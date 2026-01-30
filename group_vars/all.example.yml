@@ -1,0 +1,42 @@
+---
+# Copy to group_vars/all.yml and edit. This file is checked in as a
+# template; the real all.yml is gitignored so machine-specific values
+# don't leak.
+
+# ---- identity ----
+home_domain: home.local            # Caddy vhosts hang under this
+home_timezone: Europe/London
+home_user: bruce
+home_uid: 1000
+home_gid: 1000
+
+# ---- storage layout ----
+# Where the repo lives on disk. bind-mounts in packages/*/compose.yml
+# resolve relative to this via ${HOME_LOCAL_ROOT}.
+home_local_root: /home/{{ home_user }}/home.local
+
+# Where bulk media lives. Kept outside the repo so a fresh clone
+# doesn't imply moving TBs around.
+media_root: /home/{{ home_user }}/media
+
+# ---- package toggles ----
+# Consumed by scripts/up.sh; ansible only cares about host-level roles.
+packages_enabled:
+  - core        # always on: caddy + homepage
+  - privacy     # adguard + gluetun
+  - media       # arr stack + rdtclient + qbittorrent
+  - storage     # samba + minidlna
+
+# ---- security ----
+ssh_allow_password_auth: false
+ssh_permit_root_login: "no"
+firewall_allow_from_lan_only: true
+firewall_lan_cidr: 192.168.0.0/24
+fail2ban_ban_time: 1h
+fail2ban_find_time: 10m
+fail2ban_max_retry: 5
+
+# ---- network ----
+# AdGuard runs as LAN DNS. Set this to the address of the box on your
+# LAN so *.{{ home_domain }} rewrites resolve to it.
+lan_ip: 192.168.0.110

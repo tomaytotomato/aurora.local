@@ -1,0 +1,37 @@
+# ---- secrets ----
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials.yaml
+
+# ---- runtime state ----
+# Per-service config/data dirs, bind-mounted into containers.
+# These are stateful and NEVER go into git.
+data/
+packages/*/data/
+packages/*/*/data/
+
+# Logs written by containers.
+**/logs/
+*.log
+
+# ---- ansible ----
+*.retry
+inventory.ini
+!inventory.example.ini
+group_vars/all.yml
+!group_vars/all.example.yml
+group_vars/host_vars/
+.vault_pass
+
+# ---- homepage runtime ----
+packages/core/homepage/config/logs/
+
+# ---- misc ----
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
