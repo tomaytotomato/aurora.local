@@ -1,0 +1,18 @@
+---
+- resources:
+    label: host
+    cpu: true
+    memory: true
+    disk: /host
+    uptime: true
+
+- search:
+    provider: duckduckgo
+    target: _blank
+
+- datetime:
+    text_size: xl
+    format:
+      dateStyle: full
+      timeStyle: short
+      hourCycle: h23

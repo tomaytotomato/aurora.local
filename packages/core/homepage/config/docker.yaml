@@ -1,0 +1,9 @@
+---
+# home.local / homepage / docker.yaml
+# Homepage reads container status via this socket; any service tile
+# whose `container:` name matches a running container gets a live
+# health dot.
+# https://gethomepage.dev/configs/docker/
+
+my-docker:
+  socket: /var/run/docker.sock

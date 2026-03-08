@@ -1,0 +1,10 @@
+---
+title: home.local
+description: home.local — dashboard
+theme: dark
+color: slate
+headerStyle: clean
+hideVersion: true
+
+providers:
+  searchProvider: duckduckgo

@@ -1,0 +1,23 @@
+# home.local / packages/core
+#
+# Homepage dashboard. Currently binds :80 directly — will move behind
+# Caddy as soon as we add more services fighting for that port.
+
+name: home-core
+
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    user: "1000:975"
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ:-Europe/London}
+    volumes:
+      - ./homepage/config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/host:ro
+    ports:
+      - "80:3000"
