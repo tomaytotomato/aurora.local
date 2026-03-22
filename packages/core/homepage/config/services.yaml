@@ -1,3 +1,45 @@
 ---
-# Service tiles will land here as packages come online.
-# https://gethomepage.dev/configs/services/
+- Media automation:
+    - Sonarr:
+        icon: sonarr.png
+        href: http://aurora.local:8989/
+        description: TV automation
+        container: sonarr
+        server: my-docker
+        widget:
+          type: sonarr
+          url: http://sonarr:8989
+          key: "{{HOMEPAGE_VAR_SONARR_KEY}}"
+
+    - Radarr:
+        icon: radarr.png
+        href: http://aurora.local:7878/
+        description: Movie automation
+        container: radarr
+        server: my-docker
+        widget:
+          type: radarr
+          url: http://radarr:7878
+          key: "{{HOMEPAGE_VAR_RADARR_KEY}}"
+
+    - Prowlarr:
+        icon: prowlarr.png
+        href: http://aurora.local:9696/
+        description: Indexer aggregator
+        container: prowlarr
+        server: my-docker
+        widget:
+          type: prowlarr
+          url: http://prowlarr:9696
+          key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"
+
+    - Bazarr:
+        icon: bazarr.png
+        href: http://aurora.local:6767/
+        description: Subtitle automation
+        container: bazarr
+        server: my-docker
+        widget:
+          type: bazarr
+          url: http://bazarr:6767
+          key: "{{HOMEPAGE_VAR_BAZARR_KEY}}"
