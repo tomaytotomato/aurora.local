@@ -1,6 +1,7 @@
 # home.local / packages/media
 #
-# Arr stack. Debrid + torrent client come in a later commit.
+# Arr stack + Debrid bridge (RDTClient) + Flaresolverr for cloudflare
+# challenges Prowlarr hits. qBittorrent still to come.
 
 name: home-media
 
@@ -49,3 +50,29 @@ services:
       - ../../data/bazarr:/config
       - /home/bruce/media/tv:/tv
       - /home/bruce/media/movies:/movies
+
+  rdtclient:
+    <<: *arr-common
+    image: rogerfar/rdtclient:latest
+    container_name: rdtclient
+    ports: ["6500:6500"]
+    volumes:
+      - ../../data/rdtclient/data:/data/db
+      - /home/bruce/media/downloads:/data/downloads
+
+  flaresolverr:
+    <<: *arr-common
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    ports: ["8191:8191"]
+    environment:
+      - TZ=${TZ:-Europe/London}
+      - LOG_LEVEL=info
+
+  jellyseerr:
+    <<: *arr-common
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    ports: ["5055:5055"]
+    volumes:
+      - ../../data/jellyseerr:/app/config

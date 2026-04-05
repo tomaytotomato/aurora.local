@@ -43,3 +43,30 @@
           type: bazarr
           url: http://bazarr:6767
           key: "{{HOMEPAGE_VAR_BAZARR_KEY}}"
+
+- Streaming:
+    - RDTClient:
+        icon: rdt-client.png
+        href: http://aurora.local:6500/
+        description: Real-Debrid bridge
+        container: rdtclient
+        server: my-docker
+        widget:
+          type: qbittorrent
+          url: http://rdtclient:6500
+          username: "{{HOMEPAGE_VAR_RDT_USER}}"
+          password: "{{HOMEPAGE_VAR_RDT_PASS}}"
+
+    - Jellyseerr:
+        icon: jellyseerr.png
+        href: http://aurora.local:5055/
+        description: Requests UI
+        container: jellyseerr
+        server: my-docker
+
+    - Flaresolverr:
+        icon: mdi-fire-#f97316
+        href: http://aurora.local:8191/
+        description: CF challenge solver
+        container: flaresolverr
+        server: my-docker
