@@ -1,0 +1,14 @@
+---
+firewall_allowed_tcp_ports:
+  - 22    # ssh
+  - 80    # caddy http
+  - 443   # caddy https
+  - 53    # adguard dns (privacy pkg)
+  - 139   # samba
+  - 445   # samba
+
+firewall_allowed_udp_ports:
+  - 53    # adguard dns
+  - 137   # samba
+  - 138   # samba
+  - 5353  # mdns / avahi

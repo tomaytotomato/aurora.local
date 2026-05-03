@@ -1,0 +1,21 @@
+# managed by home.local ansible / ssh-hardening role
+Port 22
+Protocol 2
+
+PermitRootLogin {{ ssh_permit_root_login }}
+PasswordAuthentication {{ 'yes' if ssh_allow_password_auth else 'no' }}
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+PubkeyAuthentication yes
+UsePAM yes
+
+X11Forwarding no
+PermitEmptyPasswords no
+ClientAliveInterval 300
+ClientAliveCountMax 2
+MaxAuthTries 4
+LoginGraceTime 30
+
+AllowUsers {{ home_user }}
+
+Subsystem sftp /usr/lib/openssh/sftp-server

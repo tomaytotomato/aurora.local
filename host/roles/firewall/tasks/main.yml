@@ -1,0 +1,36 @@
+---
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Default deny incoming
+  community.general.ufw:
+    default: deny
+    direction: incoming
+
+- name: Default allow outgoing
+  community.general.ufw:
+    default: allow
+    direction: outgoing
+
+- name: Allow LAN-only TCP ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+    src: "{{ firewall_lan_cidr if firewall_allow_from_lan_only else 'any' }}"
+  loop: "{{ firewall_allowed_tcp_ports }}"
+
+- name: Allow LAN-only UDP ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: udp
+    src: "{{ firewall_lan_cidr if firewall_allow_from_lan_only else 'any' }}"
+  loop: "{{ firewall_allowed_udp_ports }}"
+
+- name: Enable ufw with logging
+  community.general.ufw:
+    state: enabled
+    logging: low
