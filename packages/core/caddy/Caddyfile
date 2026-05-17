@@ -1,0 +1,68 @@
+# home.local / Caddyfile
+#
+# One vhost per service on ${HOME_DOMAIN} (default home.local).
+# Caddy issues internal certs on first boot; install its root cert on
+# LAN clients that shouldn't see the "Not Secure" bar:
+#   docker exec -it caddy cat /data/caddy/pki/authorities/local/root.crt
+#
+# DNS: AdGuard (packages/privacy) is expected to answer *.{$HOME_DOMAIN}
+# with the LAN IP of this box.
+
+{
+	# Force internal CA for anything ending in .local (no ACME attempts).
+	auto_https disable_redirects
+	local_certs
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# ---- Core ------------------------------------------------------------
+home.{$HOME_DOMAIN}, {$HOME_DOMAIN} {
+	reverse_proxy homepage:3000
+}
+
+# ---- Privacy & security ---------------------------------------------
+adguard.{$HOME_DOMAIN} {
+	reverse_proxy adguard:3000
+}
+
+# ---- Media automation -----------------------------------------------
+sonarr.{$HOME_DOMAIN} {
+	reverse_proxy sonarr:8989
+}
+radarr.{$HOME_DOMAIN} {
+	reverse_proxy radarr:7878
+}
+prowlarr.{$HOME_DOMAIN} {
+	reverse_proxy prowlarr:9696
+}
+bazarr.{$HOME_DOMAIN} {
+	reverse_proxy bazarr:6767
+}
+jellyseerr.{$HOME_DOMAIN} {
+	reverse_proxy jellyseerr:5055
+}
+flaresolverr.{$HOME_DOMAIN} {
+	reverse_proxy flaresolverr:8191
+}
+
+# ---- Debrid + torrent -----------------------------------------------
+rdt.{$HOME_DOMAIN} {
+	reverse_proxy rdtclient:6500
+}
+# qbittorrent lives on gluetun's network namespace; reach it via the
+# gluetun container.
+qbit.{$HOME_DOMAIN} {
+	reverse_proxy gluetun:8080
+}
+
+# ---- Storage --------------------------------------------------------
+# minidlna's http UI is small but useful for verifying scans.
+dlna.{$HOME_DOMAIN} {
+	reverse_proxy minidlna:8200
+}

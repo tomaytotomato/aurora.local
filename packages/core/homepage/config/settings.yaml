@@ -1,6 +1,7 @@
 ---
 title: home.local
 description: home.local — dashboard
+startUrl: https://home.home.local/
 theme: dark
 color: slate
 headerStyle: clean

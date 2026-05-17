@@ -1,23 +1,48 @@
 # home.local / packages/core
 #
-# Homepage dashboard. Currently binds :80 directly — will move behind
-# Caddy as soon as we add more services fighting for that port.
+# Always on. Caddy is the single entry point on :80/:443 and fans out
+# to every other package on subdomains under $HOME_DOMAIN. Homepage is
+# the dashboard aggregating status from every enabled package.
+#
+# Depends on the external network `home_net` (see scripts/up.sh which
+# creates it once).
 
 name: home-core
 
+networks:
+  home_net:
+    external: true
+
 services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    networks: [home_net]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - HOME_DOMAIN=${HOME_DOMAIN:-home.local}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../data/caddy/data:/data
+      - ../../data/caddy/config:/config
+      - ../../data/caddy/logs:/var/log/caddy
+
   homepage:
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
     restart: unless-stopped
-    user: "1000:975"
+    networks: [home_net]
+    user: "1000:975"   # host uid + docker gid so /var/run/docker.sock is readable
     env_file:
       - .env
     environment:
       - TZ=${TZ:-Europe/London}
+      - HOMEPAGE_ALLOWED_HOSTS=home.${HOME_DOMAIN:-home.local},${HOME_DOMAIN:-home.local},localhost
     volumes:
       - ./homepage/config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /:/host:ro
-    ports:
-      - "80:3000"

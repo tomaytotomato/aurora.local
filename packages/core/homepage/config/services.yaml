@@ -2,7 +2,7 @@
 - Media automation:
     - Sonarr:
         icon: sonarr.png
-        href: http://aurora.local:8989/
+        href: https://sonarr.home.local/
         description: TV automation
         container: sonarr
         server: my-docker
@@ -13,7 +13,7 @@
 
     - Radarr:
         icon: radarr.png
-        href: http://aurora.local:7878/
+        href: https://radarr.home.local/
         description: Movie automation
         container: radarr
         server: my-docker
@@ -24,7 +24,7 @@
 
     - Prowlarr:
         icon: prowlarr.png
-        href: http://aurora.local:9696/
+        href: https://prowlarr.home.local/
         description: Indexer aggregator
         container: prowlarr
         server: my-docker
@@ -35,7 +35,7 @@
 
     - Bazarr:
         icon: bazarr.png
-        href: http://aurora.local:6767/
+        href: https://bazarr.home.local/
         description: Subtitle automation
         container: bazarr
         server: my-docker
@@ -47,7 +47,7 @@
 - Streaming:
     - RDTClient:
         icon: rdt-client.png
-        href: http://aurora.local:6500/
+        href: https://rdt.home.local/
         description: Real-Debrid bridge
         container: rdtclient
         server: my-docker
@@ -59,14 +59,14 @@
 
     - Jellyseerr:
         icon: jellyseerr.png
-        href: http://aurora.local:5055/
+        href: https://jellyseerr.home.local/
         description: Requests UI
         container: jellyseerr
         server: my-docker
 
     - Flaresolverr:
         icon: mdi-fire-#f97316
-        href: http://aurora.local:8191/
+        href: https://flaresolverr.home.local/
         description: CF challenge solver
         container: flaresolverr
         server: my-docker
