@@ -70,3 +70,16 @@
         description: CF challenge solver
         container: flaresolverr
         server: my-docker
+
+- Privacy & Security:
+    - AdGuard Home:
+        icon: adguard-home.png
+        href: https://adguard.home.local/
+        description: LAN DNS + ad/tracker filtering
+        container: adguard
+        server: my-docker
+        widget:
+          type: adguard
+          url: http://adguard:3000
+          username: "{{HOMEPAGE_VAR_ADGUARD_USER}}"
+          password: "{{HOMEPAGE_VAR_ADGUARD_PASS}}"
