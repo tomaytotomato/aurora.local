@@ -1,7 +1,15 @@
 # home.local / packages/privacy
 #
-# AdGuard Home — LAN DNS + ad/tracker blocker. Gluetun (VPN) lands in
-# a follow-up commit alongside qBittorrent.
+# - AdGuard Home is the LAN's DNS server + ad/tracker blocker.
+#   Point your router's DHCP DNS at this box after first boot.
+#   First-run wizard at http://<box-ip>:3000 sets admin creds;
+#   afterwards the UI moves to https://adguard.home.local/.
+#
+# - Gluetun is a VPN sidecar. It exposes its network namespace to any
+#   compose service that sets `network_mode: "service:gluetun"`.
+#   Provider-agnostic: pick VPN_SERVICE_PROVIDER in .env and fill in
+#   the matching secret (wireguard key, openvpn creds, whatever).
+#   qBittorrent in packages/media routes through it.
 
 name: home-privacy
 
@@ -16,9 +24,35 @@ services:
     restart: unless-stopped
     networks: [home_net]
     ports:
+      # DNS is host-bound; the admin UI is fronted by Caddy.
       - "53:53/tcp"
       - "53:53/udp"
+      # First-boot setup wizard; can close after Caddy vhost works.
       - "3000:3000/tcp"
     volumes:
       - ../../data/adguard/work:/opt/adguardhome/work
       - ../../data/adguard/conf:/opt/adguardhome/conf
+
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    restart: unless-stopped
+    networks: [home_net]
+    cap_add: [NET_ADMIN]
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    env_file:
+      - .env
+    ports:
+      # qBittorrent web UI (packages/media/qbittorrent uses
+      # network_mode: service:gluetun so its ports are published here).
+      - "8080:8080"
+      # gluetun control-server for the Homepage widget
+      - "8000:8000"
+    volumes:
+      - ../../data/gluetun:/gluetun
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/v1/publicip/ip"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

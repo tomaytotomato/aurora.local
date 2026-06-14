@@ -1,12 +1,23 @@
 # home.local / packages/media
 #
-# Arr stack + Debrid bridge (RDTClient) + Flaresolverr for cloudflare
-# challenges Prowlarr hits. qBittorrent still to come.
+# Opinionated: Debrid-first (RDTClient) with qBittorrent behind gluetun
+# as the local fallback. Sonarr/Radarr/Bazarr/Prowlarr do the automation,
+# Jellyseerr does requests, Flaresolverr rides shotgun on the cloudflare
+# challenges Prowlarr occasionally hits.
+#
+# qBittorrent uses `network_mode: "service:gluetun"` so it *must* be
+# brought up as part of `docker compose -f privacy -f media up -d`
+# (which scripts/up.sh handles).
 
 name: home-media
 
+networks:
+  home_net:
+    external: true
+
 x-arr-common: &arr-common
   restart: unless-stopped
+  networks: [home_net]
   environment:
     - PUID=1000
     - PGID=1000
@@ -17,7 +28,6 @@ services:
     <<: *arr-common
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
-    ports: ["8989:8989"]
     volumes:
       - ../../data/sonarr:/config
       - /home/bruce/media/tv:/tv
@@ -27,7 +37,6 @@ services:
     <<: *arr-common
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
-    ports: ["7878:7878"]
     volumes:
       - ../../data/radarr:/config
       - /home/bruce/media/movies:/movies
@@ -37,7 +46,6 @@ services:
     <<: *arr-common
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
-    ports: ["9696:9696"]
     volumes:
       - ../../data/prowlarr:/config
 
@@ -45,34 +53,51 @@ services:
     <<: *arr-common
     image: lscr.io/linuxserver/bazarr:latest
     container_name: bazarr
-    ports: ["6767:6767"]
     volumes:
       - ../../data/bazarr:/config
       - /home/bruce/media/tv:/tv
       - /home/bruce/media/movies:/movies
 
-  rdtclient:
+  jellyseerr:
     <<: *arr-common
-    image: rogerfar/rdtclient:latest
-    container_name: rdtclient
-    ports: ["6500:6500"]
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
     volumes:
-      - ../../data/rdtclient/data:/data/db
-      - /home/bruce/media/downloads:/data/downloads
+      - ../../data/jellyseerr:/app/config
 
   flaresolverr:
     <<: *arr-common
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: flaresolverr
-    ports: ["8191:8191"]
     environment:
       - TZ=${TZ:-Europe/London}
       - LOG_LEVEL=info
 
-  jellyseerr:
+  rdtclient:
     <<: *arr-common
-    image: fallenbagel/jellyseerr:latest
-    container_name: jellyseerr
-    ports: ["5055:5055"]
+    image: rogerfar/rdtclient:latest
+    container_name: rdtclient
     volumes:
-      - ../../data/jellyseerr:/app/config
+      - ../../data/rdtclient/data:/data/db
+      - /home/bruce/media/downloads:/data/downloads
+
+  # ---- qBittorrent, VPN-tunnelled ----
+  # Shares gluetun's netns so all traffic (peer + tracker) egresses
+  # through the VPN. gluetun's kill-switch means if the tunnel drops
+  # qbit gets no network — no leaks.
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    restart: unless-stopped
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-Europe/London}
+      - WEBUI_PORT=8080
+    volumes:
+      - ../../data/qbittorrent:/config
+      - /home/bruce/media/downloads:/downloads

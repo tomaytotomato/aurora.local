@@ -83,3 +83,25 @@
           url: http://adguard:3000
           username: "{{HOMEPAGE_VAR_ADGUARD_USER}}"
           password: "{{HOMEPAGE_VAR_ADGUARD_PASS}}"
+
+    - Gluetun (VPN):
+        icon: mdi-vpn-#a78bfa
+        href: https://qbit.home.local/
+        description: WireGuard/OpenVPN — provider-agnostic egress
+        container: gluetun
+        server: my-docker
+        widget:
+          type: gluetun
+          url: http://gluetun:8000
+
+    - qBittorrent:
+        icon: qbittorrent.png
+        href: https://qbit.home.local/
+        description: Torrent client (via gluetun)
+        container: qbittorrent
+        server: my-docker
+        widget:
+          type: qbittorrent
+          url: http://gluetun:8080
+          username: "{{HOMEPAGE_VAR_QBIT_USER}}"
+          password: "{{HOMEPAGE_VAR_QBIT_PASS}}"
