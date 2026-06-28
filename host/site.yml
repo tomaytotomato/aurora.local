@@ -3,6 +3,8 @@
 # runs on anything Debian-family (Optiplex, NUC, tower, VM).
 #
 #   ansible-playbook -i ../inventory.ini host/site.yml -K
+#
+# The packages/* compose stacks assume this playbook has already run.
 
 - name: Bootstrap home.local host
   hosts: home_servers
@@ -12,3 +14,4 @@
     - docker
     - firewall
     - ssh-hardening
+    - fail2ban

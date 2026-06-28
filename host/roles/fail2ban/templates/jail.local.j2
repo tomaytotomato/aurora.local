@@ -1,0 +1,18 @@
+# managed by home.local ansible / fail2ban role
+[DEFAULT]
+bantime  = {{ fail2ban_ban_time }}
+findtime = {{ fail2ban_find_time }}
+maxretry = {{ fail2ban_max_retry }}
+ignoreip = 127.0.0.1/8 ::1 {{ firewall_lan_cidr }}
+backend  = systemd
+
+[sshd]
+enabled = true
+port    = 22
+
+[caddy-auth]
+# Requires Caddy to log 401/403 responses to a file. Optional jail;
+# leave disabled until Caddy log format is finalised.
+enabled = false
+port    = http,https
+logpath = {{ home_local_root }}/packages/core/data/caddy/logs/access.log
