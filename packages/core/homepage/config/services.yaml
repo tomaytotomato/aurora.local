@@ -1,5 +1,54 @@
 ---
-- Media automation:
+# home.local / homepage / services.yaml
+#
+# Groups mirror packages/ 1:1 so orientation is self-documenting.
+# API keys pulled from packages/core/.env via {{HOMEPAGE_VAR_*}} tokens.
+# https://gethomepage.dev/configs/services/
+
+- Core:
+    - Caddy:
+        icon: mdi-shield-check-#22d3ee
+        href: https://home.home.local/
+        description: Reverse proxy — TLS + vhost fanout
+        container: caddy
+        server: my-docker
+
+    - Homepage:
+        icon: homepage.png
+        href: https://home.home.local/
+        description: This dashboard
+        container: homepage
+        server: my-docker
+
+- Privacy & Security:
+    - AdGuard Home:
+        icon: adguard-home.png
+        href: https://adguard.home.local/
+        description: LAN DNS + ad/tracker filtering
+        container: adguard
+        server: my-docker
+        widget:
+          type: adguard
+          url: http://adguard:3000
+          username: "{{HOMEPAGE_VAR_ADGUARD_USER}}"
+          password: "{{HOMEPAGE_VAR_ADGUARD_PASS}}"
+
+    - Gluetun (VPN):
+        icon: mdi-vpn-#a78bfa
+        href: https://qbit.home.local/
+        description: WireGuard/OpenVPN — provider-agnostic egress
+        container: gluetun
+        server: my-docker
+        widget:
+          type: gluetun
+          url: http://gluetun:8000
+
+    - Proton VPN account:
+        icon: proton-vpn.png
+        href: https://account.protonvpn.com/
+        description: Provider dashboard (swap for any WG/OVPN provider)
+
+- Media:
     - Sonarr:
         icon: sonarr.png
         href: https://sonarr.home.local/
@@ -44,11 +93,17 @@
           url: http://bazarr:6767
           key: "{{HOMEPAGE_VAR_BAZARR_KEY}}"
 
-- Streaming:
+    - Jellyseerr:
+        icon: jellyseerr.png
+        href: https://jellyseerr.home.local/
+        description: Request UI (Plex/Jellyfin-compatible)
+        container: jellyseerr
+        server: my-docker
+
     - RDTClient:
         icon: rdt-client.png
         href: https://rdt.home.local/
-        description: Real-Debrid bridge
+        description: Real-Debrid bridge (qBittorrent API shim)
         container: rdtclient
         server: my-docker
         widget:
@@ -57,47 +112,10 @@
           username: "{{HOMEPAGE_VAR_RDT_USER}}"
           password: "{{HOMEPAGE_VAR_RDT_PASS}}"
 
-    - Jellyseerr:
-        icon: jellyseerr.png
-        href: https://jellyseerr.home.local/
-        description: Requests UI
-        container: jellyseerr
-        server: my-docker
-
-    - Flaresolverr:
-        icon: mdi-fire-#f97316
-        href: https://flaresolverr.home.local/
-        description: CF challenge solver
-        container: flaresolverr
-        server: my-docker
-
-- Privacy & Security:
-    - AdGuard Home:
-        icon: adguard-home.png
-        href: https://adguard.home.local/
-        description: LAN DNS + ad/tracker filtering
-        container: adguard
-        server: my-docker
-        widget:
-          type: adguard
-          url: http://adguard:3000
-          username: "{{HOMEPAGE_VAR_ADGUARD_USER}}"
-          password: "{{HOMEPAGE_VAR_ADGUARD_PASS}}"
-
-    - Gluetun (VPN):
-        icon: mdi-vpn-#a78bfa
-        href: https://qbit.home.local/
-        description: WireGuard/OpenVPN — provider-agnostic egress
-        container: gluetun
-        server: my-docker
-        widget:
-          type: gluetun
-          url: http://gluetun:8000
-
     - qBittorrent:
         icon: qbittorrent.png
         href: https://qbit.home.local/
-        description: Torrent client (via gluetun)
+        description: Torrent client (routed via gluetun)
         container: qbittorrent
         server: my-docker
         widget:
@@ -105,3 +123,51 @@
           url: http://gluetun:8080
           username: "{{HOMEPAGE_VAR_QBIT_USER}}"
           password: "{{HOMEPAGE_VAR_QBIT_PASS}}"
+
+    - Flaresolverr:
+        icon: mdi-fire-#f97316
+        href: https://flaresolverr.home.local/
+        description: Cloudflare challenge solver (for Prowlarr)
+        container: flaresolverr
+        server: my-docker
+
+- Storage:
+    - Samba:
+        icon: mdi-folder-network-#f472b6
+        href: smb://home.local/
+        description: LAN file shares (SMB)
+        container: samba
+        server: my-docker
+
+    - MiniDLNA:
+        icon: mdi-cast-#f472b6
+        href: https://dlna.home.local/
+        description: DLNA server for smart TVs
+        container: minidlna
+        server: my-docker
+
+    - Disk usage:
+        icon: mdi-harddisk-#f472b6
+        href: https://home.home.local/
+        description: See resource strip above
+
+- External:
+    - Router:
+        icon: mdi-router-network-#94a3b8
+        href: http://192.168.0.1/
+        description: LAN gateway
+
+    - Real-Debrid:
+        icon: real-debrid.png
+        href: https://real-debrid.com/
+        description: Cloud torrent cache
+
+    - Stremio:
+        icon: stremio.png
+        href: https://web.stremio.com/
+        description: Streaming client (browser/TV/phone)
+
+    - GitHub — home.local:
+        icon: github.png
+        href: https://github.com/tomaytotomato/home.local
+        description: Source of truth

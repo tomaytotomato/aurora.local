@@ -1,14 +1,10 @@
 ---
-- resources:
-    label: host
-    cpu: true
-    memory: true
-    disk: /host
-    uptime: true
+# home.local / homepage / widgets.yaml
+# https://gethomepage.dev/widgets/
 
-- search:
-    provider: duckduckgo
-    target: _blank
+- greeting:
+    text_size: 4xl
+    text: home.local
 
 - datetime:
     text_size: xl
@@ -16,3 +12,17 @@
       dateStyle: full
       timeStyle: short
       hourCycle: h23
+
+- resources:
+    label: host
+    cpu: true
+    memory: true
+    cputemp: true
+    disk: /host
+    uptime: true
+    units: metric
+
+- search:
+    provider: duckduckgo
+    focus: false
+    target: _blank

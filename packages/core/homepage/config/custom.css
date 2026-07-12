@@ -1,0 +1,49 @@
+/* home.local / homepage / custom.css
+ * Subtle polish on top of the slate theme + dynamic Bing background.
+ */
+
+/* Softer card edges, a touch of glass. */
+#information-widgets,
+.services-group,
+.bookmarks-group {
+  backdrop-filter: blur(6px) saturate(1.1);
+  -webkit-backdrop-filter: blur(6px) saturate(1.1);
+  background: rgba(15, 23, 42, 0.55) !important;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+}
+
+/* Group headings — accent underline. */
+h2 {
+  border-bottom: 2px solid rgba(56, 189, 248, 0.35);
+  padding-bottom: 0.35rem;
+  letter-spacing: 0.02em;
+}
+
+/* Service tiles — lift on hover. */
+.service-card {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.service-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px -8px rgba(56, 189, 248, 0.35);
+}
+
+/* Big datetime widget, monospaced feel. */
+#information-widgets .datetime span {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Vignette on the background image so tiles pop. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 30%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+  z-index: -1;
+}
