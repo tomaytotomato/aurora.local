@@ -1,17 +1,17 @@
 # home.local / Caddyfile
 #
 # One vhost per service on ${HOME_DOMAIN} (default home.local).
-# Caddy issues internal certs on first boot; install its root cert on
-# LAN clients that shouldn't see the "Not Secure" bar:
+# Each site serves BOTH http:// and https:// so devices without the
+# Caddy root cert installed can still reach dashboards without warnings.
+# HTTPS uses Caddy's internal CA; install the root once per device to
+# get green padlocks:
 #   docker exec -it caddy cat /data/caddy/pki/authorities/local/root.crt
 #
 # DNS: AdGuard (packages/privacy) is expected to answer *.{$HOME_DOMAIN}
 # with the LAN IP of this box.
 
 {
-	# Force internal CA for anything ending in .local (no ACME attempts).
 	auto_https disable_redirects
-	local_certs
 	log {
 		output file /var/log/caddy/access.log {
 			roll_size 10mb
@@ -22,49 +22,97 @@
 }
 
 # ---- Core ------------------------------------------------------------
-# Homepage is also the fallback vhost so bookmarks pointing at the raw
-# IP or aurora.local still work while AdGuard DNS is being set up.
-home.{$HOME_DOMAIN}, {$HOME_DOMAIN}, aurora.local, 192.168.0.110 {
+# Homepage is also the fallback for raw IP / aurora.local so bookmarks
+# keep working while AdGuard DNS is being brought online.
+http://home.{$HOME_DOMAIN}, http://{$HOME_DOMAIN}, http://aurora.local, http://192.168.0.110 {
+	reverse_proxy homepage:3000
+}
+https://home.{$HOME_DOMAIN}, https://{$HOME_DOMAIN}, https://aurora.local {
+	tls internal
 	reverse_proxy homepage:3000
 }
 
 # ---- Privacy & security ---------------------------------------------
-adguard.{$HOME_DOMAIN} {
+http://adguard.{$HOME_DOMAIN} {
+	reverse_proxy adguard:3000
+}
+https://adguard.{$HOME_DOMAIN} {
+	tls internal
 	reverse_proxy adguard:3000
 }
 
 # ---- Media automation -----------------------------------------------
-sonarr.{$HOME_DOMAIN} {
+http://sonarr.{$HOME_DOMAIN} {
 	reverse_proxy sonarr:8989
 }
-radarr.{$HOME_DOMAIN} {
+https://sonarr.{$HOME_DOMAIN} {
+	tls internal
+	reverse_proxy sonarr:8989
+}
+
+http://radarr.{$HOME_DOMAIN} {
 	reverse_proxy radarr:7878
 }
-prowlarr.{$HOME_DOMAIN} {
+https://radarr.{$HOME_DOMAIN} {
+	tls internal
+	reverse_proxy radarr:7878
+}
+
+http://prowlarr.{$HOME_DOMAIN} {
 	reverse_proxy prowlarr:9696
 }
-bazarr.{$HOME_DOMAIN} {
+https://prowlarr.{$HOME_DOMAIN} {
+	tls internal
+	reverse_proxy prowlarr:9696
+}
+
+http://bazarr.{$HOME_DOMAIN} {
 	reverse_proxy bazarr:6767
 }
-jellyseerr.{$HOME_DOMAIN} {
+https://bazarr.{$HOME_DOMAIN} {
+	tls internal
+	reverse_proxy bazarr:6767
+}
+
+http://jellyseerr.{$HOME_DOMAIN} {
 	reverse_proxy jellyseerr:5055
 }
-flaresolverr.{$HOME_DOMAIN} {
+https://jellyseerr.{$HOME_DOMAIN} {
+	tls internal
+	reverse_proxy jellyseerr:5055
+}
+
+http://flaresolverr.{$HOME_DOMAIN} {
+	reverse_proxy flaresolverr:8191
+}
+https://flaresolverr.{$HOME_DOMAIN} {
+	tls internal
 	reverse_proxy flaresolverr:8191
 }
 
 # ---- Debrid + torrent -----------------------------------------------
-rdt.{$HOME_DOMAIN} {
+http://rdt.{$HOME_DOMAIN} {
 	reverse_proxy rdtclient:6500
 }
-# qbittorrent lives on gluetun's network namespace; reach it via the
-# gluetun container.
-qbit.{$HOME_DOMAIN} {
+https://rdt.{$HOME_DOMAIN} {
+	tls internal
+	reverse_proxy rdtclient:6500
+}
+
+# qBittorrent shares gluetun's netns; reach it via gluetun:8080.
+http://qbit.{$HOME_DOMAIN} {
+	reverse_proxy gluetun:8080
+}
+https://qbit.{$HOME_DOMAIN} {
+	tls internal
 	reverse_proxy gluetun:8080
 }
 
 # ---- Storage --------------------------------------------------------
-# minidlna's http UI is small but useful for verifying scans.
-dlna.{$HOME_DOMAIN} {
+http://dlna.{$HOME_DOMAIN} {
+	reverse_proxy minidlna:8200
+}
+https://dlna.{$HOME_DOMAIN} {
+	tls internal
 	reverse_proxy minidlna:8200
 }
