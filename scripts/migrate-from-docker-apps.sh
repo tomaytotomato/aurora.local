@@ -43,6 +43,8 @@ declare -A SERVICES=(
   [jellyseerr]=jellyseerr
   [sabnzbd]=sabnzbd
   [rdtclient]=rdtclient
+  [qbittorrent]=qbittorrent
+  [minidlna]=minidlna
   [homepage]=homepage/config
 )
 
@@ -74,6 +76,18 @@ fi
 if [[ -f "$OLD/.env" && ! -f "$NEW/packages/core/.env" ]]; then
   echo "==> copying $OLD/.env -> packages/core/.env"
   cp "$OLD/.env" "$NEW/packages/core/.env"
+  # Ensure HOME_DOMAIN is set so Caddy vhosts resolve.
+  grep -q '^HOME_DOMAIN=' "$NEW/packages/core/.env" || \
+    echo 'HOME_DOMAIN=home.local' >> "$NEW/packages/core/.env"
+fi
+
+# Propagate SAMBA_PASS from old .env into packages/storage/.env if present.
+if [[ -f "$OLD/.env" && ! -f "$NEW/packages/storage/.env" ]]; then
+  echo "==> seeding packages/storage/.env from .env.example + SAMBA_PASS"
+  cp "$NEW/packages/storage/.env.example" "$NEW/packages/storage/.env"
+  if samba_pass=$(grep -E '^SAMBA_PASS=' "$OLD/.env" | cut -d= -f2-); then
+    sed -i "s|^SAMBA_PASS=.*|SAMBA_PASS=${samba_pass}|" "$NEW/packages/storage/.env"
+  fi
 fi
 
 echo
