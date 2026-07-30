@@ -16,10 +16,17 @@
     repo: >-
       deb [arch={{ ansible_architecture | replace('x86_64', 'amd64') }}
       signed-by=/etc/apt/keyrings/docker.asc]
-      https://download.docker.com/linux/debian
+      https://download.docker.com/linux/{{ ansible_distribution | lower }}
       {{ ansible_distribution_release }} stable
     filename: docker
     state: present
+    update_cache: false
+
+- name: Update apt cache (allow warnings from unrelated repos)
+  ansible.builtin.apt:
+    update_cache: true
+  register: apt_update
+  failed_when: apt_update.failed and 'docker.com' in (apt_update.msg | default(''))
 
 - name: Install Docker Engine + compose plugin
   ansible.builtin.apt:
@@ -30,7 +37,6 @@
       - docker-buildx-plugin
       - docker-compose-plugin
     state: present
-    update_cache: true
 
 - name: Add home_user to docker group
   ansible.builtin.user:
