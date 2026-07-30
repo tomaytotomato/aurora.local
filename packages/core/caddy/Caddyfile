@@ -109,12 +109,6 @@ https://qbit.{$HOME_DOMAIN} {
 }
 
 # ---- Storage --------------------------------------------------------
-# minidlna runs with network_mode: host for UPnP multicast, so we reach
-# it via the LAN IP rather than a container name.
-http://dlna.{$HOME_DOMAIN} {
-	reverse_proxy host.docker.internal:8200
-}
-https://dlna.{$HOME_DOMAIN} {
-	tls internal
-	reverse_proxy host.docker.internal:8200
-}
+# minidlna runs with network_mode: host for UPnP multicast, so it's not
+# reachable from the caddy bridge network without UFW carve-outs. Access
+# its (minimal) status UI directly at http://<lan-ip>:8200/.
