@@ -68,3 +68,9 @@ echo "==> bringing up: ${pkgs[*]}"
 docker compose -p home "${files[@]}" pull
 docker compose -p home "${files[@]}" up -d --remove-orphans
 docker compose -p home "${files[@]}" ps
+
+# Post-up seed hooks (idempotent — safe to run every time).
+if [[ " ${pkgs[*]} " == *" privacy "* ]] && [[ -x "$REPO/scripts/seed-adguard.sh" ]]; then
+  echo
+  "$REPO/scripts/seed-adguard.sh" || true
+fi
