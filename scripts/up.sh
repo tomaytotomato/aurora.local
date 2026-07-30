@@ -16,6 +16,23 @@ REPO="$PWD"
 pkgs=("$@")
 [[ ${#pkgs[@]} -eq 0 ]] && pkgs=(core privacy media storage)
 
+# Compose profiles that opt in optional services. Right now the only
+# profile is 'torrent' (gluetun + qbittorrent).
+profiles=()
+filtered=()
+for arg in "${pkgs[@]}"; do
+  case "$arg" in
+    --torrent) profiles+=(torrent) ;;
+    --*)       echo "unknown flag: $arg" >&2; exit 1 ;;
+    *)         filtered+=("$arg") ;;
+  esac
+done
+pkgs=("${filtered[@]}")
+if [[ ${#profiles[@]} -gt 0 ]]; then
+  export COMPOSE_PROFILES="$(IFS=,; echo "${profiles[*]}")"
+  echo "==> enabling profiles: $COMPOSE_PROFILES"
+fi
+
 # Shared docker network. Idempotent.
 if ! docker network inspect home_net >/dev/null 2>&1; then
   echo "==> creating docker network home_net"

@@ -38,6 +38,10 @@ services:
     image: qmcgaw/gluetun:latest
     container_name: gluetun
     restart: unless-stopped
+    # Opt-in: only starts when COMPOSE_PROFILES includes 'torrent'.
+    # Currently qbittorrent is gluetun's only consumer, so both are
+    # gated together. If gluetun gains other consumers, split them.
+    profiles: ["torrent"]
     networks: [home_net]
     cap_add: [NET_ADMIN]
     devices:

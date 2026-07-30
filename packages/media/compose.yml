@@ -82,13 +82,14 @@ services:
       - /home/bruce/media/downloads:/data/downloads
 
   # ---- qBittorrent, VPN-tunnelled ----
-  # Shares gluetun's netns so all traffic (peer + tracker) egresses
-  # through the VPN. gluetun's kill-switch means if the tunnel drops
-  # qbit gets no network — no leaks.
+  # Opt-in via COMPOSE_PROFILES=torrent. Shares gluetun's netns so all
+  # traffic (peer + tracker) egresses through the VPN. gluetun's
+  # kill-switch means if the tunnel drops qbit gets no network.
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
     restart: unless-stopped
+    profiles: ["torrent"]
     depends_on:
       gluetun:
         condition: service_healthy
