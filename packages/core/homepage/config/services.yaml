@@ -141,8 +141,8 @@
 
     - MiniDLNA:
         icon: mdi-cast-#f472b6
-        href: https://dlna.home.local/
-        description: DLNA server for smart TVs
+        href: http://192.168.0.110:8200/
+        description: DLNA server for smart TVs (host netns)
         container: minidlna
         server: my-docker
 
