@@ -22,7 +22,9 @@
 }
 
 # ---- Core ------------------------------------------------------------
-home.{$HOME_DOMAIN}, {$HOME_DOMAIN} {
+# Homepage is also the fallback vhost so bookmarks pointing at the raw
+# IP or aurora.local still work while AdGuard DNS is being set up.
+home.{$HOME_DOMAIN}, {$HOME_DOMAIN}, aurora.local, 192.168.0.110 {
 	reverse_proxy homepage:3000
 }
 

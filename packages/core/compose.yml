@@ -41,7 +41,7 @@ services:
       - .env
     environment:
       - TZ=${TZ:-Europe/London}
-      - HOMEPAGE_ALLOWED_HOSTS=home.${HOME_DOMAIN:-home.local},${HOME_DOMAIN:-home.local},localhost
+      - HOMEPAGE_ALLOWED_HOSTS=home.${HOME_DOMAIN:-home.local},${HOME_DOMAIN:-home.local},aurora.local,192.168.0.110,localhost
     volumes:
       - ./homepage/config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro
