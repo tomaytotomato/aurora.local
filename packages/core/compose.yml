@@ -25,6 +25,9 @@ services:
       - "443:443/udp"
     environment:
       - HOME_DOMAIN=${HOME_DOMAIN:-home.local}
+    extra_hosts:
+      # So Caddy can reach services running in host netns (e.g. minidlna).
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ../../data/caddy/data:/data

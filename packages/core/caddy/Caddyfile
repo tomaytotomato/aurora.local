@@ -112,9 +112,9 @@ https://qbit.{$HOME_DOMAIN} {
 # minidlna runs with network_mode: host for UPnP multicast, so we reach
 # it via the LAN IP rather than a container name.
 http://dlna.{$HOME_DOMAIN} {
-	reverse_proxy 192.168.0.110:8200
+	reverse_proxy host.docker.internal:8200
 }
 https://dlna.{$HOME_DOMAIN} {
 	tls internal
-	reverse_proxy 192.168.0.110:8200
+	reverse_proxy host.docker.internal:8200
 }
