@@ -1,0 +1,20 @@
+# home.local / packages/privacy/adguard / rewrites.yaml
+#
+# LAN DNS rewrites applied by scripts/seed-adguard.sh into
+# data/adguard/conf/AdGuardHome.yaml. Idempotent — re-running the
+# seed script only adds missing entries, never removes what you've
+# added by hand in the UI.
+#
+# Format matches AdGuardHome's own filtering.rewrites schema so we
+# can splice it in verbatim.
+
+rewrites:
+  # Base LAN domain resolves to the box itself.
+  - domain: home.local
+    answer: 192.168.0.110
+    enabled: true
+
+  # Wildcard: every service Caddy exposes on *.home.local.
+  - domain: '*.home.local'
+    answer: 192.168.0.110
+    enabled: true
