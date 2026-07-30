@@ -24,9 +24,10 @@ services:
     restart: unless-stopped
     networks: [home_net]
     ports:
-      # DNS is host-bound; the admin UI is fronted by Caddy.
-      - "53:53/tcp"
-      - "53:53/udp"
+      # DNS is bound to the LAN IP only so systemd-resolved can keep
+      # its loopback stub on 127.0.0.53. LAN clients point at $LAN_IP.
+      - "${LAN_IP:-0.0.0.0}:53:53/tcp"
+      - "${LAN_IP:-0.0.0.0}:53:53/udp"
       # First-boot setup wizard; can close after Caddy vhost works.
       - "3000:3000/tcp"
     volumes:
