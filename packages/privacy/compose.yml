@@ -42,8 +42,27 @@ services:
     cap_add: [NET_ADMIN]
     devices:
       - /dev/net/tun:/dev/net/tun
-    env_file:
-      - .env
+    # Explicit pass-through from the shell env (populated by scripts/up.sh
+    # sourcing packages/privacy/.env). Docker compose env_file behaviour
+    # with multi -f setups is unreliable, so we use pass-through instead.
+    environment:
+      - TZ
+      - VPN_SERVICE_PROVIDER
+      - VPN_TYPE
+      - WIREGUARD_PRIVATE_KEY
+      - WIREGUARD_ADDRESSES
+      - WIREGUARD_PRESHARED_KEY
+      - SERVER_COUNTRIES
+      - SERVER_CITIES
+      - OPENVPN_USER
+      - OPENVPN_PASSWORD
+      - FIREWALL
+      - FIREWALL_INPUT_PORTS
+      - FIREWALL_OUTBOUND_SUBNETS
+      - FIREWALL_VPN_INPUT_PORTS
+      - VPN_PORT_FORWARDING
+      - VPN_PORT_FORWARDING_PROVIDER
+      - PORT_FORWARD_ONLY
     ports:
       # qBittorrent web UI (packages/media/qbittorrent uses
       # network_mode: service:gluetun so its ports are published here).
@@ -53,7 +72,11 @@ services:
     volumes:
       - ../../data/gluetun:/gluetun
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8000/v1/publicip/ip"]
+      # Verifies the tunnel is actually passing traffic. Gluetun's own
+      # /v1/* endpoints require auth by default; hitting an external
+      # "what's my IP" service through the tunnel is a better signal.
+      test: ["CMD", "wget", "-qO-", "--tries=1", "--timeout=5", "https://checkip.amazonaws.com"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
+      start_period: 30s
