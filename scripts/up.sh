@@ -24,6 +24,7 @@ fi
 
 # Assemble -f flags across every requested package.
 files=()
+env_files=()
 for p in "${pkgs[@]}"; do
   f="$REPO/packages/$p/compose.yml"
   [[ -f "$f" ]] || { echo "no such package: $p" >&2; exit 1; }
@@ -36,6 +37,14 @@ for p in "${pkgs[@]}"; do
     echo "==> seeding $p/.env from .env.example (edit before restart)"
     cp "$env_ex" "$env_real"
   fi
+  [[ -f "$env_real" ]] && env_files+=("$env_real")
+done
+
+# Merge all per-package .env files into shell env so ${VAR} substitution
+# in every compose file sees them (compose only auto-loads .env from the
+# project dir; multi-file setups fall through the cracks).
+for ef in "${env_files[@]}"; do
+  set -a; source "$ef"; set +a
 done
 
 echo "==> bringing up: ${pkgs[*]}"
