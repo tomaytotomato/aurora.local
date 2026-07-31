@@ -1,0 +1,16 @@
+# Test-scoped overrides. SQLite lives in a tempfile so tests are isolated
+# from each other and from the packaged database.
+spring:
+  datasource:
+    url: jdbc:sqlite::memory:?cache=shared
+    hikari:
+      # sqlite in-memory + shared cache: single connection so schema survives.
+      maximum-pool-size: 1
+      minimum-idle: 1
+  flyway:
+    clean-disabled: false
+aurora:
+  repo-path: ${AURORA_TEST_REPO:src/test/resources/fake-repo}
+  host-proc-path: /proc
+  docker:
+    host: unix:///var/run/docker.sock

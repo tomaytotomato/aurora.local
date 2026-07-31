@@ -1,0 +1,19 @@
+name: media
+title: Media automation
+description: |
+  Sonarr/Radarr/etc.
+category: media
+depends_on:
+  - core
+recommends:
+  - privacy
+profiles: {}
+ports:
+  - {port: 8989, proto: tcp, description: Sonarr}
+requires:
+  min_ram_mb: 2048
+  min_disk_gb: 20
+  host_roles: []
+required_env: []
+post_install_notes: |
+  Configure Sonarr.

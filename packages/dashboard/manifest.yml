@@ -1,0 +1,33 @@
+name: dashboard
+title: Aurora — admin dashboard
+description: |
+  Aurora is the admin plane for aurora.local. Vue 3.5 + Spring Boot 4,
+  ships as a single container. Package picker, health, security
+  posture, first-run wizard, per-package .env editor. Not a Homepage
+  replacement — Homepage is the tile grid users hit day-to-day;
+  Aurora is where you install, configure, audit, and troubleshoot.
+
+category: core
+
+depends_on:
+  - core
+recommends:
+  - identity
+
+ports:
+  - {port: 8090, proto: tcp, description: Aurora dashboard HTTP}
+
+requires:
+  min_ram_mb: 512
+  min_disk_gb: 1
+  host_roles: []
+
+required_env:
+  - AURORA_SESSION_SECRET
+
+post_install_notes: |
+  1. Open the first-run wizard: https://admin.$DOMAIN/
+  2. Create the admin user (password for v0.1; passkey coming in v0.2).
+  3. Onboarding wizard walks you through domain, packages, DNS and TLS.
+  4. Aurora's own admin URL is behind Authelia forward-auth when the
+     `identity` package is enabled.

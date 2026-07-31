@@ -1,0 +1,9 @@
+# aurora.local / packages/dashboard / homepage.yml
+
+- Admin:
+    - Aurora:
+        icon: mdi-shield-crown-outline
+        href: https://admin.{{HOMEPAGE_VAR_DOMAIN}}/
+        description: Install, configure, audit — the fuse box for aurora.local
+        container: aurora
+        server: my-docker

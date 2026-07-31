@@ -1,0 +1,57 @@
+# aurora.local / packages/dashboard
+#
+# Aurora — the admin plane for an aurora.local box.
+# Single container, Spring Boot 4 + embedded Vue SPA on :8090,
+# fronted by Caddy at admin.$DOMAIN.
+
+name: aurora-dashboard
+
+networks:
+  aurora_net:
+    external: true
+
+volumes:
+  aurora_data: {}
+
+services:
+  aurora:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aurora-dashboard:${AURORA_VERSION:-0.1.0}
+    pull_policy: never
+    container_name: aurora
+    restart: unless-stopped
+    networks: [aurora_net]
+
+    # Runs as the invoking user + docker group so it can read/write
+    # ~/aurora.local and talk to docker.sock. DOCKER_GID exported by
+    # scripts/up.sh.
+    user: "${AURORA_UID:-1000}:${DOCKER_GID:-999}"
+
+    environment:
+      TZ: ${TZ:-UTC}
+      AURORA_DB_PATH: /data/aurora.db
+      AURORA_REPO_PATH: /repo
+      AURORA_HOST_PROC: /host/proc
+      DOCKER_HOST: unix:///var/run/docker.sock
+      SERVER_PORT: 8090
+      # Sessions / bootstrap — overridden by packages/dashboard/.env
+      AURORA_SESSION_SECRET: ${AURORA_SESSION_SECRET:?set in packages/dashboard/.env}
+
+    volumes:
+      # Whole repo bind-mounted rw — aurora reads manifests + writes .env / .state.yml.
+      - ${AURORA_REPO_PATH_HOST:-${HOME}/aurora.local}:/repo:rw
+      # Docker socket for docker-java (list containers, events, stats).
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      # Host /proc for cheap metrics (mem, load, uptime).
+      - /proc:/host/proc:ro
+      # Aurora's own state (SQLite DB, sessions).
+      - aurora_data:/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8090/api/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3

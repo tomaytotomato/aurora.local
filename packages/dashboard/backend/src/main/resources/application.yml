@@ -1,0 +1,47 @@
+server:
+  port: 8090
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: aurora
+  datasource:
+    url: jdbc:sqlite:${AURORA_DB_PATH:/data/aurora.db}
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 1        # SQLite: single writer
+      pool-name: aurora-sqlite
+  flyway:
+    enabled: false               # SQLite dialect not shipping in Flyway 13 community; using sql.init for v0.1
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/migration/V1__init.sql
+      continue-on-error: true    # tolerate 'already exists' on restart until migrations arrive
+  mvc:
+    problemdetails:
+      enabled: true
+
+aurora:
+  # Bind mount of ~/aurora.local inside the container.
+  repo-path: ${AURORA_REPO_PATH:/repo}
+  # Path to host /proc for metrics reads.
+  host-proc-path: ${AURORA_HOST_PROC:/host/proc}
+  docker:
+    # Overridden by DOCKER_HOST env for isolated-daemon tests.
+    host: ${DOCKER_HOST:unix:///var/run/docker.sock}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    com.tomaytotomato.aurora: DEBUG
