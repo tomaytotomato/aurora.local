@@ -1,0 +1,48 @@
+# home.local / packages/identity / caddy.snippet
+#
+# Two things live here:
+#
+#   1. The auth.${HOME_DOMAIN} vhost, which serves Authelia's own UI
+#      (login screen, 2FA enrolment, password reset).
+#
+#   2. A named route `(authelia)` that any OTHER package's Caddy
+#      snippet can pull into its vhost with a single line:
+#
+#          import authelia
+#
+#      Doing that turns the vhost into a protected app: unauthenticated
+#      requests are bounced through Authelia's forward-auth endpoint,
+#      then either allowed through (with X-Remote-* headers set for
+#      the upstream) or redirected to the login screen.
+
+# ---- Reusable forward-auth snippet ---------------------------------
+(authelia) {
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+	}
+}
+
+# ---- Authelia's own portal ----------------------------------------
+http://auth.{$HOME_DOMAIN} {
+	reverse_proxy authelia:9091
+}
+https://auth.{$HOME_DOMAIN} {
+	tls internal
+	reverse_proxy authelia:9091
+}
+
+# ---- Example: protecting an existing package -----------------------
+# To require login for e.g. sonarr, edit packages/media/caddy.snippet
+# (or the merged Caddyfile) and add `import authelia` inside the
+# vhost block. Illustration:
+#
+#     https://sonarr.{$HOME_DOMAIN} {
+#         tls internal
+#         import authelia
+#         reverse_proxy sonarr:8989
+#     }
+#
+# The snippet is a no-op if identity is not enabled (Caddy will just
+# fail to resolve `authelia:9091` — the installer therefore only
+# writes the `import authelia` lines when identity is selected).

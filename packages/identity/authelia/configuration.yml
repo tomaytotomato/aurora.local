@@ -1,0 +1,84 @@
+###############################################################
+# Authelia configuration for home.local                        #
+#                                                              #
+# This file is bind-mounted read-only into the container at    #
+# /config/configuration.yml. Secrets are NOT stored here —     #
+# they arrive via env vars (AUTHELIA_JWT_SECRET etc.) which    #
+# Authelia auto-picks up via its env-var-secret convention.    #
+###############################################################
+
+theme: auto
+
+server:
+  address: 'tcp://0.0.0.0:9091/'
+
+log:
+  level: info
+
+# ---- Authentication backend ----------------------------------
+# File-based. Users are managed in users_database.yml (bind-mount).
+authentication_backend:
+  password_reset:
+    disable: false
+  refresh_interval: 5m
+  file:
+    path: /data/users_database.yml
+    watch: true
+    password:
+      algorithm: argon2
+      argon2:
+        variant: argon2id
+        iterations: 3
+        memory: 65536
+        parallelism: 4
+        key_length: 32
+        salt_length: 16
+
+# ---- Access control -----------------------------------------
+# 'one_factor' = username + password.
+# 'two_factor' = also require TOTP or WebAuthn.
+# Tune per-subdomain as needed.
+access_control:
+  default_policy: deny
+  rules:
+    # Public: auth portal itself, plus the dashboard so it doesn't
+    # bounce loop. Move to two_factor once you're comfortable.
+    - domain: 'auth.{{ env "HOME_DOMAIN" }}'
+      policy: bypass
+    - domain: 'home.{{ env "HOME_DOMAIN" }}'
+      policy: one_factor
+    # Default: everything else in the family requires 2FA.
+    - domain: '*.{{ env "HOME_DOMAIN" }}'
+      policy: two_factor
+
+# ---- Session / cookies --------------------------------------
+session:
+  name: authelia_session
+  same_site: lax
+  inactivity: 5m
+  expiration: 1h
+  remember_me: 1M
+  cookies:
+    - domain: '{{ env "HOME_DOMAIN" }}'
+      authelia_url: 'https://auth.{{ env "HOME_DOMAIN" }}'
+      default_redirection_url: 'https://home.{{ env "HOME_DOMAIN" }}'
+
+# ---- Regulation (brute-force protection) --------------------
+regulation:
+  max_retries: 3
+  find_time: 2m
+  ban_time: 5m
+
+# ---- Storage ------------------------------------------------
+storage:
+  local:
+    path: /data/db.sqlite3
+
+# ---- Notifier -----------------------------------------------
+# If AUTHELIA_NOTIFIER_SMTP_HOST is set in env, Authelia will use
+# SMTP; otherwise it falls through to the filesystem notifier for
+# a self-contained local-only setup.
+notifier:
+  disable_startup_check: false
+  filesystem:
+    filename: /data/notification.txt

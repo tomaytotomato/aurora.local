@@ -1,0 +1,53 @@
+# home.local / packages/identity
+#
+# Authelia SSO + 2FA. Sits behind Caddy on auth.${HOME_DOMAIN} and
+# integrates with other packages via forward-auth (see caddy.snippet:
+# the `authelia` named route can be `import`ed into any vhost).
+#
+# Backend: file-based users_database.yml + local SQLite storage.
+# Zero external dependencies.
+
+name: home-identity
+
+networks:
+  home_net:
+    external: true
+
+services:
+  authelia:
+    image: authelia/authelia:latest
+    container_name: authelia
+    restart: unless-stopped
+    networks: [home_net]
+    ports:
+      # Bound only for local debugging. Real access is via Caddy on
+      # https://auth.${HOME_DOMAIN}. Comment out to hide from the LAN.
+      - "127.0.0.1:9091:9091"
+    environment:
+      - TZ=${TZ:-Europe/London}
+      # Static config file lives in the bind-mount; secrets injected
+      # via env so they don't touch disk.
+      - AUTHELIA_JWT_SECRET=${AUTHELIA_JWT_SECRET}
+      - AUTHELIA_SESSION_SECRET=${AUTHELIA_SESSION_SECRET}
+      - AUTHELIA_STORAGE_ENCRYPTION_KEY=${AUTHELIA_STORAGE_ENCRYPTION_KEY}
+      # Optional SMTP for password-reset / 2FA-enrolment emails. Leave
+      # unset to use the filesystem notifier (writes to /config/notification.txt).
+      - AUTHELIA_NOTIFIER_SMTP_HOST=${AUTHELIA_NOTIFIER_SMTP_HOST:-}
+      - AUTHELIA_NOTIFIER_SMTP_PORT=${AUTHELIA_NOTIFIER_SMTP_PORT:-}
+      - AUTHELIA_NOTIFIER_SMTP_USERNAME=${AUTHELIA_NOTIFIER_SMTP_USERNAME:-}
+      - AUTHELIA_NOTIFIER_SMTP_PASSWORD=${AUTHELIA_NOTIFIER_SMTP_PASSWORD:-}
+      - AUTHELIA_NOTIFIER_SMTP_SENDER=${AUTHELIA_NOTIFIER_SMTP_SENDER:-}
+      # Bake the domain into cookies via env; configuration.yml
+      # references ${HOME_DOMAIN}.
+      - HOME_DOMAIN=${HOME_DOMAIN:-home.local}
+    volumes:
+      - ./authelia:/config:ro
+      # State (SQLite, notifications). Users db lives here too so it
+      # can be edited without a rebuild.
+      - ../../data/identity/authelia:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--tries=1", "--timeout=5", "http://127.0.0.1:9091/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
