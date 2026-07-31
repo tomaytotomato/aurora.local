@@ -2,6 +2,7 @@
 import { onMounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
+import AuroraHero from '@/components/AuroraHero.vue';
 import Button from '@/components/ui/Button.vue';
 import Alert from '@/components/ui/Alert.vue';
 
@@ -34,6 +35,8 @@ const notDebian = computed(() => {
 
 <template>
   <div>
+    <AuroraHero height="md" class="mb-8" />
+
     <div class="eyebrow mb-3">Step 1 of 9</div>
     <h1 class="mb-4">Welcome to Aurora.</h1>
     <p class="text-ink-2 text-base leading-relaxed mb-8">

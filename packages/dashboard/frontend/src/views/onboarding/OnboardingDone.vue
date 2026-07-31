@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { useOnboardingStore } from '@/stores/onboarding';
 import { useRouter } from 'vue-router';
+import AuroraHero from '@/components/AuroraHero.vue';
 import Button from '@/components/ui/Button.vue';
 import Card from '@/components/ui/Card.vue';
 import { OnboardingApi } from '@/api/onboarding';
+import { pickAuroraRandom } from '@/lib/aurora-photos';
 
 const store = useOnboardingStore();
 const router = useRouter();
+
+// A different pick to the welcome screen — feels like a small reward.
+const reward = pickAuroraRandom();
 
 async function toDashboard(): Promise<void> {
   try { await OnboardingApi.complete(); } catch { /* soft */ }
@@ -16,6 +21,8 @@ async function toDashboard(): Promise<void> {
 
 <template>
   <div>
+    <AuroraHero :photo="reward" height="lg" class="mb-8" />
+
     <div class="eyebrow mb-3">Step 9 of 9</div>
     <h1 class="mb-4">You're up.</h1>
     <p class="text-ink-2 mb-10">
@@ -25,26 +32,16 @@ async function toDashboard(): Promise<void> {
 
     <div class="grid grid-cols-2 gap-4 mb-10">
       <Card hover>
-        <div class="eyebrow mb-1">First</div>
-        <h3 class="mb-2">Homepage</h3>
-        <p class="text-sm text-ink-3 mb-4">
-          The tile grid your household uses day-to-day. Everything you just installed
-          appears there.
-        </p>
-        <a :href="`http://${store.domain}`" class="text-sm text-ink no-underline">Open Homepage →</a>
-      </Card>
-
-      <Card hover>
-        <div class="eyebrow mb-1">Admin plane</div>
+        <div class="eyebrow mb-1">Home</div>
         <h3 class="mb-2">Aurora</h3>
         <p class="text-sm text-ink-3 mb-4">
-          This — where you manage packages, secrets, health, and security posture.
-          Bookmark it.
+          The dashboard you're standing in. Manage packages, secrets, health, and
+          security posture from here. Bookmark <code class="text-ink">{{ store.domain }}</code>.
         </p>
-        <a :href="`http://admin.${store.domain}`" class="text-sm text-ink no-underline">Open Aurora →</a>
+        <a :href="`http://${store.domain}`" class="text-sm text-ink no-underline">Open Aurora →</a>
       </Card>
 
-      <Card v-if="store.selectedPackages.includes('privacy')">
+      <Card v-if="store.selectedPackages.includes('privacy')" hover>
         <div class="eyebrow mb-1">Next</div>
         <h3 class="mb-2">AdGuard first-run</h3>
         <p class="text-sm text-ink-3 mb-4">
@@ -54,7 +51,7 @@ async function toDashboard(): Promise<void> {
         <a :href="`http://${store.domain}:3000/`" class="text-sm text-ink no-underline">Open AdGuard wizard →</a>
       </Card>
 
-      <Card v-if="store.selectedPackages.includes('media')">
+      <Card v-if="store.selectedPackages.includes('media')" hover>
         <div class="eyebrow mb-1">Media</div>
         <h3 class="mb-2">Onboard Sonarr / Radarr / Seerr</h3>
         <p class="text-sm text-ink-3 mb-4">
@@ -63,12 +60,22 @@ async function toDashboard(): Promise<void> {
         </p>
         <a :href="`http://prowlarr.${store.domain}`" class="text-sm text-ink no-underline">Start with Prowlarr →</a>
       </Card>
+
+      <Card v-if="store.selectedPackages.includes('storage')" hover>
+        <div class="eyebrow mb-1">Files</div>
+        <h3 class="mb-2">Mount the SMB share</h3>
+        <p class="text-sm text-ink-3 mb-4">
+          Samba is up on the LAN. On macOS: <kbd>⌘K</kbd> then
+          <code class="text-ink">smb://{{ store.domain }}</code>. On Windows: File Explorer →
+          <code class="text-ink">\\{{ store.domain }}</code>.
+        </p>
+      </Card>
     </div>
 
     <div class="flex items-center justify-between border-t border-line pt-6">
       <div class="text-sm text-ink-3">
         <div class="eyebrow mb-1">Reminder</div>
-        Homepage is the tile grid. Aurora is the fuse box.
+        One box, one URL, one dashboard. That's the whole point.
       </div>
       <Button variant="primary" size="lg" @click="toDashboard">Take me to Aurora</Button>
     </div>

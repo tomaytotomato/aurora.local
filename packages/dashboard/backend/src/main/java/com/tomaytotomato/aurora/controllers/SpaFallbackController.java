@@ -23,8 +23,8 @@ public class SpaFallbackController {
 
   @GetMapping(value = {
       "/",
-      "/{path:^(?!api|actuator|assets|favicon)[^.]*}",
-      "/{path:^(?!api|actuator|assets|favicon)[^.]*}/**"
+      "/{path:^(?!api|actuator|assets|favicon|aurora)[^.]*}",
+      "/{path:^(?!api|actuator|assets|favicon|aurora)[^.]*}/**"
   })
   public ResponseEntity<Resource> forwardToIndex() {
     if (!index.exists()) {
