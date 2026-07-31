@@ -1,17 +1,12 @@
 <script setup lang="ts">
 import { useOnboardingStore } from '@/stores/onboarding';
 import { useRouter } from 'vue-router';
-import AuroraHero from '@/components/AuroraHero.vue';
 import Button from '@/components/ui/Button.vue';
 import Card from '@/components/ui/Card.vue';
 import { OnboardingApi } from '@/api/onboarding';
-import { pickAuroraRandom } from '@/lib/aurora-photos';
 
 const store = useOnboardingStore();
 const router = useRouter();
-
-// A different pick to the welcome screen — feels like a small reward.
-const reward = pickAuroraRandom();
 
 async function toDashboard(): Promise<void> {
   try { await OnboardingApi.complete(); } catch { /* soft */ }
@@ -21,8 +16,6 @@ async function toDashboard(): Promise<void> {
 
 <template>
   <div>
-    <AuroraHero :photo="reward" height="lg" class="mb-8" />
-
     <div class="eyebrow mb-3">Step 9 of 9</div>
     <h1 class="mb-4">You're up.</h1>
     <p class="text-ink-2 mb-10">
