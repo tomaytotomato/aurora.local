@@ -1,0 +1,16 @@
+# packages/dev — Caddy vhost
+# Import from packages/core/caddy/Caddyfile.
+
+http://code.{$HOME_DOMAIN} {
+	reverse_proxy code-server:8443
+}
+
+https://code.{$HOME_DOMAIN} {
+	tls internal
+	# code-server needs websockets and long-lived connections.
+	reverse_proxy code-server:8443 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

@@ -1,0 +1,46 @@
+name: ai
+title: Local AI (Ollama + Open-WebUI)
+description: |
+  Local LLM inference via Ollama with Open-WebUI as the chat front-end.
+  Runs on CPU by default; opt-in NVIDIA GPU passthrough via the 'gpu'
+  compose profile (requires the gpu-nvidia host role, TBD).
+
+category: ai
+
+depends_on:
+  - core
+recommends: []
+
+profiles:
+  gpu:
+    description: Enable NVIDIA GPU passthrough for Ollama.
+    requires_packages: []
+
+ports:
+  - {port: 11434, proto: tcp, description: Ollama API}
+  - {port: 3011,  proto: tcp, description: Open-WebUI}
+
+requires:
+  min_ram_mb: 8192
+  min_disk_gb: 30
+  # gpu-nvidia role does not yet exist; the 'gpu' profile assumes the
+  # NVIDIA Container Toolkit is installed on the host. See report.
+  host_roles: [gpu-nvidia]
+
+required_env:
+  - WEBUI_SECRET_KEY
+
+post_install_notes: |
+  1. Open-WebUI:  https://ai.$HOME_DOMAIN/  (first user to sign up is admin)
+  2. Ollama API:  http://<lan-ip>:11434/     (also reachable as ollama:11434
+     from other containers on home_net)
+  3. Pull a model:
+       docker exec -it ollama ollama pull llama3.2
+       docker exec -it ollama ollama pull qwen2.5-coder:7b
+  4. Rough RAM/VRAM guidance:
+       3B  models : ~4 GB
+       7B  models : ~8 GB
+       13B models : ~16 GB
+       70B models : ~48 GB (GPU/quantised only)
+  5. GPU: use `./scripts/up.sh --gpu core ai` (requires NVIDIA Container
+     Toolkit on the host).
