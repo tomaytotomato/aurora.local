@@ -28,13 +28,14 @@ services:
     <<: *common
     image: prom/prometheus:latest
     container_name: prometheus
+    user: "${HOMEPAGE_UID:-1000}:${HOMEPAGE_UID:-1000}"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=30d
       - --web.enable-lifecycle
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ../../data/monitoring/prometheus:/prometheus
     ports:
       - "9090:9090"
@@ -43,6 +44,7 @@ services:
     <<: *common
     image: grafana/grafana:latest
     container_name: grafana
+    user: "${HOMEPAGE_UID:-1000}:${HOMEPAGE_UID:-1000}"
     environment:
       - TZ=${TZ:-Europe/London}
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
@@ -51,7 +53,7 @@ services:
       - GF_ANALYTICS_REPORTING_ENABLED=false
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ../../data/monitoring/grafana:/var/lib/grafana
     ports:
       - "3001:3000"

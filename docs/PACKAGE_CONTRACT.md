@@ -72,3 +72,17 @@ post_install_notes: |
 4. Optionally add `caddy.snippet` (imported automatically by core).
 5. `./scripts/up.sh foo` to smoke-test.
 6. Commit; bootstrap.sh will find it on next run.
+
+### Gotcha: relative bind-mount paths in a multi-`-f` project
+
+`scripts/up.sh` invokes `docker compose -p home -f packages/core/compose.yml -f packages/<pkg>/compose.yml ...`. Compose resolves relative bind-mount source paths against the **first** `-f` file's directory (i.e. `packages/core/`), **not** each file's own directory.
+
+So inside `packages/<pkg>/compose.yml`, always write paths as:
+
+```yaml
+volumes:
+  - ../<pkg>/config/foo.yml:/etc/foo/foo.yml:ro   # your OWN files
+  - ../../data/<pkg>/state:/data                   # runtime data
+```
+
+Never `./config/foo.yml` — that resolves to `packages/core/config/foo.yml` and blows up at container start.

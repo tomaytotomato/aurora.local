@@ -41,7 +41,7 @@ services:
       # references ${HOME_DOMAIN}.
       - HOME_DOMAIN=${HOME_DOMAIN:-home.local}
     volumes:
-      - ./authelia:/config:ro
+      - ../identity/authelia:/config:ro
       # State (SQLite, notifications). Users db lives here too so it
       # can be edited without a rebuild.
       - ../../data/identity/authelia:/data
