@@ -30,6 +30,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../data/caddy/snippets:/etc/caddy/snippets:ro
       - ../../data/caddy/data:/data
       - ../../data/caddy/config:/config
       - ../../data/caddy/logs:/var/log/caddy

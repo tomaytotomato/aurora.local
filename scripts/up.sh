@@ -22,6 +22,8 @@ export REPO
 . "$REPO/scripts/lib/manifest.sh"
 # shellcheck source=lib/state.sh
 . "$REPO/scripts/lib/state.sh"
+# shellcheck source=lib/render.sh
+. "$REPO/scripts/lib/render.sh"
 
 # --------------------------------------------------------------------
 # Parse args: profile flags + package names
@@ -31,6 +33,8 @@ pkgs=()
 for arg in "$@"; do
   case "$arg" in
     --torrent) profiles+=(torrent) ;;
+    --zigbee)  profiles+=(zigbee) ;;
+    --gpu)     profiles+=(gpu) ;;
     --profile=*) profiles+=("${arg#--profile=}") ;;
     --*) die "unknown flag: $arg" ;;
     *) pkgs+=("$arg") ;;
@@ -116,6 +120,12 @@ for ef in "${env_files[@]}"; do
   # shellcheck disable=SC1090
   set -a; . "$ef"; set +a
 done
+
+# --------------------------------------------------------------------
+# Render per-package fragments into runtime layout (caddy snippets,
+# homepage services.yaml, identity users_database seed, pinned images).
+# --------------------------------------------------------------------
+render_all "${pkgs[@]}"
 
 # --------------------------------------------------------------------
 # Up

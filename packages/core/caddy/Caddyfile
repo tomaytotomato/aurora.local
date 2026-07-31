@@ -114,3 +114,9 @@ https://rdt.{$HOME_DOMAIN} {
 # minidlna runs with network_mode: host for UPnP multicast, so it's not
 # reachable from the caddy bridge network without UFW carve-outs. Access
 # its (minimal) status UI directly at http://<lan-ip>:8200/.
+
+# ---- Per-package snippets -------------------------------------------
+# Every enabled package's caddy.snippet is materialised at
+# /etc/caddy/snippets/<pkg>.caddy by scripts/up.sh (via lib/render.sh).
+# Files are picked up automatically; disabled packages get pruned.
+import /etc/caddy/snippets/*.caddy

@@ -1,7 +1,11 @@
 ---
-# home.local / homepage / services.yaml
+# BASE homepage services file (checked in).
 #
-# Groups mirror packages/ 1:1 so orientation is self-documenting.
+# scripts/lib/render.sh writes services.yaml = this file +
+# every enabled package's packages/<name>/homepage.yml fragment.
+# Edit this file for base groups (Core, External, etc.); package
+# groups belong in the package's own homepage.yml.
+
 # API keys pulled from packages/core/.env via {{HOMEPAGE_VAR_*}} tokens.
 # https://gethomepage.dev/configs/services/
 
