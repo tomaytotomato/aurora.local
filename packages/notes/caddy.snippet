@@ -1,0 +1,9 @@
+# home.local / packages/notes / caddy.snippet
+
+http://notes.{$HOME_DOMAIN} {
+	reverse_proxy silverbullet:3000
+}
+https://notes.{$HOME_DOMAIN} {
+	tls internal
+	reverse_proxy silverbullet:3000
+}
