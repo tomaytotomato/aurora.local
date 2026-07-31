@@ -1,0 +1,48 @@
+---
+- name: Skip storage-mount (no external_mounts defined)
+  ansible.builtin.debug:
+    msg: "external_mounts is empty; nothing to mount."
+  when: external_mounts | length == 0
+
+- name: Validate mount entries (must have uuid or label)
+  ansible.builtin.assert:
+    that:
+      - (item.uuid is defined) or (item.label is defined)
+      - item.mountpoint is defined
+    fail_msg: >-
+      external_mounts entry {{ item }} must have uuid or label,
+      and mountpoint.
+  loop: "{{ external_mounts }}"
+  when: external_mounts | length > 0
+
+- name: Ensure mountpoint directories exist
+  ansible.builtin.file:
+    path: "{{ item.mountpoint }}"
+    state: directory
+    owner: "{{ item.owner | default(home_user) }}"
+    group: "{{ item.group | default(home_user) }}"
+    mode: "{{ item.mode | default(storage_mount_default_mode) }}"
+  loop: "{{ external_mounts }}"
+  when: external_mounts | length > 0
+
+- name: Add fstab entries and mount
+  ansible.posix.mount:
+    src: "{{ ('UUID=' + item.uuid) if item.uuid is defined else ('LABEL=' + item.label) }}"
+    path: "{{ item.mountpoint }}"
+    fstype: "{{ item.fstype | default(storage_mount_default_fstype) }}"
+    opts: "{{ item.options | default(storage_mount_default_options) }}"
+    state: mounted
+  loop: "{{ external_mounts }}"
+  when: external_mounts | length > 0
+
+- name: Chown mounted filesystems (best-effort, ext-family only)
+  ansible.builtin.file:
+    path: "{{ item.mountpoint }}"
+    state: directory
+    owner: "{{ item.owner | default(home_user) }}"
+    group: "{{ item.group | default(home_user) }}"
+    recurse: false
+  loop: "{{ external_mounts }}"
+  when:
+    - external_mounts | length > 0
+    - item.chown | default(true) | bool
