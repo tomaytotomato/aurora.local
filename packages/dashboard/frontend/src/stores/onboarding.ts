@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import type { OnboardingStepId } from '@/api/onboarding';
+import { OnboardingApi, type OnboardingStepId, type OnboardingStatus, type OnboardingEnv } from '@/api/onboarding';
 
 // Local wizard state. The server is source of truth; this mirrors for UX snap.
 // Keeps the middle steps navigable without a network round-trip.
@@ -43,8 +43,27 @@ export const useOnboardingStore = defineStore('onboarding', () => {
   const selectedPackages = ref<string[]>(['core', 'privacy', 'storage']);
   const dnsMode = ref<'adguard' | 'router' | 'mdns' | null>(null);
 
+  // Server-authoritative status. Populated once via fetchStatus(); router
+  // guard reads this to decide first-run redirects. Kept small so it can
+  // be re-fetched cheaply on any transition.
+  const status = ref<OnboardingStatus | null>(null);
+  const env = ref<OnboardingEnv | null>(null);
+
   const stepIndex = computed(() => STEPS.indexOf(currentStep.value));
   const progress = computed(() => (stepIndex.value / (STEPS.length - 1)) * 100);
+
+  async function fetchStatus(): Promise<OnboardingStatus> {
+    status.value = await OnboardingApi.status();
+    if (status.value.step && STEPS.includes(status.value.step)) {
+      currentStep.value = status.value.step;
+    }
+    return status.value;
+  }
+
+  async function fetchEnv(): Promise<OnboardingEnv> {
+    env.value = await OnboardingApi.env();
+    return env.value;
+  }
 
   function markCompleted(step: OnboardingStepId): void {
     completed.value.add(step);
@@ -97,12 +116,16 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     domain,
     selectedPackages,
     dnsMode,
+    status,
+    env,
     stepIndex,
     progress,
     goTo,
     next,
     back,
     markCompleted,
+    fetchStatus,
+    fetchEnv,
     selectPreset,
     togglePackage,
   };

@@ -46,6 +46,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:rw
       # Host /proc for cheap metrics (mem, load, uptime).
       - /proc:/host/proc:ro
+      # Host distro identity for the onboarding welcome screen.
+      - /etc/os-release:/host/etc/os-release:ro
       # Aurora's own state (SQLite DB, sessions).
       - aurora_data:/data
 

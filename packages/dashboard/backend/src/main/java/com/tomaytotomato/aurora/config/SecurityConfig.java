@@ -40,6 +40,7 @@ public class SecurityConfig {
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/auth/session", "/api/auth/me").permitAll()
             .requestMatchers("/api/onboarding/**").permitAll() // OnboardingController re-checks bootstrap mode
             .requestMatchers("/api/health").permitAll()
             .anyRequest().authenticated()

@@ -1,6 +1,7 @@
 package com.tomaytotomato.aurora.controllers;
 
 import com.tomaytotomato.aurora.services.OnboardingService;
+import com.tomaytotomato.aurora.services.SystemService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -30,9 +31,11 @@ import java.util.Map;
 public class OnboardingController {
 
   private final OnboardingService onboarding;
+  private final SystemService system;
 
-  public OnboardingController(OnboardingService onboarding) {
+  public OnboardingController(OnboardingService onboarding, SystemService system) {
     this.onboarding = onboarding;
+    this.system = system;
   }
 
   @GetMapping("/status")
@@ -42,6 +45,15 @@ public class OnboardingController {
         "bootstrap_mode", onboarding.isBootstrapMode(),
         "step", onboarding.currentStep()
     );
+  }
+
+  /**
+   * Public system facts for the welcome screen. Anything hazardous stays
+   * on the authed /api/system endpoint.
+   */
+  @GetMapping("/env")
+  public Map<String, Object> env() {
+    return system.env();
   }
 
   @PostMapping("/admin")
@@ -67,8 +79,9 @@ public class OnboardingController {
   @PostMapping("/packages")
   public ResponseEntity<Map<String, Object>> setPackages(@RequestBody SetPackagesReq req) {
     guardPostAdmin();
-    onboarding.setEnabledPackages(req.enabled());
-    return ResponseEntity.ok(Map.of("enabled", req.enabled()));
+    List<String> enabled = req.enabledOrNames();
+    onboarding.setEnabledPackages(enabled);
+    return ResponseEntity.ok(Map.of("enabled", enabled));
   }
 
   @PostMapping("/complete")
@@ -102,5 +115,12 @@ public class OnboardingController {
 
   public record SetDomainReq(@NotBlank String domain) {}
 
-  public record SetPackagesReq(List<String> enabled) {}
+  /** Accepts either {enabled:[...]} or {names:[...]} for frontend compat. */
+  public record SetPackagesReq(List<String> enabled, List<String> names) {
+    public List<String> enabledOrNames() {
+      if (enabled != null && !enabled.isEmpty()) return enabled;
+      if (names != null && !names.isEmpty()) return names;
+      return List.of();
+    }
+  }
 }

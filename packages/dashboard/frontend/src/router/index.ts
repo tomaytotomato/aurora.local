@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useOnboardingStore } from '@/stores/onboarding';
 
 import AppShell from '@/components/layout/AppShell.vue';
 import OnboardingShell from '@/components/layout/OnboardingShell.vue';
@@ -10,7 +11,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/onboarding',
     component: OnboardingShell,
-    meta: { public: true },
+    meta: { public: true, onboarding: true },
     children: [
       { path: '', redirect: '/onboarding/welcome' },
       { path: 'welcome', component: () => import('@/views/onboarding/OnboardingWelcome.vue') },
@@ -48,10 +49,39 @@ export const router = createRouter({
   },
 });
 
-// Auth guard — public routes skip; everything else needs a session.
+// Guard order:
+//   1. Onboarding not complete → force /onboarding/** (except /login).
+//   2. Onboarding done + route is public → allow.
+//   3. Otherwise require an authenticated session; else /login.
 // Fail-open on network errors so the user can still reach /login.
 router.beforeEach(async (to) => {
+  const onboarding = useOnboardingStore();
+
+  // Fetch status once per SPA lifetime; router calls this on every nav
+  // but the store caches the result so it's a single network call.
+  if (!onboarding.status) {
+    try {
+      await onboarding.fetchStatus();
+    } catch {
+      // Backend unreachable — let the request through so the UI can show
+      // its own error state instead of an infinite router loop.
+      return true;
+    }
+  }
+
+  const needsOnboarding =
+    onboarding.status && (onboarding.status.bootstrap_mode || !onboarding.status.complete);
+
+  if (needsOnboarding) {
+    if (to.path.startsWith('/onboarding')) return true;
+    // Allow /login too in case an admin was half-created and needs recovery.
+    if (to.path === '/login') return true;
+    return { path: '/onboarding/welcome' };
+  }
+
+  // Onboarding done. Normal auth flow.
   if (to.meta.public) return true;
+
   const auth = useAuthStore();
   if (!auth.session) await auth.fetchSession();
   if (auth.session?.authenticated) return true;

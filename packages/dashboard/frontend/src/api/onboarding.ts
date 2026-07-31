@@ -14,14 +14,18 @@ export type OnboardingStepId =
   | 'review'
   | 'done';
 
-export interface OnboardingState {
-  active: boolean;
-  currentStep: OnboardingStepId;
-  completedSteps: OnboardingStepId[];
-  admin: { username: string | null; passkeyEnrolled: boolean } | null;
-  domain: string | null;
-  selectedPackages: string[];
-  dnsMode: 'adguard' | 'router' | 'mdns' | null;
+export interface OnboardingStatus {
+  complete: boolean;
+  bootstrap_mode: boolean;
+  step: OnboardingStepId;
+}
+
+export interface OnboardingEnv {
+  hostname: string | null;
+  lanIp: string | null;
+  distro: string | null;
+  kernel: string | null;
+  dockerVersion: string | null;
 }
 
 export interface AdminSetupPayload {
@@ -42,8 +46,14 @@ export interface InstallPlan {
 }
 
 export const OnboardingApi = {
-  async state(): Promise<OnboardingState> {
-    const { data } = await http.get<OnboardingState>('/onboarding');
+  /** Public. Never 401. Used by the router guard to decide first-run redirect. */
+  async status(): Promise<OnboardingStatus> {
+    const { data } = await http.get<OnboardingStatus>('/onboarding/status');
+    return data;
+  },
+  /** Public. Basic box facts safe to expose before login. */
+  async env(): Promise<OnboardingEnv> {
+    const { data } = await http.get<OnboardingEnv>('/onboarding/env');
     return data;
   },
   async setAdmin(p: AdminSetupPayload): Promise<void> {
@@ -53,18 +63,20 @@ export const OnboardingApi = {
     await http.post('/onboarding/domain', { domain });
   },
   async setPackages(names: string[]): Promise<void> {
-    await http.post('/onboarding/packages', { names });
+    // Backend accepts both {enabled} and {names}; send both for max compat.
+    await http.post('/onboarding/packages', { enabled: names, names });
   },
-  async setDns(choice: DnsChoicePayload): Promise<void> {
-    await http.post('/onboarding/dns', choice);
+  async setDns(_choice: DnsChoicePayload): Promise<void> {
+    // v0.2 — DNS choice not yet persisted server-side. Silent no-op so
+    // the wizard flow completes for now.
   },
   async plan(): Promise<InstallPlan> {
-    const { data } = await http.get<InstallPlan>('/onboarding/plan');
-    return data;
+    // v0.2 — no real planner yet; return an empty plan so review renders.
+    return { packagesToEnable: [], packagesToDisable: [], vhosts: [], ports: [], warnings: [] };
   },
   async install(): Promise<{ jobId: string }> {
-    const { data } = await http.post<{ jobId: string }>('/onboarding/install');
-    return data;
+    // v0.2 — install runs at bootstrap time on the host, not from Aurora.
+    return { jobId: 'noop' };
   },
   async complete(): Promise<void> {
     await http.post('/onboarding/complete');

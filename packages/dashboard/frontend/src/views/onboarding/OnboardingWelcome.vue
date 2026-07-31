@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useSystemStore } from '@/stores/system';
 import { useOnboardingStore } from '@/stores/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Alert from '@/components/ui/Alert.vue';
 
-const system = useSystemStore();
 const store = useOnboardingStore();
 const router = useRouter();
 
@@ -14,8 +12,9 @@ const err = ref<string | null>(null);
 
 onMounted(async () => {
   try {
-    if (!system.info) await system.fetchInfo();
+    if (!store.env) await store.fetchEnv();
   } catch (e) {
+    // Public endpoint; a real failure means backend is broken. Surface it.
     err.value = e instanceof Error ? e.message : 'Failed to read system info';
   }
 });
@@ -25,10 +24,12 @@ function proceed(): void {
   router.push(`/onboarding/${store.currentStep}`);
 }
 
-const notDebian = () => {
-  const d = system.info?.distro?.toLowerCase() ?? '';
+const env = computed(() => store.env);
+
+const notDebian = computed(() => {
+  const d = env.value?.distro?.toLowerCase() ?? '';
   return d && !d.includes('debian') && !d.includes('ubuntu');
-};
+});
 </script>
 
 <template>
@@ -45,34 +46,34 @@ const notDebian = () => {
       <Alert tone="err" class="mb-6">{{ err }}</Alert>
     </div>
 
-    <div v-else-if="!system.info" class="text-sm text-ink-4 mb-8">Reading system info…</div>
+    <div v-else-if="!env" class="text-sm text-ink-4 mb-8">Reading system info…</div>
 
     <div v-else class="border border-line rounded-lg mb-8">
       <dl class="divide-y divide-[var(--color-line-2)]">
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
           <dt class="text-ink-3">Hostname</dt>
-          <dd class="col-span-2 font-mono text-ink">{{ system.info.hostname }}</dd>
+          <dd class="col-span-2 font-mono text-ink">{{ env.hostname ?? '—' }}</dd>
         </div>
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
           <dt class="text-ink-3">LAN IP</dt>
-          <dd class="col-span-2 font-mono text-ink">{{ system.info.lanIp }}</dd>
+          <dd class="col-span-2 font-mono text-ink">{{ env.lanIp ?? '—' }}</dd>
         </div>
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
           <dt class="text-ink-3">Distribution</dt>
-          <dd class="col-span-2 font-mono text-ink">{{ system.info.distro }}</dd>
+          <dd class="col-span-2 font-mono text-ink">{{ env.distro ?? '—' }}</dd>
         </div>
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
           <dt class="text-ink-3">Kernel</dt>
-          <dd class="col-span-2 font-mono text-ink">{{ system.info.kernel }}</dd>
+          <dd class="col-span-2 font-mono text-ink">{{ env.kernel ?? '—' }}</dd>
         </div>
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
           <dt class="text-ink-3">Docker</dt>
-          <dd class="col-span-2 font-mono text-ink">{{ system.info.dockerVersion }}</dd>
+          <dd class="col-span-2 font-mono text-ink">{{ env.dockerVersion ?? '—' }}</dd>
         </div>
       </dl>
     </div>
 
-    <Alert v-if="notDebian()" tone="warn" title="Untested distribution" class="mb-8">
+    <Alert v-if="notDebian" tone="warn" title="Untested distribution" class="mb-8">
       Aurora is designed for Debian and Ubuntu. Other distros may work, but the host
       Ansible playbooks and firewall roles assume Debian's package layout.
     </Alert>

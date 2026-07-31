@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -41,7 +40,7 @@ public class AuthController {
   }
 
   @PostMapping("/login")
-  public Map<String, Object> login(@Valid @RequestBody LoginReq req, HttpServletRequest request) {
+  public Session login(@Valid @RequestBody LoginReq req, HttpServletRequest request) {
     Optional<AdminUser> user = auth.authenticate(req.username(), req.password());
     if (user.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid credentials");
@@ -56,7 +55,7 @@ public class AuthController {
         user.get().username(), null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
     SecurityContextHolder.getContext().setAuthentication(authToken);
 
-    return Map.of("username", user.get().username(), "id", user.get().id());
+    return new Session(true, user.get().username(), false, user.get().tz());
   }
 
   @PostMapping("/logout")
@@ -67,14 +66,26 @@ public class AuthController {
     return ResponseEntity.noContent().build();
   }
 
-  @GetMapping("/me")
-  public ResponseEntity<Map<String, Object>> me(HttpServletRequest request) {
-    HttpSession session = request.getSession(false);
-    if (session == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-    Object u = session.getAttribute(SESSION_USER);
-    if (u == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-    return ResponseEntity.ok(Map.of("username", u.toString()));
+  /**
+   * Public. Always returns 200 with a Session; when nobody's logged in,
+   * {@code authenticated} is false. The SPA reads this on every navigation
+   * to decide auth vs onboarding vs login redirects, so it MUST NOT 401.
+   */
+  @GetMapping({"/session", "/me"})
+  public Session session(HttpServletRequest request) {
+    HttpSession s = request.getSession(false);
+    if (s == null) return Session.anonymous();
+    Object u = s.getAttribute(SESSION_USER);
+    if (u == null) return Session.anonymous();
+    return new Session(true, u.toString(), false, null);
   }
 
   public record LoginReq(@NotBlank String username, @NotBlank String password) {}
+
+  /** SPA-facing session shape. Stable contract; add fields, never rename. */
+  public record Session(boolean authenticated, String username, boolean passkeyEnrolled, String tz) {
+    public static Session anonymous() {
+      return new Session(false, null, false, null);
+    }
+  }
 }
