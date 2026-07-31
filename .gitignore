@@ -17,6 +17,10 @@ packages/*/*/data/
 **/logs/
 *.log
 
+# ---- installer state ----
+# Written by bootstrap.sh; records which packages are enabled on this host.
+.state.yml
+
 # ---- ansible ----
 *.retry
 inventory.ini
