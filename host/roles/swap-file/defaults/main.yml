@@ -1,0 +1,16 @@
+---
+# Where the swap file lives.
+swap_file_path: /swapfile
+
+# Explicit size in GB. When empty/0/'auto' the size is derived:
+#   size = max(2, round(RAM_GB))
+# capped at 8 to avoid runaway allocation on large boxes.
+swap_file_size_gb: auto
+
+# Only create swap if the box has less than this much RAM (GB).
+# Set to a very large number to force creation regardless.
+swap_min_ram_gb_threshold: 4
+
+# Cap for auto-sized swap. Ignored when swap_file_size_gb is set
+# explicitly.
+swap_file_auto_max_gb: 8
