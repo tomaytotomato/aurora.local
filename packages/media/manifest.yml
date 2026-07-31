@@ -1,0 +1,41 @@
+name: media
+title: Media automation (*arr + requests + downloaders)
+description: |
+  Debrid-first (RDTClient) with qBittorrent-behind-gluetun as the local
+  fallback. Sonarr/Radarr/Bazarr/Prowlarr do the automation, Jellyseerr
+  handles requests, Flaresolverr rides shotgun on Cloudflare challenges.
+
+category: media
+
+depends_on:
+  - core
+recommends:
+  - privacy
+  - storage
+
+profiles:
+  torrent:
+    description: Enable qBittorrent behind gluetun.
+    requires_packages: [privacy]
+
+ports:
+  - {port: 8989, proto: tcp, description: Sonarr}
+  - {port: 7878, proto: tcp, description: Radarr}
+  - {port: 9696, proto: tcp, description: Prowlarr}
+  - {port: 6767, proto: tcp, description: Bazarr}
+  - {port: 5055, proto: tcp, description: Jellyseerr}
+  - {port: 6500, proto: tcp, description: RDTClient}
+  - {port: 8191, proto: tcp, description: Flaresolverr}
+  - {port: 8081, proto: tcp, description: SABnzbd}
+
+requires:
+  min_ram_mb: 2048
+  min_disk_gb: 20
+  host_roles: []
+
+required_env: []
+
+post_install_notes: |
+  1. Set the download client(s) in Sonarr/Radarr Settings > Download Clients.
+  2. Add Prowlarr as the indexer source in Sonarr/Radarr Settings > Indexers.
+  3. Point Jellyseerr at your Jellyfin/Plex server.

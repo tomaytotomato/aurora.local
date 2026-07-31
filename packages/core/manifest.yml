@@ -1,0 +1,29 @@
+name: core
+title: Core (dashboard + reverse proxy)
+description: |
+  Always on. Caddy is the single entry point on :80/:443 and fans out
+  to every other package on subdomains under $HOME_DOMAIN. Homepage
+  is the dashboard aggregating status from every enabled package.
+
+category: core
+
+depends_on: []
+recommends: []
+profiles: {}
+
+ports:
+  - {port: 80,  proto: tcp, description: Caddy HTTP}
+  - {port: 443, proto: tcp, description: Caddy HTTPS}
+
+requires:
+  min_ram_mb: 256
+  min_disk_gb: 1
+  host_roles: []
+
+required_env: []
+
+post_install_notes: |
+  Install Caddy's root CA on client devices for green padlocks:
+    ./scripts/get-caddy-root-cert.sh
+  Homepage will be reachable on http://<hostname>.local/ and
+  http://home.$HOME_DOMAIN/.

@@ -1,0 +1,40 @@
+name: privacy
+title: Privacy (LAN DNS + VPN)
+description: |
+  AdGuard Home is the LAN's DNS server + ad/tracker blocker; point
+  your router's DHCP DNS at this box after first boot. Gluetun is a
+  provider-agnostic VPN sidecar exposing its network namespace to
+  other packages (e.g. qBittorrent in media/torrent profile).
+
+category: privacy
+
+depends_on:
+  - core
+recommends: []
+
+profiles:
+  torrent:
+    description: Start gluetun (needed by media package's torrent profile).
+    requires_packages: []
+
+ports:
+  - {port: 53,   proto: tcp, description: DNS (bound to LAN IP)}
+  - {port: 53,   proto: udp, description: DNS (bound to LAN IP)}
+  - {port: 3000, proto: tcp, description: AdGuard first-run wizard}
+  - {port: 8000, proto: tcp, description: Gluetun control server, profile: torrent}
+  - {port: 8080, proto: tcp, description: qBittorrent WebUI (via gluetun), profile: torrent}
+
+requires:
+  min_ram_mb: 512
+  min_disk_gb: 2
+  host_roles: []
+
+required_env:
+  - VPN_SERVICE_PROVIDER
+  - WIREGUARD_PRIVATE_KEY
+
+post_install_notes: |
+  1. First-run AdGuard wizard: http://<lan-ip>:3000
+  2. Configure your router to hand out this box's IP as DNS.
+  3. For VPN, fill packages/privacy/.env (see .env.example for
+     Proton/Mullvad/Wireguard examples).

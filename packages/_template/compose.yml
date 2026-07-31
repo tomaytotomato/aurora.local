@@ -1,0 +1,22 @@
+# Package template
+#
+# Copy this directory to packages/<yourname>/ and edit.
+# All files are required unless noted; see docs/PACKAGE_CONTRACT.md.
+
+name: home-TEMPLATE
+
+networks:
+  home_net:
+    external: true
+
+services:
+  # example:
+  # myservice:
+  #   image: myimage:latest
+  #   container_name: myservice
+  #   restart: unless-stopped
+  #   networks: [home_net]
+  #   environment:
+  #     - TZ=${TZ}
+  #   volumes:
+  #     - ../../data/myservice:/config
