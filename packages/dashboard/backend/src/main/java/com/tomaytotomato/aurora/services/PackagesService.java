@@ -80,6 +80,33 @@ public class PackagesService {
     }
   }
 
+  // Infrastructure packages that are always installed and never appear in
+  // the user-facing enabled[] set. Excluded from install-diff surfaces so
+  // the Done screen doesn't tell the user to "stop the dashboard" (i.e.
+  // itself) because they never explicitly opted into it.
+  private static final java.util.Set<String> INFRASTRUCTURE_PACKAGES =
+      java.util.Set.of("dashboard");
+
+  /** Packages the wizard enabled that don't have any containers up yet. */
+  public List<String> enabledNotRunning() {
+    var out = new ArrayList<String>();
+    for (var p : list()) {
+      if (INFRASTRUCTURE_PACKAGES.contains(p.name())) continue;
+      if (p.enabled() && !p.running()) out.add(p.name());
+    }
+    return out;
+  }
+
+  /** Packages with containers running that the wizard doesn't have enabled. */
+  public List<String> runningNotEnabled() {
+    var out = new ArrayList<String>();
+    for (var p : list()) {
+      if (INFRASTRUCTURE_PACKAGES.contains(p.name())) continue;
+      if (p.running() && !p.enabled()) out.add(p.name());
+    }
+    return out;
+  }
+
   private Set<String> runningPackageNames() {
     // Compose service name doesn't strictly equal package name, but the
     // convention in aurora.local is that each package's compose sets

@@ -43,6 +43,17 @@ public class AdminUserRepo {
     }
   }
 
+  /** Return the primary admin (lowest id). v0.1 only ever has one. */
+  public Optional<AdminUser> findFirst() {
+    try {
+      return Optional.ofNullable(jdbc.queryForObject(
+          "SELECT id, username, password_hash, tz, created_at FROM admin_user ORDER BY id LIMIT 1",
+          MAPPER));
+    } catch (EmptyResultDataAccessException e) {
+      return Optional.empty();
+    }
+  }
+
   public long create(String username, String passwordHash, String tz) {
     KeyHolder kh = new GeneratedKeyHolder();
     jdbc.update(conn -> {
