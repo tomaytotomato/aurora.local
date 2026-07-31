@@ -1,0 +1,35 @@
+name: backup
+title: Backup (Kopia)
+description: |
+  Kopia is a deduplicating, encrypted backup tool with a friendly web
+  UI. Defaults to a local filesystem repository under
+  data/backup/repository; can be reconfigured to point at B2, S3, GCS,
+  Azure, SFTP or WebDAV from the UI without changing this package.
+
+category: storage
+
+depends_on:
+  - core
+recommends: []
+profiles: {}
+
+ports:
+  - {port: 51515, proto: tcp, description: Kopia server UI/API}
+
+requires:
+  min_ram_mb: 512
+  min_disk_gb: 20
+  host_roles: []
+
+required_env:
+  - KOPIA_PASSWORD
+  - KOPIA_UI_PASSWORD
+
+post_install_notes: |
+  UI: https://backup.$HOME_DOMAIN/  (login KOPIA_UI_USER / KOPIA_UI_PASSWORD)
+
+  First-run:
+    1. Open the UI; if the repo is uninitialised, "Create Repository"
+       -> Filesystem -> /repository, encryption password = KOPIA_PASSWORD.
+    2. Add sources: /data/home/<you>/home.local, /data/etc, etc.
+    3. Import policies/default-policy.json as a starting point.

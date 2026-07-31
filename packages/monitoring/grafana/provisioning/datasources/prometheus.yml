@@ -1,0 +1,16 @@
+# home.local / packages/monitoring / grafana datasource provisioning
+#
+# Auto-registers Prometheus as the default datasource on first boot.
+# Bind-mounted read-only into /etc/grafana/provisioning/datasources/.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 30s

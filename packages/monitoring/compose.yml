@@ -1,0 +1,99 @@
+# home.local / packages/monitoring
+#
+# Observability trio for the home box:
+#   - Prometheus scrapes node_exporter (host) and cAdvisor (containers),
+#     plus anything else you wire in under prometheus/prometheus.yml.
+#   - Grafana visualises. Datasource + dashboards folder are
+#     auto-provisioned from grafana/provisioning/ so a fresh volume
+#     comes up already pointed at Prometheus.
+#   - Uptime-Kuma is a separate, self-contained blackbox monitor for
+#     "is the URL up" style checks (used by the Homepage dashboard).
+#
+# All services join home_net so Caddy can front them on subdomains.
+
+name: home-monitoring
+
+networks:
+  home_net:
+    external: true
+
+x-common: &common
+  restart: unless-stopped
+  networks: [home_net]
+  environment:
+    - TZ=${TZ:-Europe/London}
+
+services:
+  prometheus:
+    <<: *common
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../data/monitoring/prometheus:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    <<: *common
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - TZ=${TZ:-Europe/London}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../../data/monitoring/grafana:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
+  node-exporter:
+    <<: *common
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    ports:
+      - "9100:9100"
+
+  cadvisor:
+    <<: *common
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    # cAdvisor needs a laundry list of host paths to introspect
+    # container cgroups. Read-only where possible.
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8082:8080"
+
+  uptime-kuma:
+    <<: *common
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    volumes:
+      - ../../data/monitoring/uptime-kuma:/app/data
+    ports:
+      - "3002:3001"
