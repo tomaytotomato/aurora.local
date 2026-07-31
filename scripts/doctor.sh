@@ -166,6 +166,33 @@ if list_enabled_packages | grep -qx core; then
   (( found )) || _warn "caddy root cert not installed on this host (run scripts/get-caddy-root-cert.sh)"
 fi
 
+# ---- bind-mount integrity --------------------------------------------
+# Detects the specific footgun of `sudo rm -rf data/` while containers
+# are running: the mount source path disappears from the host, so on
+# next container restart the app boots as a fresh install and every
+# setting is lost. Compare each running container's declared bind
+# source against reality on disk.
+if has_cmd docker && docker ps -q 2>/dev/null | read -r _; then
+  log "bind-mount integrity"
+  mismatched=0
+  while IFS='|' read -r cname src _dest; do
+    [[ -z "$src" ]] && continue
+    # Only care about mounts under $REPO/data (the ones we own).
+    [[ "$src" == "$REPO/data/"* ]] || continue
+    if [[ ! -e "$src" ]]; then
+      _fail "container '$cname' bind source vanished: $src"
+      _fail "  a restart will wipe its config; recover via 'docker cp' BEFORE restarting"
+      mismatched=1
+    fi
+  done < <(
+    for c in $(docker ps --format '{{.Names}}'); do
+      docker inspect "$c" --format '{{range .Mounts}}{{if eq .Type "bind"}}'"$c"'|{{.Source}}|{{.Destination}}
+{{end}}{{end}}'
+    done
+  )
+  (( mismatched )) || _pass "all running containers' bind sources exist on disk"
+fi
+
 # ---- summary ---------------------------------------------------------
 echo
 if (( FAILS == 0 && WARNS == 0 )); then

@@ -13,6 +13,25 @@ idempotent, safe to run repeatedly, and lives under `scripts/`.
 
 Every script accepts `-h` / `--help`.
 
+## ⚠️ Safety: don't `rm -rf data/` while containers are running
+
+Docker bind-mounts are path-resolved, not inode-pinned. If you delete
+`data/` (or any `data/<pkg>/` subdirectory) while its container is
+running, the container will keep serving from in-memory state — but
+the on-disk state is gone, and the **next restart wipes the app**
+(fresh install, all settings lost).
+
+- **Safe order** for a hard reset: `./scripts/down.sh` **first**, then
+  `rm -rf data/<pkg>`, then `./scripts/up.sh <pkg>`.
+- `./scripts/doctor.sh` includes a `bind-mount integrity` check that
+  fails loudly if any running container's bind source has vanished
+  from disk. Run doctor before restarting anything if you suspect the
+  filesystem was disturbed — recovery is only possible **before** the
+  container restarts, via `docker cp <container>:<path> /somewhere/`.
+- `./scripts/backup.sh` (see below) snapshots the small, stateful
+  config directories under `data/`; run it as a cron job so a
+  recoverable copy always exists.
+
 ## doctor
 
 ```
