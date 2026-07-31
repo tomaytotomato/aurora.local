@@ -8,7 +8,7 @@ Every `packages/<name>/` directory MUST contain:
 | File               | Required | Purpose                                                      |
 |--------------------|----------|--------------------------------------------------------------|
 | `manifest.yml`     | yes      | Metadata consumed by `bootstrap.sh` and `scripts/*.sh`.      |
-| `compose.yml`      | yes      | Compose stack. Uses `name: home-<name>`, joins `home_net`.   |
+| `compose.yml`      | yes      | Compose stack. Uses `name: home-<name>`, joins `aurora_net`.   |
 | `.env.example`     | yes      | Every variable referenced by `compose.yml`, with comments.   |
 | `README.md`        | yes      | Short human description + first-run notes.                   |
 | `caddy.snippet`    | no       | Vhost fragments imported by `packages/core/caddy/Caddyfile`. |
@@ -75,7 +75,7 @@ post_install_notes: |
 
 ### Gotcha: relative bind-mount paths in a multi-`-f` project
 
-`scripts/up.sh` invokes `docker compose -p home -f packages/core/compose.yml -f packages/<pkg>/compose.yml ...`. Compose resolves relative bind-mount source paths against the **first** `-f` file's directory (i.e. `packages/core/`), **not** each file's own directory.
+`scripts/up.sh` invokes `docker compose -p aurora -f packages/core/compose.yml -f packages/<pkg>/compose.yml ...`. Compose resolves relative bind-mount source paths against the **first** `-f` file's directory (i.e. `packages/core/`), **not** each file's own directory.
 
 So inside `packages/<pkg>/compose.yml`, always write paths as:
 

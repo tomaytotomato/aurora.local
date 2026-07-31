@@ -9,14 +9,14 @@ Browser-based **VS Code (code-server)** plus **Postgres 16** and
    `POSTGRES_PASSWORD`, `REDIS_PASSWORD`.
 2. `./scripts/up.sh core dev`
 3. Access:
-   - code-server: `https://code.$HOME_DOMAIN/`
+   - code-server: `https://code.$DOMAIN/`
    - Postgres (from host): `psql -h localhost -p 15432 -U $POSTGRES_USER $POSTGRES_DB`
    - Redis (from host): `redis-cli -h localhost -p 16379 -a $REDIS_PASSWORD`
 
 ## Editing this repo from the browser
 
-`~/home.local` is bind-mounted into code-server at
-`/workspace/home.local`. Open that folder and you can edit the entire
+`~/aurora.local` is bind-mounted into code-server at
+`/workspace/aurora.local`. Open that folder and you can edit the entire
 repo from anywhere on the LAN.
 
 **UID caveat.** code-server runs as UID 1000 by default (via
@@ -26,7 +26,7 @@ container will be owned by the wrong host user.
 
 ## Connecting other packages to Postgres/Redis
 
-Both are on `home_net`, so any other package's container can reach:
+Both are on `aurora_net`, so any other package's container can reach:
 
 - `postgres:5432` — internal Postgres port (not the remapped 15432)
 - `redis:6379`   — internal Redis port (not 16379)

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# home.local / scripts/lib/state.sh
+# aurora.local / scripts/lib/state.sh
 #
 # Read/write $REPO/.state.yml. Records what's currently enabled on this
 # host so `add`, `remove`, `status`, `up`, `down` know the true set.
@@ -7,7 +7,7 @@
 # Schema:
 #   bootstrap_version: 1
 #   hostname: aurora
-#   domain: home.local
+#   domain: aurora.local
 #   installed_at: 2025-07-31T14:34:00Z
 #   enabled:
 #     - core

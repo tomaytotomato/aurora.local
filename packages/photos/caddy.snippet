@@ -1,13 +1,13 @@
-# home.local / packages/photos / caddy.snippet
+# aurora.local / packages/photos / caddy.snippet
 #
 # Imported by packages/core/caddy/Caddyfile via `import` once the
 # installer wires it up. Serves both http:// and https:// to match
 # the rest of the deployment.
 
-http://photos.{$HOME_DOMAIN} {
+http://photos.{$DOMAIN} {
 	reverse_proxy immich-server:2283
 }
-https://photos.{$HOME_DOMAIN} {
+https://photos.{$DOMAIN} {
 	tls internal
 	reverse_proxy immich-server:2283
 }

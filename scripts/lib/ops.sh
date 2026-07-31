@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# home.local / scripts/lib/ops.sh
+# aurora.local / scripts/lib/ops.sh
 #
 # Shared helpers for the OPS scripts (doctor, health, backup, pin,
 # rotate-secrets). This file intentionally lives alongside a future

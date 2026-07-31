@@ -8,7 +8,7 @@ frontend).
 1. Copy `.env.example` to `.env`. Set `WEBUI_SECRET_KEY` (generate with
    `openssl rand -hex 32`).
 2. `./scripts/up.sh core ai`
-3. Open-WebUI: `https://ai.$HOME_DOMAIN/` — first user to sign up
+3. Open-WebUI: `https://ai.$DOMAIN/` — first user to sign up
    becomes the admin.
 4. Pull a model:
    ```

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# home.local / host/roles/caddy-trust/files/install-caddy-cert-client.sh
+# aurora.local / host/roles/caddy-trust/files/install-caddy-cert-client.sh
 #
 # Run this on a CLIENT machine (laptop, phone-via-share, etc.) to trust
-# the home.local Caddy root CA so *.home.local URLs get a green padlock.
+# the aurora.local Caddy root CA so *.aurora.local URLs get a green padlock.
 #
 # Usage:
 #   # Grab the cert from the server (one time):

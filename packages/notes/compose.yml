@@ -1,12 +1,12 @@
-# home.local / packages/notes
+# aurora.local / packages/notes
 #
 # SilverBullet — single-user markdown notes with a plug system.
 # Storage is just a directory full of .md files; no database.
 
-name: home-notes
+name: aurora-notes
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -14,7 +14,7 @@ services:
     image: ghcr.io/silverbulletmd/silverbullet:latest
     container_name: silverbullet
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     environment:
       - TZ=${TZ:-Europe/London}
       # Built-in HTTP basic auth. SilverBullet reads user:password

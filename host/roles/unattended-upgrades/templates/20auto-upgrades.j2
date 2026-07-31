@@ -1,4 +1,4 @@
-// managed by home.local ansible / unattended-upgrades role
+// managed by aurora.local ansible / unattended-upgrades role
 APT::Periodic::Update-Package-Lists "{{ unattended_upgrades_update_lists_days }}";
 APT::Periodic::Download-Upgradeable-Packages "{{ unattended_upgrades_download_days }}";
 APT::Periodic::Unattended-Upgrade "{{ unattended_upgrades_install_days }}";

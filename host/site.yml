@@ -1,5 +1,5 @@
 ---
-# Host-level bootstrap for a home.local server. Hardware-agnostic:
+# Host-level bootstrap for an aurora.local server. Hardware-agnostic:
 # runs on anything Debian-family (Optiplex, NUC, tower, VM).
 #
 #   ansible-playbook -i ../inventory.ini host/site.yml -K
@@ -10,7 +10,7 @@
 #
 # The packages/* compose stacks assume the default play has already run.
 
-- name: Bootstrap home.local host
+- name: Bootstrap aurora.local host
   hosts: home_servers
   become: true
   roles:

@@ -1,6 +1,6 @@
-# home.local / packages/monitoring
+# aurora.local / packages/monitoring
 #
-# Observability trio for the home box:
+# Observability trio for the aurora box:
 #   - Prometheus scrapes node_exporter (host) and cAdvisor (containers),
 #     plus anything else you wire in under prometheus/prometheus.yml.
 #   - Grafana visualises. Datasource + dashboards folder are
@@ -9,17 +9,17 @@
 #   - Uptime-Kuma is a separate, self-contained blackbox monitor for
 #     "is the URL up" style checks (used by the Homepage dashboard).
 #
-# All services join home_net so Caddy can front them on subdomains.
+# All services join aurora_net so Caddy can front them on subdomains.
 
-name: home-monitoring
+name: aurora-monitoring
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 x-common: &common
   restart: unless-stopped
-  networks: [home_net]
+  networks: [aurora_net]
   environment:
     - TZ=${TZ:-Europe/London}
 

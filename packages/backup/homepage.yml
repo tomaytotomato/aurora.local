@@ -1,9 +1,9 @@
-# home.local / packages/backup / homepage services fragment
+# aurora.local / packages/backup / homepage services fragment
 
 - Backup:
     - Kopia:
         icon: mdi-backup-restore
-        href: https://backup.{{HOMEPAGE_VAR_HOME_DOMAIN}}/
+        href: https://backup.{{HOMEPAGE_VAR_DOMAIN}}/
         description: Snapshots & repository status
         widget:
           type: kopia

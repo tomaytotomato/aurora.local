@@ -30,9 +30,9 @@ required_env:
   - GRAFANA_ADMIN_PASSWORD
 
 post_install_notes: |
-  Grafana:    https://grafana.$HOME_DOMAIN/    (admin / GRAFANA_ADMIN_PASSWORD)
-  Prometheus: https://prometheus.$HOME_DOMAIN/ (basic-auth gated in caddy.snippet)
-  Uptime:     https://uptime.$HOME_DOMAIN/     (set admin creds on first visit)
+  Grafana:    https://grafana.$DOMAIN/    (admin / GRAFANA_ADMIN_PASSWORD)
+  Prometheus: https://prometheus.$DOMAIN/ (basic-auth gated in caddy.snippet)
+  Uptime:     https://uptime.$DOMAIN/     (set admin creds on first visit)
 
   Add scrape targets by editing prometheus/prometheus.yml then:
     docker exec prometheus killall -HUP prometheus

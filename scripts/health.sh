@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# home.local / scripts/health.sh
+# aurora.local / scripts/health.sh
 #
 # Report on the running state of the enabled packages: docker container
 # health, uptime, listening ports, and HTTP status of each package's
@@ -34,16 +34,16 @@ if (( ${#pkgs[@]} == 0 )); then
 fi
 
 load_group_vars
-home_domain="${home_domain:-${HOME_DOMAIN:-home.local}}"
+domain="${domain:-${DOMAIN:-aurora.local}}"
 
 FAILS=0
 
 # ---- containers ------------------------------------------------------
-log "containers (project=home)"
+log "containers (project=aurora)"
 # Format: name status health
 fmt='table {{.Name}}\t{{.Status}}\t{{.State}}'
-if ! docker compose -p home ps --format "$fmt" 2>/dev/null; then
-  warn "docker compose -p home ps failed (project not up?)"
+if ! docker compose -p aurora ps --format "$fmt" 2>/dev/null; then
+  warn "docker compose -p aurora ps failed (project not up?)"
 fi
 echo
 
@@ -60,16 +60,16 @@ while IFS=$'\t' read -r name state health; do
     running|"")  ;;
     exited|dead) err "$name state=$state"; FAILS=$((FAILS+1)) ;;
   esac
-done < <(docker ps -a --filter "label=com.docker.compose.project=home" \
+done < <(docker ps -a --filter "label=com.docker.compose.project=aurora" \
            --format '{{.Names}}\t{{.State}}\t{{.Status}}' 2>/dev/null)
 
 # ---- HTTP probes -----------------------------------------------------
 if (( ! NO_HTTP )) && has_cmd curl; then
-  log "HTTP probes ($home_domain)"
+  log "HTTP probes ($domain)"
   for pkg in "${pkgs[@]}"; do
-    # crude: try https://<pkg>.$home_domain/ ; if it 000s, fall back to http
+    # crude: try https://<pkg>.$domain/ ; if it 000s, fall back to http
     for scheme in https http; do
-      url="$scheme://$pkg.$home_domain/"
+      url="$scheme://$pkg.$domain/"
       code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null || echo 000)
       if [[ "$code" != "000" ]]; then
         if [[ "$code" =~ ^(2|3) ]]; then
@@ -80,7 +80,7 @@ if (( ! NO_HTTP )) && has_cmd curl; then
         break
       fi
       if [[ "$scheme" == "http" ]]; then
-        dim "  $pkg.$home_domain: no vhost (skipped)"
+        dim "  $pkg.$domain: no vhost (skipped)"
       fi
     done
   done

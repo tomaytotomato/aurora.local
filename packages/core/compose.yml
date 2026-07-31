@@ -1,16 +1,16 @@
-# home.local / packages/core
+# aurora.local / packages/core
 #
 # Always on. Caddy is the single entry point on :80/:443 and fans out
-# to every other package on subdomains under $HOME_DOMAIN. Homepage is
+# to every other package on subdomains under $DOMAIN. Homepage is
 # the dashboard aggregating status from every enabled package.
 #
-# Depends on the external network `home_net` (see scripts/up.sh which
+# Depends on the external network `aurora_net` (see scripts/up.sh which
 # creates it once).
 
-name: home-core
+name: aurora-core
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -18,13 +18,13 @@ services:
     image: caddy:2-alpine
     container_name: caddy
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
     environment:
-      - HOME_DOMAIN=${HOME_DOMAIN:-home.local}
+      - DOMAIN=${DOMAIN:-aurora.local}
     extra_hosts:
       # So Caddy can reach services running in host netns (e.g. minidlna).
       - "host.docker.internal:host-gateway"
@@ -39,7 +39,7 @@ services:
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     # host uid + docker gid so /var/run/docker.sock is readable.
     # scripts/up.sh exports DOCKER_GID from `getent group docker` at
     # run-time; falls back to 998 (Debian bookworm default).
@@ -48,7 +48,7 @@ services:
       - .env
     environment:
       - TZ=${TZ:-Europe/London}
-      - HOMEPAGE_ALLOWED_HOSTS=${HOME_DOMAIN:-home.local},aurora.local,192.168.0.110,localhost
+      - HOMEPAGE_ALLOWED_HOSTS=${DOMAIN:-aurora.local},aurora.local,192.168.0.110,localhost
     volumes:
       - ./homepage/config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro

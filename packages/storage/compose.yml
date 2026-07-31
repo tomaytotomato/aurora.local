@@ -1,13 +1,13 @@
-# home.local / packages/storage
+# aurora.local / packages/storage
 #
 # LAN file sharing. Samba exports the media root over SMB. MiniDLNA
 # advertises the same content over UPnP/DLNA for smart TVs that
 # don't speak SMB.
 
-name: home-storage
+name: aurora-storage
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -15,7 +15,7 @@ services:
     image: dperson/samba:latest
     container_name: samba
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     ports:
       - "139:139"
       - "445:445"
@@ -38,7 +38,7 @@ services:
     network_mode: host
     environment:
       - MINIDLNA_MEDIA_DIR=/media
-      - MINIDLNA_FRIENDLY_NAME=home.local
+      - MINIDLNA_FRIENDLY_NAME=aurora.local
     volumes:
       - /home/bruce/media:/media:ro
       - ../../data/minidlna:/minidlna

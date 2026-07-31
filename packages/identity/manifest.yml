@@ -18,7 +18,7 @@ recommends: []
 profiles: {}
 
 ports:
-  - {port: 9091, proto: tcp, description: Authelia HTTP (internal to home_net)}
+  - {port: 9091, proto: tcp, description: Authelia HTTP (internal to aurora_net)}
 
 requires:
   min_ram_mb: 256
@@ -42,5 +42,5 @@ post_install_notes: |
   3. To protect any package, add this inside its Caddy vhost:
        import authelia
      (the named route is defined in identity/caddy.snippet).
-  4. First login: https://auth.$HOME_DOMAIN — the wizard will guide
+  4. First login: https://auth.$DOMAIN — the wizard will guide
      TOTP / WebAuthn enrolment.

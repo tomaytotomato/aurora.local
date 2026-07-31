@@ -1,8 +1,8 @@
-# home.local / packages/identity / homepage.yml
+# aurora.local / packages/identity / homepage.yml
 
 - Identity:
     - Authelia:
-        href: https://auth.{{HOMEPAGE_VAR_HOME_DOMAIN}}/
+        href: https://auth.{{HOMEPAGE_VAR_DOMAIN}}/
         description: SSO + 2FA portal
         icon: authelia.png
         container: authelia

@@ -1,10 +1,10 @@
 ---
-# home.local / homepage / settings.yaml
+# aurora.local / homepage / settings.yaml
 # https://gethomepage.dev/configs/settings/
 
-title: home.local
+title: aurora.local
 description: Opinionated home server — control panel
-startUrl: https://home.local/
+startUrl: https://aurora.local/
 
 # ---- theme ----
 theme: dark

@@ -1,4 +1,4 @@
-name: home-automation
+name: aurora-automation
 title: Home automation (Home Assistant + MQTT + Zigbee2MQTT)
 description: |
   Home Assistant for automations, Mosquitto as the MQTT broker, and
@@ -7,7 +7,7 @@ description: |
 
   Home Assistant runs with network_mode: host — this is standard
   practice and required for many local-discovery integrations (mDNS,
-  SSDP, HomeKit, Chromecast). It is therefore NOT attached to home_net.
+  SSDP, HomeKit, Chromecast). It is therefore NOT attached to aurora_net.
 
 category: home-automation
 

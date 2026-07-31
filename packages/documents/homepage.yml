@@ -1,10 +1,10 @@
 ---
-# home.local / packages/documents / homepage.yml
+# aurora.local / packages/documents / homepage.yml
 
 - Productivity:
     - Paperless-ngx:
         icon: paperless.png
-        href: https://paperless.{{HOMEPAGE_VAR_HOME_DOMAIN}}/
+        href: https://paperless.{{HOMEPAGE_VAR_DOMAIN}}/
         description: Document DMS + OCR archive
         container: paperless
         server: my-docker
@@ -16,7 +16,7 @@
 
     - Stirling-PDF:
         icon: stirling-pdf.png
-        href: https://pdf.{{HOMEPAGE_VAR_HOME_DOMAIN}}/
+        href: https://pdf.{{HOMEPAGE_VAR_DOMAIN}}/
         description: Browser PDF toolkit
         container: stirling-pdf
         server: my-docker

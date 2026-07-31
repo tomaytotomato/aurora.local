@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# home.local / scripts/rotate-secrets.sh
+# aurora.local / scripts/rotate-secrets.sh
 #
 # Walk every packages/*/.env and flag values that look weak. Rules:
 #   - Empty value
@@ -11,7 +11,7 @@
 #   (default) report only
 #   --apply    replace weak values with `openssl rand -hex 24` output,
 #              write a .env.bak, and print a diff. Skips keys whose
-#              purpose is *not* a secret (e.g. HOME_DOMAIN, TZ, USER
+#              purpose is *not* a secret (e.g. DOMAIN, TZ, USER
 #              fields) via NON_SECRET_KEYS pattern.
 #
 # Never rotates keys that already look strong (>= 24 chars random-ish).
@@ -31,7 +31,7 @@ for a in "$@"; do
 done
 
 # Names that look like secrets but are NOT — never rotate.
-NON_SECRET_PATTERN='^(TZ|HOME_DOMAIN|LAN_IP|VPN_SERVICE_PROVIDER|VPN_TYPE|SERVER_COUNTRIES|SERVER_CITIES|OPENVPN_USER|HOMEPAGE_VAR_[A-Z]+_USER|.*_USER|FIREWALL.*|VPN_PORT_FORWARDING(_PROVIDER)?|PORT_FORWARD_ONLY|WIREGUARD_ADDRESSES)$'
+NON_SECRET_PATTERN='^(TZ|DOMAIN|LAN_IP|VPN_SERVICE_PROVIDER|VPN_TYPE|SERVER_COUNTRIES|SERVER_CITIES|OPENVPN_USER|HOMEPAGE_VAR_[A-Z]+_USER|.*_USER|FIREWALL.*|VPN_PORT_FORWARDING(_PROVIDER)?|PORT_FORWARD_ONLY|WIREGUARD_ADDRESSES)$'
 SECRET_HINT_PATTERN='(SECRET|KEY|PASSWORD|TOKEN|PASS|PSK)'
 WEAK_VALUES=('' password Password PASSWORD changeme change_me admin letmein 123456 secret)
 

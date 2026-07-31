@@ -1,4 +1,4 @@
-# home.local / packages/monitoring / grafana datasource provisioning
+# aurora.local / packages/monitoring / grafana datasource provisioning
 #
 # Auto-registers Prometheus as the default datasource on first boot.
 # Bind-mounted read-only into /etc/grafana/provisioning/datasources/.

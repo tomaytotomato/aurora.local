@@ -1,4 +1,4 @@
-# home.local / packages/monitoring / caddy vhost fragments
+# aurora.local / packages/monitoring / caddy vhost fragments
 #
 # The installer worker is expected to wire this file (and every other
 # packages/*/caddy.snippet) into packages/core/caddy/Caddyfile via an
@@ -6,10 +6,10 @@
 # manually.
 
 # ---- Grafana ---------------------------------------------------------
-http://grafana.{$HOME_DOMAIN} {
+http://grafana.{$DOMAIN} {
 	reverse_proxy grafana:3000
 }
-https://grafana.{$HOME_DOMAIN} {
+https://grafana.{$DOMAIN} {
 	tls internal
 	reverse_proxy grafana:3000
 }
@@ -19,13 +19,13 @@ https://grafana.{$HOME_DOMAIN} {
 # the hash with:  docker run --rm caddy:2-alpine caddy hash-password
 # then set PROMETHEUS_BASIC_AUTH_USER / PROMETHEUS_BASIC_AUTH_HASH in
 # packages/core/.env (or wherever your caddy env comes from).
-http://prometheus.{$HOME_DOMAIN} {
+http://prometheus.{$DOMAIN} {
 	basic_auth {
 		{$PROMETHEUS_BASIC_AUTH_USER} {$PROMETHEUS_BASIC_AUTH_HASH}
 	}
 	reverse_proxy prometheus:9090
 }
-https://prometheus.{$HOME_DOMAIN} {
+https://prometheus.{$DOMAIN} {
 	tls internal
 	basic_auth {
 		{$PROMETHEUS_BASIC_AUTH_USER} {$PROMETHEUS_BASIC_AUTH_HASH}
@@ -34,15 +34,15 @@ https://prometheus.{$HOME_DOMAIN} {
 }
 
 # ---- Uptime-Kuma -----------------------------------------------------
-http://uptime.{$HOME_DOMAIN} {
+http://uptime.{$DOMAIN} {
 	reverse_proxy uptime-kuma:3001
 }
-https://uptime.{$HOME_DOMAIN} {
+https://uptime.{$DOMAIN} {
 	tls internal
 	reverse_proxy uptime-kuma:3001
 }
 
 # ---- cAdvisor (optional; noisy, LAN-only) ---------------------------
-# http://cadvisor.{$HOME_DOMAIN} {
+# http://cadvisor.{$DOMAIN} {
 # 	reverse_proxy cadvisor:8080
 # }

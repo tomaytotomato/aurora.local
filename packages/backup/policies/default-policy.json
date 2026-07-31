@@ -1,5 +1,5 @@
 {
-  "_comment": "home.local / packages/backup / default-policy.json — starting point for the Kopia global policy. Import via: kopia policy set --global --from-file /app/config/policies/default-policy.json  (mount this file in first). NOT auto-applied; treat as a template.",
+  "_comment": "aurora.local / packages/backup / default-policy.json — starting point for the Kopia global policy. Import via: kopia policy set --global --from-file /app/config/policies/default-policy.json  (mount this file in first). NOT auto-applied; treat as a template.",
 
   "retention": {
     "keepLatest": 10,

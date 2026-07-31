@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# home.local / scripts/up.sh
+# aurora.local / scripts/up.sh
 #
 # Bring up one or more packages. Handles the cross-package coupling
 # (media's qbittorrent needs privacy's gluetun) by merging compose
@@ -101,9 +101,9 @@ fi
 # --------------------------------------------------------------------
 # Shared network
 # --------------------------------------------------------------------
-if ! docker network inspect home_net >/dev/null 2>&1; then
-  log_step "creating docker network home_net"
-  docker network create home_net >/dev/null
+if ! docker network inspect aurora_net >/dev/null 2>&1; then
+  log_step "creating docker network aurora_net"
+  docker network create aurora_net >/dev/null
 fi
 
 # --------------------------------------------------------------------
@@ -151,9 +151,9 @@ render_all "${pkgs[@]}"
 # Up
 # --------------------------------------------------------------------
 log_step "bringing up: ${pkgs[*]}"
-docker compose -p home "${files[@]}" pull
-docker compose -p home "${files[@]}" up -d --remove-orphans
-docker compose -p home "${files[@]}" ps
+docker compose -p aurora "${files[@]}" pull
+docker compose -p aurora "${files[@]}" up -d --remove-orphans
+docker compose -p aurora "${files[@]}" ps
 
 # --------------------------------------------------------------------
 # Record in state (only if state exists — bootstrap creates it).

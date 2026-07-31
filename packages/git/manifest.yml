@@ -27,10 +27,10 @@ required_env:
   - FORGEJO_ADMIN_PASSWORD
 
 post_install_notes: |
-  1. First-run wizard: http://git.$HOME_DOMAIN/ (or http://<lan-ip>:3080).
+  1. First-run wizard: http://git.$DOMAIN/ (or http://<lan-ip>:3080).
      The admin user from .env is auto-created on container start.
   2. To enable CI: in Forgejo UI go to Site Administration > Actions >
      Runners > "Create new Runner", copy the registration token, put it
      in packages/git/.env as FORGEJO_RUNNER_TOKEN, then:
-       docker compose -p home ... up -d --force-recreate forgejo-runner
+       docker compose -p aurora ... up -d --force-recreate forgejo-runner
   3. Clone URL: ssh://git@<hostname>:2222/<user>/<repo>.git

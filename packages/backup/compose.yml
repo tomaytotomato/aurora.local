@@ -1,4 +1,4 @@
-# home.local / packages/backup
+# aurora.local / packages/backup
 #
 # Kopia is a repository-based deduplicating backup tool with a decent
 # web UI. Runs in "server" mode; you connect to it via the browser and
@@ -11,10 +11,10 @@
 #                  unused and reconfigure the repo from inside the UI
 #                  (or via `kopia repository create s3 ...`).
 
-name: home-backup
+name: aurora-backup
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -23,7 +23,7 @@ services:
     container_name: kopia
     hostname: kopia
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     # Kopia's server mode. Bind to 0.0.0.0 inside the container; Caddy
     # (or a LAN port) does the exposure. Basic auth is set via
     # KOPIA_UI_USER/PASSWORD env vars.

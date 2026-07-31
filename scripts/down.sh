@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# home.local / scripts/down.sh
+# aurora.local / scripts/down.sh
 #
 # Stop and remove one or more packages. Volumes are preserved.
 #
@@ -32,6 +32,6 @@ for p in "${pkgs[@]}"; do
 done
 
 log_step "stopping: ${pkgs[*]}"
-docker compose -p home "${files[@]}" down
+docker compose -p aurora "${files[@]}" down
 
 log_ok "down complete"

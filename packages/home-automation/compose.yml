@@ -1,22 +1,22 @@
-# home.local / packages/home-automation
+# aurora.local / packages/home-automation
 #
 # - Home Assistant runs with network_mode: host. This is intentional
 #   and matches HA's own recommendation: many integrations rely on
 #   L2 discovery (mDNS/SSDP/HomeKit) that a bridge network breaks.
-#   Consequence: HA is NOT on home_net; Caddy reverse-proxies it via
+#   Consequence: HA is NOT on aurora_net; Caddy reverse-proxies it via
 #   host.docker.internal:8123 (or the host's LAN IP).
 #
-# - Mosquitto and Zigbee2MQTT sit on home_net. HA reaches Mosquitto
+# - Mosquitto and Zigbee2MQTT sit on aurora_net. HA reaches Mosquitto
 #   over the host's LAN IP (or 127.0.0.1) on 1883 since it's on
 #   host networking.
 #
 # - Zigbee2MQTT is opt-in via COMPOSE_PROFILES=zigbee so users without
 #   a coordinator don't get device-not-found errors.
 
-name: home-automation
+name: aurora-automation
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -36,7 +36,7 @@ services:
     image: eclipse-mosquitto:2
     container_name: mosquitto
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     ports:
       - "1883:1883"
       - "8883:8883"
@@ -50,7 +50,7 @@ services:
     container_name: zigbee2mqtt
     restart: unless-stopped
     profiles: ["zigbee"]
-    networks: [home_net]
+    networks: [aurora_net]
     depends_on:
       - mosquitto
     ports:

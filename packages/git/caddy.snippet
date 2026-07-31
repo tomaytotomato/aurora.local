@@ -1,7 +1,7 @@
 # packages/git — Caddy vhost
 # Import from packages/core/caddy/Caddyfile.
 
-http://git.{$HOME_DOMAIN} {
+http://git.{$DOMAIN} {
 	reverse_proxy forgejo:3000 {
 		header_up X-Real-IP {remote_host}
 		header_up X-Forwarded-For {remote_host}
@@ -9,7 +9,7 @@ http://git.{$HOME_DOMAIN} {
 	}
 }
 
-https://git.{$HOME_DOMAIN} {
+https://git.{$DOMAIN} {
 	tls internal
 	# Forgejo web + LFS + git-over-HTTPS + websocket (for the built-in
 	# web terminal / live activity streams).

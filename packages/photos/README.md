@@ -13,7 +13,7 @@ face recognition and CLIP-based semantic search.
 2. Optionally point `UPLOAD_LOCATION` at bulk storage (e.g.
    `/mnt/media/photos`) — the library grows fast.
 3. `./scripts/up.sh core photos`
-4. Visit `https://photos.$HOME_DOMAIN/` and register. **The first
+4. Visit `https://photos.$DOMAIN/` and register. **The first
    registered account is the admin.**
 5. Install the Immich app on your phone (App Store / F-Droid / Play)
    and point it at the same URL to enable auto-backup.
@@ -42,4 +42,4 @@ Restic or Kopia against both, ideally to an offsite target.
 
 ## Ports
 
-Only 2283 is exposed; the rest of the stack is on `home_net` only.
+Only 2283 is exposed; the rest of the stack is on `aurora_net` only.

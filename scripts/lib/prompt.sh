@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# home.local / scripts/lib/prompt.sh
+# aurora.local / scripts/lib/prompt.sh
 #
 # Interactive prompt helpers. Uses whiptail when available on a TTY,
 # falls back to plain read otherwise. All functions echo their result

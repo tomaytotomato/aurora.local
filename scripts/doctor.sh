@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# home.local / scripts/doctor.sh
+# aurora.local / scripts/doctor.sh
 #
-# Pre-flight sanity check for a home.local box. Run this on any host
-# you plan to install home.local on, or after an install to verify the
+# Pre-flight sanity check for an aurora.local box. Run this on any host
+# you plan to install aurora.local on, or after an install to verify the
 # environment is still sane.
 #
 # Exits non-zero if any CRITICAL check fails. WARN-level checks do not
@@ -34,13 +34,13 @@ _pass() { (( QUIET )) || ok "$*"; }
 _fail() { err "$*"; FAILS=$((FAILS+1)); }
 _warn() { warn "$*"; WARNS=$((WARNS+1)); }
 
-log "home.local doctor — $(date -Iseconds)"
+log "aurora.local doctor — $(date -Iseconds)"
 echo
 
 # ---- identity --------------------------------------------------------
 log "identity"
 if [[ $EUID -eq 0 ]]; then
-  _fail "running as root; home.local expects a normal user (sudo is used explicitly)"
+  _fail "running as root; aurora.local expects a normal user (sudo is used explicitly)"
 else
   _pass "user=$(id -un) uid=$(id -u) gid=$(id -g)"
 fi
@@ -62,10 +62,10 @@ else
 fi
 
 if has_cmd docker && docker info >/dev/null 2>&1; then
-  if docker network inspect home_net >/dev/null 2>&1; then
-    _pass "docker network home_net exists"
+  if docker network inspect aurora_net >/dev/null 2>&1; then
+    _pass "docker network aurora_net exists"
   else
-    _warn "docker network home_net missing (scripts/up.sh will create it)"
+    _warn "docker network aurora_net missing (scripts/up.sh will create it)"
   fi
 fi
 
@@ -145,11 +145,11 @@ fi
 # ---- DNS / adguard ---------------------------------------------------
 if list_enabled_packages | grep -qx privacy; then
   log "dns"
-  home_domain="${home_domain:-${HOME_DOMAIN:-home.local}}"
-  if has_cmd getent && getent hosts "home.$home_domain" >/dev/null 2>&1; then
-    _pass "DNS home.$home_domain resolves"
+  domain="${domain:-${DOMAIN:-aurora.local}}"
+  if has_cmd getent && getent hosts "$domain" >/dev/null 2>&1; then
+    _pass "DNS $domain resolves"
   else
-    _warn "DNS home.$home_domain does not resolve (adguard rewrites configured?)"
+    _warn "DNS $domain does not resolve (adguard rewrites configured?)"
   fi
 fi
 

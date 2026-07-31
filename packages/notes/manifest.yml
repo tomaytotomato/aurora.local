@@ -28,7 +28,7 @@ required_env:
   - SB_PASSWORD
 
 post_install_notes: |
-  1. First-run: https://notes.$HOME_DOMAIN/ — log in with
+  1. First-run: https://notes.$DOMAIN/ — log in with
      SB_USER / SB_PASSWORD from .env.
   2. Notes live as .md files under ../../data/notes/silverbullet
      (or wherever you point the bind mount).

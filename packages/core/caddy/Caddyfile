@@ -1,13 +1,13 @@
-# home.local / Caddyfile
+# aurora.local / Caddyfile
 #
-# One vhost per service on ${HOME_DOMAIN} (default home.local).
+# One vhost per service on ${DOMAIN} (default aurora.local).
 # Each site serves BOTH http:// and https:// so devices without the
 # Caddy root cert installed can still reach dashboards without warnings.
 # HTTPS uses Caddy's internal CA; install the root once per device to
 # get green padlocks:
 #   docker exec -it caddy cat /data/caddy/pki/authorities/local/root.crt
 #
-# DNS: AdGuard (packages/privacy) is expected to answer *.{$HOME_DOMAIN}
+# DNS: AdGuard (packages/privacy) is expected to answer *.{$DOMAIN}
 # with the LAN IP of this box.
 
 {
@@ -22,79 +22,79 @@
 }
 
 # ---- Core ------------------------------------------------------------
-# Homepage is served at the bare domain (home.local) plus mDNS shortcut
-# (aurora.local) and raw LAN IP fallback. No redundant home.home.local.
-http://{$HOME_DOMAIN}, http://aurora.local, http://192.168.0.110 {
+# Homepage is served at the bare domain (aurora.local) plus mDNS shortcut
+# (aurora.local) and raw LAN IP fallback. No redundant home.aurora.local.
+http://{$DOMAIN}, http://aurora.local, http://192.168.0.110 {
 	reverse_proxy homepage:3000
 }
-https://{$HOME_DOMAIN}, https://aurora.local {
+https://{$DOMAIN}, https://aurora.local {
 	tls internal
 	reverse_proxy homepage:3000
 }
 
 # ---- Privacy & security ---------------------------------------------
-http://adguard.{$HOME_DOMAIN} {
+http://adguard.{$DOMAIN} {
 	reverse_proxy adguard:3000
 }
-https://adguard.{$HOME_DOMAIN} {
+https://adguard.{$DOMAIN} {
 	tls internal
 	reverse_proxy adguard:3000
 }
 
 # ---- Media automation -----------------------------------------------
-http://sonarr.{$HOME_DOMAIN} {
+http://sonarr.{$DOMAIN} {
 	reverse_proxy sonarr:8989
 }
-https://sonarr.{$HOME_DOMAIN} {
+https://sonarr.{$DOMAIN} {
 	tls internal
 	reverse_proxy sonarr:8989
 }
 
-http://radarr.{$HOME_DOMAIN} {
+http://radarr.{$DOMAIN} {
 	reverse_proxy radarr:7878
 }
-https://radarr.{$HOME_DOMAIN} {
+https://radarr.{$DOMAIN} {
 	tls internal
 	reverse_proxy radarr:7878
 }
 
-http://prowlarr.{$HOME_DOMAIN} {
+http://prowlarr.{$DOMAIN} {
 	reverse_proxy prowlarr:9696
 }
-https://prowlarr.{$HOME_DOMAIN} {
+https://prowlarr.{$DOMAIN} {
 	tls internal
 	reverse_proxy prowlarr:9696
 }
 
-http://bazarr.{$HOME_DOMAIN} {
+http://bazarr.{$DOMAIN} {
 	reverse_proxy bazarr:6767
 }
-https://bazarr.{$HOME_DOMAIN} {
+https://bazarr.{$DOMAIN} {
 	tls internal
 	reverse_proxy bazarr:6767
 }
 
-http://seerr.{$HOME_DOMAIN} {
+http://seerr.{$DOMAIN} {
 	reverse_proxy seerr:5055
 }
-https://seerr.{$HOME_DOMAIN} {
+https://seerr.{$DOMAIN} {
 	tls internal
 	reverse_proxy seerr:5055
 }
 
-http://flaresolverr.{$HOME_DOMAIN} {
+http://flaresolverr.{$DOMAIN} {
 	reverse_proxy flaresolverr:8191
 }
-https://flaresolverr.{$HOME_DOMAIN} {
+https://flaresolverr.{$DOMAIN} {
 	tls internal
 	reverse_proxy flaresolverr:8191
 }
 
 # ---- Debrid + torrent -----------------------------------------------
-http://rdt.{$HOME_DOMAIN} {
+http://rdt.{$DOMAIN} {
 	reverse_proxy rdtclient:6500
 }
-https://rdt.{$HOME_DOMAIN} {
+https://rdt.{$DOMAIN} {
 	tls internal
 	reverse_proxy rdtclient:6500
 }
@@ -102,10 +102,10 @@ https://rdt.{$HOME_DOMAIN} {
 # qBittorrent + Gluetun vhosts — only reachable when the 'torrent'
 # compose profile is enabled (scripts/up.sh --torrent).
 # Leaving them commented so re-enabling is a one-line uncomment.
-# http://qbit.{$HOME_DOMAIN} {
+# http://qbit.{$DOMAIN} {
 # 	reverse_proxy gluetun:8080
 # }
-# https://qbit.{$HOME_DOMAIN} {
+# https://qbit.{$DOMAIN} {
 # 	tls internal
 # 	reverse_proxy gluetun:8080
 # }

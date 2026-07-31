@@ -1,8 +1,8 @@
-# home.local / packages/identity / caddy.snippet
+# aurora.local / packages/identity / caddy.snippet
 #
 # Two things live here:
 #
-#   1. The auth.${HOME_DOMAIN} vhost, which serves Authelia's own UI
+#   1. The auth.${DOMAIN} vhost, which serves Authelia's own UI
 #      (login screen, 2FA enrolment, password reset).
 #
 #   2. A named route `(authelia)` that any OTHER package's Caddy
@@ -24,10 +24,10 @@
 }
 
 # ---- Authelia's own portal ----------------------------------------
-http://auth.{$HOME_DOMAIN} {
+http://auth.{$DOMAIN} {
 	reverse_proxy authelia:9091
 }
-https://auth.{$HOME_DOMAIN} {
+https://auth.{$DOMAIN} {
 	tls internal
 	reverse_proxy authelia:9091
 }
@@ -37,7 +37,7 @@ https://auth.{$HOME_DOMAIN} {
 # (or the merged Caddyfile) and add `import authelia` inside the
 # vhost block. Illustration:
 #
-#     https://sonarr.{$HOME_DOMAIN} {
+#     https://sonarr.{$DOMAIN} {
 #         tls internal
 #         import authelia
 #         reverse_proxy sonarr:8989

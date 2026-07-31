@@ -4,7 +4,7 @@
 # don't leak.
 
 # ---- identity ----
-home_domain: home.local            # Caddy vhosts hang under this
+domain: aurora.local            # Caddy vhosts hang under this
 home_timezone: Europe/London
 home_user: bruce
 home_uid: 1000
@@ -13,7 +13,7 @@ home_gid: 1000
 # ---- storage layout ----
 # Where the repo lives on disk. bind-mounts in packages/*/compose.yml
 # resolve relative to this via ${HOME_LOCAL_ROOT}.
-home_local_root: /home/{{ home_user }}/home.local
+home_local_root: /home/{{ home_user }}/aurora.local
 
 # Where bulk media lives. Kept outside the repo so a fresh clone
 # doesn't imply moving TBs around.
@@ -63,7 +63,7 @@ fail2ban_max_retry: 5
 
 # ---- network ----
 # AdGuard runs as LAN DNS. Set this to the address of the box on your
-# LAN so *.{{ home_domain }} rewrites resolve to it.
+# LAN so *.{{ domain }} rewrites resolve to it.
 lan_ip: 192.168.0.110
 
 # mDNS host name published by avahi (usually leave as inventory_hostname).

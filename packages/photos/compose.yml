@@ -1,4 +1,4 @@
-# home.local / packages/photos
+# aurora.local / packages/photos
 #
 # Immich: self-hosted photo/video backup with mobile apps.
 #
@@ -11,10 +11,10 @@
 # Data lives under ../../data/photos/. UPLOAD_LOCATION in .env can
 # override the library path to point at bulk storage.
 
-name: home-photos
+name: aurora-photos
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -22,7 +22,7 @@ services:
     image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
     container_name: immich-server
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     environment:
       - TZ=${TZ:-Europe/London}
       - DB_HOSTNAME=immich-postgres
@@ -53,7 +53,7 @@ services:
     image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
     container_name: immich-ml
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     environment:
       - TZ=${TZ:-Europe/London}
     volumes:
@@ -63,7 +63,7 @@ services:
     image: docker.io/redis:6.2-alpine
     container_name: immich-redis
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -74,7 +74,7 @@ services:
     image: docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0
     container_name: immich-postgres
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     environment:
       - TZ=${TZ:-Europe/London}
       - POSTGRES_USER=immich

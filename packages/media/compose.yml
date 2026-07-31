@@ -1,4 +1,4 @@
-# home.local / packages/media
+# aurora.local / packages/media
 #
 # Opinionated: Debrid-first (RDTClient) with qBittorrent behind gluetun
 # as the local fallback. Sonarr/Radarr/Bazarr/Prowlarr do the automation,
@@ -9,15 +9,15 @@
 # brought up as part of `docker compose -f privacy -f media up -d`
 # (which scripts/up.sh handles).
 
-name: home-media
+name: aurora-media
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 x-arr-common: &arr-common
   restart: unless-stopped
-  networks: [home_net]
+  networks: [aurora_net]
   environment:
     - PUID=1000
     - PGID=1000
@@ -66,7 +66,7 @@ services:
     container_name: seerr
     restart: unless-stopped
     init: true
-    networks: [home_net]
+    networks: [aurora_net]
     environment:
       - TZ=${TZ:-Europe/London}
       - LOG_LEVEL=info

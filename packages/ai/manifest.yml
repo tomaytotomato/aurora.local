@@ -35,9 +35,9 @@ required_env:
   - WEBUI_SECRET_KEY
 
 post_install_notes: |
-  1. Open-WebUI:  https://ai.$HOME_DOMAIN/  (first user to sign up is admin)
+  1. Open-WebUI:  https://ai.$DOMAIN/  (first user to sign up is admin)
   2. Ollama API:  http://<lan-ip>:11434/     (also reachable as ollama:11434
-     from other containers on home_net)
+     from other containers on aurora_net)
   3. Pull a model:
        docker exec -it ollama ollama pull llama3.2
        docker exec -it ollama ollama pull qwen2.5-coder:7b

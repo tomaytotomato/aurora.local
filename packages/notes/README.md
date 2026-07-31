@@ -8,7 +8,7 @@ personal knowledge system. Everything is a `.md` file in a folder
 
 1. `cp .env.example .env` and set `SB_USER` / `SB_PASSWORD`.
 2. `./scripts/up.sh core notes`
-3. Visit `https://notes.$HOME_DOMAIN/` and log in.
+3. Visit `https://notes.$DOMAIN/` and log in.
 
 ## Storage
 

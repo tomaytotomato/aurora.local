@@ -3,7 +3,7 @@
 - AI:
     - Open-WebUI:
         icon: open-webui.png
-        href: https://ai.{{HOMEPAGE_VAR_HOME_DOMAIN}}/
+        href: https://ai.{{HOMEPAGE_VAR_DOMAIN}}/
         description: Local LLM chat
         server: my-docker
         container: open-webui

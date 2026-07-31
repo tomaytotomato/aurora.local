@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# home.local / scripts/lib/log.sh
+# aurora.local / scripts/lib/log.sh
 #
 # Color + TTY-aware logging helpers. Safe to source multiple times.
 

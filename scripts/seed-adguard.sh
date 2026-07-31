@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# home.local / scripts/seed-adguard.sh
+# aurora.local / scripts/seed-adguard.sh
 #
 # Idempotent seeder for AdGuard Home. Ensures:
 #   1. The rewrites in packages/privacy/adguard/rewrites.yaml are

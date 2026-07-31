@@ -1,41 +1,41 @@
-# Brief: purpose-built dashboard for managing a home.local server
+# Brief: purpose-built dashboard for managing an aurora.local server
 
 **Target reader:** an AI agent (or team) picking up this project from scratch.
-**Author:** the agent that built the home.local `productionize` branch (Jul 2026).
-**Companion repo:** [`tomaytotomato/home.local`](https://github.com/tomaytotomato/home.local), branch `productionize` (41 commits ahead of `main`).
+**Author:** the agent that built the aurora.local `productionize` branch (Jul 2026).
+**Companion repo:** [`tomaytotomato/aurora.local`](https://github.com/tomaytotomato/aurora.local), branch `productionize` (41 commits ahead of `main`).
 
 ## 0. TL;DR
 
-Build a small, single-tenant web app that manages one `home.local` box.
+Build a small, single-tenant web app that manages one `aurora.local` box.
 It replaces the CLI `bootstrap.sh` flow with a browser UI, plus adds
 security posture reporting, simplified onboarding, live health, and
 opinionated guardrails against the specific footguns that hurt real
-users of home.local (documented below).
+users of aurora.local (documented below).
 
 - **Frontend:** Vue 3.5 + Vite 8 + TypeScript 5.6+.
 - **Backend:** Java 25 (LTS) + Spring Boot 4 + `docker-java` 3.7.
 - **Storage:** SQLite (per-instance). No external DB.
 - **Ships as:** one container, packaged as a new `packages/dashboard/`
-  bundle inside the home.local repo, so users install it the same way
-  they install any other home.local package.
+  bundle inside the aurora.local repo, so users install it the same way
+  they install any other aurora.local package.
 
 It is **not** a replacement for Homepage (which is the tile grid users
 hit day-to-day). It is the *admin plane* — install, configure, audit,
 troubleshoot. Think of Homepage as the living-room TV, this thing as
 the fuse box.
 
-Working name: **Warden** (feel free to change).
+Working name: **Aurora** (feel free to change).
 
 ---
 
-## 1. Context: what home.local already is
+## 1. Context: what aurora.local already is
 
-`~/home.local/` is a repo that turns a fresh Debian/Ubuntu box into a
+`~/aurora.local/` is a repo that turns a fresh Debian/Ubuntu box into a
 self-hosted server via three layers:
 
 ```
 L2  Ansible (host/site.yml)     harden OS, install docker
-L3  Docker + docker-compose      single project 'home' on home_net
+L3  Docker + docker-compose      single project 'home' on aurora_net
 L4  Installer (bootstrap.sh)     manifest-driven package picker
 L5  Packages (packages/<name>/)  15 curated docker-compose bundles
 ```
@@ -53,12 +53,12 @@ packages/<name>/
   seed.sh            (optional) idempotent post-up hook
 ```
 
-State lives in `~/home.local/.state.yml` (gitignored):
+State lives in `~/aurora.local/.state.yml` (gitignored):
 
 ```yaml
 bootstrap_version: 1
 hostname: "aurora"
-domain: "home.local"
+domain: "aurora.local"
 installed_at: "2026-07-31T14:22:37Z"
 enabled:
   - core
@@ -130,7 +130,7 @@ succeeded.
 - Prometheus/Grafana replacement. Explicitly not competing with the
   optional `packages/monitoring` package.
 - Any features that would require anything beyond
-  `~/home.local`, `/var/run/docker.sock`, and `/proc`.
+  `~/aurora.local`, `/var/run/docker.sock`, and `/proc`.
 
 ---
 
@@ -189,7 +189,7 @@ succeeded.
   `.state.yml`. Do not shell out to `yq` from Java; keep the parsing
   in-process.
 - **Compose invocation:** shell out to `docker compose` via
-  `ProcessBuilder`, wrapping the existing home.local scripts
+  `ProcessBuilder`, wrapping the existing aurora.local scripts
   (`scripts/up.sh`, `scripts/down.sh`, etc.). Do NOT rewrite the
   installer logic in Java — those scripts are the contract; you're
   the driver.
@@ -209,29 +209,29 @@ succeeded.
     `mvn -T1C package`; copy Vue dist into
     `src/main/resources/static/` before packaging.
   - `stage 3`: `eclipse-temurin:25-jre-alpine` → copy the fat jar,
-    entrypoint `java -jar /app/warden.jar`.
+    entrypoint `java -jar /app/aurora.jar`.
   - Target final image size < 250 MB.
-- **Ships as** `packages/dashboard/` inside home.local:
+- **Ships as** `packages/dashboard/` inside aurora.local:
 
   ```
   packages/dashboard/
     manifest.yml        category: core (or 'management')
-    compose.yml         warden service + bind mounts
-    .env.example        WARDEN_ADMIN_USERNAME, JWT signing key, session secret, TZ
+    compose.yml         aurora service + bind mounts
+    .env.example        AURORA_ADMIN_USERNAME, JWT signing key, session secret, TZ
     README.md
-    caddy.snippet       warden.$HOME_DOMAIN vhost, protected by import authelia
+    caddy.snippet       admin.$DOMAIN vhost, protected by import authelia
                         when identity is enabled
-    homepage.yml        one tile linking to warden UI
+    homepage.yml        one tile linking to aurora UI
   ```
 
 - **Mounts** (in compose.yml):
-  - `/home/${USER}/home.local:/repo:rw` — the entire home.local repo.
-    Warden reads manifests, writes .env, writes .state.yml, runs
+  - `/home/${USER}/aurora.local:/repo:rw` — the entire aurora.local repo.
+    Aurora reads manifests, writes .env, writes .state.yml, runs
     scripts.
   - `/var/run/docker.sock:/var/run/docker.sock:rw` — docker-java.
   - `warden_data:/data` — SQLite DB, WebAuthn keys, uploads.
   - `/proc:/host/proc:ro` — host metrics.
-- **Runs as** `user: "${WARDEN_UID:-1000}:${DOCKER_GID}"` — same
+- **Runs as** `user: "${AURORA_UID:-1000}:${DOCKER_GID}"` — same
   pattern as Homepage. `scripts/up.sh` auto-exports `DOCKER_GID`.
 - **Port:** 8090 (avoid every used port in the ecosystem — see
   `packages/*/manifest.yml` for the current allocations, and check
@@ -241,7 +241,7 @@ succeeded.
 
 ```
 Browser (Vue SPA)
-    │  HTTPS via Caddy (warden.home.local)
+    │  HTTPS via Caddy (admin.aurora.local)
     ▼
 Spring Boot (embedded Tomcat, :8090)
     ├─ REST controllers    /api/packages, /api/system, /api/security, …
@@ -253,7 +253,7 @@ Spring Boot (embedded Tomcat, :8090)
          │                   │                  │
          ▼                   ▼                  ▼
  docker.sock (docker-java)  Filesystem       Process
-                            ~/home.local     scripts/*.sh
+                            ~/aurora.local     scripts/*.sh
                             /proc            docker compose
 ```
 
@@ -310,7 +310,7 @@ patch release. Do not pin transitively — let the BOMs manage it
 | `AuditEvent`     | Every admin action: userId, action, target, timestamp, diff. Never deleted.               |
 | `AdminUser`      | Single row (v1). Username, password hash (argon2id), WebAuthn credentials list, TZ.       |
 | `Session`        | Spring Security session; JDBC-backed for restart-survival.                                |
-| `BackupRun`      | If backup.sh is on cron: parsed from `~/backups/home.local/` timestamps + sizes.          |
+| `BackupRun`      | If backup.sh is on cron: parsed from `~/backups/aurora.local/` timestamps + sizes.          |
 
 ---
 
@@ -328,7 +328,7 @@ step is skippable but marked with a warning if it is.
    passkey now. Explicitly recommend passkey; make it the default
    button.
 3. **Hostname & domain** — pre-fills from L2 host state; asks for
-   `$HOME_DOMAIN`. Explains what changes when you edit it.
+   `$DOMAIN`. Explains what changes when you edit it.
 4. **Pick packages** — checkbox grid grouped by category. Recommends
    `core + privacy + storage` as the safe default; shows a "media
    server" preset and a "personal cloud" preset.
@@ -345,7 +345,7 @@ step is skippable but marked with a warning if it is.
       offer `/etc/hosts` snippet.
 7. **Trust the TLS root** — one-click download of the Caddy root CA,
    with per-OS install instructions. Verify by loading a hidden iframe
-   from a warden-signed URL.
+   from an aurora-signed URL.
 8. **Review & install** — plan diff (packages to enable, services to
    start, ports to open), confirm, streaming log output during
    `scripts/up.sh`.
@@ -372,7 +372,7 @@ step is skippable but marked with a warning if it is.
 Single-screen "score" (0–100) with a list of checks; each check is a
 row with severity dot, description, remediation button.
 
-Concrete checks (leverage what home.local already knows):
+Concrete checks (leverage what aurora.local already knows):
 
 - Weak/empty `.env` secrets (reuse the logic from
   `scripts/rotate-secrets.sh` — read `packages/*/.env` and score).
@@ -479,10 +479,10 @@ Non-negotiable defaults:
 
 ---
 
-## 9. Integration with home.local — concrete contract
+## 9. Integration with aurora.local — concrete contract
 
-The Warden container **reads and writes** the following paths inside
-its `/repo` mount (which is a bind of `~/home.local`):
+The Aurora container **reads and writes** the following paths inside
+its `/repo` mount (which is a bind of `~/aurora.local`):
 
 | Path                                   | Read | Write | Notes                                                                                 |
 |----------------------------------------|:----:|:-----:|---------------------------------------------------------------------------------------|
@@ -500,7 +500,7 @@ its `/repo` mount (which is a bind of `~/home.local`):
 | `data/**`                              |      |       | **Never touched from Java.** These are container-owned bind mounts.                   |
 | `scripts/*.sh`                         | ✓    |       | Executed via ProcessBuilder; never modified.                                          |
 
-The following scripts are the ONLY things Warden may `ProcessBuilder`:
+The following scripts are the ONLY things Aurora may `ProcessBuilder`:
 
 - `bootstrap.sh {add,remove,list,status}`
 - `scripts/{up,down,status,doctor,health,backup,pin,rotate-secrets}.sh`
@@ -544,7 +544,7 @@ configurable knobs:
 
 ---
 
-## 11. Pitfalls (learned the hard way while building home.local)
+## 11. Pitfalls (learned the hard way while building aurora.local)
 
 Read these; each one bit me in production. Bake them into your design.
 
@@ -555,7 +555,7 @@ break the container (docker holds the mount open) — but the container
 becomes a ticking bomb. The next restart re-resolves the bind source,
 finds nothing, and boots as a fresh install with every setting lost.
 
-- **Warden must never delete a bind-mount source while its container
+- **Aurora must never delete a bind-mount source while its container
   is running.** Every "delete data" flow must first stop the affected
   containers, then delete, then re-up.
 - Ship a first-class `POST /api/packages/{name}/reset` endpoint that
@@ -566,14 +566,14 @@ finds nothing, and boots as a fresh install with every setting lost.
 
 ### 11.2 Relative bind-mount paths in multi-`-f` compose
 
-`scripts/up.sh` invokes `docker compose -p home -f packages/core/compose.yml
+`scripts/up.sh` invokes `docker compose -p aurora -f packages/core/compose.yml
 -f packages/<pkg>/compose.yml ...`. Compose resolves relative bind
 sources against the **first** `-f` file's directory, not each file's
 own directory. So `./prometheus/prometheus.yml` inside
 `packages/monitoring/compose.yml` becomes
 `packages/core/prometheus/prometheus.yml` at runtime and blows up.
 
-- Warden should refuse to enable a package whose compose.yml contains
+- Aurora should refuse to enable a package whose compose.yml contains
   `./` relative bind sources. Fail loudly with a link to the "Gotcha"
   section of `docs/PACKAGE_CONTRACT.md`.
 - Consider a lint step in the UI that flags this on package selection.
@@ -585,31 +585,31 @@ Debian 998–999, some older installs 975, RHEL 991. Any container that
 mounts `/var/run/docker.sock` and runs as a non-root user needs the
 right gid at container-user level.
 
-- Warden's own compose.yml must use `${DOCKER_GID}` and `scripts/up.sh`
+- Aurora's own compose.yml must use `${DOCKER_GID}` and `scripts/up.sh`
   exports it via `getent group docker`. Do NOT hardcode a number.
 
 ### 11.4 Homepage's dashboard is NOT this dashboard
 
-Users will confuse "Homepage" (the tile grid at `home.local`) with
-Warden. Be explicit:
+Users will confuse "Homepage" (the tile grid at `aurora.local`) with
+Aurora. Be explicit:
 
-- Every Warden screen has a "Back to dashboard" link that goes to
-  Homepage, not to Warden's own root.
-- The Warden vhost is `warden.$HOME_DOMAIN`, distinct.
+- Every Aurora screen has a "Back to dashboard" link that goes to
+  Homepage, not to Aurora's own root.
+- The Aurora vhost is `admin.$DOMAIN`, distinct.
 - README/onboarding calls them "the dashboard" (Homepage) and "the
-  admin panel" (Warden) consistently.
+  admin panel" (Aurora) consistently.
 
 ### 11.5 Caddy caches the config
 
 `docker compose up -d` doesn't reload Caddy if only the mounted
-Caddyfile changed. Warden must issue `docker exec caddy caddy reload
+Caddyfile changed. Aurora must issue `docker exec caddy caddy reload
 --config /etc/caddy/Caddyfile` after any change to snippet content or
 Caddyfile.
 
 ### 11.6 First-run URLs matter more than dashboards
 
 After install, users need first-run URLs (AdGuard wizard, Sonarr
-setup, Seerr onboarding). Warden must **surface these prominently**
+setup, Seerr onboarding). Aurora must **surface these prominently**
 on the "just installed" screen. Bury the tile grid; foreground the
 "what to do next".
 
@@ -621,7 +621,7 @@ same as Homepage. This bit us. See 11.3.
 ### 11.8 States that need reconciliation
 
 `.state.yml` (installer intent) can drift from what docker actually
-runs (reality). Warden's home screen should always show both and flag
+runs (reality). Aurora's home screen should always show both and flag
 divergence. Common causes:
 
 - User did `docker stop foo` manually.
@@ -633,7 +633,7 @@ state's enabled set.
 
 ### 11.9 Secrets in `.env` are the trust boundary
 
-Every writable path Warden touches contains secrets. Any bug in the
+Every writable path Aurora touches contains secrets. Any bug in the
 `.env` diff/write path leaks credentials. Wrap all writes in a small
 `EnvFileMutator` service with explicit tests. Never templatize `.env`
 from strings; always parse-modify-serialize.
@@ -642,7 +642,7 @@ from strings; always parse-modify-serialize.
 
 Users will ask. Say no in v1. Editing compose.yml means learning
 Docker Compose, and if they're at that point they should be on SSH.
-Warden's job is the layer above.
+Aurora's job is the layer above.
 
 ---
 
@@ -652,8 +652,8 @@ Deliver in vertical slices; each one should be independently useful.
 
 ### M1 — Skeleton (1 week)
 
-- Repo scaffold: Maven multi-module (`warden-server`, `warden-web`).
-- Frontend serves a static "Warden" placeholder.
+- Repo scaffold: Maven multi-module (`aurora-server`, `aurora-web`).
+- Frontend serves a static "Aurora" placeholder.
 - Backend: docker-java lists containers, exposes `/api/containers`.
 - Auth: password-only login, session cookie, one hardcoded admin from
   env var for dev.
@@ -702,7 +702,7 @@ Deliver in vertical slices; each one should be independently useful.
 
 - CI, tests, docs, screenshots.
 - README with animated GIF of onboarding.
-- Ship image to `ghcr.io/<owner>/warden`.
+- Ship image to `ghcr.io/<owner>/aurora`.
 
 Cadence estimate: 5 weeks of focused single-agent work.
 
@@ -710,7 +710,7 @@ Cadence estimate: 5 weeks of focused single-agent work.
 
 ## 13. Deliverables
 
-- New repo (suggested name `home.local-warden` or `warden`), MIT
+- New repo (suggested name `aurora.local-aurora` or `aurora`), MIT
   licensed, hosted at `github.com/tomaytotomato/…`.
 - Multi-stage `Dockerfile` producing an image ≤ 200 MB.
 - Multi-arch build (`linux/amd64`, `linux/arm64`) via `docker buildx
@@ -718,12 +718,12 @@ Cadence estimate: 5 weeks of focused single-agent work.
 - End-to-end test using Playwright hitting a real dev instance.
 - Component tests for Vue via Vitest.
 - Backend tests: JUnit 5 + Mockito for unit tests; docker-java
-  against the ambient daemon (with `warden.test=true` label cleanup)
+  against the ambient daemon (with `aurora.test=true` label cleanup)
   for integration tests; Testcontainers 2.0+ narrowly scoped to
-  end-to-end (booting the Warden image) and optional isolated-daemon
+  end-to-end (booting the Aurora image) and optional isolated-daemon
   runs (see §14).
-- A PR against `tomaytotomato/home.local` adding
-  `packages/dashboard/` that installs Warden.
+- A PR against `tomaytotomato/aurora.local` adding
+  `packages/dashboard/` that installs Aurora.
 - Documentation site (optional v1): a `docs/` folder rendered by
   VitePress, deployed on GH Pages.
 
@@ -749,8 +749,8 @@ it just isn't at every tier.
   `docker compose config -q` invocation. **Do not wrap this in
   Testcontainers** — docker-java is already the SUT dependency, so
   Testcontainers would just be docker-java-driving-docker-java. Every
-  container this tier creates carries a `warden.test=true` label and
-  a `warden-it-<uuid>` name prefix; `@AfterEach` prunes by label so a
+  container this tier creates carries a `aurora.test=true` label and
+  a `aurora-it-<uuid>` name prefix; `@AfterEach` prunes by label so a
   hard failure still leaves the daemon clean.
 
 ### 14.3 End-to-end / isolation tests (**Testcontainers earns its keep**)
@@ -758,29 +758,29 @@ it just isn't at every tier.
 **Use Testcontainers 2.0+ here, deliberately and narrowly.** The
 cases where it genuinely helps:
 
-1. **Whole-app end-to-end.** Boot the built Warden image itself
-   (`GenericContainer("warden:local").withExposedPorts(8090)`) in a
+1. **Whole-app end-to-end.** Boot the built Aurora image itself
+   (`GenericContainer("aurora:local").withExposedPorts(8090)`) in a
    test, mount a temp directory as `/repo`, and drive it with real
    HTTP. Tests the packaged artefact, not just a local Maven run.
 2. **Isolated docker daemon for local `mvn verify`.** On a developer
    laptop, integration tests polluting the real docker daemon is a
    pain. Optional profile `-Pisolated-docker` spins up a
    `docker:dind` container via Testcontainers, points
-   `DOCKER_HOST=tcp://<dind>:2375` at it, and both Warden-under-test
+   `DOCKER_HOST=tcp://<dind>:2375` at it, and both Aurora-under-test
    and its child compose calls hit that isolated daemon. In CI this
    profile is off (GH Actions gives every job its own daemon
    already).
 3. **Multi-package scenario tests via `ComposeContainer`.** For
    tests that need "start core + privacy + media as a real project
-   and assert Warden sees them correctly", `ComposeContainer` is
+   and assert Aurora sees them correctly", `ComposeContainer` is
    the cleanest way — it does the compose lifecycle for you.
-4. **Playwright + Warden container.** The E2E suite starts a Warden
+4. **Playwright + Aurora container.** The E2E suite starts an Aurora
    container (Testcontainers), waits for `/health`, and points
-   Playwright at the exposed port. The Warden image is the SUT; the
+   Playwright at the exposed port. The Aurora image is the SUT; the
    browser is the driver.
 
 Rule of thumb: **if the test is about docker-java behaviour, don't
-use Testcontainers. If the test is about Warden-as-a-shipped-artefact
+use Testcontainers. If the test is about Aurora-as-a-shipped-artefact
 or about daemon isolation, do.**
 
 ### 14.4 Frontend
@@ -789,7 +789,7 @@ or about daemon isolation, do.**
   validators, security-score reducers). Snapshot tests discouraged.
 - **Playwright 1.62** for the first-run wizard and package-
   add/remove flow end-to-end. Runs against the Testcontainers-hosted
-  Warden from §14.3.
+  Aurora from §14.3.
 
 ### 14.5 Security tests
 
@@ -830,7 +830,7 @@ or about daemon isolation, do.**
 2. Every mutating action leaves an audit trail.
 3. Any secret you set stays a secret in every log and every JSON
    response.
-4. Doctor + Warden together catch all 10 pitfalls in §11 before they
+4. Doctor + Aurora together catch all 10 pitfalls in §11 before they
    destroy user data.
 5. The onboarding wizard fits on one laptop screen at 1440x900 (no
    scrolling) at every step.
@@ -840,7 +840,7 @@ or about daemon isolation, do.**
 ## 17. What to do first (if you're the agent picking this up)
 
 1. Read this brief end-to-end. Then read `docs/PACKAGE_CONTRACT.md`,
-   `docs/ARCHITECTURE.md`, and `docs/OPERATIONS.md` in the home.local
+   `docs/ARCHITECTURE.md`, and `docs/OPERATIONS.md` in the aurora.local
    repo.
 2. Skim `bootstrap.sh` and `scripts/lib/*.sh` — those are the CLI
    you're replacing.
@@ -849,12 +849,12 @@ or about daemon isolation, do.**
 4. Read §18 (Prior art) before making UX decisions — there are ten
    existing products in this space, and the brief takes a strong
    position on what to steal from each.
-5. Fork the home.local repo and check out `productionize`.
-6. Create a new empty repo for Warden.
-7. Scaffold M1 in a single PR: Maven parent + `warden-server` (Spring
-   Boot Hello World) + `warden-web` (Vue Hello World) + Dockerfile
+5. Fork the aurora.local repo and check out `productionize`.
+6. Create a new empty repo for Aurora.
+7. Scaffold M1 in a single PR: Maven parent + `aurora-server` (Spring
+   Boot Hello World) + `aurora-web` (Vue Hello World) + Dockerfile
    that serves them both from one port.
-8. Add `packages/dashboard/` in a PR against home.local.
+8. Add `packages/dashboard/` in a PR against aurora.local.
 9. When M1 lands, ping the human, then start M2.
 
 ---
@@ -863,7 +863,7 @@ or about daemon isolation, do.**
 
 The self-hosted dashboard space is crowded. Before you invent a
 navigation pattern, read this. Every product below solved a piece of
-the problem; Warden's job is to synthesize the good ideas, not
+the problem; Aurora's job is to synthesize the good ideas, not
 relitigate them.
 
 Categories:
@@ -875,9 +875,9 @@ Categories:
 - **Container / server admin panels** — general-purpose ops UIs
   (Portainer, Cockpit, Proxmox).
 
-Warden lives closest to the third category (admin panel), but
+Aurora lives closest to the third category (admin panel), but
 borrows heavily from the second (curated, opinionated app catalogue
-via home.local packages). It is deliberately **not** a tile
+via aurora.local packages). It is deliberately **not** a tile
 dashboard — Homepage already exists in `packages/core`.
 
 ### 18.1 Homepage — the tile grid already in-house
@@ -888,22 +888,22 @@ sees them.
 
 **Steal:**
 - **Docker-label discovery.** Users write `homepage.group="Media"` on
-  a container and it shows up. Warden should treat these labels as
+  a container and it shows up. Aurora should treat these labels as
   authoritative and merge them with the package manifest.
 - **Widget-per-service pattern.** Each package can declare a widget
-  spec (`homepage.yml`). Warden should render the same specs in its
+  spec (`homepage.yml`). Aurora should render the same specs in its
   own admin views so the "health" pane is data-driven.
 - **API-key proxying.** Never expose secrets to the browser. Every
-  outbound call to a managed app goes through the Warden server.
+  outbound call to a managed app goes through the Aurora server.
 
 **Avoid:**
 - **Read-only.** Homepage does one thing well; users still SSH for
-  the other 90%. Warden's job is the other 90%.
+  the other 90%. Aurora's job is the other 90%.
 - **YAML-only configuration.** Homepage's config surface is a `.yaml`
   file. That's fine for a bookmark grid; unacceptable for an admin
-  panel. Warden edits YAML on the user's behalf, atomically.
+  panel. Aurora edits YAML on the user's behalf, atomically.
 - **Static build.** Static works when there's no auth and no mutation.
-  Warden has both.
+  Aurora has both.
 
 ### 18.2 Homarr — the drag-and-drop dashboard
 
@@ -917,17 +917,17 @@ container. The original repo is archived; v1+ lives at
   time picking icons. Ship a searchable picker backed by
   [selfh.st/icons](https://selfh.st/icons) + mdi/lucide sets.
 - **First-class secret rotation UI.** Homarr treats secrets as
-  editable-but-audited objects. Warden should too — every `.env`
+  editable-but-audited objects. Aurora should too — every `.env`
   value has a history and a rotation button.
 - **Modular integrations catalogue.** Homarr publishes a table of
-  supported apps with a per-app widget doc. Warden's package manifests
+  supported apps with a per-app widget doc. Aurora's package manifests
   give us the same catalogue for free.
 - **Live status pills.** Every tile gets a green/red status dot from
   the container-health probe. Do the same on our package list.
 
 **Avoid:**
 - **Drag-and-drop as the primary interaction.** Great for a launcher,
-  bad for an admin panel. Warden's layout is fixed; drag-and-drop is
+  bad for an admin panel. Aurora's layout is fixed; drag-and-drop is
   a v2 stretch goal, if at all.
 - **Building your own auth system.** Homarr rolled its own users +
   invites + roles. Spring Security + WebAuthn is battle-tested; use
@@ -943,7 +943,7 @@ docker-containers, server-stats). Vanilla JS on the client.
 
 **Steal:**
 - **Ruthless performance budget.** Glance boasts uncached page loads
-  in ~1 s. Warden should aim for the same on the primary dashboard:
+  in ~1 s. Aurora should aim for the same on the primary dashboard:
   under 300 KB JS, under 1 s time-to-interactive on a Pi 4.
 - **Vanilla JS in critical paths.** Not saying drop Vue — but the SSE
   event feed, the container status pills, and the metrics chart don't
@@ -955,7 +955,7 @@ docker-containers, server-stats). Vanilla JS on the client.
 
 **Avoid:**
 - **All the RSS/Reddit/YouTube widgets.** Out of scope. Glance is a
-  personal-portal; Warden is an admin panel.
+  personal-portal; Aurora is an admin panel.
 - **Server-rendered HTML templates.** Fine for Glance's read-only
   surface; a poor fit for our forms and streaming views.
 
@@ -965,18 +965,18 @@ docker-containers, server-stats). Vanilla JS on the client.
 by tags from `selfh.st/apps`, auto-picks icons from `selfh.st/icons`.
 
 **Steal:**
-- **Reflect the router truth.** Warden should read Caddy's admin API
+- **Reflect the router truth.** Aurora should read Caddy's admin API
   (`:2019/config/` or `/id/{id}`) and surface "vhosts caddy actually
   knows about right now" alongside "vhosts the packages *say* should
   exist". Divergence is a security-relevant fact.
 - **`selfh.st/apps` + `selfh.st/icons` as reference metadata.**
   Ubiquitous, high-quality, opinionated icon set. Use it.
-- **Group by app-category tag automatically.** Warden's manifest
+- **Group by app-category tag automatically.** Aurora's manifest
   already has a `category` field — lean into it as the primary grouping
   in every list view.
 
 **Avoid:**
-- **Single-integration bind.** TraLa only works with Traefik. Warden
+- **Single-integration bind.** TraLa only works with Traefik. Aurora
   should assume Caddy but not be structurally locked to it — abstract
   the vhost-reflection behind a small interface.
 
@@ -992,7 +992,7 @@ ZimaCube hardware but installable on any x86-64 UEFI machine.
   screenshotted, not a wall of forms. Copy the tone: one big call to
   action per screen, plain language, images.
 - **An app catalogue as the primary navigation.** CasaOS treats
-  "install an app" as the central action, not a hidden menu. Warden
+  "install an app" as the central action, not a hidden menu. Aurora
   should surface `packages/*` the same way: as a catalogue with
   categories, previews, screenshots, ratings-esque "how commonly
   used" signals.
@@ -1003,11 +1003,11 @@ ZimaCube hardware but installable on any x86-64 UEFI machine.
   live plus a "you should back up" / "you should update" prompt.
 
 **Avoid:**
-- **Owning the whole OS.** Warden is an app you install on someone's
-  Ubuntu, not a distro. That's the entire point of home.local's L2/L3
+- **Owning the whole OS.** Aurora is an app you install on someone's
+  Ubuntu, not a distro. That's the entire point of aurora.local's L2/L3
   split.
 - **A closed app taxonomy.** CasaOS's app store is curated by
-  IceWhale. Warden's catalogue is the local `packages/*` directory
+  IceWhale. Aurora's catalogue is the local `packages/*` directory
   — the user (and third parties) can add packages by dropping a
   folder.
 - **Custom compose formats.** CasaOS wraps compose in its own
@@ -1023,16 +1023,16 @@ in the homelab world.
 
 **Steal:**
 - **The tree view as the primary spatial model.** Datacenter (=
-  fleet) → Node (= host) → Guest (= package/container). Warden is v1
+  fleet) → Node (= host) → Guest (= package/container). Aurora is v1
   single-host, but structure the URL and store hierarchy this way so
   multi-host is a config change, not a rewrite.
 - **Live graphs at every level of the tree.** Every screen has
   aggregate stats for its subtree. Cheap to implement, huge UX win.
 - **Backup/restore lifecycle as a first-class object.** Proxmox
   treats backups as versioned artefacts you can browse, tag, and
-  restore from. Warden's backup list should feel the same.
+  restore from. Aurora's backup list should feel the same.
 - **"Bulk action" pattern.** Select multiple guests → apply an action.
-  Warden should support this for packages ("restart selected",
+  Aurora should support this for packages ("restart selected",
   "upgrade selected").
 - **Task log at the bottom.** A persistent, dismissible drawer
   showing the current + last-N background tasks (up.sh, pin, backup)
@@ -1040,7 +1040,7 @@ in the homelab world.
 
 **Avoid:**
 - **Enterprise UI density.** Proxmox is dense on purpose; its users
-  are ops engineers. Warden's users are a mix, so bias toward less
+  are ops engineers. Aurora's users are a mix, so bias toward less
   chrome and larger targets.
 - **VM/LXC concepts.** They're out of scope; don't leak them into
   the vocabulary.
@@ -1057,22 +1057,22 @@ templated docker-run flags.
 **Steal:**
 - **The docker template pattern.** UnRAID templates are XML files
   that translate to `docker run` flags with per-field descriptions.
-  Warden's `.env.example` files play the same role; render them as
+  Aurora's `.env.example` files play the same role; render them as
   friendly forms with the inline comments as helper text (**major**
   differentiator vs Portainer's raw compose editor).
 - **The "Advanced view" toggle.** UnRAID hides the ugly bits behind a
   toggle so casuals see friendly forms, power users see raw values.
   Steal directly.
-- **A dedicated dashboard tile per array/disk.** For Warden, replace
+- **A dedicated dashboard tile per array/disk.** For Aurora, replace
   "array" with "data volume" — show per-package disk usage at a glance.
 - **Discoverable community apps.** Users install things they didn't
-  know existed. Even without a real app store, Warden should surface
+  know existed. Even without a real app store, Aurora should surface
   a "Suggested next packages" strip based on category (e.g., if you
   have `media`, suggest `home-automation`).
 
 **Avoid:**
 - **A paid tier.** UnRAID's UI polish is partially funded by licence
-  sales; Warden is MIT/GPL and doesn't have that budget. Compensate
+  sales; Aurora is MIT/GPL and doesn't have that budget. Compensate
   with simplicity, not chrome.
 - **XML template files.** We already have `manifest.yml` + `.env.example`.
 - **A parallel plugin ecosystem.** Packages are the extension point.
@@ -1090,23 +1090,23 @@ edition adds RBAC + support.
   design. Copy it for our per-container detail view, but constrain
   it to the packages we know about — no full docker admin surface.
 - **The stack (compose) diff view.** Before Portainer applies a
-  change, it shows a diff of the compose file. Warden should show a
+  change, it shows a diff of the compose file. Aurora should show a
   plan (packages added/removed, ports opened/closed, env keys added)
   before every install.
 - **Live event log.** Portainer streams docker events into a
   bottom-of-page log. Take this pattern for the task drawer.
-- **Endpoints concept.** Even if Warden is single-host in v1, expose
+- **Endpoints concept.** Even if Aurora is single-host in v1, expose
   the "current endpoint" in the URL / top-bar so multi-host later is
   a URL change, not a rewrite (same principle as Proxmox tree).
 
 **Avoid:**
 - **General-purpose docker exposure.** Portainer's audience includes
   ops engineers who want to `docker run` anything. That path leads to
-  users breaking home.local's invariants. Warden should refuse to
+  users breaking aurora.local's invariants. Aurora should refuse to
   create resources outside the known package set.
 - **The "choose your orchestrator" flow.** Docker only. If someone
-  needs Swarm/K8s, they don't need Warden.
-- **License-gated features.** Everything Warden ships is open. Don't
+  needs Swarm/K8s, they don't need Aurora.
+- **License-gated features.** Everything Aurora ships is open. Don't
   design around a "pro tier" from day one.
 
 ### 18.9 Runtipi — the personal homeserver orchestrator
@@ -1119,18 +1119,18 @@ dashboard.
 **Steal:**
 - **Config forms driven by app metadata.** Runtipi apps carry a
   `config.json` describing each field type (text, password, url,
-  boolean). Warden's `.env.example` comments should be parsed into
+  boolean). Aurora's `.env.example` comments should be parsed into
   the same field-type hints (`# type: password`, `# type: url`,
   `# required`, `# generated`).
 - **A public app-repo model.** Runtipi supports community app stores
-  as git repos. Warden's `packages/*` structure already supports this
-  — lean in with a `warden-app-store.example.com` future concept
+  as git repos. Aurora's `packages/*` structure already supports this
+  — lean in with a `aurora-app-store.example.com` future concept
   that points to a git remote of extra packages.
 - **TOTP as a backup 2FA path.** WebAuthn is the primary, but not
   every user will have a passkey device. TOTP is a fine secondary.
 - **Guest dashboard.** A read-only "what's on this server" that a
   family member can open without an account. Perfect fit for v2.
-- **Backups per-app.** Runtipi does per-app backup/restore. Warden's
+- **Backups per-app.** Runtipi does per-app backup/restore. Aurora's
   `scripts/backup.sh` covers all packages at once; expose it
   per-package too.
 
@@ -1153,15 +1153,15 @@ resource cost when idle. Multi-host via "machines".
 
 **Steal:**
 - **Integrated terminal.** Cockpit ships an xterm.js terminal on
-  every host. For Warden, this is v2 material — but structurally,
+  every host. For Aurora, this is v2 material — but structurally,
   every "container" detail view should have a “Logs / Exec” tab
   ready for it.
-- **On-demand activation.** Warden's JVM should be lazy where
+- **On-demand activation.** Aurora's JVM should be lazy where
   possible: cheap idle, aggressive warm-up when a user is present.
   Aim for < 100 MB RSS at idle.
 - **Multi-host as “machines”.** Same principle as Proxmox/Portainer.
 - **“Fix it” in-context.** Cockpit's SELinux page finds violations
-  and offers a one-click policy edit. Every Warden security finding
+  and offers a one-click policy edit. Every Aurora security finding
   should end in a button that takes the action, not just describes
   it.
 - **Terminal as a fallback for anything not yet UI-wrapped.** Users
@@ -1171,12 +1171,12 @@ resource cost when idle. Multi-host via "machines".
 - **RHEL vocabulary.** SELinux, subscription-manager, journald
   specifics — leak these and Ubuntu/Debian users get lost.
 - **Server-side rendered pages with per-page reloads.** Cockpit does
-  this and it feels dated. Warden is an SPA.
+  this and it feels dated. Aurora is an SPA.
 - **Generic Linux admin scope.** Cockpit does firewalls, users,
-  storage, kdump, everything. Warden stays focused on the
-  home.local surface.
+  storage, kdump, everything. Aurora stays focused on the
+  aurora.local surface.
 
-### 18.11 Synthesis: the ten principles Warden takes forward
+### 18.11 Synthesis: the ten principles Aurora takes forward
 
 Distilled from the above:
 
@@ -1204,23 +1204,23 @@ Distilled from the above:
     structure, store hierarchy, and API paths all assume an endpoint
     id, even when there's only one.
 
-### 18.12 What every one of them gets wrong (and Warden must not)
+### 18.12 What every one of them gets wrong (and Aurora must not)
 
 - **They all assume the user knows what they want to install.** None
   of them provide a decision-tree wizard for “I want to build a media
-  server” → packages selected + configured + started. Warden's
+  server” → packages selected + configured + started. Aurora's
   first-run wizard is a competitive advantage.
 - **None of them audit their own effect on the host.** No one shows
   you the current UFW rules, the current fail2ban ban count, the
   current unattended-upgrades run history. Security posture is
-  Warden's other differentiator.
+  Aurora's other differentiator.
 - **None of them protect the user from the specific footguns** in
   §11. Bind-mount rm, GID drift, multi-`-f` compose paths — these
-  are unique to how home.local composes packages, and Warden should
+  are unique to how aurora.local composes packages, and Aurora should
   own them.
 
 That's the pitch: **a Portainer-shaped admin panel with a
 Runtipi-shaped catalogue, a CasaOS-shaped onboarding, and a
 Cockpit-shaped “fix it” attitude, purpose-built for the
-home.local package model.**
+aurora.local package model.**
 

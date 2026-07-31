@@ -4,7 +4,7 @@
     that:
       - ansible_os_family == 'Debian'
     fail_msg: >-
-      home.local host roles currently support Debian/Ubuntu only
+      aurora.local host roles currently support Debian/Ubuntu only
       (detected {{ ansible_distribution }} {{ ansible_distribution_version }}
       / family {{ ansible_os_family }}). TODO: add RHEL-family support
       (dnf, firewalld, etc.).

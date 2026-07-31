@@ -1,10 +1,10 @@
 ---
-# home.local / homepage / widgets.yaml
+# aurora.local / homepage / widgets.yaml
 # https://gethomepage.dev/widgets/
 
 - greeting:
     text_size: 4xl
-    text: home.local
+    text: aurora.local
 
 - datetime:
     text_size: xl

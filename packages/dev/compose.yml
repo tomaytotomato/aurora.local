@@ -1,18 +1,18 @@
-# home.local / packages/dev
+# aurora.local / packages/dev
 #
 # General dev sandbox: code-server (VS Code in browser) plus a Postgres
 # 16 and Redis 7 you can point apps at.
 #
-# Other packages on home_net reach these via container name:
+# Other packages on aurora_net reach these via container name:
 #   postgres:5432
 #   redis:6379
 # Host-side ports are remapped (15432 / 16379) so they don't collide with
 # a locally-installed pg/redis.
 
-name: home-dev
+name: aurora-dev
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -20,19 +20,19 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     container_name: code-server
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - TZ=${TZ:-Europe/London}
       - PASSWORD=${CODE_SERVER_PASSWORD}
       - SUDO_PASSWORD=${CODE_SERVER_SUDO_PASSWORD:-}
-      - DEFAULT_WORKSPACE=/workspace/home.local
+      - DEFAULT_WORKSPACE=/workspace/aurora.local
     volumes:
       - ../../data/dev/code-server:/config
       # Edit this repo from the browser. UID 1000:1000 by default; if
       # your host user differs, override PUID/PGID in .env.
-      - /home/${HOME_USER:-bruce}/home.local:/workspace/home.local:rw
+      - /home/${HOME_USER:-bruce}/aurora.local:/workspace/aurora.local:rw
     ports:
       - "8443:8443"
 
@@ -40,7 +40,7 @@ services:
     image: postgres:16-alpine
     container_name: postgres
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     environment:
       - TZ=${TZ:-Europe/London}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -60,7 +60,7 @@ services:
     image: redis:7-alpine
     container_name: redis
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     command:
       - redis-server
       - --requirepass

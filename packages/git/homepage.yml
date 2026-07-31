@@ -4,7 +4,7 @@
 - Dev:
     - Forgejo:
         icon: forgejo.png
-        href: https://git.{{HOMEPAGE_VAR_HOME_DOMAIN}}/
+        href: https://git.{{HOMEPAGE_VAR_DOMAIN}}/
         description: Self-hosted git + CI
         server: my-docker
         container: forgejo

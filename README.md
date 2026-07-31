@@ -1,16 +1,16 @@
-# home.local
+# aurora.local
 
 Turn any fresh Debian/Ubuntu box into a self-hosted server: reverse
 proxy + dashboard + LAN DNS + VPN + media automation + file sharing +
 whatever else you enable. Everything runs in Docker, orchestrated
-under a single `home` compose project.
+under a single `aurora` compose project.
 
 ## Quick start
 
 On a fresh box:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/tomaytotomato/home.local/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tomaytotomato/aurora.local/main/bootstrap.sh | bash
 ```
 
 You'll get an interactive TUI: hostname, domain, timezone, LAN CIDR,
@@ -18,7 +18,7 @@ then a package picker. Or drive it headless:
 
 ```
 ENABLE_PACKAGES="core privacy media storage" \
-  HOME_DOMAIN=home.local \
+  DOMAIN=aurora.local \
   bash bootstrap.sh
 ```
 

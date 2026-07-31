@@ -1,16 +1,16 @@
-# home.local / packages/identity
+# aurora.local / packages/identity
 #
-# Authelia SSO + 2FA. Sits behind Caddy on auth.${HOME_DOMAIN} and
+# Authelia SSO + 2FA. Sits behind Caddy on auth.${DOMAIN} and
 # integrates with other packages via forward-auth (see caddy.snippet:
 # the `authelia` named route can be `import`ed into any vhost).
 #
 # Backend: file-based users_database.yml + local SQLite storage.
 # Zero external dependencies.
 
-name: home-identity
+name: aurora-identity
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -18,10 +18,10 @@ services:
     image: authelia/authelia:latest
     container_name: authelia
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     ports:
       # Bound only for local debugging. Real access is via Caddy on
-      # https://auth.${HOME_DOMAIN}. Comment out to hide from the LAN.
+      # https://auth.${DOMAIN}. Comment out to hide from the LAN.
       - "127.0.0.1:9091:9091"
     environment:
       - TZ=${TZ:-Europe/London}
@@ -38,8 +38,8 @@ services:
       - AUTHELIA_NOTIFIER_SMTP_PASSWORD=${AUTHELIA_NOTIFIER_SMTP_PASSWORD:-}
       - AUTHELIA_NOTIFIER_SMTP_SENDER=${AUTHELIA_NOTIFIER_SMTP_SENDER:-}
       # Bake the domain into cookies via env; configuration.yml
-      # references ${HOME_DOMAIN}.
-      - HOME_DOMAIN=${HOME_DOMAIN:-home.local}
+      # references ${DOMAIN}.
+      - DOMAIN=${DOMAIN:-aurora.local}
     volumes:
       - ../identity/authelia:/config:ro
       # State (SQLite, notifications). Users db lives here too so it

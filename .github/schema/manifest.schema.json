@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://home.local/schema/manifest.schema.json",
-  "title": "home.local package manifest",
+  "$id": "https://aurora.local/schema/manifest.schema.json",
+  "title": "aurora.local package manifest",
   "description": "Schema for packages/<name>/manifest.yml. See docs/PACKAGE_CONTRACT.md.",
   "type": "object",
   "required": ["name", "title", "description", "category", "depends_on"],

@@ -8,13 +8,13 @@ Home Assistant runs with `network_mode: host`. This is HA's own
 recommendation: local-discovery integrations (Chromecast, HomeKit,
 mDNS, SSDP) do not survive a docker bridge network. Consequence:
 
-- HA is **not** attached to `home_net`.
+- HA is **not** attached to `aurora_net`.
 - Caddy in `core` reaches it via `host.docker.internal:8123` (Linux
   has `extra_hosts: host-gateway` on the caddy service).
 - HA reaches Mosquitto over the host's LAN IP or 127.0.0.1:1883 (not
   by container name).
 
-Mosquitto and Zigbee2MQTT stay on `home_net` and are reachable by
+Mosquitto and Zigbee2MQTT stay on `aurora_net` and are reachable by
 name from other packages.
 
 ## First-run

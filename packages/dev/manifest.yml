@@ -2,10 +2,10 @@ name: dev
 title: Dev sandbox (code-server + Postgres + Redis)
 description: |
   Browser-based VS Code (code-server) plus a Postgres 16 and Redis 7
-  instance for general dev/prototyping. code-server has ~/home.local
-  bind-mounted at /workspace/home.local so you can edit this repo from
+  instance for general dev/prototyping. code-server has ~/aurora.local
+  bind-mounted at /workspace/aurora.local so you can edit this repo from
   any browser. Postgres/Redis are reachable from other packages on
-  home_net at postgres:5432 and redis:6379.
+  aurora_net at postgres:5432 and redis:6379.
 
 category: dev
 
@@ -32,12 +32,12 @@ required_env:
   - REDIS_PASSWORD
 
 post_install_notes: |
-  1. code-server: https://code.$HOME_DOMAIN/ — password from .env.
+  1. code-server: https://code.$DOMAIN/ — password from .env.
   2. Postgres: from host: psql -h localhost -p 15432 -U $POSTGRES_USER
-     from another container on home_net: postgres:5432
+     from another container on aurora_net: postgres:5432
   3. Redis: from host: redis-cli -h localhost -p 16379 -a $REDIS_PASSWORD
-     from another container on home_net: redis:6379
+     from another container on aurora_net: redis:6379
   4. code-server runs as UID 1000 (coder). Files created inside
-     /workspace/home.local will be owned by 1000:1000 on the host, which
+     /workspace/aurora.local will be owned by 1000:1000 on the host, which
      matches the default home_uid/home_gid. If your host user isn't 1000,
      override PUID/PGID in .env.

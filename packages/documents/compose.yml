@@ -1,16 +1,16 @@
-# home.local / packages/documents
+# aurora.local / packages/documents
 #
 # Paperless-ngx (document DMS + OCR) with its Gotenberg / Tika
 # sidecars, backed by a dedicated Postgres + Redis. Plus Stirling-PDF
 # as a general-purpose browser PDF toolkit.
 #
 # The Postgres/Redis instances here are *scoped* to Paperless — they
-# stay on home_net but no other package should touch them.
+# stay on aurora_net but no other package should touch them.
 
-name: home-documents
+name: aurora-documents
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -18,7 +18,7 @@ services:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
     container_name: paperless
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     depends_on:
       paperless-postgres:
         condition: service_healthy
@@ -58,7 +58,7 @@ services:
     image: docker.io/library/postgres:16-alpine
     container_name: paperless-postgres
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     environment:
       - TZ=${TZ:-Europe/London}
       - POSTGRES_USER=paperless
@@ -76,7 +76,7 @@ services:
     image: docker.io/library/redis:7-alpine
     container_name: paperless-redis
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     volumes:
       - ../../data/documents/redis:/data
     healthcheck:
@@ -89,7 +89,7 @@ services:
     image: docker.io/gotenberg/gotenberg:8
     container_name: paperless-gotenberg
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     # Paperless calls into gotenberg for office-file rendering. The
     # default chromium sandbox needs these flags in a container.
     command:
@@ -101,14 +101,14 @@ services:
     image: docker.io/apache/tika:latest
     container_name: paperless-tika
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
 
   # ---- Stirling-PDF: general browser PDF toolkit -----------------------
   stirling-pdf:
     image: docker.io/frooodle/s-pdf:latest
     container_name: stirling-pdf
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     environment:
       - TZ=${TZ:-Europe/London}
       - DOCKER_ENABLE_SECURITY=false

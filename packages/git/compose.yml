@@ -1,14 +1,14 @@
-# home.local / packages/git
+# aurora.local / packages/git
 #
 # Forgejo (Gitea community fork) + forgejo-runner for CI.
 #
 # The runner starts but stays idle until FORGEJO_RUNNER_TOKEN is set in
 # .env (see README). Recreate the container after populating the token.
 
-name: home-git
+name: aurora-git
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -16,7 +16,7 @@ services:
     image: codeberg.org/forgejo/forgejo:1.21
     container_name: forgejo
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     environment:
       - USER_UID=1000
       - USER_GID=1000
@@ -24,9 +24,9 @@ services:
       # First-boot admin bootstrap (Forgejo reads these and creates the
       # user if it doesn't yet exist).
       - FORGEJO__security__INSTALL_LOCK=true
-      - FORGEJO__server__DOMAIN=git.${HOME_DOMAIN:-home.local}
-      - FORGEJO__server__ROOT_URL=https://git.${HOME_DOMAIN:-home.local}/
-      - FORGEJO__server__SSH_DOMAIN=${HOME_DOMAIN:-home.local}
+      - FORGEJO__server__DOMAIN=git.${DOMAIN:-aurora.local}
+      - FORGEJO__server__ROOT_URL=https://git.${DOMAIN:-aurora.local}/
+      - FORGEJO__server__SSH_DOMAIN=${DOMAIN:-aurora.local}
       - FORGEJO__server__SSH_PORT=2222
       - FORGEJO__service__DISABLE_REGISTRATION=true
       - FORGEJO__ADMIN_USER=${FORGEJO_ADMIN_USER}
@@ -44,14 +44,14 @@ services:
     image: code.forgejo.org/forgejo/runner:3.5.1
     container_name: forgejo-runner
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     depends_on:
       - forgejo
     environment:
       - TZ=${TZ:-Europe/London}
       - FORGEJO_INSTANCE_URL=http://forgejo:3000
       - FORGEJO_RUNNER_REGISTRATION_TOKEN=${FORGEJO_RUNNER_TOKEN:-}
-      - FORGEJO_RUNNER_NAME=home-runner
+      - FORGEJO_RUNNER_NAME=aurora-runner
     volumes:
       - ../../data/git/runner:/data
       # Runner needs docker to spawn job containers.

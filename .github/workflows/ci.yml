@@ -90,7 +90,7 @@ jobs:
           for p in ${{ matrix.combo }}; do
             args+=(-f "packages/$p/compose.yml")
           done
-          # home_net is external in every stack; declare it locally for validation
+          # aurora_net is external in every stack; declare it locally for validation
           export COMPOSE_PROJECT_NAME=ci
           # `docker compose config` fails on missing external networks with
           # some versions; --resolve-image-digests is off by default.

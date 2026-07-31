@@ -26,10 +26,10 @@ required_env:
   - KOPIA_UI_PASSWORD
 
 post_install_notes: |
-  UI: https://backup.$HOME_DOMAIN/  (login KOPIA_UI_USER / KOPIA_UI_PASSWORD)
+  UI: https://backup.$DOMAIN/  (login KOPIA_UI_USER / KOPIA_UI_PASSWORD)
 
   First-run:
     1. Open the UI; if the repo is uninitialised, "Create Repository"
        -> Filesystem -> /repository, encryption password = KOPIA_PASSWORD.
-    2. Add sources: /data/home/<you>/home.local, /data/etc, etc.
+    2. Add sources: /data/home/<you>/aurora.local, /data/etc, etc.
     3. Import policies/default-policy.json as a starting point.

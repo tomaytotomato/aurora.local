@@ -20,8 +20,8 @@ Two complementary tools:
 
 2. `./scripts/up.sh core documents`
 
-3. Paperless: `https://paperless.$HOME_DOMAIN/` (or `http://<host>:8010`)
-4. Stirling: `https://pdf.$HOME_DOMAIN/`     (or `http://<host>:8020`)
+3. Paperless: `https://paperless.$DOMAIN/` (or `http://<host>:8010`)
+4. Stirling: `https://pdf.$DOMAIN/`     (or `http://<host>:8020`)
 
 ## Consumption folder
 
@@ -58,4 +58,4 @@ directory is regenerable.
 - 8010 → Paperless-ngx
 - 8020 → Stirling-PDF
 
-(Everything else stays on `home_net`.)
+(Everything else stays on `aurora_net`.)

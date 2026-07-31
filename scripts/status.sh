@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# home.local / scripts/status.sh
+# aurora.local / scripts/status.sh
 #
 # Print a quick health snapshot: hostname, enabled packages, container
 # state, listening ports (that we care about), disk usage on media_root.
@@ -46,8 +46,8 @@ if command -v docker >/dev/null 2>&1; then
       [[ -f "$f" ]] && files+=(-f "$f")
     done
     if [[ ${#files[@]} -gt 0 ]]; then
-      docker compose -p home "${files[@]}" ps --format 'table {{.Service}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' \
-        2>/dev/null || docker ps --filter label=com.docker.compose.project=home
+      docker compose -p aurora "${files[@]}" ps --format 'table {{.Service}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' \
+        2>/dev/null || docker ps --filter label=com.docker.compose.project=aurora
     fi
   else
     docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' | head -20

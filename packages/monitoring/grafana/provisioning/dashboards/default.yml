@@ -1,14 +1,14 @@
-# home.local / packages/monitoring / grafana dashboards provisioning
+# aurora.local / packages/monitoring / grafana dashboards provisioning
 #
-# Registers a "home.local" folder backed by any *.json files dropped
+# Registers a "aurora.local" folder backed by any *.json files dropped
 # in this directory. Grafana rescans every 30s.
 
 apiVersion: 1
 
 providers:
-  - name: home.local
+  - name: aurora.local
     orgId: 1
-    folder: home.local
+    folder: aurora.local
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30

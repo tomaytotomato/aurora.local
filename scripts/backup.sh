@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# home.local / scripts/backup.sh
+# aurora.local / scripts/backup.sh
 #
-# Snapshot the *configuration* of a home.local box into a timestamped
+# Snapshot the *configuration* of an aurora.local box into a timestamped
 # tarball. Deliberately does NOT back up the giant media/library data;
 # only the state that would be painful to recreate: env files, ansible
 # vars, homepage/caddy config, and each package's small config bind
@@ -10,7 +10,7 @@
 # Bulk media, sonarr's Media/ dir, jellyfin's transcodes, etc. are all
 # excluded by pattern; back those up with restic/borg separately.
 #
-# Optional: if RCLONE_REMOTE is set (e.g. b2:mybucket/home.local), the
+# Optional: if RCLONE_REMOTE is set (e.g. b2:mybucket/aurora.local), the
 # resulting tarball is pushed with `rclone copy`.
 #
 # Retention: keeps the most recent $KEEP backups (default 14).
@@ -19,7 +19,7 @@
 #   ./scripts/backup.sh                          # write to $BACKUP_DIR
 #   BACKUP_DIR=/mnt/backup ./scripts/backup.sh   # override dest
 #   KEEP=7 ./scripts/backup.sh                   # keep 7 most recent
-#   RCLONE_REMOTE=b2:home.local ./scripts/backup.sh
+#   RCLONE_REMOTE=b2:aurora.local ./scripts/backup.sh
 #   ./scripts/backup.sh --dry-run                # list what'd be included
 
 set -euo pipefail
@@ -27,7 +27,7 @@ set -euo pipefail
 # shellcheck source=lib/ops.sh
 . "$(dirname "$0")/lib/ops.sh"
 
-BACKUP_DIR="${BACKUP_DIR:-$HOME/backups/home.local}"
+BACKUP_DIR="${BACKUP_DIR:-$HOME/backups/aurora.local}"
 KEEP="${KEEP:-14}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-}"
 DRY_RUN=0
@@ -77,7 +77,7 @@ EXCLUDES=(
 mkdir -p "$BACKUP_DIR"
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
 host="$(hostname -s 2>/dev/null || echo host)"
-out="$BACKUP_DIR/home.local-$host-$ts.tar.gz"
+out="$BACKUP_DIR/aurora.local-$host-$ts.tar.gz"
 
 # Assemble the list of items that actually exist.
 cd "$REPO"
@@ -134,7 +134,7 @@ ok "wrote $out ($size, $count entries)"
 # ---- retention -------------------------------------------------------
 if (( KEEP > 0 )); then
   # shellcheck disable=SC2012
-  mapfile -t old < <(ls -1t "$BACKUP_DIR"/home.local-*.tar.gz 2>/dev/null | tail -n +$((KEEP+1)))
+  mapfile -t old < <(ls -1t "$BACKUP_DIR"/aurora.local-*.tar.gz 2>/dev/null | tail -n +$((KEEP+1)))
   if (( ${#old[@]} > 0 )); then
     log "pruning ${#old[@]} old backup(s)"
     for f in "${old[@]}"; do

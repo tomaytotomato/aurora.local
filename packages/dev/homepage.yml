@@ -3,7 +3,7 @@
 - Dev:
     - code-server:
         icon: vscode.png
-        href: https://code.{{HOMEPAGE_VAR_HOME_DOMAIN}}/
+        href: https://code.{{HOMEPAGE_VAR_DOMAIN}}/
         description: VS Code in the browser
         server: my-docker
         container: code-server

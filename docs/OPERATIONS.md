@@ -1,6 +1,6 @@
 # Operations handbook
 
-Day-2 tooling for a running home.local box. Every script here is
+Day-2 tooling for a running aurora.local box. Every script here is
 idempotent, safe to run repeatedly, and lives under `scripts/`.
 
 | Script                     | Purpose                                                | Cadence           |
@@ -51,12 +51,12 @@ set. Non-zero exit if any container is unhealthy or any vhost returns
 
 Cron example (five minutes, log rotated by `logrotate`):
 ```
-*/5 * * * *  cd $HOME/home.local && ./scripts/health.sh --no-http >> /var/log/home.local/health.log 2>&1
+*/5 * * * *  cd $HOME/aurora.local && ./scripts/health.sh --no-http >> /var/log/aurora.local/health.log 2>&1
 ```
 
 ## backup
 
-Writes `~/backups/home.local/home.local-<host>-<UTC>.tar.gz`. Explicit
+Writes `~/backups/aurora.local/aurora.local-<host>-<UTC>.tar.gz`. Explicit
 about what it does NOT capture: bulk media, transcodes, caches, logs.
 For those, use restic/borg against `$MEDIA_ROOT` separately.
 
@@ -69,19 +69,19 @@ KEEP=30 ./scripts/backup.sh                # override retention
 
 Systemd timer example:
 ```
-# /etc/systemd/system/home-local-backup.service
+# /etc/systemd/system/aurora-backup.service
 [Unit]
-Description=home.local config backup
+Description=aurora.local config backup
 [Service]
 Type=oneshot
 User=%i
-WorkingDirectory=/home/%i/home.local
-Environment=RCLONE_REMOTE=b2:home-local-backups
-ExecStart=/home/%i/home.local/scripts/backup.sh
+WorkingDirectory=/home/%i/aurora.local
+Environment=RCLONE_REMOTE=b2:aurora-backups
+ExecStart=/home/%i/aurora.local/scripts/backup.sh
 
-# /etc/systemd/system/home-local-backup.timer
+# /etc/systemd/system/aurora-backup.timer
 [Unit]
-Description=Daily home.local config backup
+Description=Daily aurora.local config backup
 [Timer]
 OnCalendar=*-*-* 03:15:00
 Persistent=true
@@ -105,13 +105,13 @@ Typical workflow: run `--check` from cron weekly, open a PR titled
 
 Weekly cron example:
 ```
-15 4 * * 1  cd $HOME/home.local && ./scripts/pin.sh --check | mail -s 'home.local pin drift' me@example.com
+15 4 * * 1  cd $HOME/aurora.local && ./scripts/pin.sh --check | mail -s 'aurora.local pin drift' me@example.com
 ```
 
 ## rotate-secrets
 
 Best-effort weakness heuristic — never rotates keys named `*_USER`,
-`TZ`, `HOME_DOMAIN`, and other non-secret settings.
+`TZ`, `DOMAIN`, and other non-secret settings.
 
 ```
 ./scripts/rotate-secrets.sh          # report only

@@ -1,12 +1,12 @@
 ---
-# home.local / packages/photos / homepage.yml
+# aurora.local / packages/photos / homepage.yml
 #
 # Merged into homepage/config/services.yaml by the installer.
 
 - Productivity:
     - Immich:
         icon: immich.png
-        href: https://photos.{{HOMEPAGE_VAR_HOME_DOMAIN}}/
+        href: https://photos.{{HOMEPAGE_VAR_DOMAIN}}/
         description: Photo & video backup
         container: immich-server
         server: my-docker

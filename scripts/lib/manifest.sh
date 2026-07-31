@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# home.local / scripts/lib/manifest.sh
+# aurora.local / scripts/lib/manifest.sh
 #
 # Read packages/*/manifest.yml. Uses yq (mikefarah v4) if available,
 # else falls back to python3 + PyYAML.

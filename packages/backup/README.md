@@ -11,7 +11,7 @@ plan to swap to a remote target as soon as you're happy.
 **Remote (recommended):** point Kopia at Backblaze B2, S3, R2, GCS,
 Azure, SFTP or WebDAV. Two ways to configure:
 
-1. **From the UI** (easiest): open `https://backup.$HOME_DOMAIN/`,
+1. **From the UI** (easiest): open `https://backup.$DOMAIN/`,
    click **Reconnect** → pick provider, paste creds.
 2. **Auto-connect on start**: set `KOPIA_REPOSITORY` in `.env` to a
    full CLI arg string (see `.env.example` for examples for B2/S3/SFTP).
@@ -23,10 +23,10 @@ worth adding on day one:
 
 | Path (inside container)           | Why                             |
 |-----------------------------------|---------------------------------|
-| `/data/home/<user>/home.local/group_vars/all.yml` | machine identity |
-| `/data/home/<user>/home.local/packages/*/.env`    | all secrets      |
-| `/data/home/<user>/home.local/data/*/config`      | per-app configs  |
-| `/data/home/<user>/home.local/data/caddy`         | root CA & certs  |
+| `/data/home/<user>/aurora.local/group_vars/all.yml` | machine identity |
+| `/data/home/<user>/aurora.local/packages/*/.env`    | all secrets      |
+| `/data/home/<user>/aurora.local/data/*/config`      | per-app configs  |
+| `/data/home/<user>/aurora.local/data/caddy`         | root CA & certs  |
 | `/data/etc`                                       | host config      |
 
 **EXCLUDED** by the default policy (`policies/default-policy.json`):
@@ -42,7 +42,7 @@ worth adding on day one:
 1. `cp .env.example .env`; fill in `KOPIA_UI_PASSWORD` and
    `KOPIA_PASSWORD` (write it down — losing it means losing the repo).
 2. `./scripts/up.sh backup`
-3. Open `https://backup.$HOME_DOMAIN/`. If unconfigured, click
+3. Open `https://backup.$DOMAIN/`. If unconfigured, click
    **Create Repository** → **Filesystem** → path `/repository`,
    encryption password = `KOPIA_PASSWORD`.
 4. Add snapshot sources from the list above.
@@ -56,6 +56,6 @@ See `manifest.yml`.
 
 ## Integration
 
-- `caddy.snippet` fronts the UI on `backup.$HOME_DOMAIN` with a
+- `caddy.snippet` fronts the UI on `backup.$DOMAIN` with a
   second basic-auth layer (defence in depth over Kopia's own auth).
 - `homepage.yml` adds a Kopia tile with status widget.

@@ -1,4 +1,4 @@
-# home.local / packages/privacy/adguard / rewrites.yaml
+# aurora.local / packages/privacy/adguard / rewrites.yaml
 #
 # LAN DNS rewrites applied by scripts/seed-adguard.sh into
 # data/adguard/conf/AdGuardHome.yaml. Idempotent — re-running the
@@ -10,11 +10,11 @@
 
 rewrites:
   # Base LAN domain resolves to the box itself.
-  - domain: home.local
+  - domain: aurora.local
     answer: 192.168.0.110
     enabled: true
 
-  # Wildcard: every service Caddy exposes on *.home.local.
-  - domain: '*.home.local'
+  # Wildcard: every service Caddy exposes on *.aurora.local.
+  - domain: '*.aurora.local'
     answer: 192.168.0.110
     enabled: true

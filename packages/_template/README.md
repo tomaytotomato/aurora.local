@@ -8,7 +8,7 @@ Short description of what this package provides.
    then rename `<name>` throughout (`manifest.yml` at minimum).
 2. Copy `.env.example` to `.env` and fill in required values.
 3. `./scripts/up.sh <name>`
-4. Access via `https://<name>.$HOME_DOMAIN/`.
+4. Access via `https://<name>.$DOMAIN/`.
 
 ## Ports
 

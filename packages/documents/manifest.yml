@@ -33,5 +33,5 @@ post_install_notes: |
      — Paperless watches it and OCRs on ingest.
   2. PAPERLESS_SECRET_KEY is used to sign session cookies. Treat it
      like a password; rotating it logs everyone out.
-  3. Visit https://paperless.$HOME_DOMAIN/ for Paperless and
-     https://pdf.$HOME_DOMAIN/ for Stirling-PDF.
+  3. Visit https://paperless.$DOMAIN/ for Paperless and
+     https://pdf.$DOMAIN/ for Stirling-PDF.
