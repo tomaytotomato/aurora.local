@@ -1,0 +1,9 @@
+---
+# Path to write the extracted root CA into the host trust store.
+caddy_trust_cert_dest: /usr/local/share/ca-certificates/caddy-local.crt
+
+# Container name that runs Caddy (matches packages/core/compose.yml).
+caddy_trust_container: caddy
+
+# In-container path to the internal CA root cert.
+caddy_trust_cert_src: /data/caddy/pki/authorities/local/root.crt
