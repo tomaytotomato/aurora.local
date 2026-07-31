@@ -34,7 +34,16 @@ ENABLE_PACKAGES="core privacy media storage" \
 | `./scripts/up.sh [<pkg>...]`          | (Re)start the current or given set.                 |
 | `./scripts/down.sh [<pkg>...]`        | Stop packages; volumes preserved.                   |
 | `./scripts/status.sh`                 | Same as `bootstrap.sh status`.                      |
+| `./scripts/doctor.sh`                 | Pre-flight sanity: docker, network, RAM, DNS, etc.  |
+| `./scripts/health.sh`                 | Per-container health + HTTP probe each vhost.       |
+| `./scripts/backup.sh`                 | Snapshot configs + secrets into `~/backups/`.       |
+| `./scripts/pin.sh --check`            | Report image-digest drift vs `packages/*/pins.env`. |
+| `./scripts/rotate-secrets.sh`         | Find weak/empty secrets in every `packages/*/.env`. |
 | `./scripts/get-caddy-root-cert.sh`    | Extract root CA for client HTTPS trust.             |
+
+Profile flags on `up.sh`: `--torrent` (media qBittorrent behind
+gluetun), `--zigbee` (home-automation Zigbee2MQTT), `--gpu` (ai
+Ollama with NVIDIA passthrough).
 
 ## What's a package?
 
@@ -48,12 +57,22 @@ render status output.
 
 Current packages:
 
-| Package | Category | What                                              |
-|---------|----------|---------------------------------------------------|
-| core    | core     | Caddy (HTTPS + reverse proxy) + Homepage          |
-| privacy | privacy  | AdGuard Home (LAN DNS) + Gluetun (VPN sidecar)    |
-| media   | media    | Sonarr, Radarr, Bazarr, Prowlarr, Jellyseerr, RDT |
-| storage | storage  | Samba + MiniDLNA                                  |
+| Package         | Category         | What                                                                       |
+|-----------------|------------------|----------------------------------------------------------------------------|
+| core            | core             | Caddy (HTTPS + reverse proxy) + Homepage dashboard                         |
+| privacy         | privacy          | AdGuard Home (LAN DNS) + Gluetun (VPN sidecar)                             |
+| media           | media            | Sonarr, Radarr, Bazarr, Prowlarr, Jellyseerr, RDTClient, SABnzbd, qBittorrent |
+| storage         | storage          | Samba + MiniDLNA                                                           |
+| monitoring      | monitoring       | Prometheus + Grafana + node_exporter + cAdvisor + Uptime-Kuma              |
+| backup          | storage          | Kopia (dedup backup with Web UI)                                           |
+| photos          | productivity     | Immich                                                                     |
+| documents       | productivity     | Paperless-ngx + Stirling-PDF                                               |
+| notes           | productivity     | SilverBullet                                                               |
+| git             | dev              | Forgejo + forgejo-runner CI                                                |
+| dev             | dev              | code-server + Postgres 16 + Redis 7                                        |
+| ai              | ai               | Ollama + Open-WebUI (CPU default, `--gpu` opt-in NVIDIA)                   |
+| home-automation | home-automation  | Home Assistant + Mosquitto + Zigbee2MQTT (`--zigbee`)                      |
+| identity        | identity         | Authelia SSO + 2FA (forward-auth for other packages)                       |
 
 Adding a new one is a copy of `packages/_template/` and a
 `./bootstrap.sh add <name>` away.
@@ -69,13 +88,26 @@ set.
 
 ```
 bootstrap.sh              installer entrypoint
-docs/PACKAGE_CONTRACT.md  package schema
-host/                     ansible for OS hardening (docker, ufw, ssh, fail2ban)
-packages/<name>/          per-stack compose + manifest + .env.example
+docs/
+  PACKAGE_CONTRACT.md     package schema
+  OPERATIONS.md           operator handbook (backup/pin/health cadence)
+host/                     ansible for OS hardening
+  roles/
+    common, docker, firewall, ssh-hardening, fail2ban
+    swap-file, storage-mount, avahi, unattended-upgrades, caddy-trust
+packages/<name>/          per-stack compose + manifest + fragments
+  compose.yml, manifest.yml, .env.example, README.md
+  caddy.snippet           (optional) vhost fragments merged into Caddy
+  homepage.yml            (optional) dashboard tiles merged into Homepage
+  seed.sh                 (optional) idempotent post-up hook
 scripts/
-  up.sh down.sh status.sh
-  lib/                    reusable bash modules (log, prompt, manifest, state)
-  seed-adguard.sh         legacy post-privacy hook
-group_vars/               ansible vars (all.yml gitignored)
+  up.sh down.sh status.sh doctor.sh health.sh
+  backup.sh pin.sh rotate-secrets.sh
+  lib/                    log, prompt, manifest, state, render, ops
+group_vars/all.yml        ansible vars (gitignored)
 inventory.ini             ansible inventory (gitignored)
+.state.yml                installer state (gitignored)
+.github/
+  workflows/ci.yml        shellcheck + yamllint + ansible-lint + compose + schema
+  schema/manifest.schema.json
 ```
