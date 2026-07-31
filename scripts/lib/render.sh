@@ -10,8 +10,11 @@
 #
 # Called by scripts/up.sh. All functions idempotent and safe to re-run.
 
+[[ -n "${_HOMELOCAL_RENDER_SH:-}" ]] && return 0
+_HOMELOCAL_RENDER_SH=1
+
 # shellcheck source=log.sh
-[[ -z "${_LOG_SH_LOADED:-}" ]] && . "${BASH_SOURCE%/*}/log.sh"
+[[ -n "${_HOMELOCAL_LOG_SH:-}" ]] || . "${BASH_SOURCE%/*}/log.sh"
 
 # --------------------------------------------------------------------
 # render_caddy_snippets <pkg> [<pkg>...]

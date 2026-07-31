@@ -41,6 +41,16 @@ for arg in "$@"; do
   esac
 done
 
+# Default AI Ollama runs on CPU. When --gpu is not requested, add the
+# 'cpu' profile so packages/ai's ollama-cpu service starts. --gpu opts
+# into the gpu profile instead; the two are mutually exclusive because
+# both containers bind :11434.
+_has_gpu=0
+for p in "${profiles[@]}"; do [[ "$p" == "gpu" ]] && _has_gpu=1; done
+if [[ $_has_gpu -eq 0 ]]; then
+  profiles+=(cpu)
+fi
+
 # No packages given → use state, or fall back to legacy defaults.
 if [[ ${#pkgs[@]} -eq 0 ]]; then
   mapfile -t pkgs < <(state_list_enabled)
@@ -83,6 +93,7 @@ done
 # Compose profiles
 # --------------------------------------------------------------------
 if [[ ${#profiles[@]} -gt 0 ]]; then
+  # shellcheck disable=SC2155
   export COMPOSE_PROFILES="$(IFS=,; echo "${profiles[*]}")"
   log_step "enabling profiles: $COMPOSE_PROFILES"
 fi
@@ -117,9 +128,18 @@ done
 # Merge per-package .env into shell env so ${VAR} substitution works
 # across multi-file compose invocations.
 for ef in "${env_files[@]}"; do
-  # shellcheck disable=SC1090
+  # shellcheck disable=SC1090,SC1091
   set -a; . "$ef"; set +a
 done
+
+# Auto-detect the docker group's gid so core/homepage can read
+# /var/run/docker.sock without hard-coding a number that differs
+# per distro. Fall back to 998 (Debian) if the lookup fails.
+if [[ -z "${DOCKER_GID:-}" ]]; then
+  DOCKER_GID="$(getent group docker 2>/dev/null | cut -d: -f3 || true)"
+  DOCKER_GID="${DOCKER_GID:-998}"
+  export DOCKER_GID
+fi
 
 # --------------------------------------------------------------------
 # Render per-package fragments into runtime layout (caddy snippets,

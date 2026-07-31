@@ -17,13 +17,15 @@ networks:
     external: true
 
 services:
-  # Default (CPU). Always started. If you're using the 'gpu' profile,
-  # stop this one first: `docker stop ollama-cpu`.
+  # CPU inference (default). Runs unless --gpu is passed to up.sh, which
+  # switches on the 'gpu' profile and drops 'cpu' so only one Ollama
+  # binds :11434.
   ollama-cpu:
     image: ollama/ollama:latest
     container_name: ollama-cpu
     hostname: ollama
     restart: unless-stopped
+    profiles: ["cpu"]
     networks:
       home_net:
         aliases: [ollama]

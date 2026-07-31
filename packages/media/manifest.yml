@@ -26,7 +26,6 @@ ports:
   - {port: 5055, proto: tcp, description: Jellyseerr}
   - {port: 6500, proto: tcp, description: RDTClient}
   - {port: 8191, proto: tcp, description: Flaresolverr}
-  - {port: 8081, proto: tcp, description: SABnzbd}
 
 requires:
   min_ram_mb: 2048

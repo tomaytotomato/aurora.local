@@ -6,7 +6,7 @@ description: |
   data/backup/repository; can be reconfigured to point at B2, S3, GCS,
   Azure, SFTP or WebDAV from the UI without changing this package.
 
-category: storage
+category: backup
 
 depends_on:
   - core

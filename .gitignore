@@ -50,3 +50,6 @@ packages/*/pins.env
 *~
 .idea/
 .vscode/
+
+# pi-subagents scratch
+.pi-subagents/

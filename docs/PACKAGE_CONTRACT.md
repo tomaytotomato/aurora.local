@@ -25,7 +25,7 @@ description: |                  # one paragraph, shown in the picker
   qBittorrent-behind-VPN (opt-in via 'torrent' profile).
 
 # Grouping in the interactive selector.
-category: media                 # core | privacy | media | storage | monitoring | productivity | dev | ai | identity
+category: media                 # core|privacy|media|storage|backup|monitoring|productivity|dev|ai|identity|home-automation
 
 # Hard dependencies on other packages. bootstrap.sh will refuse to
 # enable this one unless every dep is also selected.

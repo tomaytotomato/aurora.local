@@ -12,8 +12,11 @@ depends_on:
 recommends: []
 
 profiles:
+  cpu:
+    description: CPU-only Ollama (default; auto-enabled unless --gpu is set).
+    requires_packages: []
   gpu:
-    description: Enable NVIDIA GPU passthrough for Ollama.
+    description: NVIDIA GPU passthrough for Ollama (needs NVIDIA Container Toolkit).
     requires_packages: []
 
 ports:
@@ -23,9 +26,10 @@ ports:
 requires:
   min_ram_mb: 8192
   min_disk_gb: 30
-  # gpu-nvidia role does not yet exist; the 'gpu' profile assumes the
-  # NVIDIA Container Toolkit is installed on the host. See report.
-  host_roles: [gpu-nvidia]
+  # GPU: --gpu profile assumes NVIDIA Container Toolkit is installed on
+  # the host (apt: nvidia-container-toolkit; then `systemctl restart
+  # docker`). No dedicated Ansible role yet.
+  host_roles: []
 
 required_env:
   - WEBUI_SECRET_KEY

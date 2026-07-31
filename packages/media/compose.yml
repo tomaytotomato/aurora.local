@@ -30,8 +30,8 @@ services:
     container_name: sonarr
     volumes:
       - ../../data/sonarr:/config
-      - /home/bruce/media/tv:/tv
-      - /home/bruce/media/downloads:/downloads
+      - ${MEDIA_ROOT:-/home/bruce/media}/tv:/tv
+      - ${MEDIA_ROOT:-/home/bruce/media}/downloads:/downloads
 
   radarr:
     <<: *arr-common
@@ -39,8 +39,8 @@ services:
     container_name: radarr
     volumes:
       - ../../data/radarr:/config
-      - /home/bruce/media/movies:/movies
-      - /home/bruce/media/downloads:/downloads
+      - ${MEDIA_ROOT:-/home/bruce/media}/movies:/movies
+      - ${MEDIA_ROOT:-/home/bruce/media}/downloads:/downloads
 
   prowlarr:
     <<: *arr-common
@@ -55,8 +55,8 @@ services:
     container_name: bazarr
     volumes:
       - ../../data/bazarr:/config
-      - /home/bruce/media/tv:/tv
-      - /home/bruce/media/movies:/movies
+      - ${MEDIA_ROOT:-/home/bruce/media}/tv:/tv
+      - ${MEDIA_ROOT:-/home/bruce/media}/movies:/movies
 
   jellyseerr:
     <<: *arr-common
@@ -79,7 +79,7 @@ services:
     container_name: rdtclient
     volumes:
       - ../../data/rdtclient/data:/data/db
-      - /home/bruce/media/downloads:/data/downloads
+      - ${MEDIA_ROOT:-/home/bruce/media}/downloads:/data/downloads
 
   # ---- qBittorrent, VPN-tunnelled ----
   # Opt-in via COMPOSE_PROFILES=torrent. Shares gluetun's netns so all
@@ -101,4 +101,4 @@ services:
       - WEBUI_PORT=8080
     volumes:
       - ../../data/qbittorrent:/config
-      - /home/bruce/media/downloads:/downloads
+      - ${MEDIA_ROOT:-/home/bruce/media}/downloads:/downloads

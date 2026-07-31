@@ -40,7 +40,10 @@ services:
     container_name: homepage
     restart: unless-stopped
     networks: [home_net]
-    user: "1000:975"   # host uid + docker gid so /var/run/docker.sock is readable
+    # host uid + docker gid so /var/run/docker.sock is readable.
+    # scripts/up.sh exports DOCKER_GID from `getent group docker` at
+    # run-time; falls back to 998 (Debian bookworm default).
+    user: "${HOMEPAGE_UID:-1000}:${DOCKER_GID:-998}"
     env_file:
       - .env
     environment:
