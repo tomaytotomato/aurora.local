@@ -1,4 +1,14 @@
 ---
+- name: Assert supported distro (Debian/Ubuntu only for now)
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == 'Debian'
+    fail_msg: >-
+      home.local host roles currently support Debian/Ubuntu only
+      (detected {{ ansible_distribution }} {{ ansible_distribution_version }}
+      / family {{ ansible_os_family }}). TODO: add RHEL-family support
+      (dnf, firewalld, etc.).
+
 - name: Set timezone
   community.general.timezone:
     name: "{{ home_timezone }}"
@@ -21,14 +31,9 @@
     update_cache: true
     cache_valid_time: 3600
 
-- name: Enable unattended-upgrades
-  ansible.builtin.copy:
-    dest: /etc/apt/apt.conf.d/20auto-upgrades
-    mode: "0644"
-    content: |
-      APT::Periodic::Update-Package-Lists "1";
-      APT::Periodic::Unattended-Upgrade "1";
-      APT::Periodic::AutocleanInterval "7";
+# avahi active configuration lives in host/roles/avahi.
+# unattended-upgrades active configuration lives in host/roles/unattended-upgrades.
+# The packages remain listed above so nothing breaks between plays.
 
 - name: Ensure home user exists in docker group later (placeholder for docker role)
   ansible.builtin.user:

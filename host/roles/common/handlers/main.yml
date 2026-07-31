@@ -1,5 +1,4 @@
 ---
-- name: Restart avahi
-  ansible.builtin.systemd:
-    name: avahi-daemon
-    state: restarted
+# No handlers currently used by common. Avahi handler lives in the
+# avahi role; add more here as common gains state that needs
+# post-change action.
