@@ -163,6 +163,26 @@ export const OnboardingApi = {
       warnings: data.warnings ?? [],
     };
   },
+
+  /**
+   * Speculative plan preview. Same shape as {@link plan} but scoped to a
+   * caller-supplied enabled[] instead of what's currently on disk. Used by
+   * the Packages step to show live resource warnings as the user toggles
+   * packages, before any PATCH is committed.
+   */
+  async previewPlan(enabled: string[]): Promise<InstallPlan> {
+    const csv = enabled.join(',');
+    const { data } = await http.get<PlanWire>('/onboarding/plan', {
+      params: { enabled: csv },
+    });
+    return {
+      packagesToEnable: data.packages_to_enable ?? [],
+      packagesToDisable: data.packages_to_disable ?? [],
+      vhosts: data.vhosts ?? [],
+      ports: data.ports ?? [],
+      warnings: data.warnings ?? [],
+    };
+  },
   async install(): Promise<InstallResult> {
     const { data } = await http.post<InstallResult>('/onboarding/install');
     return data;

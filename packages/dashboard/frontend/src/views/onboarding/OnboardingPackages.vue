@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { usePackagesStore } from '@/stores/packages';
@@ -15,6 +15,15 @@ const router = useRouter();
 
 const err = ref<string | null>(null);
 const activeCategory = ref<PackageCategory | 'all'>('all');
+
+// Live resource-warning preview. Populated by a debounced GET /plan
+// scoped to the current selection so users see warnings (e.g. Ollama
+// needs a GPU) before committing. Preview failures are non-fatal:
+// selection must always remain usable even if the backend is flaky.
+const previewWarnings = ref<string[]>([]);
+const previewChecking = ref(false);
+let previewTimer: ReturnType<typeof setTimeout> | null = null;
+let previewSeq = 0;
 
 // Fallback catalogue if the backend isn't up yet — real values match packages/*/manifest.yml
 const fallback = [
@@ -38,7 +47,45 @@ onMounted(async () => {
   try {
     await packages.fetchList();
   } catch { /* fall through to fallback */ }
+  // Kick off an initial preview so warnings show for the default preset.
+  schedulePreview();
 });
+
+onUnmounted(() => {
+  if (previewTimer) clearTimeout(previewTimer);
+});
+
+// Debounced live preview. Watches selectedPackages (deep, since it's an
+// array mutated in place by togglePackage / selectPreset) and schedules a
+// 250ms-delayed /plan call. Uses an incrementing seq so a slow response
+// from an earlier selection can't clobber a fresher one.
+function schedulePreview(): void {
+  if (previewTimer) clearTimeout(previewTimer);
+  previewChecking.value = true;
+  previewTimer = setTimeout(async () => {
+    const seq = ++previewSeq;
+    const snapshot = [...store.selectedPackages];
+    try {
+      const plan = await OnboardingApi.previewPlan(snapshot);
+      if (seq !== previewSeq) return; // stale — a newer selection is in flight
+      previewWarnings.value = plan.warnings;
+    } catch (e) {
+      // Silent by design: a failed preview must never block selection.
+      // eslint-disable-next-line no-console
+      console.warn('preview /plan failed', e);
+      if (seq !== previewSeq) return;
+      previewWarnings.value = [];
+    } finally {
+      if (seq === previewSeq) previewChecking.value = false;
+    }
+  }, 250);
+}
+
+watch(
+  () => store.selectedPackages,
+  () => schedulePreview(),
+  { deep: true },
+);
 
 const catalogue = computed(() => {
   if (packages.list.length > 0) {
@@ -75,7 +122,10 @@ async function proceed(): Promise<void> {
   if (!store.selectedPackages.includes('core')) {
     store.selectedPackages = ['core', ...store.selectedPackages];
   }
-  try { await OnboardingApi.setPackages(store.selectedPackages); } catch { /* soft */ }
+  await store.patchDraft({
+    enabled_packages: store.selectedPackages,
+    step: 'secrets',
+  });
   store.next();
   router.push(`/onboarding/${store.currentStep}`);
 }
@@ -120,7 +170,7 @@ async function proceed(): Promise<void> {
       </div>
     </div>
 
-    <div class="grid grid-cols-2 gap-3 mb-10">
+    <div class="grid grid-cols-2 gap-3 mb-6">
       <button
         v-for="pkg in filtered"
         :key="pkg.name"
@@ -141,6 +191,24 @@ async function proceed(): Promise<void> {
           <p class="text-xs text-ink-3 mt-1 line-clamp-2">{{ pkg.description }}</p>
         </div>
       </button>
+    </div>
+
+    <!-- Live resource warnings. Only renders when there's something to say,
+         so the layout doesn't have an empty gap on a healthy selection. -->
+    <div v-if="previewWarnings.length > 0" class="mb-8">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="eyebrow">Resource warnings</div>
+        <div v-if="previewChecking" class="text-xs text-ink-4">checking…</div>
+      </div>
+      <Alert
+        v-for="(w, i) in previewWarnings"
+        :key="i"
+        tone="warn"
+        class="mb-2"
+      >{{ w }}</Alert>
+    </div>
+    <div v-else-if="previewChecking" class="mb-8 text-xs text-ink-4">
+      checking selection…
     </div>
 
     <div class="flex items-center justify-between">
