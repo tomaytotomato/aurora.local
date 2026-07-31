@@ -34,6 +34,14 @@ requires:
 
 required_env: []
 
+warnings:
+  - id: media_low_cpu
+    if: { cpu_threads_lt: 4 }
+    message: 'The *arr stack runs 7 services. It is happier with 4+ CPU threads.'
+  - id: media_low_disk
+    if: { free_disk_gb_below: 50 }
+    message: 'Media library needs disk headroom. Aurora sees less than 50 GB free on the largest drive.'
+
 post_install_notes: |
   1. Set the download client(s) in Sonarr/Radarr Settings > Download Clients.
   2. Add Prowlarr as the indexer source in Sonarr/Radarr Settings > Indexers.

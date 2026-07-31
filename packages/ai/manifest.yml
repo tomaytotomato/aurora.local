@@ -34,6 +34,14 @@ requires:
 required_env:
   - WEBUI_SECRET_KEY
 
+warnings:
+  - id: ollama_no_gpu
+    if: { no_gpu: true }
+    message: 'Ollama runs CPU-only without a GPU. Anything above a 7B model will be painfully slow on this box. Consider phi3:mini or llama3:8b.'
+  - id: ollama_low_ram
+    if: { ram_below_mb: 8192 }
+    message: 'Ollama needs at least 8 GB RAM for even the smallest models. This box has less.'
+
 post_install_notes: |
   1. Open-WebUI:  https://ai.$DOMAIN/  (first user to sign up is admin)
   2. Ollama API:  http://<lan-ip>:11434/     (also reachable as ollama:11434

@@ -80,6 +80,35 @@ public class PackagesService {
     }
   }
 
+  /**
+   * Read the {@code warnings:} block from a package manifest, if any.
+   * Each entry is a raw map: {@code {id, if: {…}, message}}. Returns an
+   * empty list if the manifest declares no warnings or is unreadable.
+   *
+   * <p>Kept off {@link com.tomaytotomato.aurora.domain.Package} on purpose
+   * so the {@code Package} record stays a stable v0.1 contract; the
+   * {@code warnings:} schema is v0.2 and evaluated by {@link OnboardingService}.
+   */
+  @SuppressWarnings("unchecked")
+  public List<Map<String, Object>> readWarnings(String name) {
+    Path p = Path.of(props.repoPath()).resolve("packages").resolve(name).resolve("manifest.yml");
+    if (!Files.isRegularFile(p)) return List.of();
+    try (var in = Files.newInputStream(p)) {
+      Map<String, Object> m = new Yaml().load(in);
+      if (m == null) return List.of();
+      Object raw = m.get("warnings");
+      if (!(raw instanceof List<?> list)) return List.of();
+      var out = new ArrayList<Map<String, Object>>();
+      for (Object o : list) {
+        if (o instanceof Map<?, ?> mm) out.add((Map<String, Object>) mm);
+      }
+      return out;
+    } catch (IOException e) {
+      log.warn("readWarnings({}) failed: {}", name, e.getMessage());
+      return List.of();
+    }
+  }
+
   // Infrastructure packages that are always installed and never appear in
   // the user-facing enabled[] set. Excluded from install-diff surfaces so
   // the Done screen doesn't tell the user to "stop the dashboard" (i.e.

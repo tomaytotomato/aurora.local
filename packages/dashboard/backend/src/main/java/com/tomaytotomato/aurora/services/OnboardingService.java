@@ -49,17 +49,20 @@ public class OnboardingService {
   private final AuthService auth;
   private final StateFileService stateFiles;
   private final PackagesService packages;
+  private final SystemService system;
   private final AuroraProperties props;
 
   public OnboardingService(AdminUserRepo users, AuditEventRepo audit, SettingsRepo settings,
                            AuthService auth, StateFileService stateFiles,
-                           PackagesService packages, AuroraProperties props) {
+                           PackagesService packages, SystemService system,
+                           AuroraProperties props) {
     this.users = users;
     this.audit = audit;
     this.settings = settings;
     this.auth = auth;
     this.stateFiles = stateFiles;
     this.packages = packages;
+    this.system = system;
     this.props = props;
   }
 
@@ -182,6 +185,136 @@ public class OnboardingService {
   }
 
   // ------------------------------------------------------------------
+  // Manifest-driven resource warnings (v0.2)
+  // ------------------------------------------------------------------
+
+  /**
+   * Collect host resource facts once so every warning evaluation sees a
+   * consistent snapshot. Wrapped in try/catch — a partial snapshot is
+   * better than a 500 on the plan endpoint.
+   */
+  @SuppressWarnings("unchecked")
+  private java.util.Map<String, Object> hostSnapshot() {
+    var s = new java.util.HashMap<String, Object>();
+    try { s.put("cpu",    system.cpu());    } catch (Exception e) { s.put("cpu", java.util.Map.of()); }
+    try { s.put("memory", system.readMemInfoPublic()); } catch (Exception e) { s.put("memory", java.util.Map.of()); }
+    try { s.put("disks",  system.disks());  } catch (Exception e) { s.put("disks", List.of()); }
+    try { s.put("gpu",    system.gpu());    } catch (Exception e) { s.put("gpu", java.util.Map.of("present", false)); }
+    return s;
+  }
+
+  /**
+   * Evaluate a manifest {@code warnings[].if} clause against the host
+   * snapshot. Supported keys:
+   * <ul>
+   *   <li>{@code no_gpu: true} — fires when no GPU detected.</li>
+   *   <li>{@code ram_below_mb: N} — fires when MemTotal &lt; N megabytes.</li>
+   *   <li>{@code cpu_threads_lt: N} — fires when cpu.threads &lt; N.</li>
+   *   <li>{@code free_disk_gb_below: N} — fires when the largest disk's
+   *       free space is &lt; N gigabytes.</li>
+   * </ul>
+   * Unknown keys never fire (fail-closed).
+   */
+  @SuppressWarnings("unchecked")
+  private boolean evaluateWarningCondition(java.util.Map<String, Object> warning,
+                                           java.util.Map<String, Object> host) {
+    Object rawIf = warning.get("if");
+    if (!(rawIf instanceof java.util.Map<?, ?> cond)) return false;
+
+    var cpu    = (java.util.Map<String, Object>) host.getOrDefault("cpu", java.util.Map.of());
+    var mem    = (java.util.Map<String, Object>) host.getOrDefault("memory", java.util.Map.of());
+    var gpu    = (java.util.Map<String, Object>) host.getOrDefault("gpu", java.util.Map.of());
+    var disks  = (List<java.util.Map<String, Object>>) host.getOrDefault("disks", List.of());
+
+    for (var e : cond.entrySet()) {
+      String key = String.valueOf(e.getKey());
+      Object val = e.getValue();
+      switch (key) {
+        case "no_gpu" -> {
+          boolean want = Boolean.TRUE.equals(val);
+          boolean present = Boolean.TRUE.equals(gpu.get("present"));
+          if (want && present) return false;
+          if (!want && !present) return false;
+        }
+        case "ram_below_mb" -> {
+          if (!(val instanceof Number n)) return false;
+          Object total = mem.get("MemTotal");
+          if (!(total instanceof Number tn)) return false;
+          if (tn.longValue() >= n.longValue() * 1024L * 1024L) return false;
+        }
+        case "cpu_threads_lt" -> {
+          if (!(val instanceof Number n)) return false;
+          Object t = cpu.get("threads");
+          if (!(t instanceof Number tn)) return false;
+          if (tn.intValue() >= n.intValue()) return false;
+        }
+        case "free_disk_gb_below" -> {
+          if (!(val instanceof Number n)) return false;
+          long maxFree = 0L;
+          for (var d : disks) {
+            Object f = d.get("free_bytes");
+            if (f instanceof Number fn && fn.longValue() > maxFree) maxFree = fn.longValue();
+          }
+          if (maxFree == 0L) return false; // no disk data — don't cry wolf
+          if (maxFree >= n.longValue() * 1024L * 1024L * 1024L) return false;
+        }
+        default -> { return false; } // unknown key: fail-closed
+      }
+    }
+    return true;
+  }
+
+  private static final Pattern INTERP = Pattern.compile("\\$\\{([a-zA-Z_][a-zA-Z0-9_.]*)}");
+
+  /**
+   * Expand {@code ${cpu.threads}} / {@code ${memory.MemTotal_gb}} /
+   * {@code ${gpu.model}} references in a message. Missing paths render
+   * literally so a mistyped placeholder is visible in QA.
+   */
+  @SuppressWarnings("unchecked")
+  private String interpolate(String msg, java.util.Map<String, Object> host) {
+    if (msg == null) return "";
+    Matcher m = INTERP.matcher(msg);
+    var out = new StringBuilder();
+    while (m.find()) {
+      String path = m.group(1);
+      Object v = resolvePath(path, host);
+      m.appendReplacement(out, Matcher.quoteReplacement(v == null ? "${" + path + "}" : v.toString()));
+    }
+    m.appendTail(out);
+    return out.toString();
+  }
+
+  @SuppressWarnings("unchecked")
+  private Object resolvePath(String path, java.util.Map<String, Object> host) {
+    // Support _gb / _mb suffixes on the leaf to auto-convert byte fields.
+    String[] parts = path.split("\\.");
+    Object cur = host;
+    for (int i = 0; i < parts.length; i++) {
+      String key = parts[i];
+      boolean last = (i == parts.length - 1);
+      String unit = null;
+      if (last && (key.endsWith("_gb") || key.endsWith("_mb") || key.endsWith("_kb"))) {
+        unit = key.substring(key.length() - 2);
+        key = key.substring(0, key.length() - 3);
+      }
+      if (!(cur instanceof java.util.Map<?, ?> mm)) return null;
+      cur = ((java.util.Map<String, Object>) mm).get(key);
+      if (cur == null) return null;
+      if (last && unit != null && cur instanceof Number nn) {
+        long bytes = nn.longValue();
+        return switch (unit) {
+          case "gb" -> String.format("%.1f", bytes / (1024.0 * 1024.0 * 1024.0));
+          case "mb" -> String.format("%.0f", bytes / (1024.0 * 1024.0));
+          case "kb" -> String.format("%.0f", bytes / 1024.0);
+          default   -> nn.toString();
+        };
+      }
+    }
+    return cur;
+  }
+
+  // ------------------------------------------------------------------
   // Install
   // ------------------------------------------------------------------
 
@@ -246,8 +379,21 @@ public class OnboardingService {
    * you should expect to see," not a guarantee.
    */
   public java.util.Map<String, Object> plan() {
+    return plan(null);
+  }
+
+  /**
+   * Compute the install plan. If {@code enabledOverride} is non-null it is
+   * used in place of {@code .state.yml}'s enabled list, so the SPA can
+   * preview warnings for a hypothetical selection without PATCHing state.
+   * A null override falls back to the persisted selection (canonical use
+   * from Review).
+   */
+  public java.util.Map<String, Object> plan(List<String> enabledOverride) {
     var state = stateFiles.readState();
-    List<String> enabled = state.enabled() == null ? List.of() : state.enabled();
+    List<String> enabled = enabledOverride != null
+        ? enabledOverride
+        : (state.enabled() == null ? List.of() : state.enabled());
     String domain = state.domain();
 
     var enabledManifests = packages.list().stream()
@@ -309,6 +455,18 @@ public class OnboardingService {
       warnings.add("No packages selected. Core is required and will be forced on at install.");
     } else if (!enabled.contains("core")) {
       warnings.add("Core is not in the enabled set but is required — it will be added at install.");
+    }
+
+    // Manifest-driven resource warnings. Snapshot the host once and
+    // evaluate each enabled package's declared warnings against it.
+    var host = hostSnapshot();
+    for (String pkgName : enabled) {
+      for (var w : packages.readWarnings(pkgName)) {
+        if (evaluateWarningCondition(w, host)) {
+          Object msg = w.get("message");
+          if (msg != null) warnings.add(interpolate(msg.toString(), host));
+        }
+      }
     }
 
     var out = new java.util.LinkedHashMap<String, Object>();

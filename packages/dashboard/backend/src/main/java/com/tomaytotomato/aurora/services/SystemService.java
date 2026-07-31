@@ -162,6 +162,12 @@ public class SystemService {
     }
   }
 
+  /** Public accessor for meminfo used by the plan evaluator. Same data
+   *  shape (MemTotal / MemAvailable / MemFree in bytes). */
+  public Map<String, Long> readMemInfoPublic() {
+    return readMemInfo();
+  }
+
   private Map<String, Long> readMemInfo() {
     Map<String, Long> mem = new HashMap<>();
     Path p = Path.of(props.hostProcPath()).resolve("meminfo");

@@ -115,8 +115,20 @@ public class OnboardingController {
    * bootstrap.
    */
   @GetMapping("/plan")
-  public Map<String, Object> plan() {
-    return onboarding.plan();
+  public Map<String, Object> plan(
+      @org.springframework.web.bind.annotation.RequestParam(name = "enabled", required = false)
+      String enabledCsv) {
+    // enabled=core,ai,media — optional preview override so the SPA can
+    // evaluate warnings for a hypothetical selection without PATCHing.
+    List<String> override = null;
+    if (enabledCsv != null && !enabledCsv.isBlank()) {
+      override = new java.util.ArrayList<>();
+      for (String s : enabledCsv.split(",")) {
+        String t = s.trim();
+        if (!t.isEmpty()) override.add(t);
+      }
+    }
+    return onboarding.plan(override);
   }
 
   /**
