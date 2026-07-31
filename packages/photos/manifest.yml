@@ -1,0 +1,37 @@
+name: photos
+title: Photos (Immich)
+description: |
+  Self-hosted photo & video backup with mobile apps, timeline, faces,
+  and search. Immich server + microservices + Postgres (pgvecto.rs) +
+  Redis + a machine-learning worker for CLIP / face detection.
+
+category: productivity
+
+depends_on:
+  - core
+recommends:
+  - storage
+
+profiles: {}
+
+ports:
+  - {port: 2283, proto: tcp, description: Immich web + API}
+
+requires:
+  min_ram_mb: 4096
+  min_disk_gb: 20            # metadata + ML cache; library grows separately
+  host_roles: []
+
+required_env:
+  - DB_PASSWORD
+  - JWT_SECRET
+  - UPLOAD_LOCATION
+
+post_install_notes: |
+  1. First-run: visit https://photos.$HOME_DOMAIN/ and create the admin
+     user (first registered user is admin).
+  2. Install the Immich mobile app (iOS/Android) and point it at the
+     same URL to enable auto-backup.
+  3. UPLOAD_LOCATION defaults to ../../data/photos/library — override
+     in .env to point at bulk storage if you don't want your photos on
+     the OS disk.
