@@ -12,8 +12,8 @@ security posture reporting, simplified onboarding, live health, and
 opinionated guardrails against the specific footguns that hurt real
 users of home.local (documented below).
 
-- **Frontend:** Vue 3 + Vite + TypeScript.
-- **Backend:** Java 21 + Spring Boot 3 + `docker-java`.
+- **Frontend:** Vue 3.5 + Vite 8 + TypeScript 5.6+.
+- **Backend:** Java 25 (LTS) + Spring Boot 4 + `docker-java` 3.7.
 - **Storage:** SQLite (per-instance). No external DB.
 - **Ships as:** one container, packaged as a new `packages/dashboard/`
   bundle inside the home.local repo, so users install it the same way
@@ -138,32 +138,54 @@ succeeded.
 
 ### 4.1 Frontend
 
-- **Vue 3** (Composition API), **Vite**, **TypeScript** strict.
-- **Vue Router** for routes; nested routes for wizard flows.
-- **Pinia** for state; one store per resource (`packages`, `system`,
-  `security`, `auth`, `events`).
-- **UI kit:** [shadcn-vue](https://www.shadcn-vue.com/) or PrimeVue.
-  Pick one, don't mix. Prefer shadcn-vue for the aesthetic + full
-  source ownership.
-- **Charts:** [uPlot](https://github.com/leeoniya/uPlot) via `uplot-vue`.
-  Do not pull in Chart.js/ECharts; overkill.
+- **Vue 3.5.x** (Composition API), stable. Vue 3.6 is in RC as of
+  mid-2026 and adds Vapor Mode (compiler-emitted direct DOM ops, no
+  VDOM — SolidJS-tier perf). **Start on 3.5, plan a 3.6 uptake in
+  M3/M4 once 3.6 GA lands**; Vapor is opt-in per component so upgrade
+  cost is bounded. Do not adopt 3.6 pre-GA — the surface is stable
+  but tooling/plugins are still catching up.
+- **Vite 8** (8.2+), TypeScript 5.6+ strict.
+- **Vue Router 5** for routes; nested routes for wizard flows.
+- **Pinia 4** for state (ESM-only, requires `@vue/devtools-api` v8).
+  One store per resource (`packages`, `system`, `security`, `auth`,
+  `events`).
+- **UI kit:** [shadcn-vue 2.4+](https://www.shadcn-vue.com/) built on
+  [Reka UI](https://reka-ui.com/) (formerly Radix Vue — renamed 2025).
+  This is the strongly recommended default: copy-paste components,
+  full source ownership, Tailwind-based styling, small bundles.
+  Fallback if the team dislikes Tailwind: **PrimeVue 4.5** with the
+  styled-mode theme builder — richer out of the box, less flexible.
+  **Pick one, don't mix.**
+- **Charts:** [uPlot 1.6](https://github.com/leeoniya/uPlot) via
+  `uplot-vue`. ~50 KB min, extremely fast. Do not pull in
+  Chart.js/ECharts; overkill for four line charts.
 - **Auth on the client:** WebAuthn via
-  [`@simplewebauthn/browser`](https://simplewebauthn.dev/).
+  [`@simplewebauthn/browser` 13.x](https://simplewebauthn.dev/).
 - **Server-Sent Events** (`EventSource`) for the docker events stream.
   Do not add WebSockets; SSE is enough and simpler.
-- **i18n:** English only in v1. Structure strings via `vue-i18n` from
-  day one so it's easy later.
+- **i18n:** English only in v1. Structure strings via `vue-i18n 10`
+  from day one so it's easy later.
 
 ### 4.2 Backend
 
-- **Java 21**, **Spring Boot 3.3+**, Maven.
-- **`docker-java` v3.4+** for Docker Engine API (list containers,
+- **Java 25 (LTS)** — released Sep 2025, first LTS since Java 21,
+  supported through at least 2033. Use compact source files, module
+  imports, and flexible constructors where they simplify things.
+- **Spring Boot 4.0** (released Nov 2025, latest 4.0.x as of Jun
+  2026). Built on **Spring Framework 7** with **Jakarta EE 11** —
+  Servlet 6.1, JPA 3.2, Bean Validation 3.1. Boot 4 introduces a
+  full framework modularization; pull only the starters you need.
+  Note: Boot 4 requires Java 17+, but we're targeting 25 for the LTS.
+- **`docker-java` 3.7.x** for Docker Engine API (list containers,
   stats, events, inspect networks, image pulls).
-- **Spring Security** for session + WebAuthn (`spring-security-webauthn`
-  or [`webauthn4j` + `spring-security-webauthn`](https://webauthn4j.github.io/webauthn4j/)).
-- **SQLite via `org.xerial:sqlite-jdbc`**, migrations with **Flyway**.
-  Schema in `src/main/resources/db/migration/V*.sql`.
-- **YAML parsing:** SnakeYAML for reading `manifest.yml` and
+- **Spring Security 7** for session + WebAuthn. Use the native Spring
+  Security WebAuthn integration (added in Spring Security 6.4 and
+  hardened in 7). Wrap **[webauthn4j 0.31.x](https://webauthn4j.github.io/webauthn4j/en/)**
+  for the attestation/verification primitives if the native
+  integration lacks a corner you need.
+- **SQLite via `org.xerial:sqlite-jdbc 3.53.x`**, migrations with
+  **Flyway 13**. Schema in `src/main/resources/db/migration/V*.sql`.
+- **YAML parsing:** SnakeYAML 2.6 for reading `manifest.yml` and
   `.state.yml`. Do not shell out to `yq` from Java; keep the parsing
   in-process.
 - **Compose invocation:** shell out to `docker compose` via
@@ -174,18 +196,21 @@ succeeded.
 - **Metrics collection:** a `@Scheduled(fixedRate = 15000)` bean that
   pulls docker stats + reads `/proc/meminfo`, `/proc/loadavg`, `df`,
   stores rows in SQLite table `metrics_sample`. Retain 7 days.
-- **Observability of the app itself:** Spring Boot Actuator with `/health`
-  and `/info` at minimum. No Prometheus scraping endpoint by default
-  (see monitoring package).
+- **Observability of the app itself:** Spring Boot Actuator with
+  `/health` and `/info` at minimum. No Prometheus scraping endpoint
+  by default (see monitoring package).
 
 ### 4.3 Packaging
 
 - **One container.** Multi-stage Dockerfile:
-  - `stage 1`: node:22-alpine → build Vue app (`npm ci && npm run build`).
-  - `stage 2`: maven:3.9-eclipse-temurin-21 → `mvn -T1C package`;
-    copy Vue dist into `src/main/resources/static/` before packaging.
-  - `stage 3`: `eclipse-temurin:21-jre-alpine` → copy the fat jar,
+  - `stage 1`: `node:22-alpine` → build Vue app
+    (`npm ci && npm run build`).
+  - `stage 2`: `maven:3.9-eclipse-temurin-25-alpine` →
+    `mvn -T1C package`; copy Vue dist into
+    `src/main/resources/static/` before packaging.
+  - `stage 3`: `eclipse-temurin:25-jre-alpine` → copy the fat jar,
     entrypoint `java -jar /app/warden.jar`.
+  - Target final image size < 250 MB.
 - **Ships as** `packages/dashboard/` inside home.local:
 
   ```
@@ -231,6 +256,44 @@ Spring Boot (embedded Tomcat, :8090)
                             ~/home.local     scripts/*.sh
                             /proc            docker compose
 ```
+
+### 4.5 Component versions — verified July 2026
+
+Use these as **hard floors** for a new project starting today. Only
+downgrade if you have a defended reason (write it into the repo
+README).
+
+| Component                     | Version            | Notes                                                       |
+|-------------------------------|--------------------|-------------------------------------------------------------|
+| Java / OpenJDK                | **25 LTS**         | Released 2025-09-16, supported ≥ 8 years. Prev LTS: 21.     |
+| Spring Boot                   | **4.0.x**          | 4.0.0 GA 2025-11-20. Built on Spring Framework 7.           |
+| Spring Framework              | 7.x                | Jakarta EE 11 (Servlet 6.1, JPA 3.2, Bean Validation 3.1).  |
+| Spring Security               | 7.x                | Native WebAuthn support (matured since 6.4).                |
+| docker-java                   | 3.7.x              | 3.7.1 released 2026-03-19.                                  |
+| webauthn4j                    | 0.31.x             | Only if Spring Security WebAuthn lacks a needed primitive.  |
+| SnakeYAML                     | 2.6                | Feb 2026 release, prev 2.5 (Aug 2025).                      |
+| sqlite-jdbc (org.xerial)      | 3.53.x             | Bundles SQLite 3.53.                                        |
+| Flyway                        | 13.0.x             | Jul 2026 release.                                           |
+| Testcontainers                | (not used)         | Docker-java is the SUT dep; use it directly for integration tests. |
+| Maven                         | 3.9.9+             | Toolchain for Java 25 build.                                |
+| Node.js (build-time only)     | 22 LTS             | Discarded from runtime image via multi-stage.               |
+| Vue                           | **3.5.x**          | Stable. Migrate to 3.6 (Vapor Mode) when 3.6 GA lands.      |
+| Vite                          | 8.2+               | Released 2026-07-30.                                        |
+| Pinia                         | 4.0.x              | ESM-only; requires @vue/devtools-api v8.                    |
+| Vue Router                    | 5.2+               |                                                             |
+| TypeScript                    | 5.6+               |                                                             |
+| shadcn-vue                    | 2.4+               | On Reka UI (formerly Radix Vue, renamed 2025).              |
+| Reka UI                       | latest             | Headless base used by shadcn-vue.                           |
+| @simplewebauthn/browser       | 13.x               | 13.3.0 released 2026-03-10.                                 |
+| uPlot                         | 1.6.x              | ~50 KB min; use `uplot-vue` wrapper.                        |
+| vue-i18n                      | 10.x               |                                                             |
+| Vitest                        | 4.1.x              | v5 in beta as of mid-2026; stay on 4.1 for M1–M2.           |
+| Playwright                    | 1.62.x             |                                                             |
+| CycloneDX Maven plugin        | latest 2.x         | For SBOM.                                                   |
+
+When bumping any of these, run the full test matrix in CI and cut a
+patch release. Do not pin transitively — let the BOMs manage it
+(Spring Boot BOM for backend, Vite/Vue peer deps for frontend).
 
 ---
 
@@ -474,6 +537,10 @@ configurable knobs:
 - **Every write is auditable.** No "quiet" mutations.
 - **Docker is the only orchestrator we know about.** Podman is a
   post-1.0 stretch goal.
+- **Track LTS Java, not bleeding-edge.** Java 25 today; move to Java
+  29 (expected LTS in 2027) when it lands, not before.
+- **Track stable Vue only.** Do not run Vue 3.6 pre-GA. Adopt Vapor
+  Mode component-by-component after it goes stable.
 
 ---
 
@@ -650,8 +717,9 @@ Cadence estimate: 5 weeks of focused single-agent work.
   bake` in GH Actions.
 - End-to-end test using Playwright hitting a real dev instance.
 - Component tests for Vue via Vitest.
-- Backend tests: JUnit 5 + Testcontainers for the Docker interaction
-  (spin up a real `docker:dind` in CI).
+- Backend tests: JUnit 5 + Mockito for unit tests; docker-java
+  against the ambient daemon (with `warden.test=true` label cleanup)
+  for integration tests. **No Testcontainers dependency.**
 - A PR against `tomaytotomato/home.local` adding
   `packages/dashboard/` that installs Warden.
 - Documentation site (optional v1): a `docs/` folder rendered by
@@ -661,17 +729,34 @@ Cadence estimate: 5 weeks of focused single-agent work.
 
 ## 14. Testing expectations
 
-- **Backend:** unit tests for every service, integration tests using
-  Testcontainers (docker-in-docker) for `PackagesService`, `DockerService`,
-  and the whole `/api/packages/{name}/enable` flow. Aim for ≥ 80% line
-  coverage on services, ≥ 60% overall.
-- **Frontend:** Vitest for components with logic; Playwright for the
-  first-run wizard end-to-end. Snapshot tests are discouraged.
-- **Contract tests:** a Playwright test that starts Warden, points it
-  at a temp checkout of `home.local`, installs `core + privacy`,
-  and asserts both containers reach healthy state.
-- **Security tests:** OWASP ZAP baseline scan in CI, mandatory to pass
-  before release.
+- **Backend unit tests:** JUnit 5 + Mockito. Every service unit-tested
+  against a mocked `DockerClient` (the `com.github.dockerjava.api`
+  interface). No live daemon required. Fast, deterministic, runs on
+  every save.
+- **Backend integration tests:** JUnit 5 pointing docker-java at a
+  real daemon. Two supported modes:
+  1. **Local dev / CI runner:** use the ambient `/var/run/docker.sock`.
+     Every test names its containers with a `warden-it-<uuid>` prefix
+     and a `warden.test=true` label; `@AfterEach` prunes by label so
+     the host daemon stays clean even on hard failures.
+  2. **Isolated CI:** GH Actions gives every job its own docker
+     daemon by default — no extra sidecar needed. If a nested-docker
+     scenario ever comes up, launch a `docker:dind` service in the
+     workflow's `services:` block and point `DOCKER_HOST` at it. Do
+     this in ~5 lines of workflow YAML; do not pull in Testcontainers
+     just for daemon lifecycle. **Testcontainers is not a project
+     dependency.**
+- **Contract tests:** an integration test that starts Warden against
+  a temp checkout of home.local, calls `/api/packages/core/enable`,
+  and asserts the container reaches healthy state. Same `warden.test`
+  label + prune strategy as the integration tests.
+- **Frontend:** Vitest 4.1 for components with logic; Playwright 1.62
+  for the first-run wizard end-to-end. Snapshot tests are discouraged.
+- **Security tests:** OWASP ZAP baseline scan in CI, mandatory to
+  pass before release.
+- **Coverage targets:** ≥ 80% line coverage on services, ≥ 60%
+  overall. Frontend components with logic ≥ 70%. Do not chase
+  100%; coverage past 80% is usually testing trivialities.
 
 ---
 
