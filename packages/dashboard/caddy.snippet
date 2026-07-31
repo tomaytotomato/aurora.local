@@ -1,13 +1,10 @@
 # aurora.local / packages/dashboard / caddy.snippet
 #
-# Serves Aurora at admin.$DOMAIN. When the `identity` package is
-# enabled the vhost gets Authelia forward-auth via `import authelia`
-# in the core Caddyfile.
-
-http://admin.{$DOMAIN} {
-	reverse_proxy aurora:8090
-}
-https://admin.{$DOMAIN} {
-	tls internal
-	reverse_proxy aurora:8090
-}
+# Aurora is served at the apex $DOMAIN (see packages/core/caddy/Caddyfile).
+# This snippet is intentionally empty so that packages/dashboard drops in
+# cleanly without adding a duplicate vhost. If you ever want a distinct
+# admin subdomain (e.g. because Aurora runs alongside a public site on
+# the same box), add:
+#
+#   http://admin.{$DOMAIN}  { reverse_proxy aurora:8090 }
+#   https://admin.{$DOMAIN} { tls internal; reverse_proxy aurora:8090 }

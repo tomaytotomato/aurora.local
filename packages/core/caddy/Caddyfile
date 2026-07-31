@@ -21,15 +21,15 @@
 	}
 }
 
-# ---- Core ------------------------------------------------------------
-# Homepage is served at the bare domain (aurora.local) plus mDNS shortcut
-# (aurora.local) and raw LAN IP fallback. No redundant home.aurora.local.
+# ---- Aurora dashboard (apex) ----------------------------------------
+# Aurora IS the landing page: served at the bare domain, plus raw LAN IP
+# fallback. Homepage retired in v0.1.
 http://{$DOMAIN}, http://aurora.local, http://192.168.0.110 {
-	reverse_proxy homepage:3000
+	reverse_proxy aurora:8090
 }
 https://{$DOMAIN}, https://aurora.local {
 	tls internal
-	reverse_proxy homepage:3000
+	reverse_proxy aurora:8090
 }
 
 # ---- Privacy & security ---------------------------------------------
