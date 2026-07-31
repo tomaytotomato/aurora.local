@@ -26,4 +26,4 @@ post_install_notes: |
   Install Caddy's root CA on client devices for green padlocks:
     ./scripts/get-caddy-root-cert.sh
   Homepage will be reachable on http://<hostname>.local/ and
-  http://home.$HOME_DOMAIN/.
+  http://$HOME_DOMAIN/.

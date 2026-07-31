@@ -45,7 +45,7 @@ access_control:
     # bounce loop. Move to two_factor once you're comfortable.
     - domain: 'auth.{{ env "HOME_DOMAIN" }}'
       policy: bypass
-    - domain: 'home.{{ env "HOME_DOMAIN" }}'
+    - domain: '{{ env "HOME_DOMAIN" }}'
       policy: one_factor
     # Default: everything else in the family requires 2FA.
     - domain: '*.{{ env "HOME_DOMAIN" }}'
@@ -61,7 +61,7 @@ session:
   cookies:
     - domain: '{{ env "HOME_DOMAIN" }}'
       authelia_url: 'https://auth.{{ env "HOME_DOMAIN" }}'
-      default_redirection_url: 'https://home.{{ env "HOME_DOMAIN" }}'
+      default_redirection_url: 'https://{{ env "HOME_DOMAIN" }}'
 
 # ---- Regulation (brute-force protection) --------------------
 regulation:

@@ -22,12 +22,12 @@
 }
 
 # ---- Core ------------------------------------------------------------
-# Homepage is also the fallback for raw IP / aurora.local so bookmarks
-# keep working while AdGuard DNS is being brought online.
-http://home.{$HOME_DOMAIN}, http://{$HOME_DOMAIN}, http://aurora.local, http://192.168.0.110 {
+# Homepage is served at the bare domain (home.local) plus mDNS shortcut
+# (aurora.local) and raw LAN IP fallback. No redundant home.home.local.
+http://{$HOME_DOMAIN}, http://aurora.local, http://192.168.0.110 {
 	reverse_proxy homepage:3000
 }
-https://home.{$HOME_DOMAIN}, https://{$HOME_DOMAIN}, https://aurora.local {
+https://{$HOME_DOMAIN}, https://aurora.local {
 	tls internal
 	reverse_proxy homepage:3000
 }

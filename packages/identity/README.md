@@ -64,7 +64,7 @@ identity has been selected.
 1. User signs in with password (`one_factor`).
 2. Authelia forces registration on first login if the target policy
    is `two_factor` (which is the default in `configuration.yml` for
-   everything except `home.$HOME_DOMAIN`).
+   everything except `$HOME_DOMAIN`).
 3. Enrolment link is emailed (SMTP) or written to the filesystem
    notifier (no SMTP configured).
 4. User scans the QR into their authenticator (or registers a
@@ -77,7 +77,7 @@ Defaults in `authelia/configuration.yml`:
 | Domain                    | Policy       |
 |---------------------------|--------------|
 | `auth.$HOME_DOMAIN`       | bypass       |
-| `home.$HOME_DOMAIN`       | one_factor   |
+| `$HOME_DOMAIN`       | one_factor   |
 | everything else           | two_factor   |
 
 Edit `authelia/configuration.yml` `access_control.rules` to

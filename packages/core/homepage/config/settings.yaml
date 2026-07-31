@@ -4,7 +4,7 @@
 
 title: home.local
 description: Opinionated home server — control panel
-startUrl: https://home.home.local/
+startUrl: https://home.local/
 
 # ---- theme ----
 theme: dark

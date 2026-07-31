@@ -12,14 +12,14 @@
 - Core:
     - Caddy:
         icon: mdi-shield-check-#22d3ee
-        href: https://home.home.local/
+        href: https://home.local/
         description: Reverse proxy — TLS + vhost fanout
         container: caddy
         server: my-docker
 
     - Homepage:
         icon: homepage.png
-        href: https://home.home.local/
+        href: https://home.local/
         description: This dashboard
         container: homepage
         server: my-docker
@@ -130,7 +130,7 @@
 
     - Disk usage:
         icon: mdi-harddisk-#f472b6
-        href: https://home.home.local/
+        href: https://home.local/
         description: See resource strip above
 
 - External:
