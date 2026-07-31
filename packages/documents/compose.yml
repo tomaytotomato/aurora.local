@@ -1,0 +1,120 @@
+# home.local / packages/documents
+#
+# Paperless-ngx (document DMS + OCR) with its Gotenberg / Tika
+# sidecars, backed by a dedicated Postgres + Redis. Plus Stirling-PDF
+# as a general-purpose browser PDF toolkit.
+#
+# The Postgres/Redis instances here are *scoped* to Paperless — they
+# stay on home_net but no other package should touch them.
+
+name: home-documents
+
+networks:
+  home_net:
+    external: true
+
+services:
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    restart: unless-stopped
+    networks: [home_net]
+    depends_on:
+      paperless-postgres:
+        condition: service_healthy
+      paperless-redis:
+        condition: service_healthy
+      paperless-gotenberg:
+        condition: service_started
+      paperless-tika:
+        condition: service_started
+    environment:
+      - TZ=${TZ:-Europe/London}
+      - USERMAP_UID=1000
+      - USERMAP_GID=1000
+      - PAPERLESS_TIME_ZONE=${TZ:-Europe/London}
+      - PAPERLESS_OCR_LANGUAGE=${PAPERLESS_OCR_LANGUAGE:-eng}
+      - PAPERLESS_REDIS=redis://paperless-redis:6379
+      - PAPERLESS_DBHOST=paperless-postgres
+      - PAPERLESS_DBUSER=paperless
+      - PAPERLESS_DBPASS=${PAPERLESS_DB_PASSWORD}
+      - PAPERLESS_DBNAME=paperless
+      - PAPERLESS_TIKA_ENABLED=1
+      - PAPERLESS_TIKA_ENDPOINT=http://paperless-tika:9998
+      - PAPERLESS_TIKA_GOTENBERG_ENDPOINT=http://paperless-gotenberg:3000
+      - PAPERLESS_SECRET_KEY=${PAPERLESS_SECRET_KEY}
+      - PAPERLESS_URL=${PAPERLESS_URL:-}
+      - PAPERLESS_ADMIN_USER=${PAPERLESS_ADMIN_USER}
+      - PAPERLESS_ADMIN_PASSWORD=${PAPERLESS_ADMIN_PASSWORD}
+    volumes:
+      - ../../data/documents/paperless/data:/usr/src/paperless/data
+      - ../../data/documents/paperless/media:/usr/src/paperless/media
+      - ../../data/documents/paperless/export:/usr/src/paperless/export
+      - ../../data/documents/paperless/consume:/usr/src/paperless/consume
+    ports:
+      - "8010:8000"
+
+  paperless-postgres:
+    image: docker.io/library/postgres:16-alpine
+    container_name: paperless-postgres
+    restart: unless-stopped
+    networks: [home_net]
+    environment:
+      - TZ=${TZ:-Europe/London}
+      - POSTGRES_USER=paperless
+      - POSTGRES_PASSWORD=${PAPERLESS_DB_PASSWORD}
+      - POSTGRES_DB=paperless
+    volumes:
+      - ../../data/documents/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperless -d paperless"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  paperless-redis:
+    image: docker.io/library/redis:7-alpine
+    container_name: paperless-redis
+    restart: unless-stopped
+    networks: [home_net]
+    volumes:
+      - ../../data/documents/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  paperless-gotenberg:
+    image: docker.io/gotenberg/gotenberg:8
+    container_name: paperless-gotenberg
+    restart: unless-stopped
+    networks: [home_net]
+    # Paperless calls into gotenberg for office-file rendering. The
+    # default chromium sandbox needs these flags in a container.
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+
+  paperless-tika:
+    image: docker.io/apache/tika:latest
+    container_name: paperless-tika
+    restart: unless-stopped
+    networks: [home_net]
+
+  # ---- Stirling-PDF: general browser PDF toolkit -----------------------
+  stirling-pdf:
+    image: docker.io/frooodle/s-pdf:latest
+    container_name: stirling-pdf
+    restart: unless-stopped
+    networks: [home_net]
+    environment:
+      - TZ=${TZ:-Europe/London}
+      - DOCKER_ENABLE_SECURITY=false
+    volumes:
+      - ../../data/documents/stirling/config:/configs
+      - ../../data/documents/stirling/logs:/logs
+      - ../../data/documents/stirling/tessdata:/usr/share/tessdata
+    ports:
+      - "8020:8080"

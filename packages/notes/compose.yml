@@ -1,0 +1,28 @@
+# home.local / packages/notes
+#
+# SilverBullet — single-user markdown notes with a plug system.
+# Storage is just a directory full of .md files; no database.
+
+name: home-notes
+
+networks:
+  home_net:
+    external: true
+
+services:
+  silverbullet:
+    image: ghcr.io/silverbulletmd/silverbullet:latest
+    container_name: silverbullet
+    restart: unless-stopped
+    networks: [home_net]
+    environment:
+      - TZ=${TZ:-Europe/London}
+      # Built-in HTTP basic auth. SilverBullet reads user:password
+      # from SB_USER / SB_PASSWORD env; falls back to open if unset.
+      - SB_USER=${SB_USER}:${SB_PASSWORD}
+    volumes:
+      - ../../data/notes/silverbullet:/space
+    # SilverBullet listens on 3000 internally; publish as 3030 to
+    # avoid collision with AdGuard's :3000 first-run wizard.
+    ports:
+      - "3030:3000"

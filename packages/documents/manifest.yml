@@ -1,0 +1,37 @@
+name: documents
+title: Documents (Paperless-ngx + Stirling-PDF)
+description: |
+  Paperless-ngx is a document management system: OCRs paper scans,
+  tags them, and gives you a searchable archive. Gotenberg + Apache
+  Tika are its office-file and content-extraction sidecars.
+  Stirling-PDF is an unrelated but complementary browser-based PDF
+  toolkit (split, merge, sign, redact, etc.).
+
+category: productivity
+
+depends_on:
+  - core
+recommends: []
+profiles: {}
+
+ports:
+  - {port: 8010, proto: tcp, description: Paperless-ngx web UI}
+  - {port: 8020, proto: tcp, description: Stirling-PDF web UI}
+
+requires:
+  min_ram_mb: 2048
+  min_disk_gb: 10
+  host_roles: []
+
+required_env:
+  - PAPERLESS_ADMIN_USER
+  - PAPERLESS_ADMIN_PASSWORD
+  - PAPERLESS_SECRET_KEY
+
+post_install_notes: |
+  1. Drop PDFs / images into ../../data/documents/paperless/consume/
+     — Paperless watches it and OCRs on ingest.
+  2. PAPERLESS_SECRET_KEY is used to sign session cookies. Treat it
+     like a password; rotating it logs everyone out.
+  3. Visit https://paperless.$HOME_DOMAIN/ for Paperless and
+     https://pdf.$HOME_DOMAIN/ for Stirling-PDF.
