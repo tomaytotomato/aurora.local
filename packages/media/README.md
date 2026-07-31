@@ -4,7 +4,7 @@ The classic *arr stack + a debrid-first downloader plus optional
 torrent client behind VPN.
 
 - **Sonarr / Radarr / Bazarr / Prowlarr** — automation.
-- **Jellyseerr** — requests.
+- **Seerr** — requests.
 - **RDTClient** — Real-Debrid/AllDebrid/Premiumize downloader.
 - **Flaresolverr** — Cloudflare bypass for Prowlarr.
 - **SABnzbd** — Usenet.
@@ -17,4 +17,4 @@ torrent client behind VPN.
    `./scripts/up.sh --torrent core privacy media`).
 2. Wire Prowlarr → Sonarr/Radarr from Prowlarr's UI.
 3. Add download clients in Sonarr/Radarr.
-4. Point Jellyseerr at your Jellyfin/Plex.
+4. Point Seerr at your Jellyfin/Plex.

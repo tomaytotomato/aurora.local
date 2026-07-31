@@ -21,7 +21,7 @@ Every `packages/<name>/` directory MUST contain:
 name: media                     # matches directory name
 title: Media automation         # short human title
 description: |                  # one paragraph, shown in the picker
-  Sonarr/Radarr/Bazarr/Prowlarr + Jellyseerr + RDTClient + optional
+  Sonarr/Radarr/Bazarr/Prowlarr + Seerr + RDTClient + optional
   qBittorrent-behind-VPN (opt-in via 'torrent' profile).
 
 # Grouping in the interactive selector.

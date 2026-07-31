@@ -87,11 +87,11 @@
           url: http://bazarr:6767
           key: "{{HOMEPAGE_VAR_BAZARR_KEY}}"
 
-    - Jellyseerr:
-        icon: jellyseerr.png
-        href: https://jellyseerr.home.local/
+    - Seerr:
+        icon: mdi-eye-outline-#a78bfa
+        href: https://seerr.home.local/
         description: Request UI (Plex/Jellyfin-compatible)
-        container: jellyseerr
+        container: seerr
         server: my-docker
 
     - RDTClient:

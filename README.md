@@ -61,7 +61,7 @@ Current packages:
 |-----------------|------------------|----------------------------------------------------------------------------|
 | core            | core             | Caddy (HTTPS + reverse proxy) + Homepage dashboard                         |
 | privacy         | privacy          | AdGuard Home (LAN DNS) + Gluetun (VPN sidecar)                             |
-| media           | media            | Sonarr, Radarr, Bazarr, Prowlarr, Jellyseerr, RDTClient, SABnzbd, qBittorrent |
+| media           | media            | Sonarr, Radarr, Bazarr, Prowlarr, Seerr, RDTClient, SABnzbd, qBittorrent |
 | storage         | storage          | Samba + MiniDLNA                                                           |
 | monitoring      | monitoring       | Prometheus + Grafana + node_exporter + cAdvisor + Uptime-Kuma              |
 | backup          | storage          | Kopia (dedup backup with Web UI)                                           |
