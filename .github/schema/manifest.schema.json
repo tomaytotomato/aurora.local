@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://home.local/schema/manifest.schema.json",
+  "title": "home.local package manifest",
+  "description": "Schema for packages/<name>/manifest.yml. See docs/PACKAGE_CONTRACT.md.",
+  "type": "object",
+  "required": ["name", "title", "description", "category", "depends_on"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Package identifier; must match the directory name."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "core", "privacy", "media", "storage", "monitoring",
+        "productivity", "dev", "ai", "identity", "home-automation",
+        "backup"
+      ]
+    },
+    "depends_on": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+      "uniqueItems": true
+    },
+    "recommends": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+      "uniqueItems": true
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description"],
+        "properties": {
+          "description": { "type": "string" },
+          "requires_packages": {
+            "type": "array",
+            "items": { "type": "string" },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "ports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["port", "proto", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "port":        { "type": "integer", "minimum": 1, "maximum": 65535 },
+          "proto":       { "type": "string", "enum": ["tcp", "udp"] },
+          "description": { "type": "string" },
+          "profile":     { "type": "string" }
+        }
+      }
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_ram_mb":  { "type": "integer", "minimum": 0 },
+        "min_disk_gb": { "type": "integer", "minimum": 0 },
+        "host_roles":  {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "required_env": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "post_install_notes": { "type": "string" }
+  }
+}
