@@ -1,0 +1,75 @@
+# home.local / packages/ai
+#
+# Ollama (local LLM runner) + Open-WebUI (chat frontend).
+#
+# CPU is the default. NVIDIA GPU passthrough is opt-in via the 'gpu'
+# compose profile:
+#   ./scripts/up.sh --gpu core ai
+#
+# The two ollama variants use distinct container names; both register
+# the `ollama` network alias on home_net so Open-WebUI always resolves
+# it. Run ONE at a time (see README).
+
+name: home-ai
+
+networks:
+  home_net:
+    external: true
+
+services:
+  # Default (CPU). Always started. If you're using the 'gpu' profile,
+  # stop this one first: `docker stop ollama-cpu`.
+  ollama-cpu:
+    image: ollama/ollama:latest
+    container_name: ollama-cpu
+    hostname: ollama
+    restart: unless-stopped
+    networks:
+      home_net:
+        aliases: [ollama]
+    environment:
+      - TZ=${TZ:-Europe/London}
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-5m}
+    volumes:
+      - ../../data/ai/ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+
+  ollama-gpu:
+    image: ollama/ollama:latest
+    container_name: ollama-gpu
+    hostname: ollama
+    restart: unless-stopped
+    profiles: ["gpu"]
+    networks:
+      home_net:
+        aliases: [ollama]
+    environment:
+      - TZ=${TZ:-Europe/London}
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-5m}
+    volumes:
+      - ../../data/ai/ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    networks: [home_net]
+    environment:
+      - TZ=${TZ:-Europe/London}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      - DEFAULT_MODELS=${DEFAULT_MODELS:-}
+    volumes:
+      - ../../data/ai/open-webui:/app/backend/data
+    ports:
+      - "3011:8080"
