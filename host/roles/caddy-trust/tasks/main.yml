@@ -1,0 +1,46 @@
+---
+- name: Check whether Caddy container is running
+  ansible.builtin.command:
+    cmd: "docker inspect -f {% raw %}'{{.State.Running}}'{% endraw %} {{ caddy_trust_container }}"
+  register: _caddy_running
+  changed_when: false
+  failed_when: false
+
+- name: Skip caddy-trust (Caddy not running)
+  ansible.builtin.debug:
+    msg: >-
+      Caddy container '{{ caddy_trust_container }}' is not running;
+      bring the core package up first (scripts/up.sh core), then re-run
+      with `-t caddy-trust`.
+  when: _caddy_running.rc != 0 or (_caddy_running.stdout | default('')) != 'true'
+
+- name: Extract Caddy root CA to host trust store
+  ansible.builtin.shell:
+    cmd: >-
+      docker exec {{ caddy_trust_container }}
+      cat {{ caddy_trust_cert_src }} > {{ caddy_trust_cert_dest }}
+  args:
+    creates: "{{ caddy_trust_cert_dest }}"
+  register: _extract
+  when:
+    - _caddy_running.rc == 0
+    - (_caddy_running.stdout | default('')) == 'true'
+
+- name: Ensure cert perms
+  ansible.builtin.file:
+    path: "{{ caddy_trust_cert_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - _caddy_running.rc == 0
+    - (_caddy_running.stdout | default('')) == 'true'
+
+- name: Refresh CA trust store
+  ansible.builtin.command:
+    cmd: update-ca-certificates
+  register: _update_ca
+  changed_when: "'added' in _update_ca.stdout or 'updated' in _update_ca.stdout"
+  when:
+    - _caddy_running.rc == 0
+    - (_caddy_running.stdout | default('')) == 'true'

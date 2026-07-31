@@ -4,14 +4,41 @@
 #
 #   ansible-playbook -i ../inventory.ini host/site.yml -K
 #
-# The packages/* compose stacks assume this playbook has already run.
+# Opt-in plays:
+#   -t caddy-trust    add Caddy's root CA to the host's trust store
+#                     (requires the core package to already be up)
+#
+# The packages/* compose stacks assume the default play has already run.
 
 - name: Bootstrap home.local host
   hosts: home_servers
   become: true
   roles:
-    - common
-    - docker
-    - firewall
-    - ssh-hardening
-    - fail2ban
+    - role: common
+      tags: [common]
+    - role: swap-file
+      tags: [swap, system]
+    - role: storage-mount
+      tags: [storage, system]
+      when: external_mounts | default([]) | length > 0
+    - role: avahi
+      tags: [avahi, network]
+    - role: unattended-upgrades
+      tags: [updates, system]
+    - role: docker
+      tags: [docker]
+    - role: firewall
+      tags: [firewall, security]
+    - role: ssh-hardening
+      tags: [ssh, security]
+    - role: fail2ban
+      tags: [fail2ban, security]
+
+# Opt-in: run only with `-t caddy-trust`. Requires the core package's
+# Caddy container to already be running.
+- name: Trust Caddy root CA on host
+  hosts: home_servers
+  become: true
+  tags: [caddy-trust, never]
+  roles:
+    - role: caddy-trust
