@@ -274,7 +274,7 @@ README).
 | SnakeYAML                     | 2.6                | Feb 2026 release, prev 2.5 (Aug 2025).                      |
 | sqlite-jdbc (org.xerial)      | 3.53.x             | Bundles SQLite 3.53.                                        |
 | Flyway                        | 13.0.x             | Jul 2026 release.                                           |
-| Testcontainers                | (not used)         | Docker-java is the SUT dep; use it directly for integration tests. |
+| Testcontainers                | 2.0.x              | Scoped to E2E + isolated-daemon tests only, not integration. |
 | Maven                         | 3.9.9+             | Toolchain for Java 25 build.                                |
 | Node.js (build-time only)     | 22 LTS             | Discarded from runtime image via multi-stage.               |
 | Vue                           | **3.5.x**          | Stable. Migrate to 3.6 (Vapor Mode) when 3.6 GA lands.      |
@@ -719,7 +719,9 @@ Cadence estimate: 5 weeks of focused single-agent work.
 - Component tests for Vue via Vitest.
 - Backend tests: JUnit 5 + Mockito for unit tests; docker-java
   against the ambient daemon (with `warden.test=true` label cleanup)
-  for integration tests. **No Testcontainers dependency.**
+  for integration tests; Testcontainers 2.0+ narrowly scoped to
+  end-to-end (booting the Warden image) and optional isolated-daemon
+  runs (see §14).
 - A PR against `tomaytotomato/home.local` adding
   `packages/dashboard/` that installs Warden.
 - Documentation site (optional v1): a `docs/` folder rendered by
@@ -729,34 +731,78 @@ Cadence estimate: 5 weeks of focused single-agent work.
 
 ## 14. Testing expectations
 
-- **Backend unit tests:** JUnit 5 + Mockito. Every service unit-tested
-  against a mocked `DockerClient` (the `com.github.dockerjava.api`
-  interface). No live daemon required. Fast, deterministic, runs on
-  every save.
-- **Backend integration tests:** JUnit 5 pointing docker-java at a
-  real daemon. Two supported modes:
-  1. **Local dev / CI runner:** use the ambient `/var/run/docker.sock`.
-     Every test names its containers with a `warden-it-<uuid>` prefix
-     and a `warden.test=true` label; `@AfterEach` prunes by label so
-     the host daemon stays clean even on hard failures.
-  2. **Isolated CI:** GH Actions gives every job its own docker
-     daemon by default — no extra sidecar needed. If a nested-docker
-     scenario ever comes up, launch a `docker:dind` service in the
-     workflow's `services:` block and point `DOCKER_HOST` at it. Do
-     this in ~5 lines of workflow YAML; do not pull in Testcontainers
-     just for daemon lifecycle. **Testcontainers is not a project
-     dependency.**
-- **Contract tests:** an integration test that starts Warden against
-  a temp checkout of home.local, calls `/api/packages/core/enable`,
-  and asserts the container reaches healthy state. Same `warden.test`
-  label + prune strategy as the integration tests.
-- **Frontend:** Vitest 4.1 for components with logic; Playwright 1.62
-  for the first-run wizard end-to-end. Snapshot tests are discouraged.
-- **Security tests:** OWASP ZAP baseline scan in CI, mandatory to
-  pass before release.
-- **Coverage targets:** ≥ 80% line coverage on services, ≥ 60%
-  overall. Frontend components with logic ≥ 70%. Do not chase
-  100%; coverage past 80% is usually testing trivialities.
+Three tiers, each with a defined tool. Testcontainers has a role;
+it just isn't at every tier.
+
+### 14.1 Unit tests (fastest, mocked)
+
+- **JUnit 5 + Mockito.** Mock `com.github.dockerjava.api.DockerClient`
+  and its command builders. Test service logic (dep resolution,
+  env-file mutation, state transitions, security-rule scoring) in
+  isolation. No daemon, no containers, no Testcontainers. Runs on
+  every save; targets < 5 s total.
+
+### 14.2 Integration tests (docker-java ↔ real daemon)
+
+- **JUnit 5 + docker-java against the ambient `/var/run/docker.sock`.**
+  Test `DockerService`, container lifecycle, event streaming,
+  `docker compose config -q` invocation. **Do not wrap this in
+  Testcontainers** — docker-java is already the SUT dependency, so
+  Testcontainers would just be docker-java-driving-docker-java. Every
+  container this tier creates carries a `warden.test=true` label and
+  a `warden-it-<uuid>` name prefix; `@AfterEach` prunes by label so a
+  hard failure still leaves the daemon clean.
+
+### 14.3 End-to-end / isolation tests (**Testcontainers earns its keep**)
+
+**Use Testcontainers 2.0+ here, deliberately and narrowly.** The
+cases where it genuinely helps:
+
+1. **Whole-app end-to-end.** Boot the built Warden image itself
+   (`GenericContainer("warden:local").withExposedPorts(8090)`) in a
+   test, mount a temp directory as `/repo`, and drive it with real
+   HTTP. Tests the packaged artefact, not just a local Maven run.
+2. **Isolated docker daemon for local `mvn verify`.** On a developer
+   laptop, integration tests polluting the real docker daemon is a
+   pain. Optional profile `-Pisolated-docker` spins up a
+   `docker:dind` container via Testcontainers, points
+   `DOCKER_HOST=tcp://<dind>:2375` at it, and both Warden-under-test
+   and its child compose calls hit that isolated daemon. In CI this
+   profile is off (GH Actions gives every job its own daemon
+   already).
+3. **Multi-package scenario tests via `ComposeContainer`.** For
+   tests that need "start core + privacy + media as a real project
+   and assert Warden sees them correctly", `ComposeContainer` is
+   the cleanest way — it does the compose lifecycle for you.
+4. **Playwright + Warden container.** The E2E suite starts a Warden
+   container (Testcontainers), waits for `/health`, and points
+   Playwright at the exposed port. The Warden image is the SUT; the
+   browser is the driver.
+
+Rule of thumb: **if the test is about docker-java behaviour, don't
+use Testcontainers. If the test is about Warden-as-a-shipped-artefact
+or about daemon isolation, do.**
+
+### 14.4 Frontend
+
+- **Vitest 4.1** for components with logic (composables, form
+  validators, security-score reducers). Snapshot tests discouraged.
+- **Playwright 1.62** for the first-run wizard and package-
+  add/remove flow end-to-end. Runs against the Testcontainers-hosted
+  Warden from §14.3.
+
+### 14.5 Security tests
+
+- OWASP ZAP baseline scan in CI, mandatory to pass before release.
+- `npm audit --production` + `mvn dependency-check:check` gates on
+  Critical/High only (Medium/Low ignored to avoid alert fatigue).
+
+### 14.6 Coverage targets
+
+- Services: ≥ 80% line coverage.
+- Overall backend: ≥ 60%.
+- Frontend components with logic: ≥ 70%.
+- Do not chase 100%; coverage past 80% usually tests trivialities.
 
 ---
 
