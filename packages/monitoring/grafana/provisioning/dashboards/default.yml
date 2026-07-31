@@ -1,0 +1,18 @@
+# home.local / packages/monitoring / grafana dashboards provisioning
+#
+# Registers a "home.local" folder backed by any *.json files dropped
+# in this directory. Grafana rescans every 30s.
+
+apiVersion: 1
+
+providers:
+  - name: home.local
+    orgId: 1
+    folder: home.local
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: true
