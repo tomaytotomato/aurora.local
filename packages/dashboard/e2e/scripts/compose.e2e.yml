@@ -1,0 +1,22 @@
+# E2E-only overrides. Composed on top of packages/dashboard/compose.yml.
+# Isolates the E2E aurora instance from the live one:
+#   - separate compose project name (aurora-e2e) via CLI: docker compose -p aurora-e2e
+#   - separate container name
+#   - own bridge network (not the external aurora_net)
+#   - published host port 8091
+#   - state and repo bind-mounts pointed at a scratch dir
+
+networks:
+  aurora_net:
+    external: false
+    name: aurora-e2e_net
+    driver: bridge
+
+services:
+  aurora:
+    container_name: aurora-e2e
+    ports:
+      - "127.0.0.1:8091:8090"
+    # Repo + state mounts are supplied via env by reset-aurora-e2e.sh:
+    #   AURORA_REPO_PATH_HOST=/tmp/aurora-e2e-state/repo
+    # No caddy in front of this instance — tests hit :8091 directly.

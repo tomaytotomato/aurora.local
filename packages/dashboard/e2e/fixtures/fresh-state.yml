@@ -1,0 +1,5 @@
+# Minimal .state.yml the E2E reset script seeds into the isolated instance's
+# repo scratch dir. Represents a "brand new box, no onboarding yet" state.
+bootstrap_version: 1
+hostname: aurora-e2e
+domain: aurora-e2e.local

@@ -1,0 +1,21 @@
+{
+  "name": "e2e",
+  "version": "1.0.0",
+  "description": "Playwright-driven end-to-end tests that exercise the onboarding wizard and post-install dashboard against an **isolated** aurora instance.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2"
+  }
+}

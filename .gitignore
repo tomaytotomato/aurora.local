@@ -53,3 +53,9 @@ packages/*/pins.env
 
 # pi-subagents scratch
 .pi-subagents/
+
+# ---- aurora dashboard E2E ----
+packages/dashboard/e2e/node_modules/
+packages/dashboard/e2e/test-results/
+packages/dashboard/e2e/playwright-report/
+/tmp/aurora-e2e-state
