@@ -15,3 +15,6 @@
 - [x] step-P2 closure (E2E: 40/18/4 no change vs iter-3; LaunchServiceTests 6/6; live /api/services/status ~140 ms; log cap 5 MB; docker read timeout 3s; sessionStorage launch-job persistence + reconnecting badge)
 - [x] step-P3 closure (dc28c45, error-recovery 3/3)
 - [x] step-deploy (DEPLOY_STATUS.md, live=sha256:99c2375f, backup=.state.yml.bak.1785594847 + /data/aurora.db.bak.1785594875)
+
+- [ ] step-dash-1 UX spec (open) — Started 2026-08-01, dashboard-home spec at docs/UX_SPEC_DASHBOARD.md; scope = 4 confirmed blockers from logs/dashboard-bugs-2026-08-01.md (Start 409, header `be1523c08f0f.undefined`, System NaN, Metrics axios 404); non-goals: metrics backend, security module, theme overhaul; awaiting iter-1 plan (step-dash-2) then worker impl
+- [x] step-dash-2 bugs 1+2+3+4 impl (b110c13 bug 1 hostname + TopBar; 407366a bugs 2+3 NaN + metrics gated + DashboardHome rewrite; 47ef0f3 bug 4 POST /api/services/{pkg}/start + ServicesController + tests; 45/45 backend tests; E2E 41 pass / 18 fail / 3 skip vs iter-3 baseline 40/18/4 = +1 pass, 0 new fails, −1 skip; live 8090 rebuilt and healthy on new image)
