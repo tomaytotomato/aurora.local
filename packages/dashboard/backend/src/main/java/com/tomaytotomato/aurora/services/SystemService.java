@@ -94,16 +94,22 @@ public class SystemService {
 
   private String detectLanIp() {
     // Preferred path: read the host's routing table from a bind-mounted /proc.
-    // /proc/net is per-netns, so /host_root/proc/net/fib_trie inside a
+    // /proc/net is per-netns, so <hostProcPath>/net/fib_trie inside a
     // container reflects the *container's* netns (e.g. the docker bridge IP)
     // even though the file is bind-mounted from the host. To get the host's
-    // real routing table we read PID 1's netns file: /host_root/proc/1/net/fib_trie.
-    // Fall back to the container-scoped path for unit tests / dev, then to
-    // NetworkInterface as a last resort.
-    for (Path p : List.of(
-        Path.of("/host_root/proc/1/net/fib_trie"),
-        Path.of("/host_root/proc/net/fib_trie"),
-        Path.of("/proc/net/fib_trie"))) {
+    // real routing table we read PID 1's netns file: <hostProcPath>/1/net/fib_trie.
+    // Fall back to the legacy /host_root paths (older deploys) and finally
+    // the container-scoped /proc, then NetworkInterface as a last resort.
+    List<Path> candidates = new ArrayList<>();
+    String hostProc = props.hostProcPath();
+    if (hostProc != null && !hostProc.isBlank()) {
+      candidates.add(Path.of(hostProc, "1/net/fib_trie"));
+      candidates.add(Path.of(hostProc, "net/fib_trie"));
+    }
+    candidates.add(Path.of("/host_root/proc/1/net/fib_trie"));
+    candidates.add(Path.of("/host_root/proc/net/fib_trie"));
+    candidates.add(Path.of("/proc/net/fib_trie"));
+    for (Path p : candidates) {
       if (!Files.isReadable(p)) continue;
       try {
         String best = pickBestLanIp(parseFibTrieHostLocals(p));
@@ -127,6 +133,13 @@ public class SystemService {
     String prevIp = null;
     for (String raw : lines) {
       String line = raw.trim();
+      // Subtree boundary: `+-- <cidr>` marks a new subtree. Reset prevIp so a
+      // malformed / truncated fib_trie can't attribute a stray `host LOCAL`
+      // to an IP that belonged to the previous sibling subtree.
+      if (line.startsWith("+--")) {
+        prevIp = null;
+        continue;
+      }
       // Track most recent "|-- <ipv4>" line as we walk down the tree.
       if (line.startsWith("|-- ")) {
         String candidate = line.substring(4).trim();
@@ -140,7 +153,7 @@ public class SystemService {
     return out;
   }
 
-  static String pickBestLanIp(List<String> candidates) {
+  String pickBestLanIp(List<String> candidates) {
     String best = null;
     int bestScore = 0;
     for (String ip : candidates) {
@@ -154,10 +167,27 @@ public class SystemService {
   }
 
   /**
-   * Score a candidate LAN IPv4. Higher is better; {@code 0} means reject.
+   * Instance-scoped scorer: applies the pure universal rules, then rejects
+   * anything matching a configurable excluded CIDR from AuroraProperties.
+   */
+  int scoreLanCandidate(String ip) {
+    int base = scoreLanCandidatePure(ip);
+    if (base == 0) return 0;
+    List<String> excluded = props.lanIpExcludedCidrs();
+    if (excluded != null) {
+      for (String cidr : excluded) {
+        if (inCidr(ip, cidr)) return 0;
+      }
+    }
+    return base;
+  }
+
+  /**
+   * Universal scoring rules with no box-specific exclusions. Reject values
+   * are truly universal (loopback, link-local, multicast, CGNAT, 0.0.0.0).
    * Package-private for testing.
    */
-  static int scoreLanCandidate(String ip) {
+  static int scoreLanCandidatePure(String ip) {
     int[] o = new int[4];
     String[] parts = ip.split("\\.");
     if (parts.length != 4) return 0;
@@ -178,17 +208,53 @@ public class SystemService {
     if (o[0] == 100 && o[1] >= 64 && o[1] <= 127) return 0;
     // 192.168.0.0/16 — canonical home LAN.
     if (o[0] == 192 && o[1] == 168) return 100;
-    // 10.0.0.0/8 — but exclude 10.2.0.0/16 (ProtonVPN proton0 range on this box).
-    if (o[0] == 10) {
-      if (o[1] == 2) return 0;
-      return 50;
-    }
-    // 172.16.0.0/12 — but exclude docker's usual 172.17/172.18 bridges.
-    if (o[0] == 172 && o[1] >= 16 && o[1] <= 31) {
-      if (o[1] == 17 || o[1] == 18) return 0;
-      return 20;
-    }
+    // 10.0.0.0/8 — private.
+    if (o[0] == 10) return 50;
+    // 172.16.0.0/12 — private.
+    if (o[0] == 172 && o[1] >= 16 && o[1] <= 31) return 20;
     return 0;
+  }
+
+  /**
+   * Test whether {@code ip} lies inside {@code cidr}. Returns false on any
+   * parse failure — never throws. Supports IPv4 CIDRs like "192.168.0.0/16",
+   * boundary /32 (single host), and /0 (matches everything). Package-private
+   * for testing.
+   */
+  static boolean inCidr(String ip, String cidr) {
+    if (ip == null || cidr == null) return false;
+    int slash = cidr.indexOf('/');
+    if (slash < 0) return false;
+    String base = cidr.substring(0, slash);
+    int prefix;
+    try {
+      prefix = Integer.parseInt(cidr.substring(slash + 1));
+    } catch (NumberFormatException e) {
+      return false;
+    }
+    if (prefix < 0 || prefix > 32) return false;
+    long ipBits = ipToLong(ip);
+    long baseBits = ipToLong(base);
+    if (ipBits < 0 || baseBits < 0) return false;
+    if (prefix == 0) return true;
+    long mask = (0xFFFFFFFFL << (32 - prefix)) & 0xFFFFFFFFL;
+    return (ipBits & mask) == (baseBits & mask);
+  }
+
+  private static long ipToLong(String ip) {
+    String[] parts = ip.split("\\.");
+    if (parts.length != 4) return -1;
+    long out = 0L;
+    try {
+      for (int i = 0; i < 4; i++) {
+        int v = Integer.parseInt(parts[i]);
+        if (v < 0 || v > 255) return -1;
+        out = (out << 8) | v;
+      }
+    } catch (NumberFormatException e) {
+      return -1;
+    }
+    return out;
   }
 
   private String detectLanIpViaNetworkInterface() {
