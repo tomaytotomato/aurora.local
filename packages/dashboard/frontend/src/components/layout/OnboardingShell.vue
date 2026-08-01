@@ -2,11 +2,27 @@
 import { useOnboardingStore, STEPS, STEP_LABELS } from '@/stores/onboarding';
 import Progress from '@/components/ui/Progress.vue';
 import AuroraBackground from '@/components/AuroraBackground.vue';
-import { computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import type { OnboardingStepId } from '@/api/onboarding';
 
 const store = useOnboardingStore();
 const router = useRouter();
+const route = useRoute();
+
+// Keep store.currentStep in lockstep with the URL. This is what stops the
+// step-drift bug: previously the store cursor could disagree with the URL
+// (e.g. after a refresh that force-set the cursor from the server), and
+// then "Continue" would advance from the store cursor, not from the visible
+// page. Now the URL is the single source of truth.
+watch(
+  () => route.path,
+  (path) => {
+    const seg = path.split('/')[2] as OnboardingStepId | undefined;
+    if (seg) store.syncFromRoute(seg);
+  },
+  { immediate: true },
+);
 
 const stepList = computed(() =>
   STEPS.map((id, i) => ({

@@ -21,9 +21,38 @@ export function generatePassword(len = 20): string {
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {
+  // Preferred path: Clipboard API. Only available in secure contexts
+  // (HTTPS or localhost). Aurora's onboarding runs on plain HTTP at
+  // admin.aurora.local before TLS is set up, so we must fall back.
+  if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fall through to legacy path
+    }
+  }
+
+  // Legacy fallback: hidden textarea + execCommand('copy'). Deprecated but
+  // still works in every current browser and does not require a secure context.
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '0';
+    ta.style.opacity = '0';
+    ta.style.pointerEvents = 'none';
+    document.body.appendChild(ta);
+    const prevActive = document.activeElement as HTMLElement | null;
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    prevActive?.focus?.();
+    return ok;
   } catch {
     return false;
   }

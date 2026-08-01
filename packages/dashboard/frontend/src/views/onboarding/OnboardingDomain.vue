@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
-import { OnboardingApi } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
@@ -11,7 +10,10 @@ import Alert from '@/components/ui/Alert.vue';
 const store = useOnboardingStore();
 const router = useRouter();
 
+// Prefill from the (already hydrated) store. Watch the store in case
+// hydration completes after this view mounts.
 const domain = ref(store.domain);
+watch(() => store.domain, (v) => { if (v && v !== domain.value) domain.value = v; });
 const err = ref<string | null>(null);
 
 const domainOk = (d: string): boolean => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(d);
@@ -22,8 +24,7 @@ async function proceed(): Promise<void> {
     err.value = 'That doesn\'t look like a valid domain.';
     return;
   }
-  try { await OnboardingApi.setDomain(domain.value); } catch { /* soft */ }
-  store.domain = domain.value;
+  await store.patchDraft({ domain: domain.value, step: 'packages' });
   store.next();
   router.push(`/onboarding/${store.currentStep}`);
 }

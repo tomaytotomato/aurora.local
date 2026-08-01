@@ -57,11 +57,11 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   const onboarding = useOnboardingStore();
 
-  // Fetch status once per SPA lifetime; router calls this on every nav
-  // but the store caches the result so it's a single network call.
-  if (!onboarding.status) {
+  // One-shot hydration per SPA lifetime. Populates the full draft so
+  // every step view can prefill from server truth on refresh.
+  if (!onboarding.hydrated) {
     try {
-      await onboarding.fetchStatus();
+      await onboarding.hydrate();
     } catch {
       // Backend unreachable — let the request through so the UI can show
       // its own error state instead of an infinite router loop.
@@ -76,7 +76,9 @@ router.beforeEach(async (to) => {
     if (to.path.startsWith('/onboarding')) return true;
     // Allow /login too in case an admin was half-created and needs recovery.
     if (to.path === '/login') return true;
-    return { path: '/onboarding/welcome' };
+    // Resume where the server thinks the user left off, not always /welcome.
+    const step = onboarding.status?.step ?? 'welcome';
+    return { path: `/onboarding/${step}` };
   }
 
   // Onboarding done. Normal auth flow.

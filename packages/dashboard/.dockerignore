@@ -1,0 +1,11 @@
+# Prevent local dev artifacts from clobbering the container's own installs.
+# Without this, running `pnpm install` (or `npm install`) on the host
+# populates frontend/node_modules; then `COPY frontend/ ./` in the Dockerfile
+# tries to overlay those directories onto the container's own `npm install`
+# output and buildkit errors with "cannot replace to directory ... with file".
+frontend/node_modules
+frontend/dist
+frontend/.vite
+backend/target
+**/*.log
+.DS_Store

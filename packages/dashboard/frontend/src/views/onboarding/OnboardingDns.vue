@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
-import { OnboardingApi } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Tabs from '@/components/ui/Tabs.vue';
 
@@ -10,6 +9,7 @@ const store = useOnboardingStore();
 const router = useRouter();
 
 const mode = ref<'adguard' | 'router' | 'mdns'>(store.dnsMode ?? 'adguard');
+watch(() => store.dnsMode, (v) => { if (v && v !== mode.value) mode.value = v; });
 
 const tabs = [
   { value: 'adguard' as const, label: 'AdGuard on this box' },
@@ -18,8 +18,7 @@ const tabs = [
 ];
 
 async function proceed(): Promise<void> {
-  store.dnsMode = mode.value;
-  try { await OnboardingApi.setDns({ mode: mode.value }); } catch { /* soft */ }
+  await store.patchDraft({ dns_mode: mode.value, step: 'tls' });
   store.next();
   router.push(`/onboarding/${store.currentStep}`);
 }
