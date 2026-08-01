@@ -24,6 +24,7 @@ export interface EnvVarSpec {
 
 export interface PackageSummary {
   name: string;
+  title?: string;
   category: PackageCategory;
   description: string;
   enabled: boolean;

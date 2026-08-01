@@ -58,8 +58,10 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-// Format bytes to human-readable.
-export function humanBytes(n: number): string {
+// Format bytes to human-readable. Renders an em-dash for missing/NaN inputs
+// so the dashboard never emits "NaN KB" (UX_SPEC_DASHBOARD.md D2).
+export function humanBytes(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n) || n < 0) return '—';
   if (n < 1024) return `${n} B`;
   const units = ['KB', 'MB', 'GB', 'TB'];
   let v = n / 1024;
@@ -69,6 +71,37 @@ export function humanBytes(n: number): string {
     i++;
   }
   return `${v.toFixed(1)} ${units[i]}`;
+}
+
+// Human-friendly uptime. Renders em-dash for missing/NaN inputs.
+// <60s -> "just booted", <1h -> "12m", <48h -> "6h 42m", ≥2d -> "12d 5h".
+// UX_SPEC_DASHBOARD.md §2.3: "uptime NaNh" is banned; the empty state is "—".
+export function humanUptime(sec: number | null | undefined): string {
+  if (sec === null || sec === undefined || !Number.isFinite(sec) || sec < 0) return '—';
+  const s = Math.floor(sec);
+  if (s < 60) return 'just booted';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 48) {
+    const mm = m - h * 60;
+    return mm > 0 ? `${h}h ${mm}m` : `${h}h`;
+  }
+  const d = Math.floor(h / 24);
+  const hh = h - d * 24;
+  return hh > 0 ? `${d}d ${hh}h` : `${d}d`;
+}
+
+// Integer percentage of a/b, clamped [0, 100]. Returns null for missing
+// inputs so the caller can render an em-dash instead of `NaN%`.
+export function safePercent(
+  used: number | null | undefined,
+  total: number | null | undefined,
+): number | null {
+  if (used === null || used === undefined || total === null || total === undefined) return null;
+  if (!Number.isFinite(used) || !Number.isFinite(total) || total <= 0) return null;
+  const pct = Math.round((used / total) * 100);
+  return Math.max(0, Math.min(100, pct));
 }
 
 // Relative time — small, always past.
