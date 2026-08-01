@@ -191,15 +191,16 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
 
     <!-- Bento grid: four tiles, asymmetric -->
     <div class="grid grid-cols-6 gap-4 mb-10">
-      <!-- System card -->
+      <!-- System card.
+           iter-dash-polish-2 P3: eyebrow → h3 → subtitle → body anatomy.
+           The `uptime` string moved out of the top-right corner into the
+           subtitle slot so all four cards share the same slot rhythm. -->
       <Card class="col-span-3 row-span-2" data-card="system">
-        <div class="flex items-baseline justify-between mb-1">
-          <div class="eyebrow">System</div>
-          <span class="text-xs text-ink-4 font-mono" data-test="uptime">
-            uptime {{ uptimeText }}
-          </span>
-        </div>
-        <h3 class="mb-4">Resources</h3>
+        <div class="eyebrow mb-1">System</div>
+        <h3 class="mb-1">Resources</h3>
+        <p class="text-xs text-ink-4 font-mono mb-4" data-test="uptime">
+          uptime {{ uptimeText }}
+        </p>
 
         <!-- error state (§5) -->
         <div v-if="systemErr" data-state="error" role="alert">
@@ -208,10 +209,21 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
           <Button variant="secondary" size="sm" @click="fetchSystem">Try again</Button>
         </div>
 
-        <!-- empty state (§4.1) — hydrate window / no data yet -->
-        <div v-else-if="!system.info && warmingUpVisible" data-state="empty">
+        <!-- empty state (§4.1) — hydrate window / no data yet.
+             iter-dash-polish-2 P4: glyph + centred column pattern. -->
+        <div
+          v-else-if="!system.info && warmingUpVisible"
+          data-state="empty"
+          class="flex flex-col items-center text-center py-6"
+        >
+          <svg viewBox="0 0 24 24" class="w-6 h-6 text-ink-4 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="7" rx="1" />
+            <rect x="3" y="13" width="18" height="7" rx="1" />
+            <circle cx="7" cy="7.5" r="0.5" fill="currentColor" />
+            <circle cx="7" cy="16.5" r="0.5" fill="currentColor" />
+          </svg>
           <p class="text-sm text-ink-2 mb-1">Warming up</p>
-          <p class="text-sm text-ink-3">Aurora is taking your box's first measurement.</p>
+          <p class="text-xs text-ink-4">Aurora is taking your box's first measurement.</p>
         </div>
 
         <!-- hydrated data -->
@@ -243,9 +255,19 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
         <hr class="my-6" />
 
         <div class="eyebrow mb-3">Recent changes</div>
-        <!-- §4.2 empty state — must NOT name Docker -->
-        <div v-if="recentEvents.length === 0" class="text-sm" data-state="empty">
-          <p class="text-ink-2">Nothing has changed recently.</p>
+        <!-- §4.2 empty state — must NOT name Docker.
+             iter-dash-polish-2 P4: glyph + centred column. -->
+        <div
+          v-if="recentEvents.length === 0"
+          class="flex flex-col items-center text-center py-6"
+          data-state="empty"
+        >
+          <svg viewBox="0 0 24 24" class="w-6 h-6 text-ink-4 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <rect x="3" y="7" width="8" height="5" rx="0.5" />
+            <rect x="13" y="7" width="8" height="5" rx="0.5" />
+            <rect x="8" y="13" width="8" height="5" rx="0.5" />
+          </svg>
+          <p class="text-sm text-ink-2">Nothing has changed recently.</p>
           <p class="text-ink-4 text-xs">Container starts and stops will show up here.</p>
         </div>
         <ul v-else class="space-y-2 text-xs font-mono">
@@ -325,26 +347,46 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
            iter-dash-polish-2 P6 (BLOCKER): the `Review checks →` link was
            removed. /security is a stub with hard-coded findings + a
            fabricated score; sending Sarah there manufactures information.
-           No CTA per UX_SPEC_DASHBOARD.md §4.4. -->
+           No CTA per UX_SPEC_DASHBOARD.md §4.4.
+           iter-dash-polish-2 P3 + P4: h3 promoted to the empty-state
+           headline; body wrapped in the centred glyph pattern so the
+           card reads as a designed empty state, not a stub. -->
       <Card class="col-span-3" data-card="security">
         <div class="eyebrow mb-1">Security</div>
-        <h3 class="mb-2">Posture</h3>
-        <p class="text-sm text-ink-3">
-          Aurora will start scanning your box for common misconfigurations once the
-          security module ships.
-        </p>
+        <h3 class="mb-4">Security posture</h3>
+        <div
+          data-state="empty"
+          class="flex flex-col items-center text-center py-6"
+        >
+          <svg viewBox="0 0 24 24" class="w-6 h-6 text-ink-4 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+          <p class="text-sm text-ink-2 mb-1">Watching for common misconfigurations</p>
+          <p class="text-xs text-ink-4">
+            Aurora will start scanning your box once the security module ships.
+          </p>
+        </div>
       </Card>
 
-      <!-- Metrics strip — §4.5 empty state, no fetch until capability flips -->
+      <!-- Metrics strip — §4.5 empty state, no fetch until capability flips.
+           iter-dash-polish-2 P5: strip halved in height so it reads as a
+           footer, not a broken chart region.
+           P3 + P4: eyebrow → h3 (empty-state headline) → subtitle → body,
+           with the §4 glyph pattern. -->
       <Card class="col-span-6" data-card="metrics">
-        <div class="flex items-baseline justify-between mb-4">
-          <div>
-            <div class="eyebrow mb-1">Metrics — last 24h</div>
-            <h3>CPU, memory, disk</h3>
-          </div>
-        </div>
-        <div class="h-32 flex flex-col items-center justify-center text-sm gap-1" data-state="empty">
-          <p class="text-ink-2">Metrics land next release.</p>
+        <div class="eyebrow mb-1">Metrics</div>
+        <h3 class="mb-1">Metrics land next release.</h3>
+        <p class="text-xs text-ink-4 mb-2">Last 24 hours</p>
+        <div
+          class="flex items-center justify-center gap-3 text-sm py-2"
+          data-state="empty"
+        >
+          <svg viewBox="0 0 24 24" class="w-5 h-5 text-ink-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M3 20V4" />
+            <path d="M3 20h18" />
+            <path d="m6 15 4-5 4 3 5-7" />
+          </svg>
           <p class="text-ink-4 text-xs">Aurora will chart your box's last 24 hours here.</p>
         </div>
       </Card>
