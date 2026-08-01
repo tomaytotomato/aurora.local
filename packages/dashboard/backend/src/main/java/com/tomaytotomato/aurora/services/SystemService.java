@@ -27,10 +27,107 @@ public class SystemService {
   private static final Logger log = LoggerFactory.getLogger(SystemService.class);
   private final AuroraProperties props;
   private final DockerService docker;
+  private final StateFileService stateFiles;
 
-  public SystemService(AuroraProperties props, DockerService docker) {
+  public SystemService(AuroraProperties props, DockerService docker, StateFileService stateFiles) {
     this.props = props;
     this.docker = docker;
+    this.stateFiles = stateFiles;
+  }
+
+  /**
+   * Structured snapshot the dashboard-home header + System card consume
+   * via {@code GET /api/system}. Fields match the frontend
+   * {@code SystemInfo} interface (camelCase). Every value is best-effort:
+   * missing inputs return {@code null} so the frontend can render an em-dash
+   * rather than {@code NaN}/{@code undefined}.
+   *
+   * <p>Hostname + domain are read from {@code .state.yml} — never from
+   * {@code os.hostname()} / container hostname (D10, D4). This closes the
+   * {@code be1523c08f0f.undefined} regression captured 2026-08-01.
+   *
+   * <p>{@code capabilities.metrics} is deliberately {@code false} in iter-1:
+   * the frontend gates the metrics fetch on this flag so no 404 is issued
+   * from {@code /dashboard/home} until a real timeseries backend lands
+   * (UX_SPEC_DASHBOARD §6 non-goal).
+   */
+  public Map<String, Object> info() {
+    Map<String, Object> out = new LinkedHashMap<>();
+    var state = stateFiles.readState();
+    out.put("hostname", state.hostname());
+    out.put("domain", state.domain());
+    out.put("lanIp", detectLanIp());
+    out.put("distro", readDistro());
+    out.put("kernel", readKernel());
+    out.put("uptimeSeconds", hostUptimeSeconds());
+    Map<String, Object> cpu = cpu();
+    Object threads = cpu.get("threads");
+    out.put("cpuCount", threads instanceof Number n ? n.intValue() : null);
+    Map<String, Long> mem = readMemInfo();
+    Long memTotal = mem.get("MemTotal");
+    Long memAvail = mem.get("MemAvailable");
+    out.put("memTotalBytes", memTotal);
+    // Used = total - available (kernel's own definition; matches `free -b`
+    // 'used' more closely than the naive total-free).
+    out.put("memUsedBytes",
+        (memTotal == null || memAvail == null) ? null : memTotal - memAvail);
+    Map<String, Long> disk = readDiskRoot();
+    out.put("diskTotalBytes", disk.get("total"));
+    out.put("diskUsedBytes", disk.get("used"));
+    out.put("dockerVersion", docker.version().orElse(null));
+    out.put("containerCount", dockerContainerCount());
+    // Capability flags let the frontend gate feature fetches without
+    // hard-coding a version check. See UX_SPEC_DASHBOARD §4.5.
+    Map<String, Object> capabilities = new LinkedHashMap<>();
+    capabilities.put("metrics", false);
+    out.put("capabilities", capabilities);
+    return out;
+  }
+
+  /**
+   * Read {@code .state.yml} as a shape the frontend can consume via
+   * {@code GET /api/system/state}. camelCase to match the rest of the
+   * dashboard API surface; the file itself uses snake_case per the
+   * bash script convention.
+   */
+  public Map<String, Object> stateSnapshot() {
+    var s = stateFiles.readState();
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put("bootstrapVersion", s.bootstrapVersion());
+    out.put("hostname", s.hostname());
+    out.put("domain", s.domain());
+    out.put("installedAt", s.installedAt());
+    out.put("enabled", s.enabled() == null ? List.of() : s.enabled());
+    out.put("profiles", s.profiles() == null ? List.of() : s.profiles());
+    return out;
+  }
+
+  private Long hostUptimeSeconds() {
+    // Prefer host uptime from /host/proc/uptime; falls back to JVM uptime
+    // so the value is always finite (never null → avoids NaN downstream).
+    Path p = Path.of(props.hostProcPath()).resolve("uptime");
+    if (!Files.isRegularFile(p)) p = Path.of("/proc/uptime");
+    if (Files.isRegularFile(p)) {
+      try {
+        String s = Files.readString(p).trim();
+        String[] parts = s.split("\\s+");
+        if (parts.length > 0) {
+          double secs = Double.parseDouble(parts[0]);
+          return (long) secs;
+        }
+      } catch (Exception ignore) { /* fall through */ }
+    }
+    return ManagementFactory.getRuntimeMXBean().getUptime() / 1000L;
+  }
+
+  private Integer dockerContainerCount() {
+    try {
+      var xs = docker.listProjectContainers();
+      return xs == null ? null : xs.size();
+    } catch (Exception e) {
+      log.debug("dockerContainerCount failed: {}", e.getMessage());
+      return null;
+    }
   }
 
   public Map<String, Object> snapshot() {

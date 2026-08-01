@@ -11,9 +11,19 @@ const system = useSystemStore();
 const events = useEventsStore();
 const router = useRouter();
 
+// UX_SPEC_DASHBOARD.md §3.1 + D3/D4/D10: hostname/domain source of truth is
+// .state.yml (via /api/system). Never render `undefined`; never emit a
+// bare trailing dot. Falls back to "aurora.local" only when we have no
+// data at all — an em-dash is used per-half when one side is missing.
 const hostLabel = computed(() => {
-  if (!system.info) return 'aurora.local';
-  return `${system.info.hostname}.${system.info.domain}`;
+  const info = system.info;
+  if (!info) return 'aurora.local';
+  const h = info.hostname ?? null;
+  const d = info.domain ?? null;
+  if (!h && !d) return 'aurora.local';
+  if (!h) return `\u2014.${d}`;
+  if (!d) return `${h}.\u2014`;
+  return `${h}.${d}`;
 });
 
 onMounted(() => {
@@ -30,15 +40,18 @@ async function signOut(): Promise<void> {
   <header class="border-b border-line/60 bg-canvas">
     <div class="content h-14 flex items-center justify-between">
       <div class="flex items-center gap-4">
-        <div class="font-mono text-xs text-ink-3">{{ hostLabel }}</div>
+        <div class="font-mono text-xs text-ink-3" data-test="topbar-identity">{{ hostLabel }}</div>
         <Badge :tone="events.connected ? 'ok' : 'neutral'">
           {{ events.connected ? 'live' : 'idle' }}
         </Badge>
       </div>
 
       <div class="flex items-center gap-4">
-        <a href="/" class="text-xs text-ink-3">Back to Homepage</a>
-        <span class="text-ink-4">·</span>
+        <!--
+          UX_SPEC_DASHBOARD.md D5: `Back to Homepage` removed. Homepage was
+          retired in v0.1 (see packages/core/compose.yml). The dashboard IS
+          the home.
+        -->
         <span class="text-xs text-ink-3" v-if="auth.session?.username">
           {{ auth.session.username }}
         </span>

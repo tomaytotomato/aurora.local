@@ -22,7 +22,7 @@ class SystemServiceLanIpTests {
         "/host/proc",
         excludedCidrs,
         new AuroraProperties.Docker("unix:///var/run/docker.sock"));
-    return new SystemService(props, null);
+    return new SystemService(props, null, null);
   }
 
   private static SystemService defaultService() {

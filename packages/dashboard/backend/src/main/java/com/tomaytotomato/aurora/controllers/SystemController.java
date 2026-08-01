@@ -34,7 +34,31 @@ public class SystemController {
 
   @GetMapping
   public Map<String, Object> get() {
+    // Iter-dash-1: return the structured info shape the dashboard-home
+    // header + System card consume. Old callers wanting the raw
+    // hostname/uptime_ms/memory/disks map can hit /api/system/snapshot
+    // (kept for backwards compat with the wizard's welcome screen).
+    return system.info();
+  }
+
+  /**
+   * Legacy raw snapshot — hostname, java_version, uptime_ms, docker_version,
+   * cpu, memory, disks, gpu. Kept behind an explicit path so the new /api/system
+   * response can be the structured DTO the dashboard expects.
+   */
+  @GetMapping("/snapshot")
+  public Map<String, Object> snapshot() {
     return system.snapshot();
+  }
+
+  /**
+   * Serve .state.yml as camelCase JSON so the dashboard-home can read the
+   * enabled[] set + hostname/domain without hitting {@code /api/onboarding}
+   * (which is public-during-bootstrap only and has richer semantics).
+   */
+  @GetMapping("/state")
+  public Map<String, Object> state() {
+    return system.stateSnapshot();
   }
 
   /**
