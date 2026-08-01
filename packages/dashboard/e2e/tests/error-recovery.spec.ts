@@ -58,15 +58,103 @@ test('install log emits progress within 3s of clicking Install', async ({ page }
   expect(initial.length, 'log region empty within 3s of Install click').toBeGreaterThan(0);
 });
 
-/** UX_SPEC §6 anti-pattern 5 — /onboarding/done should never render an unactionable "Failed" pill. */
+/**
+ * UX_SPEC §6 anti-pattern 5 — /onboarding/done should never render an
+ * unactionable "Failed" pill.
+ *
+ * P3 closure (previously self-skipped on a fresh box): we now inject a
+ * `failed` service via a spec-scoped `page.route` interceptor on
+ * `/api/services/status` so the checklist reliably renders the failed
+ * row. No application code is changed — this is test hygiene only.
+ */
 test('done page: any failed package exposes a Retry action', async ({ page }) => {
+  // Ensure the DoneChecklist has a non-empty `enabledPackages` prop even
+  // when the wizard was not walked. The store's hydrate() reads
+  // `enabled_packages` from GET /api/onboarding.
+  await page.route('**/api/onboarding', (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        step: 'done',
+        domain: 'aurora.local',
+        enabled_packages: ['media', 'privacy'],
+        dns_mode: 'adguard',
+        admin_username: 'aurora',
+        bootstrap_mode: 'fresh',
+        completed: ['welcome', 'admin', 'domain', 'packages', 'secrets', 'tls', 'review', 'install'],
+      }),
+    });
+  });
+
+  // Inject one failed service. The DoneChecklist polls this every 5s;
+  // the interceptor stays active for the whole test.
+  await page.route('**/api/services/status', (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        generated_at: new Date().toISOString(),
+        services: [
+          {
+            package: 'media',
+            container: 'sonarr',
+            state: 'failed',
+            reason: 'The Sonarr container crashed on start.',
+            detail: 'container_crashed',
+            open_url: null,
+            priority: 0,
+            probed_ms: 12,
+          },
+          {
+            package: 'privacy',
+            container: 'adguard',
+            state: 'running',
+            reason: null,
+            detail: null,
+            open_url: 'http://aurora.local',
+            priority: 3,
+            probed_ms: 8,
+          },
+        ],
+      }),
+    });
+  });
+
+  // Capture whether the Retry button wires through to the launch endpoint.
+  let retryLaunchCalls = 0;
+  await page.route('**/api/onboarding/launch', (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    retryLaunchCalls += 1;
+    return route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify({ job_id: 'test-retry-job-1' }),
+    });
+  });
+
   await page.goto('/onboarding/done');
+
+  // Failed row must render (proves the fixture landed).
   const failed = page.locator('[data-status="failed"]');
+  await expect(failed.first()).toBeVisible({ timeout: 10_000 });
   const n = await failed.count();
-  if (n === 0) test.skip(true, 'no failed packages on the fresh e2e box');
+  expect(n, 'expected at least one failed row from injected fixture').toBeGreaterThan(0);
+
+  // Each failed row exposes a visible Retry button on the same card.
   for (let i = 0; i < n; i++) {
-    const card = failed.nth(i).locator('..');
-    const retry = card.getByRole('button', { name: /retry/i });
+    const card = failed.nth(i).locator('xpath=ancestor::li[1]');
+    const retry = card.getByRole('button', { name: /^retry$/i });
     await expect(retry, `failed card ${i} missing Retry`).toBeVisible();
   }
+
+  // Clicking Retry on the first failed row triggers the launch endpoint
+  // (mocked to 202). This asserts the CTA is wired, not just rendered.
+  const firstCard = failed.first().locator('xpath=ancestor::li[1]');
+  await firstCard.getByRole('button', { name: /^retry$/i }).click();
+  await expect.poll(() => retryLaunchCalls, {
+    message: 'Retry click did not POST /api/onboarding/launch',
+    timeout: 5_000,
+  }).toBeGreaterThan(0);
 });
