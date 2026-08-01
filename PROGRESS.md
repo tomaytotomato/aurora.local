@@ -10,3 +10,4 @@
 - [x] step-7 iter-2 impl (7a81cb2, E2E: 39 pass / 14 fail / 9 skip; iter-2 target suites 39 pass with 1 in-scope fail deferred to iter-3 for AdGuard E2E fixture)
 - [x] step-8 iter-3 plan (error-recovery classifier + always-Retry + TLS sudo scrub; media sub-checklist Prowlarr→Sonarr→Radarr→Bazarr→Seerr; SMB TCP-open probe + per-OS mount panels — target: +5 pass, 0 new fails, skips −3)
 - [x] step-9 iter-3 impl — target #1 shipped, #2 and #3 deferred (E2E: 40 pass / 18 fail / 4 skip full-suite; focused retry-clean 44/14/4; error-recovery.spec.ts 2/3 green, third self-skips; TLS sudo cp scrubbed; LaunchService.classify() + failureCode wired; 8/8 LaunchServiceClassifierTests; media substack + SMB reachability deferred to iter-4 per plan §handoff)
+- [x] step-10 morning briefing (MORNING_BRIEFING.md — TL;DR + Sarah flow post-iter-3 + E2E scorecard baseline→iter-3 + reset commands for live :8090 + 9 ranked follow-ups + 5 manual checks for Bruce)
