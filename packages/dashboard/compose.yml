@@ -39,7 +39,13 @@ services:
     environment:
       TZ: ${TZ:-UTC}
       AURORA_DB_PATH: /data/aurora.db
-      AURORA_REPO_PATH: /repo
+      # Same-absolute-path contract: aurora sees the repo at the exact
+      # host path so relative bind mounts in downstream compose files
+      # (e.g. packages/core/compose.yml's ./caddy/Caddyfile) resolve
+      # identically host-side when we shell out to docker compose via
+      # the host socket. Bootstrap.sh sets AURORA_REPO_PATH_HOST at
+      # install time; falls back to $HOME/aurora.local for dev.
+      AURORA_REPO_PATH: ${AURORA_REPO_PATH_HOST:-${HOME}/aurora.local}
       AURORA_HOST_PROC: /host/proc
       DOCKER_HOST: unix:///var/run/docker.sock
       SERVER_PORT: 8090
@@ -48,7 +54,10 @@ services:
 
     volumes:
       # Whole repo bind-mounted rw — aurora reads manifests + writes .env / .state.yml.
-      - ${AURORA_REPO_PATH_HOST:-${HOME}/aurora.local}:/repo:rw
+      # Mounted at the *host* path (not /repo) so any downstream `docker compose`
+      # invocation from inside aurora resolves relative bind mounts against a
+      # path the host daemon can also see. See AURORA_REPO_PATH above.
+      - ${AURORA_REPO_PATH_HOST:-${HOME}/aurora.local}:${AURORA_REPO_PATH_HOST:-${HOME}/aurora.local}:rw
       # Docker socket for docker-java (list containers, events, stats).
       - /var/run/docker.sock:/var/run/docker.sock:rw
       # Host /proc for cheap metrics (mem, load, uptime).

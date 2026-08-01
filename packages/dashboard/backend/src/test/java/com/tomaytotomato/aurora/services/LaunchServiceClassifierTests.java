@@ -95,6 +95,27 @@ class LaunchServiceClassifierTests {
   }
 
   @Test
+  void bind_mount_missing_from_oci_runtime_error() {
+    // Real failure captured 2026-08-01 when the aurora container mounted
+    // the repo at /repo but shelled compose out to the host, so the host
+    // daemon saw /repo/packages/core/caddy/Caddyfile (which didn't exist),
+    // auto-created it as a directory, and mount failed with:
+    String tail = "Error response from daemon: failed to create task for container: "
+        + "failed to create shim task: OCI runtime create failed: runc create failed: "
+        + "unable to start container process: error during container init: "
+        + "error mounting \"/repo/packages/core/caddy/Caddyfile\" to rootfs at "
+        + "\"/etc/caddy/Caddyfile\": mount src=/repo/packages/core/caddy/Caddyfile, "
+        + "dst=/etc/caddy/Caddyfile, dstFd=/proc/thread-self/fd/14, flags=MS_BIND|MS_REC: "
+        + "not a directory: Are you trying to mount a directory onto a file "
+        + "(or vice-versa)?\n";
+    var c = LaunchService.classify(tail, 1, "core", "up.sh exited 1");
+    assertEquals("bind_mount_missing", c.code());
+    assertTrue(c.reason().toLowerCase().contains("same path"),
+        "reason should point at the same-path contract: " + c.reason());
+    assertHumanCopy(c.reason());
+  }
+
+  @Test
   void unknown_fallback_still_returns_actionable_copy() {
     String tail = "something we've never seen before\n";
     var c = LaunchService.classify(tail, 1, "media", "up.sh exited 1");
@@ -112,6 +133,7 @@ class LaunchServiceClassifierTests {
         {"no space left on device", "disk_full"},
         {"Cannot connect to the Docker daemon", "docker_down"},
         {"Container aurora-x Exited (137)", "container_crashed"},
+        {"mount src=/repo/x dst=/y flags=MS_BIND: not a directory", "bind_mount_missing"},
         {"something else", "unknown"},
     };
     for (String[] row : cases) {

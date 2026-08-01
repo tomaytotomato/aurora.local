@@ -380,6 +380,22 @@ public class LaunchService {
           "docker_down");
     }
 
+    // Bind-mount missing / wrong type. Classic symptom when Aurora runs
+    // inside a container and shells out to compose via the host socket,
+    // but the repo isn't mounted at the same absolute path on the host.
+    // Runtime message shape (OCI runtime create failed):
+    //   "not a directory: Are you trying to mount a directory onto a file"
+    // or the inverse ("not a file") when the host path is missing entirely
+    // and docker auto-creates an empty directory in its place.
+    if ((tl.contains("not a directory") || tl.contains("not a file"))
+        && (tl.contains("mount") || tl.contains("rootfs") || tl.contains("bind"))) {
+      return new Classified(
+          "Aurora couldn't find one of its config files on the host. "
+              + "This usually means the aurora repo isn't mounted at the same path "
+              + "inside and outside the aurora container. Check AURORA_REPO_PATH_HOST.",
+          "bind_mount_missing");
+    }
+
     // Container crash: line indicates a container Exited with non-zero soon
     // after starting. Compose prints e.g. `Container aurora-media-sonarr Exited (1)`.
     if (tl.contains(" exited (") || tl.contains("exited with code") || tl.contains("unhealthy")) {
