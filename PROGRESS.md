@@ -14,3 +14,4 @@
 - [x] step-P1 closure (a9eed72 or later, no-cli-admin green)
 - [x] step-P2 closure (E2E: 40/18/4 no change vs iter-3; LaunchServiceTests 6/6; live /api/services/status ~140 ms; log cap 5 MB; docker read timeout 3s; sessionStorage launch-job persistence + reconnecting badge)
 - [x] step-P3 closure (dc28c45, error-recovery 3/3)
+- [x] step-deploy (DEPLOY_STATUS.md, live=sha256:99c2375f, backup=.state.yml.bak.1785594847 + /data/aurora.db.bak.1785594875)
