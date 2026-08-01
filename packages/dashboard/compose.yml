@@ -24,6 +24,13 @@ services:
     restart: unless-stopped
     networks: [aurora_net]
 
+    # Publish for browser reach until Caddy fronts it. Bound to all
+    # interfaces so the LAN can hit http://<host-lan-ip>:8090 during
+    # the wizard walk-through. Caddy on :80/:443 remains the intended
+    # production entry point.
+    ports:
+      - "${AURORA_HOST_PORT:-8090}:8090"
+
     # Runs as the invoking user + docker group so it can read/write
     # ~/aurora.local and talk to docker.sock. DOCKER_GID exported by
     # scripts/up.sh.
