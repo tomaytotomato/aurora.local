@@ -1,14 +1,5 @@
 # Migrating from home.local to aurora.local
 
-<!--
-  TODO(bruce): this document describes the rename executed on branch
-  `rename/aurora` (commit c899434 + follow-up) as recorded in the session
-  memory. The worktree HEAD (5d0b081) predates the v0.2 dashboard refactor,
-  so specific command paths under `packages/dashboard/` reflect what was
-  intended, not what is committed on this branch. Verify against the
-  dirty working tree on `rename/aurora` before publishing.
--->
-
 The `home.local` → `aurora.local` rename touches the compose project name,
 the docker network, the primary env var, and every Caddy vhost. It is a
 destructive rename: existing containers must come down and named volumes
@@ -270,11 +261,11 @@ verify with `grep DOMAIN packages/core/.env` before starting anything.
 - Client devices reach `admin.$DOMAIN` and land on the dashboard
 - Onboarding shows `complete: true` at `GET /api/onboarding/status`
 
-<!--
-  TODO(bruce): sanity-check the volume-rename commands. Some named
-  volumes on your box might already be prefixed by a mix of `_` and `-`
-  depending on compose version; the `home[_-]` regex covers both but
-  hasn't been tested against your exact volume set. Consider a dry-run:
-    docker volume ls --format '{{.Name}}' | grep -E '^home[_-]'
-  before running the loop.
--->
+Follow-up: the volume-rename loop assumes named volumes are prefixed
+`home_` or `home-`. Compose has used both separators across versions;
+the `home[_-]` regex covers both but has not been tested against every
+possible volume set. Dry-run before executing:
+
+```
+docker volume ls --format '{{.Name}}' | grep -E '^home[_-]'
+```

@@ -1,14 +1,5 @@
 # Onboarding v0.2
 
-<!--
-  TODO(bruce): the code that implements everything in this document lives
-  on branch `rename/aurora` as an uncommitted working-tree change (see
-  MEMORY.md, session 2026-07-31). The worktree HEAD (5d0b081) still
-  shows the pre-refactor v0.1 shape. Before publishing, either:
-    - commit the v0.2 refactor to `rename/aurora`, then rebase this branch,
-    - or update line/interface references below against the actual code.
--->
-
 v0.1 shipped an onboarding wizard that worked once, straight through,
 but was fragile the moment the user did anything unexpected: refresh
 mid-wizard, click Welcome in the sidebar after starting, or hit
@@ -208,14 +199,6 @@ continuing the wizard), or set a bootstrap-token cookie at admin
 creation and require it on subsequent onboarding calls. The first
 option is cleaner but adds a login step mid-wizard.
 
-**LAN IP shows docker bridge.** `SystemService.detectLanIp()` runs
-inside the aurora container's netns and picks the first site-local
-IPv4 it can see. That's usually `172.18.0.2` (the docker bridge for
-`aurora_net`), not the real host LAN IP. Displayed on the welcome
-screen. Fix: parse `/host_root/proc/net/route` for the default-route
-interface, or have the bootstrap script write the LAN IP into
-`.state.yml` at first-run and let Aurora echo it back.
-
 **Secrets step is a visual stub.** `OnboardingSecrets.vue` shows the
 selected package list and an info alert. Per-package `.env` editing
 ships in v0.2+. Until then, secrets in `.env.example` are used
@@ -228,11 +211,26 @@ packages the operator must bring up via `scripts/up.sh` on the host.
 The Done screen surfaces that as an action-required card. This is
 intentional for v0.1 — Aurora is the fuse box, not the electrician.
 
-**`plan.warnings` are static + light.** The current planner checks a
-handful of hardcoded rules (media without privacy, `dns_mode=adguard`
-without the privacy package, empty selection, missing core, missing
-domain). Manifest-driven warnings (e.g. Ollama-without-GPU) are
-queued for v0.2 — see `MEMORY.md` for the design.
+## Shipped in v0.2
+
+**LAN IP detection reads host `proc` fib_trie.** `SystemService.detectLanIp()`
+parses the host PID-1 netns fib_trie for RFC1918 addresses, prefers
+`192.168/16` then `10/8` then non-docker `172.16-31`, and skips a
+configurable exclusion list (docker bridges, VPN interfaces). Host proc
+path is injected via `props.hostProcPath()`; exclusions live in
+application config. Landed in `3ff7dfb`, hardened in `e38a721`.
+
+**Manifest-driven `plan.warnings`.** The static planner rules (media
+without privacy, `dns_mode=adguard` without privacy, empty selection,
+missing core, missing domain) are joined by per-manifest warning rules
+declared under `warnings:` in each `packages/*/manifest.yml`. Rule types:
+`ram_below_mb`, `cpu_threads_lt`, `free_disk_gb_below`, `no_gpu`, plus a
+resource-budget summary that sums `requires.min_ram_mb` /
+`requires.min_disk_gb` across the selected packages and warns when the
+box's ceiling is exceeded. Coverage: `ai`, `media`, plus 4-6 additional
+packages. Evaluator has unit tests. Landed in `351a4a5`, `d6661ca`,
+extended in `34c199a`. The frontend calls `GET /plan?enabled=…` on
+selection change (debounced 250 ms, monotonic sequence guard).
 
 ## Migration from v0.1 clients
 
@@ -250,12 +248,10 @@ Deprecated routes log an audit event tagged `onboarding.deprecated.*`.
 Watch `/api/audit` in v0.2+ if you want to know when it's safe to
 delete them.
 
-<!--
-  TODO(bruce): once the v0.2 refactor is committed to `rename/aurora`,
-  add exact source-line references to:
-    - the router guard in packages/dashboard/frontend/src/router/index.ts
-    - hydrate() in stores/onboarding.ts
-    - patch() in controllers/OnboardingController.java
-    - the OnboardingDraft record in services/OnboardingService.java
-  These will change during code review anyway, so leaving them out for now.
--->
+Follow-up: exact source-line references for the router guard
+(`packages/dashboard/frontend/src/router/index.ts`), `hydrate()`
+(`stores/onboarding.ts`), the controller `patch()`
+(`controllers/OnboardingController.java`), and the `OnboardingDraft`
+record (`services/OnboardingService.java`) are omitted here because they
+shift with routine refactors. Grep by symbol name — the shapes are
+stable, the line numbers are not. Frontend refactor shipped in `ce2f6be`.

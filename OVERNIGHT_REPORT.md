@@ -34,9 +34,11 @@ Two async runs were launched:
   (docker bridge `172.18.0.2` was being returned instead of the host
   `192.168.0.110`, and a naive default-route approach would pick the
   ProtonVPN interface at metric 98) and had identified the fix
-  (parse `/host_root/proc/net/fib_trie` for RFC1918 addresses, prefer
-  `192.168/16`, then `10/8`, then non-docker `172.16-31`). No commit was
-  produced.
+  (parse the host PID-1 netns fib_trie — primary path
+  `${hostProcPath}/1/net/fib_trie`, with `${hostProcPath}/net/fib_trie`
+  and `/host_root/proc/net/fib_trie` as fallbacks — for RFC1918
+  addresses, prefer `192.168/16`, then `10/8`, then non-docker
+  `172.16-31`). No commit was produced.
 - Steps 6 and 7 never ran. No push, no report, no reviewer sign-off.
 - The docs task completed and produced commit `cc5abbd` on its worktree branch.
 
@@ -72,7 +74,7 @@ run.
 
 - `cpu`: Intel Core i5-6500T @ 2.50GHz, 4 cores / 4 threads, 1 socket,
   `mhz` 2700, `load1` around 1.2
-- `memory`: `MemTotal` 16.6 GB, `MemAvailable` 12.6 GB
+- `memory`: `MemTotal` 15.5 GB, `MemAvailable` 11.8 GB
 - `disks`: one real drive, `/dev/sda1` mounted at `/`, ext4, 458 GB total,
   379 GB free
 - `gpu`: `present=false` (Dell OptiPlex, no discrete GPU — correct)
@@ -140,3 +142,39 @@ with `git worktree remove ~/aurora-docs-wt` and the branch deleted.
   the ProtonVPN / docker-bridge regression cannot come back silently.
 - Extend the manifest warnings schema to `home`, `dev`, and `privacy` so the
   live warning UX is not disproportionately loud on `ai` and `media` alone.
+
+## Morning follow-up (2026-08-01)
+
+A fix-all chain ran after the reviewer pass to close every finding before
+any install. Landed on `rename/aurora`:
+
+- `ce2f6be` aurora: v0.2 onboarding frontend refactor (hydrate + patchDraft +
+  URL cursor) — committed the nine previously-dirty frontend files. This
+  is the code the `docs/ONBOARDING_V0.2.md` architecture section describes,
+  now actually in git.
+- `e38a721` aurora: harden LAN IP detection — replaced the hardcoded
+  `/host_root/proc/…` paths with `props.hostProcPath()`, moved the
+  interface / CIDR exclusion list into application config, added a
+  parser guard for malformed `fib_trie` lines. Reads the PID-1 netns
+  file first (`${hostProcPath}/1/net/fib_trie`) and falls back to the
+  plain `net/fib_trie` and `/host_root/…` variants.
+- `34c199a` aurora: warning coverage on 4-6 more packages + resource-budget
+  warnings + unit tests — the live warning UX is no longer disproportionately
+  loud on `ai` and `media` alone, and the sum-of-`requires.min_ram_mb` /
+  `requires.min_disk_gb` budget check against host facts now runs alongside
+  the per-manifest predicates.
+- `985fd72` aurora: this report itself.
+
+This follow-up commit (docs + report cleanup) resolves the reviewer
+findings against `985fd72` and `425d3fd`: removed the two stale
+known-limitations from `docs/ONBOARDING_V0.2.md` (LAN IP docker bridge;
+`plan.warnings` static + light) and moved their real state to a new
+"Shipped in v0.2" section; removed the three `<!-- TODO(bruce) -->`
+comments in `docs/ONBOARDING_V0.2.md` and `docs/MIGRATION.md` (two
+deleted outright, one converted to a plain-text "Follow-up:" note); made
+the fib_trie path wording in this report precise about the PID-1 netns
+primary path; and unified the two `MemTotal` mentions above on 15.5 GB
+(base-2, matching the frontend `humanBytes` output). Actual host
+`MemTotal` from `/api/onboarding/env` is 16,644,009,984 bytes = 15.5 GB
+base-2 / 16.6 GB base-10; the base-2 figure is what the welcome screen
+renders.
