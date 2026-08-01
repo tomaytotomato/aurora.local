@@ -28,9 +28,9 @@ required_env:
   - UPLOAD_LOCATION
 
 warnings:
-  - id: photos_low_disk
-    if: { free_disk_gb_below: 20 }
-    message: 'Immich stores library, thumbnails and ML cache on disk. Aurora sees less than 20 GB free on the largest drive — the photo library will fill it fast.'
+  # Disk pressure is covered by the aggregate resource-budget warning
+  # (requires.min_disk_gb feeds into it), so no per-manifest disk predicate
+  # here — it would double-fire alongside the budget message.
   - id: photos_low_ram
     if: { ram_below_mb: 4096 }
     message: 'Immich (server + microservices + Postgres + Redis + ML worker) is happier with 4+ GB RAM.'
