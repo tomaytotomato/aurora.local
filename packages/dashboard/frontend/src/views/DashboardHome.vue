@@ -199,7 +199,7 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
             uptime {{ uptimeText }}
           </span>
         </div>
-        <h3 class="mb-4">Health</h3>
+        <h3 class="mb-4">Resources</h3>
 
         <!-- error state (§5) -->
         <div v-if="systemErr" data-state="error" role="alert">
@@ -321,15 +321,18 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
         </div>
       </Card>
 
-      <!-- Security card (permanent placeholder in iter-1 — §4.4) -->
+      <!-- Security card (permanent placeholder in iter-1 — §4.4)
+           iter-dash-polish-2 P6 (BLOCKER): the `Review checks →` link was
+           removed. /security is a stub with hard-coded findings + a
+           fabricated score; sending Sarah there manufactures information.
+           No CTA per UX_SPEC_DASHBOARD.md §4.4. -->
       <Card class="col-span-3" data-card="security">
         <div class="eyebrow mb-1">Security</div>
         <h3 class="mb-2">Posture</h3>
-        <p class="text-sm text-ink-3 mb-3">
+        <p class="text-sm text-ink-3">
           Aurora will start scanning your box for common misconfigurations once the
           security module ships.
         </p>
-        <router-link to="/security" class="text-sm text-ink-3">Review checks →</router-link>
       </Card>
 
       <!-- Metrics strip — §4.5 empty state, no fetch until capability flips -->
