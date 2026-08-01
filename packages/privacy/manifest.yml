@@ -33,6 +33,12 @@ required_env:
   - VPN_SERVICE_PROVIDER
   - WIREGUARD_PRIVATE_KEY
 
+probe:
+  kind: adguard
+  container: adguard
+  in_cluster_url: http://adguard:3000
+  external_url: http://{lan_ip}:3000/
+
 post_install_notes: |
   1. First-run AdGuard wizard: http://<lan-ip>:3000
   2. Configure your router to hand out this box's IP as DNS.

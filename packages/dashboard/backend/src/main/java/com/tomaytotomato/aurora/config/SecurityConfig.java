@@ -42,6 +42,7 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/auth/session", "/api/auth/me").permitAll()
             .requestMatchers("/api/onboarding/**").permitAll() // OnboardingController re-checks bootstrap mode
+            .requestMatchers(HttpMethod.GET, "/api/services/status").permitAll() // iter-2: probed by Done page; safe read-only
             .requestMatchers(HttpMethod.GET, "/api/system/caddy-root.crt").permitAll()
             .requestMatchers("/api/health").permitAll()
             .anyRequest().authenticated()

@@ -89,6 +89,28 @@ public class PackagesService {
    * so the {@code Package} record stays a stable v0.1 contract; the
    * {@code warnings:} schema is v0.2 and evaluated by {@link OnboardingService}.
    */
+  /**
+   * Read the {@code probe:} block from a package manifest, if any.
+   * Returns an empty map when the manifest has no probe declaration.
+   * Used by {@link StatusProbeService} to decide how to health-check each
+   * enabled package on the Done page.
+   */
+  @SuppressWarnings("unchecked")
+  public Map<String, Object> readProbe(String name) {
+    Path p = Path.of(props.repoPath()).resolve("packages").resolve(name).resolve("manifest.yml");
+    if (!Files.isRegularFile(p)) return Map.of();
+    try (var in = Files.newInputStream(p)) {
+      Map<String, Object> m = new Yaml().load(in);
+      if (m == null) return Map.of();
+      Object raw = m.get("probe");
+      if (!(raw instanceof Map<?, ?> mm)) return Map.of();
+      return (Map<String, Object>) mm;
+    } catch (IOException e) {
+      log.warn("readProbe({}) failed: {}", name, e.getMessage());
+      return Map.of();
+    }
+  }
+
   @SuppressWarnings("unchecked")
   public List<Map<String, Object>> readWarnings(String name) {
     Path p = Path.of(props.repoPath()).resolve("packages").resolve(name).resolve("manifest.yml");

@@ -44,6 +44,38 @@ public class DockerService {
         .exec();
   }
 
+  /**
+   * Look up a container by its {@code container_name} (not compose service).
+   * Returns empty when the container does not exist. Only inspects containers
+   * from the aurora compose project.
+   */
+  public Optional<ContainerInfo> findByName(String containerName) {
+    if (containerName == null || containerName.isBlank()) return Optional.empty();
+    String target = "/" + containerName;
+    for (Container c : listProjectContainers()) {
+      String[] names = c.getNames();
+      if (names == null) continue;
+      for (String n : names) {
+        if (target.equals(n) || containerName.equals(n)) {
+          return Optional.of(new ContainerInfo(
+              containerName,
+              c.getState() == null ? "" : c.getState(),
+              c.getStatus() == null ? "" : c.getStatus()));
+        }
+      }
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * Trimmed view of a container for status-probe consumers. Keeps
+   * {@link StatusProbeService} independent of docker-java's mockability.
+   */
+  public record ContainerInfo(String name, String state, String status) {
+    public boolean isRunning() { return "running".equalsIgnoreCase(state); }
+    public boolean isExited() { return "exited".equalsIgnoreCase(state) || "dead".equalsIgnoreCase(state); }
+  }
+
   public Optional<String> version() {
     try {
       var v = docker.versionCmd().exec();

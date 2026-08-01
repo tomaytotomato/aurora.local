@@ -3,8 +3,8 @@ import { computed, ref } from 'vue';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { useRouter } from 'vue-router';
 import Button from '@/components/ui/Button.vue';
-import Card from '@/components/ui/Card.vue';
 import LaunchProgress from '@/components/onboarding/LaunchProgress.vue';
+import DoneChecklist from '@/components/onboarding/DoneChecklist.vue';
 import { OnboardingApi } from '@/api/onboarding';
 
 const store = useOnboardingStore();
@@ -118,48 +118,12 @@ function toDashboard(): void {
       />
     </div>
 
-    <!-- Follow-up tiles: unchanged in iter-1. iter-2 owns the checklist grid. -->
-    <div class="grid grid-cols-2 gap-4 mb-10" v-if="launchState !== 'running'">
-      <Card hover>
-        <div class="eyebrow mb-1">Home</div>
-        <h3 class="mb-2">Aurora</h3>
-        <p class="text-sm text-ink-3 mb-4">
-          The dashboard you're standing in. Manage packages, secrets, health, and
-          security posture from here. Bookmark <code class="text-ink">{{ store.domain }}</code>.
-        </p>
-        <a :href="`http://${store.domain}`" class="text-sm text-ink no-underline">Open Aurora &rarr;</a>
-      </Card>
-
-      <Card v-if="store.selectedPackages.includes('privacy')" hover>
-        <div class="eyebrow mb-1">Next</div>
-        <h3 class="mb-2">AdGuard first-run</h3>
-        <p class="text-sm text-ink-3 mb-4">
-          Set the AdGuard admin password. Aurora can't do this for you &mdash; AdGuard's
-          initial setup is client-side.
-        </p>
-        <a :href="`http://${store.domain}:3000/`" class="text-sm text-ink no-underline">Open AdGuard wizard &rarr;</a>
-      </Card>
-
-      <Card v-if="store.selectedPackages.includes('media')" hover>
-        <div class="eyebrow mb-1">Media</div>
-        <h3 class="mb-2">Onboard Sonarr / Radarr / Seerr</h3>
-        <p class="text-sm text-ink-3 mb-4">
-          Each *arr wants an admin user and one indexer + one download client
-          configured. Prowlarr wires the indexers automatically.
-        </p>
-        <a :href="`http://prowlarr.${store.domain}`" class="text-sm text-ink no-underline">Start with Prowlarr &rarr;</a>
-      </Card>
-
-      <Card v-if="store.selectedPackages.includes('storage')" hover>
-        <div class="eyebrow mb-1">Files</div>
-        <h3 class="mb-2">Mount the shared folder</h3>
-        <p class="text-sm text-ink-3 mb-4">
-          Files is up on the LAN. On macOS: use Connect to Server with
-          <code class="text-ink">{{ store.domain }}</code>. On Windows: open File Explorer and
-          browse to <code class="text-ink">{{ store.domain }}</code>.
-        </p>
-      </Card>
-    </div>
+    <!-- Follow-up living checklist (iter-2). Replaces the four static tiles. -->
+    <DoneChecklist
+      v-if="launchState !== 'running'"
+      :enabled-packages="toStart"
+      class="mb-10"
+    />
 
     <div class="flex items-center justify-between border-t border-line pt-6">
       <div class="text-sm text-ink-3">
@@ -172,7 +136,7 @@ function toDashboard(): void {
         :disabled="!canGoToDashboard"
         data-testid="to-dashboard"
         @click="toDashboard"
-      >Take me to Aurora</Button>
+      >Go to my dashboard</Button>
     </div>
   </div>
 </template>

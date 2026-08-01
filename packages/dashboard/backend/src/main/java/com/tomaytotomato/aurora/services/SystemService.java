@@ -92,6 +92,11 @@ public class SystemService {
     return out;
   }
 
+  /** Public accessor for other services (StatusProbeService) that need the LAN IP. */
+  public String lanIp() {
+    return detectLanIp();
+  }
+
   private String detectLanIp() {
     // Preferred path: read the host's routing table from a bind-mounted /proc.
     // /proc/net is per-netns, so <hostProcPath>/net/fib_trie inside a

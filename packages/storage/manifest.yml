@@ -25,6 +25,11 @@ requires:
 
 required_env: []
 
+probe:
+  kind: docker
+  container: samba
+  external_url: smb://{lan_ip}/
+
 post_install_notes: |
   Samba shares are read-only by default and served as guest. Edit
   packages/storage/.env to add authenticated users or read-write shares.

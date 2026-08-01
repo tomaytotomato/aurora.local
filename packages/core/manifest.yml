@@ -22,6 +22,11 @@ requires:
 
 required_env: []
 
+probe:
+  kind: self
+  container: aurora
+  external_url: http://{domain}/
+
 post_install_notes: |
   Install Caddy's root CA on client devices for green padlocks:
     ./scripts/get-caddy-root-cert.sh
