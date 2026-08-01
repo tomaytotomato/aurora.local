@@ -57,6 +57,7 @@ fi
 
 log "starting isolated aurora on :$HOST_PORT (project=$PROJECT)..."
 AURORA_UID="$(id -u)" \
+AURORA_HOST_PORT="$HOST_PORT" \
 AURORA_REPO_PATH_HOST="$REPO_SCRATCH" \
 DOCKER_GID="$(getent group docker | cut -d: -f3 || echo 999)" \
 docker compose -p "$PROJECT" \
