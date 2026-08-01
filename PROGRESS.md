@@ -12,3 +12,4 @@
 - [x] step-9 iter-3 impl — target #1 shipped, #2 and #3 deferred (E2E: 40 pass / 18 fail / 4 skip full-suite; focused retry-clean 44/14/4; error-recovery.spec.ts 2/3 green, third self-skips; TLS sudo cp scrubbed; LaunchService.classify() + failureCode wired; 8/8 LaunchServiceClassifierTests; media substack + SMB reachability deferred to iter-4 per plan §handoff)
 - [x] step-10 morning briefing (MORNING_BRIEFING.md — TL;DR + Sarah flow post-iter-3 + E2E scorecard baseline→iter-3 + reset commands for live :8090 + 9 ranked follow-ups + 5 manual checks for Bruce)
 - [x] step-P1 closure (a9eed72 or later, no-cli-admin green)
+- [x] step-P2 closure (E2E: 40/18/4 no change vs iter-3; LaunchServiceTests 6/6; live /api/services/status ~140 ms; log cap 5 MB; docker read timeout 3s; sessionStorage launch-job persistence + reconnecting badge)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { useRouter } from 'vue-router';
 import Button from '@/components/ui/Button.vue';
@@ -22,6 +22,31 @@ const launchState = ref<'idle' | 'running' | 'success' | 'failed'>('idle');
 const launchError = ref<string | null>(null);
 const starting = ref(false);
 
+// P2 #5: persist the running job across a page reload. Session-scoped so a
+// closed tab doesn't leak a stale id into a new onboarding attempt.
+const STORAGE_KEY = 'aurora.launch.currentJob';
+const REHYDRATE_MAX_AGE_MS = 30 * 60 * 1000; // 30 min
+
+interface StoredJob { jobId: string; startedAt: number }
+
+function readStoredJob(): StoredJob | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredJob;
+    if (!parsed?.jobId || typeof parsed.startedAt !== 'number') return null;
+    if (Date.now() - parsed.startedAt > REHYDRATE_MAX_AGE_MS) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function writeStoredJob(job: StoredJob | null): void {
+  try {
+    if (job) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(job));
+    else sessionStorage.removeItem(STORAGE_KEY);
+  } catch { /* private-mode etc; not fatal */ }
+}
+
 const canGoToDashboard = computed(() => {
   // No packages to start? User can leave immediately.
   if (toStart.value.length === 0) return true;
@@ -35,6 +60,7 @@ async function startServices(): Promise<void> {
     const res = await OnboardingApi.startLaunch();
     launchJobId.value = res.job_id;
     launchState.value = 'running';
+    writeStoredJob({ jobId: res.job_id, startedAt: Date.now() });
   } catch (e: unknown) {
     launchError.value = extractError(e) ?? 'Could not start the launch.';
   } finally {
@@ -44,15 +70,18 @@ async function startServices(): Promise<void> {
 
 function onLaunchSuccess(): void {
   launchState.value = 'success';
+  writeStoredJob(null);
 }
 
 function onLaunchFailed(reason: string): void {
   launchState.value = 'failed';
   launchError.value = reason;
+  writeStoredJob(null);
 }
 
 async function onLaunchRetry(): Promise<void> {
   launchJobId.value = null;
+  writeStoredJob(null);
   await startServices();
 }
 
@@ -65,8 +94,36 @@ function extractError(e: unknown): string | null {
 
 function toDashboard(): void {
   store.clearAllDrafts();
+  writeStoredJob(null);
   router.push('/');
 }
+
+// P2 #5: on mount, if we have a stored jobId, ask the backend what state
+// it's in and rehydrate the UI accordingly. Handles reload-mid-launch.
+onMounted(async () => {
+  const stored = readStoredJob();
+  if (!stored) return;
+  try {
+    const snapshot = await OnboardingApi.getLaunchStatus(stored.jobId);
+    if (snapshot.state === 'running') {
+      launchJobId.value = stored.jobId;
+      launchState.value = 'running';
+    } else if (snapshot.state === 'success') {
+      launchState.value = 'success';
+      writeStoredJob(null);
+    } else {
+      // failed or unknown — surface the reason if we have one, then let the
+      // user retry.
+      launchState.value = 'failed';
+      launchError.value = snapshot.failure_reason
+        ?? 'The previous launch attempt did not finish. Try again.';
+      writeStoredJob(null);
+    }
+  } catch {
+    // Backend restarted / job forgotten — clear and render fresh CTA.
+    writeStoredJob(null);
+  }
+});
 </script>
 
 <template>

@@ -60,7 +60,14 @@ public class LaunchService {
 
   /** Bounded tail buffer — memory ceiling per job. */
   private static final int TAIL_MAX_LINES = 4096;
-  private static final int LOG_DIR_MODE_HINT = 0;
+  /**
+   * P2 #3: on-disk cap for {@code /data/launch-logs/launch-<id>.log}. Once
+   * a job's log crosses this size we append a single truncation marker and
+   * stop writing to disk (in-memory tail and SSE fan-out continue normally).
+   * Keeps disk usage bounded without adding rotation complexity — each job
+   * gets its own file, no cross-run growth.
+   */
+  static final long LOG_FILE_MAX_BYTES = 5L * 1024 * 1024;
   private static final String LOG_DIR = "/data/launch-logs";
 
   private final AuroraProperties props;
@@ -112,10 +119,10 @@ public class LaunchService {
     try {
       Files.createDirectories(Path.of(LOG_DIR));
       job.logFile = Path.of(LOG_DIR, "launch-" + id + ".log");
-      Files.writeString(job.logFile,
-          "# aurora launch " + id + " started " + job.startedAt + "\n"
-              + "# packages: " + String.join(",", job.packages) + "\n",
-          StandardCharsets.UTF_8);
+      String header = "# aurora launch " + id + " started " + job.startedAt + "\n"
+              + "# packages: " + String.join(",", job.packages) + "\n";
+      Files.writeString(job.logFile, header, StandardCharsets.UTF_8);
+      job.logBytesWritten = header.getBytes(StandardCharsets.UTF_8).length;
     } catch (IOException e) {
       log.warn("could not create launch log file at {}: {}", LOG_DIR, e.getMessage());
       job.logFile = null;
@@ -219,13 +226,36 @@ public class LaunchService {
       while (job.tail.size() > TAIL_MAX_LINES) job.tail.removeFirst();
     }
     if (job.logFile != null) {
-      try {
-        Files.writeString(job.logFile, line + "\n", StandardCharsets.UTF_8,
-            java.nio.file.StandardOpenOption.CREATE,
-            java.nio.file.StandardOpenOption.APPEND);
-      } catch (IOException ignore) { /* best-effort */ }
+      appendToLogFile(job, line);
     }
     fanout(job, "log", line);
+  }
+
+  /**
+   * Best-effort append with a hard on-disk cap. Once {@link #LOG_FILE_MAX_BYTES}
+   * is exceeded, a single marker line is written and further disk writes are
+   * skipped for the remainder of the job. SSE fan-out and the in-memory tail
+   * are unaffected — subscribers still see everything.
+   */
+  private void appendToLogFile(Job job, String line) {
+    if (job.logTruncated) return;
+    try {
+      byte[] payload = (line + "\n").getBytes(StandardCharsets.UTF_8);
+      if (job.logBytesWritten + payload.length > LOG_FILE_MAX_BYTES) {
+        String marker = "[aurora] log truncated at " + LOG_FILE_MAX_BYTES
+            + " bytes; live stream continues in the UI.\n";
+        Files.writeString(job.logFile, marker, StandardCharsets.UTF_8,
+            java.nio.file.StandardOpenOption.CREATE,
+            java.nio.file.StandardOpenOption.APPEND);
+        job.logBytesWritten += marker.getBytes(StandardCharsets.UTF_8).length;
+        job.logTruncated = true;
+        return;
+      }
+      Files.write(job.logFile, payload,
+          java.nio.file.StandardOpenOption.CREATE,
+          java.nio.file.StandardOpenOption.APPEND);
+      job.logBytesWritten += payload.length;
+    } catch (IOException ignore) { /* best-effort */ }
   }
 
   private void finish(Job job, State state, int exit, String reason) {
@@ -415,6 +445,10 @@ public class LaunchService {
     public volatile String failureReason;
     public volatile String failureCode;
     public volatile Path logFile;
+    /** P2 #3: bytes written to logFile; once >= {@link #LOG_FILE_MAX_BYTES} we stop appending. */
+    volatile long logBytesWritten = 0L;
+    /** True once the truncation marker has been written so we do it exactly once. */
+    volatile boolean logTruncated = false;
 
     final Deque<String> tail = new ArrayDeque<>();
     final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();

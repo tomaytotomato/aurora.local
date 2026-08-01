@@ -54,6 +54,14 @@ const perPkg = ref<Record<string, PkgState>>(
 
 let source: EventSource | null = null;
 let clock: number | null = null;
+// P2 #5: watchdog — if no SSE frame arrives for STALL_MS while the job is
+// still marked running, show a reconnecting badge. EventSource auto-
+// reconnects transparently for TCP-level drops; this badge is UX cover for
+// proxy hangs (nginx idle timeout etc).
+const STALL_MS = 30_000;
+const lastFrameAt = ref<number>(Date.now());
+const now = ref<number>(Date.now());
+const stalled = computed(() => state.value === 'running' && (now.value - lastFrameAt.value) > STALL_MS);
 
 // Heuristic package-state extraction from up.sh's line output. Iter-1
 // scope: parse the existing `log_step` / compose output rather than
@@ -86,10 +94,13 @@ function attachStream(id: string): void {
   failureReason.value = null;
   failureCode.value = null;
   for (const p of props.packages) perPkg.value[p] = 'not-started';
+  lastFrameAt.value = Date.now();
+  now.value = Date.now();
 
   source?.close();
   source = OnboardingApi.openLaunchStream(id);
   source.addEventListener('log', (ev) => {
+    lastFrameAt.value = Date.now();
     const raw = (ev as MessageEvent).data as string;
     let line = raw;
     // The server sends raw strings, but MessageEvent.data is the payload
@@ -101,6 +112,7 @@ function attachStream(id: string): void {
     classifyLine(line);
   });
   source.addEventListener('done', (ev) => {
+    lastFrameAt.value = Date.now();
     const payload = (ev as MessageEvent).data as string;
     try {
       const parsed = JSON.parse(payload);
@@ -131,6 +143,7 @@ function attachStream(id: string): void {
   });
   source.addEventListener('ping', () => {
     // heartbeat: no-op, keeps proxies from closing the connection.
+    lastFrameAt.value = Date.now();
   });
   source.onerror = () => {
     // Browser will auto-reconnect for transient drops; we only care about
@@ -140,6 +153,7 @@ function attachStream(id: string): void {
 
   if (clock) window.clearInterval(clock);
   clock = window.setInterval(() => {
+    now.value = Date.now();
     elapsedMs.value = Date.now() - startedAt;
   }, 1000);
 }
@@ -208,6 +222,12 @@ function retry(): void {
         @click="retry"
         data-testid="launch-retry"
       >Retry</button>
+      <span
+        v-else-if="stalled"
+        class="text-xs px-2 py-0.5 rounded-full border border-line text-ink-3 bg-surface"
+        data-testid="launch-reconnecting"
+        role="status"
+      >Reconnecting…</span>
     </div>
 
     <div

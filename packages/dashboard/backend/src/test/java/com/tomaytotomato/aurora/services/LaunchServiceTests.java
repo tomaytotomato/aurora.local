@@ -122,6 +122,33 @@ class LaunchServiceTests {
   }
 
   @Test
+  void log_file_is_bounded_when_up_sh_spews_more_than_cap(@TempDir Path repo) throws Exception {
+    // P2 #3: emit ~7 MB of output. On-disk log must stop growing at ~5 MB
+    // (+ a single truncation marker). In-memory tail is unaffected.
+    String body = "for i in $(seq 1 70000); do "
+        + "printf '%s\\n' '" + "x".repeat(96) + "'; "
+        + "done\nexit 0\n";
+    stageFakeUpSh(repo, body);
+    var svc = new LaunchService(props(repo), Mockito.mock(AuditEventRepo.class));
+    LaunchService.Job job = svc.startLaunch(List.of("core"));
+
+    for (int i = 0; i < 600 && job.state == LaunchService.State.RUNNING; i++) {
+      Thread.sleep(50);
+    }
+    assertEquals(LaunchService.State.SUCCESS, job.state, "launch should finish");
+
+    if (job.logFile != null && Files.exists(job.logFile)) {
+      long size = Files.size(job.logFile);
+      assertTrue(size <= LaunchService.LOG_FILE_MAX_BYTES + 512,
+          "on-disk log must be bounded (~" + LaunchService.LOG_FILE_MAX_BYTES + " bytes); was " + size);
+      assertTrue(job.logTruncated, "truncated flag must be set once cap is hit");
+    }
+    @SuppressWarnings("unchecked")
+    List<String> tail = (List<String>) job.toStatusMap().get("tail");
+    assertTrue(tail.size() <= 200, "status-map tail is capped at 200 lines");
+  }
+
+  @Test
   void status_map_shape_before_and_after_completion(@TempDir Path repo) throws Exception {
     stageFakeUpSh(repo, "echo one\nexit 0\n");
     var svc = new LaunchService(props(repo), Mockito.mock(AuditEventRepo.class));
