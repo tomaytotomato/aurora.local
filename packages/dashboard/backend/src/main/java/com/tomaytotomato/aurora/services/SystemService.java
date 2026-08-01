@@ -93,15 +93,113 @@ public class SystemService {
   }
 
   private String detectLanIp() {
-    // Prefer a private IPv4 that's not loopback/docker. Best-effort;
-    // returns null if no interface qualifies.
+    // Preferred path: read the host's routing table from a bind-mounted /proc.
+    // /proc/net is per-netns, so /host_root/proc/net/fib_trie inside a
+    // container reflects the *container's* netns (e.g. the docker bridge IP)
+    // even though the file is bind-mounted from the host. To get the host's
+    // real routing table we read PID 1's netns file: /host_root/proc/1/net/fib_trie.
+    // Fall back to the container-scoped path for unit tests / dev, then to
+    // NetworkInterface as a last resort.
+    for (Path p : List.of(
+        Path.of("/host_root/proc/1/net/fib_trie"),
+        Path.of("/host_root/proc/net/fib_trie"),
+        Path.of("/proc/net/fib_trie"))) {
+      if (!Files.isReadable(p)) continue;
+      try {
+        String best = pickBestLanIp(parseFibTrieHostLocals(p));
+        if (best != null) return best;
+      } catch (IOException e) {
+        log.debug("detectLanIp fib_trie {} failed: {}", p, e.getMessage());
+      }
+    }
+    return detectLanIpViaNetworkInterface();
+  }
+
+  /**
+   * Parse /proc/net/fib_trie for IPv4 addresses tagged {@code host LOCAL}.
+   * The format is a text tree; each "host LOCAL" line is preceded by a
+   * {@code |-- <ip>} line one row above (with an intervening {@code /32} row).
+   * Package-private for testing.
+   */
+  static List<String> parseFibTrieHostLocals(Path p) throws IOException {
+    List<String> out = new ArrayList<>();
+    List<String> lines = Files.readAllLines(p);
+    String prevIp = null;
+    for (String raw : lines) {
+      String line = raw.trim();
+      // Track most recent "|-- <ipv4>" line as we walk down the tree.
+      if (line.startsWith("|-- ")) {
+        String candidate = line.substring(4).trim();
+        if (candidate.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
+          prevIp = candidate;
+        }
+      } else if (line.endsWith("host LOCAL") && prevIp != null) {
+        if (!out.contains(prevIp)) out.add(prevIp);
+      }
+    }
+    return out;
+  }
+
+  static String pickBestLanIp(List<String> candidates) {
+    String best = null;
+    int bestScore = 0;
+    for (String ip : candidates) {
+      int s = scoreLanCandidate(ip);
+      if (s > bestScore) {
+        bestScore = s;
+        best = ip;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Score a candidate LAN IPv4. Higher is better; {@code 0} means reject.
+   * Package-private for testing.
+   */
+  static int scoreLanCandidate(String ip) {
+    int[] o = new int[4];
+    String[] parts = ip.split("\\.");
+    if (parts.length != 4) return 0;
+    try {
+      for (int i = 0; i < 4; i++) {
+        o[i] = Integer.parseInt(parts[i]);
+        if (o[i] < 0 || o[i] > 255) return 0;
+      }
+    } catch (NumberFormatException e) {
+      return 0;
+    }
+    // Loopback / link-local / broadcast / multicast — reject.
+    if (o[0] == 127) return 0;
+    if (o[0] == 169 && o[1] == 254) return 0;
+    if (o[0] >= 224) return 0;
+    if (o[0] == 0) return 0;
+    // CGNAT 100.64.0.0/10 — often ProtonVPN / carrier NAT. Reject.
+    if (o[0] == 100 && o[1] >= 64 && o[1] <= 127) return 0;
+    // 192.168.0.0/16 — canonical home LAN.
+    if (o[0] == 192 && o[1] == 168) return 100;
+    // 10.0.0.0/8 — but exclude 10.2.0.0/16 (ProtonVPN proton0 range on this box).
+    if (o[0] == 10) {
+      if (o[1] == 2) return 0;
+      return 50;
+    }
+    // 172.16.0.0/12 — but exclude docker's usual 172.17/172.18 bridges.
+    if (o[0] == 172 && o[1] >= 16 && o[1] <= 31) {
+      if (o[1] == 17 || o[1] == 18) return 0;
+      return 20;
+    }
+    return 0;
+  }
+
+  private String detectLanIpViaNetworkInterface() {
+    // Fallback: scan local NetworkInterfaces. Inside a container this returns
+    // the docker bridge IP, but it's better than null in dev.
     try {
       var ifaces = java.net.NetworkInterface.getNetworkInterfaces();
       while (ifaces != null && ifaces.hasMoreElements()) {
         var iface = ifaces.nextElement();
         if (iface.isLoopback() || !iface.isUp()) continue;
         String name = iface.getName();
-        // Skip docker bridges, tailscale, VPN tuns.
         if (name.startsWith("docker") || name.startsWith("br-")
             || name.startsWith("veth") || name.startsWith("tun")
             || name.startsWith("tailscale")) continue;
@@ -114,7 +212,7 @@ public class SystemService {
         }
       }
     } catch (Exception e) {
-      log.debug("detectLanIp failed: {}", e.getMessage());
+      log.debug("detectLanIpViaNetworkInterface failed: {}", e.getMessage());
     }
     return null;
   }
