@@ -11,7 +11,13 @@ export default defineConfig({
   fullyParallel: false, // tests share one aurora backend + SQLite; serial is safer
   retries: 1,
   workers: 1,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  globalSetup: require.resolve('./global-setup.ts'),
+  globalTeardown: require.resolve('./global-teardown.ts'),
+  reporter: [
+    ['list'],
+    ['html', { open: 'never' }],
+    ['json', { outputFile: 'results/baseline.json' }],
+  ],
   use: {
     baseURL: process.env.AURORA_E2E_BASE_URL ?? 'http://localhost:8091',
     headless: true,
