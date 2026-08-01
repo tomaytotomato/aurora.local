@@ -17,7 +17,8 @@ const router = useRouter();
 // hydrated draft. In bootstrap mode we show the create form; otherwise we
 // show a read-only card because the server will 409 any re-creation attempt
 // and we don't have the previously-set password (it lived in memory on the
-// original page load, never in storage). The user must SSH in to reset.
+// original page load, never in storage). The user must use the in-app
+// password recovery flow (or, until that ships, contact an admin) to reset.
 const alreadyCreated = computed(
   () => store.hydrated && store.draft && !store.draft.bootstrap_mode,
 );
@@ -28,6 +29,7 @@ const password = ref(store.admin?.password ?? generatePassword());
 const savedAcknowledged = ref(store.admin?.savedAcknowledged ?? false);
 const err = ref<string | null>(null);
 const copied = ref(false);
+const showRecovery = ref(false);
 const copyFailed = ref(false);
 const busy = ref(false);
 
@@ -117,8 +119,11 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
         <div class="font-mono text-sm text-ink">{{ savedUsername ?? 'admin' }}</div>
         <p class="mt-3 text-xs text-ink-3">
           Aurora doesn't store your password anywhere it can hand back. If
-          you've lost it, SSH into the box and run
-          <code class="text-ink">aurora reset-admin</code>.
+          you've lost it, use the
+          <button type="button"
+                  class="text-ink underline underline-offset-2"
+                  @click="showRecovery = true">password recovery</button>
+          option to reset it.
         </p>
       </div>
 
@@ -138,7 +143,11 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
     <template v-else>
       <p class="text-ink-2 mb-8">
         One user. One password. No email recovery, no SMS. If you lose the
-        password, you SSH in and reset it &mdash; that's the deal.
+        password, use the
+        <button type="button"
+                class="text-ink underline underline-offset-2"
+                @click="showRecovery = true">password recovery</button>
+        option on this screen to reset it.
       </p>
 
       <Alert v-if="err" tone="err" class="mb-6">{{ err }}</Alert>
@@ -207,5 +216,29 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
         </Button>
       </div>
     </template>
+
+    <!-- Password recovery modal (shared by both branches). Sarah-safe copy:
+         we promise an in-app path even before the recovery panel ships,
+         so we don't leak a CLI escape hatch here. -->
+    <div
+      v-if="showRecovery"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="recovery-title"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+      @click.self="showRecovery = false"
+    >
+      <div class="max-w-md w-full bg-surface border border-line rounded-lg p-6 shadow-lg">
+        <h2 id="recovery-title" class="text-lg mb-2">Password recovery</h2>
+        <p class="text-sm text-ink-2 mb-4">
+          Password recovery is coming to the dashboard shortly. In the
+          meantime, if you've lost the admin password, ask whoever set this
+          box up to reset it for you.
+        </p>
+        <div class="flex justify-end">
+          <Button variant="primary" @click="showRecovery = false">Got it</Button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

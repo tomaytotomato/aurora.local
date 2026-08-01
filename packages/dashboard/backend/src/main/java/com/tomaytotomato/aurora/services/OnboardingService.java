@@ -51,11 +51,14 @@ public class OnboardingService {
   private final PackagesService packages;
   private final SystemService system;
   private final AuroraProperties props;
+  private final PackageNameValidator packageNames;
 
+  @org.springframework.beans.factory.annotation.Autowired
   public OnboardingService(AdminUserRepo users, AuditEventRepo audit, SettingsRepo settings,
                            AuthService auth, StateFileService stateFiles,
                            PackagesService packages, SystemService system,
-                           AuroraProperties props) {
+                           AuroraProperties props,
+                           PackageNameValidator packageNames) {
     this.users = users;
     this.audit = audit;
     this.settings = settings;
@@ -64,6 +67,18 @@ public class OnboardingService {
     this.packages = packages;
     this.system = system;
     this.props = props;
+    this.packageNames = packageNames;
+  }
+
+  /**
+   * Legacy 8-arg constructor retained for tests that don't exercise the
+   * name-validation path. Production wiring uses the 9-arg form via Spring.
+   */
+  public OnboardingService(AdminUserRepo users, AuditEventRepo audit, SettingsRepo settings,
+                           AuthService auth, StateFileService stateFiles,
+                           PackagesService packages, SystemService system,
+                           AuroraProperties props) {
+    this(users, audit, settings, auth, stateFiles, packages, system, props, null);
   }
 
   /** True when there is no admin user yet — onboarding endpoints are unauthenticated. */
@@ -584,6 +599,7 @@ public class OnboardingService {
   }
 
   public void setEnabledPackages(List<String> enabled) {
+    if (packageNames != null) packageNames.validate(enabled);
     stateFiles.writeEnabled(enabled == null ? List.of() : enabled);
     audit.record(null, "onboarding.packages.set", null,
         "{\"enabled\":" + toJsonArray(enabled) + "}");

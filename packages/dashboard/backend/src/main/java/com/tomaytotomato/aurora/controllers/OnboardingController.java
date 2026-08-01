@@ -78,6 +78,13 @@ public class OnboardingController {
           req.step()
       );
       return ResponseEntity.ok(onboarding.patch(draft));
+    } catch (com.tomaytotomato.aurora.services.PackageNameValidator.InvalidPackageNamesException e) {
+      var body = new java.util.LinkedHashMap<String, Object>();
+      body.put("error", "invalid_package_names");
+      body.put("message", e.getMessage());
+      body.put("invalid", e.invalid);
+      body.put("unknown", e.unknown);
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     } catch (IllegalStateException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
     } catch (IllegalArgumentException e) {
