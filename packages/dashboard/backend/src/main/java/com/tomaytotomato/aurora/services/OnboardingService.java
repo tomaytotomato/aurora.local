@@ -194,7 +194,7 @@ public class OnboardingService {
    * better than a 500 on the plan endpoint.
    */
   @SuppressWarnings("unchecked")
-  private java.util.Map<String, Object> hostSnapshot() {
+  java.util.Map<String, Object> hostSnapshot() {
     var s = new java.util.HashMap<String, Object>();
     try { s.put("cpu",    system.cpu());    } catch (Exception e) { s.put("cpu", java.util.Map.of()); }
     try { s.put("memory", system.readMemInfoPublic()); } catch (Exception e) { s.put("memory", java.util.Map.of()); }
@@ -216,8 +216,8 @@ public class OnboardingService {
    * Unknown keys never fire (fail-closed).
    */
   @SuppressWarnings("unchecked")
-  private boolean evaluateWarningCondition(java.util.Map<String, Object> warning,
-                                           java.util.Map<String, Object> host) {
+  boolean evaluateWarningCondition(java.util.Map<String, Object> warning,
+                                   java.util.Map<String, Object> host) {
     Object rawIf = warning.get("if");
     if (!(rawIf instanceof java.util.Map<?, ?> cond)) return false;
 
@@ -272,7 +272,7 @@ public class OnboardingService {
    * literally so a mistyped placeholder is visible in QA.
    */
   @SuppressWarnings("unchecked")
-  private String interpolate(String msg, java.util.Map<String, Object> host) {
+  String interpolate(String msg, java.util.Map<String, Object> host) {
     if (msg == null) return "";
     Matcher m = INTERP.matcher(msg);
     var out = new StringBuilder();
@@ -286,7 +286,7 @@ public class OnboardingService {
   }
 
   @SuppressWarnings("unchecked")
-  private Object resolvePath(String path, java.util.Map<String, Object> host) {
+  Object resolvePath(String path, java.util.Map<String, Object> host) {
     // Support _gb / _mb suffixes on the leaf to auto-convert byte fields.
     String[] parts = path.split("\\.");
     Object cur = host;
@@ -469,12 +469,74 @@ public class OnboardingService {
       }
     }
 
+    // Running resource budget: sum requires.min_ram_mb / min_disk_gb
+    // across enabled packages and warn if the total exceeds 85% of what
+    // the host actually has. This runs alongside the per-manifest
+    // predicates above — predicates catch "this one package won't fit";
+    // the budget catches "the whole selection won't fit".
+    warnings.addAll(evaluateResourceBudget(enabled, host));
+
     var out = new java.util.LinkedHashMap<String, Object>();
     out.put("packages_to_enable", enabled);
     out.put("packages_to_disable", List.of());   // v0.1: no diff engine
     out.put("vhosts", new java.util.ArrayList<>(vhosts));
     out.put("ports", new java.util.ArrayList<>(ports));
     out.put("warnings", warnings);
+    return out;
+  }
+
+  /**
+   * Sum {@code requires.min_ram_mb} and {@code requires.min_disk_gb}
+   * across enabled packages and compare against host facts. Emits a
+   * synthetic warning when the total is above 85% of available. Silent
+   * when host facts are absent (better than crying wolf on a partial
+   * snapshot). Codes {@code budget_ram_high} / {@code budget_disk_high}
+   * are reserved in the message text for the frontend to key on.
+   */
+  @SuppressWarnings("unchecked")
+  List<String> evaluateResourceBudget(List<String> enabled,
+                                      java.util.Map<String, Object> host) {
+    var out = new ArrayList<String>();
+    long ramMb = 0L;
+    long diskGb = 0L;
+    for (String pkg : enabled) {
+      var req = packages.readRequires(pkg);
+      Object r = req.get("min_ram_mb");
+      if (r instanceof Number rn) ramMb += rn.longValue();
+      Object d = req.get("min_disk_gb");
+      if (d instanceof Number dn) diskGb += dn.longValue();
+    }
+
+    // RAM budget vs. MemTotal (bytes).
+    var mem = (java.util.Map<String, Object>) host.getOrDefault("memory", java.util.Map.of());
+    Object memTotal = mem.get("MemTotal");
+    if (ramMb > 0 && memTotal instanceof Number mn) {
+      long hostMb = mn.longValue() / (1024L * 1024L);
+      if (hostMb > 0 && ramMb > (long) (hostMb * 0.85)) {
+        double totalGb = ramMb / 1024.0;
+        double hostGb  = hostMb / 1024.0;
+        out.add(String.format(
+            "budget_ram_high: selected packages request ~%.1f GB RAM total; this box has %.1f GB. Expect swapping or OOM under load.",
+            totalGb, hostGb));
+      }
+    }
+
+    // Disk budget vs. the disk with the most free space (matches
+    // free_disk_gb_below semantics — same disk = same yardstick).
+    var disks = (List<java.util.Map<String, Object>>) host.getOrDefault("disks", List.of());
+    long maxFreeBytes = 0L;
+    for (var disk : disks) {
+      Object f = disk.get("free_bytes");
+      if (f instanceof Number fn && fn.longValue() > maxFreeBytes) maxFreeBytes = fn.longValue();
+    }
+    if (diskGb > 0 && maxFreeBytes > 0) {
+      long freeGb = maxFreeBytes / (1024L * 1024L * 1024L);
+      if (freeGb > 0 && diskGb > (long) (freeGb * 0.85)) {
+        out.add(String.format(
+            "budget_disk_high: selected packages request ~%d GB disk total; largest drive has %d GB free. Consider fewer packages or a bigger disk.",
+            diskGb, freeGb));
+      }
+    }
     return out;
   }
 

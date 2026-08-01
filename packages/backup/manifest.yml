@@ -25,6 +25,11 @@ required_env:
   - KOPIA_PASSWORD
   - KOPIA_UI_PASSWORD
 
+warnings:
+  - id: backup_low_disk
+    if: { free_disk_gb_below: 30 }
+    message: 'Kopia local-filesystem repositories dedupe well but still need headroom. Less than 30 GB free on the largest drive will limit retention.'
+
 post_install_notes: |
   UI: https://backup.$DOMAIN/  (login KOPIA_UI_USER / KOPIA_UI_PASSWORD)
 

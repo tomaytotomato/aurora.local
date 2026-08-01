@@ -34,6 +34,11 @@ requires:
 required_env:
   - TZ
 
+warnings:
+  - id: automation_low_ram
+    if: { ram_below_mb: 1024 }
+    message: 'Home Assistant + Mosquitto (and Zigbee2MQTT under the zigbee profile) want at least 1 GB RAM headroom. Below that, automations get sluggish.'
+
 post_install_notes: |
   1. Home Assistant onboarding wizard: http://<lan-ip>:8123
   2. MQTT broker has no default credentials; create them with:

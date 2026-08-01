@@ -109,6 +109,28 @@ public class PackagesService {
     }
   }
 
+  /**
+   * Read the {@code requires:} block from a package manifest (e.g.
+   * {@code min_ram_mb}, {@code min_disk_gb}). Returns an empty map when
+   * the manifest is missing, unreadable, or declares no requires block.
+   * Used by the running resource-budget check in {@link OnboardingService}.
+   */
+  @SuppressWarnings("unchecked")
+  public Map<String, Object> readRequires(String name) {
+    Path p = Path.of(props.repoPath()).resolve("packages").resolve(name).resolve("manifest.yml");
+    if (!Files.isRegularFile(p)) return Map.of();
+    try (var in = Files.newInputStream(p)) {
+      Map<String, Object> m = new Yaml().load(in);
+      if (m == null) return Map.of();
+      Object raw = m.get("requires");
+      if (!(raw instanceof Map<?, ?> mm)) return Map.of();
+      return (Map<String, Object>) mm;
+    } catch (IOException e) {
+      log.warn("readRequires({}) failed: {}", name, e.getMessage());
+      return Map.of();
+    }
+  }
+
   // Infrastructure packages that are always installed and never appear in
   // the user-facing enabled[] set. Excluded from install-diff surfaces so
   // the Done screen doesn't tell the user to "stop the dashboard" (i.e.

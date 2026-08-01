@@ -31,6 +31,11 @@ required_env:
   - POSTGRES_DB
   - REDIS_PASSWORD
 
+warnings:
+  - id: dev_low_cpu
+    if: { cpu_threads_lt: 4 }
+    message: 'code-server builds and Postgres/Redis under load prefer 4+ CPU threads. Compile-heavy work will be slow on this box.'
+
 post_install_notes: |
   1. code-server: https://code.$DOMAIN/ — password from .env.
   2. Postgres: from host: psql -h localhost -p 15432 -U $POSTGRES_USER

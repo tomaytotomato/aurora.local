@@ -29,6 +29,14 @@ requires:
 required_env:
   - GRAFANA_ADMIN_PASSWORD
 
+warnings:
+  - id: monitoring_low_ram
+    if: { ram_below_mb: 2048 }
+    message: 'Prometheus TSDB + Grafana + cAdvisor together want at least 2 GB RAM. Below that, scrape gaps and OOMs are likely.'
+  - id: monitoring_low_disk
+    if: { free_disk_gb_below: 10 }
+    message: 'Prometheus retains metrics on disk (default 15d). Less than 10 GB free means retention will be short.'
+
 post_install_notes: |
   Grafana:    https://grafana.$DOMAIN/    (admin / GRAFANA_ADMIN_PASSWORD)
   Prometheus: https://prometheus.$DOMAIN/ (basic-auth gated in caddy.snippet)
