@@ -110,7 +110,15 @@ class LaunchServiceTests {
     LaunchService.Job job = svc.startLaunch(List.of("core"));
     awaitTerminal(job);
     assertEquals(LaunchService.State.FAILED, job.state);
-    assertTrue(job.failureReason != null && job.failureReason.contains("up.sh"));
+    // Iter-3: failure reason is now classified user copy, not raw stderr.
+    // The launcher never surfaces the raw "scripts/up.sh not found" string;
+    // classify() falls through to the `unknown` fallback with actionable copy.
+    assertNotNull(job.failureReason);
+    assertEquals("unknown", job.failureCode);
+    // Human copy sweep: must not contain shell substrings.
+    String r = job.failureReason.toLowerCase();
+    assertTrue(!r.contains("up.sh") && !r.contains("./scripts/") && !r.contains("sudo "),
+        "classified reason must be human copy, was: " + job.failureReason);
   }
 
   @Test

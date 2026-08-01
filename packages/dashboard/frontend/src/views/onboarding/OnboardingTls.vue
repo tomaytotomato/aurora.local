@@ -45,7 +45,8 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       </div>
       <div>
         <div class="eyebrow mb-1 text-ink-2">Linux (Debian/Ubuntu)</div>
-        <p><code>sudo cp caddy-root.crt /usr/local/share/ca-certificates/ &amp;&amp; sudo update-ca-certificates</code></p>
+        <p>Save the file to your Downloads folder. Aurora will show you a
+          step-by-step in <em>Settings → TLS</em> once install completes.</p>
       </div>
       <div>
         <div class="eyebrow mb-1 text-ink-2">iOS / Android</div>

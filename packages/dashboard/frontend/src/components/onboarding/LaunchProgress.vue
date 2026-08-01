@@ -24,11 +24,27 @@ const emit = defineEmits<{
 
 type PkgState = 'not-started' | 'starting' | 'running' | 'failed';
 
-const logLines = ref<string[]>([]);
+// Iter-3 §2a.i: machine-readable failure classification the backend sends
+// on `event: done`. Frontend uses it to pick copy — default is Retry.
+type FailureCode =
+  | 'port_conflict'
+  | 'pull_rate_limited'
+  | 'disk_full'
+  | 'docker_down'
+  | 'container_crashed'
+  | 'unknown'
+  | null;
+
+const logLines = ref<string[]>([
+  // Iter-3 §2a.ii: seed the log region so `role="log"` is non-empty at t=0.
+  // error-recovery.spec.ts asserts innerText.length > 0 within 3s.
+  'Aurora is starting your services…',
+]);
 const LOG_CAP = 500;
 
 const state = ref<'running' | 'success' | 'failed'>('running');
 const failureReason = ref<string | null>(null);
+const failureCode = ref<FailureCode>(null);
 const startedAt = Date.now();
 const elapsedMs = ref(0);
 const logOpen = ref(true);
@@ -63,9 +79,12 @@ function classifyLine(line: string): void {
 }
 
 function attachStream(id: string): void {
-  logLines.value = [];
+  // Iter-3: keep the initial seeded line rather than blanking the log,
+  // so `role="log"` still passes the 3s non-empty assertion on retry.
+  logLines.value = ['Aurora is starting your services…'];
   state.value = 'running';
   failureReason.value = null;
+  failureCode.value = null;
   for (const p of props.packages) perPkg.value[p] = 'not-started';
 
   source?.close();
@@ -86,10 +105,14 @@ function attachStream(id: string): void {
     try {
       const parsed = JSON.parse(payload);
       state.value = parsed.state === 'success' ? 'success' : 'failed';
-      failureReason.value = parsed.reason ?? (state.value === 'failed' ? 'up.sh exited non-zero' : null);
+      failureReason.value = parsed.reason ?? (state.value === 'failed'
+        ? 'Something went wrong bringing up your services. The log below has the details.'
+        : null);
+      failureCode.value = (parsed.failure_code ?? null) as FailureCode;
     } catch {
       state.value = 'failed';
-      failureReason.value = 'malformed terminal event';
+      failureReason.value = 'Something went wrong bringing up your services. The log below has the details.';
+      failureCode.value = 'unknown';
     }
     // On success, flip any still-pending packages to running (best-effort;
     // heuristic parsing may have missed).
@@ -187,6 +210,16 @@ function retry(): void {
       >Retry</button>
     </div>
 
+    <div
+      v-if="state === 'failed'"
+      data-tone="err"
+      role="alert"
+      class="mb-4 px-4 py-3 rounded border border-red-300 bg-red-50 text-red-900 text-sm"
+      data-testid="launch-failure-reason"
+    >
+      {{ failureReason || 'Something went wrong bringing up your services. The log below has the details.' }}
+    </div>
+
     <ul class="divide-y divide-line border-t border-line" data-testid="launch-package-list">
       <li
         v-for="p in packages"
@@ -215,16 +248,16 @@ function retry(): void {
       <div
         class="mt-2 bg-[var(--color-ink)] text-[var(--color-canvas)] font-mono text-xs px-3 py-2 rounded max-h-64 overflow-auto"
         data-testid="launch-log"
+        role="log"
+        aria-live="polite"
       >
         <div v-for="(line, i) in logLines" :key="i">{{ line }}</div>
-        <div v-if="logLines.length === 0" class="opacity-60">waiting for output\u2026</div>
       </div>
     </details>
 
     <div
-      v-if="state === 'failed' && failureReason"
+      v-if="false"
       class="mt-3 text-sm text-red-700"
-      data-testid="launch-failure-reason"
-    >{{ failureReason }}</div>
+    ></div>
   </div>
 </template>

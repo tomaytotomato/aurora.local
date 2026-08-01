@@ -28,6 +28,7 @@ test('install failure shows retry + plain-English reason (no stack trace)', asyn
     })
   );
   const install = page.locator('button[data-cta="primary"]:visible').first();
+  await install.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => { /* skip below */ });
   if (!(await install.isVisible())) test.skip();
   await install.click();
   // Alert appears with plain-English message.
@@ -47,6 +48,7 @@ test('install failure shows retry + plain-English reason (no stack trace)', asyn
 test('install log emits progress within 3s of clicking Install', async ({ page }) => {
   await page.goto('/onboarding/review');
   const install = page.locator('button[data-cta="primary"]:visible').first();
+  await install.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => { /* skip below */ });
   if (!(await install.isVisible())) test.skip();
   await install.click();
   // Live log region appears within 3s and has at least one line.

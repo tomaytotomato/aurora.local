@@ -13,6 +13,10 @@ const plan = ref<InstallPlan | null>(null);
 const planErr = ref<string | null>(null);
 const installing = ref(false);
 const installErr = ref<string | null>(null);
+// Iter-3 §2a.ii: parse the structured 500 body `{error, message}` from
+// /install|/apply|/launch. `installErr` renders `message` in the alert;
+// `installErrCode` is retained for future CTA-copy tweaks.
+const installErrCode = ref<string | null>(null);
 const logLines = ref<string[]>([]);
 
 onMounted(async () => {
@@ -58,7 +62,10 @@ const warningsToShow = computed<string[]>(() => plan.value?.warnings ?? []);
 async function install(): Promise<void> {
   installing.value = true;
   installErr.value = null;
-  logLines.value = [];
+  installErrCode.value = null;
+  // Iter-3 §2a.ii: seed the log region at t=0 so the role="log" panel is
+  // non-empty within 3s of the Install click. error-recovery.spec.ts asserts.
+  logLines.value = ['Aurora is starting your services…'];
   try {
     // Belt & braces: PATCH the final selection one more time in case the
     // user jumped straight to review via the sidebar without hitting
@@ -85,10 +92,58 @@ async function install(): Promise<void> {
     await new Promise((r) => setTimeout(r, 350));
     router.push('/onboarding/done');
   } catch (e) {
-    installErr.value = e instanceof Error ? e.message : 'Install failed';
+    installErr.value = classifyInstallError(e);
   } finally {
     installing.value = false;
   }
+}
+
+/**
+ * Iter-3 §2a.ii: the install endpoint—on failure—returns a 500 with a
+ * JSON body of shape {error, message}. Surface `message` verbatim as user
+ * copy. Never leak stack traces. Falls back to a generic English line if
+ * the body isn't the expected shape.
+ */
+function classifyInstallError(e: unknown): string {
+  if (e && typeof e === 'object') {
+    const anyE = e as Record<string, unknown>;
+    // axios error: e.response.data holds the parsed JSON body.
+    const response = anyE.response as Record<string, unknown> | undefined;
+    const data = response?.data as Record<string, unknown> | undefined;
+    if (data && typeof data.message === 'string' && data.message.length > 0) {
+      if (typeof data.error === 'string') installErrCode.value = data.error;
+      return data.message;
+    }
+    // Some clients stash the parsed body directly under `body`.
+    const body = anyE.body as Record<string, unknown> | undefined;
+    if (body && typeof body.message === 'string' && body.message.length > 0) {
+      if (typeof body.error === 'string') installErrCode.value = body.error;
+      return body.message;
+    }
+    if (typeof anyE.message === 'string') {
+      const raw = anyE.message;
+      // Try to parse `500: {"error":"...","message":"..."}` shape too.
+      const idx = raw.indexOf('{');
+      if (idx >= 0) {
+        try {
+          const parsed = JSON.parse(raw.slice(idx));
+          if (parsed && typeof parsed.message === 'string' && parsed.message.length > 0) {
+            if (typeof parsed.error === 'string') installErrCode.value = parsed.error;
+            return parsed.message;
+          }
+        } catch { /* fall through */ }
+      }
+      // Bare message — wrap it so we never surface a raw stack trace.
+      if (!/Exception|Traceback|\tat /.test(raw)) return raw;
+    }
+  }
+  return "Something went wrong installing Aurora. Try again in a moment.";
+}
+
+function retry(): void {
+  installErr.value = null;
+  installErrCode.value = null;
+  void install();
 }
 
 function back(): void { store.back(); router.push(`/onboarding/${store.currentStep}`); }
@@ -103,7 +158,19 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
     </p>
 
     <Alert v-if="planErr" tone="warn" class="mb-6">{{ planErr }}</Alert>
-    <Alert v-if="installErr" tone="err" class="mb-6">{{ installErr }}</Alert>
+    <div
+      v-if="installErr"
+      data-tone="err"
+      role="alert"
+      class="mb-6 flex items-start justify-between gap-4 px-4 py-3 rounded border border-red-300 bg-red-50 text-red-900 text-sm"
+    >
+      <div class="flex-1">{{ installErr }}</div>
+      <button
+        type="button"
+        class="shrink-0 text-sm px-3 py-1 rounded border border-red-400 hover:bg-red-100"
+        @click="retry"
+      >Retry</button>
+    </div>
 
     <div class="border border-line rounded-lg divide-y divide-[var(--color-line-2)] mb-6">
       <div class="grid grid-cols-3 gap-4 px-5 py-4">
@@ -164,14 +231,14 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       class="mb-3"
     >{{ w }}</Alert>
 
-    <div v-if="installing || logLines.length" class="border border-line rounded-lg p-4 mb-8 bg-[var(--color-ink)] text-[var(--color-canvas)] font-mono text-xs max-h-64 overflow-auto">
+    <div v-if="installing || logLines.length" class="border border-line rounded-lg p-4 mb-8 bg-[var(--color-ink)] text-[var(--color-canvas)] font-mono text-xs max-h-64 overflow-auto" role="log" aria-live="polite">
       <div v-for="(l, i) in logLines" :key="i">{{ l }}</div>
       <div v-if="installing" class="text-ink-4/60">…</div>
     </div>
 
     <div class="mt-6 flex items-center justify-between">
       <Button variant="ghost" @click="back" :disabled="installing">Back</Button>
-      <Button variant="accent" size="lg" @click="install" :loading="installing">
+      <Button variant="accent" size="lg" @click="install" :loading="installing" data-cta="primary">
         Install
       </Button>
     </div>

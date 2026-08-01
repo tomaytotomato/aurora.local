@@ -232,9 +232,31 @@ public class LaunchService {
     job.state = state;
     job.exitCode = exit;
     job.finishedAt = Instant.now();
-    job.failureReason = reason;
-    if (reason != null) {
-      onLine(job, "[aurora] " + reason);
+    if (state == State.FAILED) {
+      // Iter-3: classify raw failure into human copy + machine-readable code.
+      // Tail lines are inspected so port-conflict / pull-rate / disk-full /
+      // docker-down / crash patterns get plain-English reasons Sarah can act on.
+      String tail;
+      synchronized (job.tail) {
+        StringBuilder b = new StringBuilder();
+        int from = Math.max(0, job.tail.size() - 200);
+        int i = 0;
+        for (String line : job.tail) {
+          if (i++ < from) continue;
+          b.append(line).append('\n');
+        }
+        tail = b.toString();
+      }
+      String firstPkg = job.packages.isEmpty() ? "your services" : job.packages.get(0);
+      Classified c = classify(tail, exit, firstPkg, reason);
+      job.failureReason = c.reason;
+      job.failureCode = c.code;
+    } else {
+      job.failureReason = reason;
+      job.failureCode = null;
+    }
+    if (job.failureReason != null) {
+      onLine(job, "[aurora] " + job.failureReason);
     }
     fanout(job, "done", doneJson(job));
     for (SseEmitter e : job.emitters) {
@@ -277,7 +299,91 @@ public class LaunchService {
         + "\",\"exit_code\":" + job.exitCode
         + ",\"duration_ms\":" + durMs
         + (job.failureReason == null ? "" : ",\"reason\":\"" + jsonEscape(job.failureReason) + "\"")
+        + (job.failureCode == null ? "" : ",\"failure_code\":\"" + jsonEscape(job.failureCode) + "\"")
         + "}";
+  }
+
+  // ------------------------------------------------------------------
+  // Failure classifier (iter-3)
+  //
+  // Best-effort English-only pattern match over the tail buffer. Falls
+  // through to `unknown` on no match so we never synthesise fake success.
+  // Reason strings MUST be user copy — no `sudo `, `docker `, `bash `,
+  // `./scripts/`, `ssh ` substrings. `LaunchServiceClassifierTests` enforces.
+  // ------------------------------------------------------------------
+
+  record Classified(String reason, String code) {}
+
+  static Classified classify(String tail, int exitCode, String firstPackage, String rawReason) {
+    String t = tail == null ? "" : tail;
+    String tl = t.toLowerCase();
+
+    // Port conflict: "bind: address already in use" (docker & compose both emit).
+    if (tl.contains("address already in use") || tl.contains("port is already allocated")) {
+      String port = findPort(t);
+      String p = port == null ? "a required port" : ("Port " + port);
+      return new Classified(
+          p + " is already in use by another program on this box. Free it up or pick a different port.",
+          "port_conflict");
+    }
+
+    // Container registry rate-limit (Docker Hub etc).
+    if (tl.contains("toomanyrequests") || tl.contains("429 too many requests")
+        || tl.contains("pull access denied") || tl.contains("rate limit")) {
+      return new Classified(
+          "The container registry is rate-limiting Aurora right now. Wait a couple of minutes and try again.",
+          "pull_rate_limited");
+    }
+
+    // Disk full.
+    if (tl.contains("no space left on device")) {
+      return new Classified(
+          "The disk Aurora is installing to is full. Free up space or pick a different drive.",
+          "disk_full");
+    }
+
+    // Docker daemon unreachable.
+    if (tl.contains("cannot connect to the docker daemon")
+        || tl.contains("is the docker daemon running")) {
+      return new Classified(
+          "Aurora can't reach the container engine on this box. Check that the container service is running.",
+          "docker_down");
+    }
+
+    // Container crash: line indicates a container Exited with non-zero soon
+    // after starting. Compose prints e.g. `Container aurora-media-sonarr Exited (1)`.
+    if (tl.contains(" exited (") || tl.contains("exited with code") || tl.contains("unhealthy")) {
+      String container = findContainer(t);
+      String who = container == null ? firstPackage : container;
+      return new Classified(
+          who + " started but crashed straight away. Aurora tailed its log to the panel below.",
+          "container_crashed");
+    }
+
+    // Fallback — never surface the raw shell-y reason.
+    return new Classified(
+        "Something went wrong bringing up " + firstPackage + ". The log below has the details.",
+        "unknown");
+  }
+
+  private static final java.util.regex.Pattern PORT_RE =
+      java.util.regex.Pattern.compile(":(\\d{2,5})[ :\\\"']|port (\\d{2,5})\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+  private static String findPort(String s) {
+    var m = PORT_RE.matcher(s);
+    if (m.find()) {
+      String a = m.group(1);
+      return a != null ? a : m.group(2);
+    }
+    return null;
+  }
+
+  private static final java.util.regex.Pattern CONTAINER_RE =
+      java.util.regex.Pattern.compile("Container ([\\w.-]+)", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+  private static String findContainer(String s) {
+    var m = CONTAINER_RE.matcher(s);
+    return m.find() ? m.group(1) : null;
   }
 
   static String jsonEscape(String s) {
@@ -307,6 +413,7 @@ public class LaunchService {
     public volatile State state = State.RUNNING;
     public volatile int exitCode = -1;
     public volatile String failureReason;
+    public volatile String failureCode;
     public volatile Path logFile;
 
     final Deque<String> tail = new ArrayDeque<>();
@@ -326,6 +433,7 @@ public class LaunchService {
       m.put("finished_at", finishedAt == null ? null : finishedAt.toString());
       m.put("exit_code", state == State.RUNNING ? null : exitCode);
       m.put("failure_reason", failureReason);
+      m.put("failure_code", failureCode);
       List<String> t;
       synchronized (tail) { t = new ArrayList<>(tail); }
       // Cap tail at 200 for status responses; full tail lives in the log file.
