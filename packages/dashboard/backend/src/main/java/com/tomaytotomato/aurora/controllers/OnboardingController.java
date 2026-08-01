@@ -1,19 +1,25 @@
 package com.tomaytotomato.aurora.controllers;
 
+import com.tomaytotomato.aurora.services.LaunchService;
 import com.tomaytotomato.aurora.services.OnboardingService;
+import com.tomaytotomato.aurora.services.PackagesService;
+import com.tomaytotomato.aurora.services.StateFileService;
 import com.tomaytotomato.aurora.services.SystemService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
@@ -44,10 +50,15 @@ public class OnboardingController {
 
   private final OnboardingService onboarding;
   private final SystemService system;
+  private final LaunchService launcher;
+  private final StateFileService stateFiles;
 
-  public OnboardingController(OnboardingService onboarding, SystemService system) {
+  public OnboardingController(OnboardingService onboarding, SystemService system,
+                              LaunchService launcher, StateFileService stateFiles) {
     this.onboarding = onboarding;
     this.system = system;
+    this.launcher = launcher;
+    this.stateFiles = stateFiles;
   }
 
   // --- canonical shape ------------------------------------------------
@@ -144,6 +155,65 @@ public class OnboardingController {
     } catch (IllegalStateException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
     }
+  }
+
+  // --- launch (iter-1) ------------------------------------------------
+
+  /**
+   * Kick off {@code scripts/up.sh} on behalf of the operator so the wizard
+   * can finish without an SSH step. Reads the enabled packages from
+   * {@code .state.yml} (never from the request body — closes any RCE surface
+   * via caller-supplied package names).
+   *
+   * <p>Guarded by {@link OnboardingService#guardMidOnboarding()} — same guard
+   * as {@code /install}. Returns 202 with the job id, or 409 if a launch is
+   * already running.
+   */
+  @PostMapping("/launch")
+  public ResponseEntity<Map<String, Object>> launch() {
+    try {
+      onboarding.guardMidOnboarding();
+    } catch (IllegalStateException e) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+    }
+    var state = stateFiles.readState();
+    List<String> enabled = state.enabled() == null ? List.of() : state.enabled();
+    if (enabled.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "no packages are enabled in .state.yml");
+    }
+    LaunchService.Job job;
+    try {
+      job = launcher.startLaunch(enabled);
+    } catch (LaunchService.LaunchInProgressException e) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "launch already running: " + e.activeJobId);
+    }
+    var body = new java.util.LinkedHashMap<String, Object>();
+    body.put("job_id", job.id);
+    body.put("packages", job.packages);
+    body.put("started_at", job.startedAt.toString());
+    return ResponseEntity.status(HttpStatus.ACCEPTED).body(body);
+  }
+
+  @GetMapping("/launch/{id}")
+  public Map<String, Object> launchStatus(@PathVariable("id") String id) {
+    LaunchService.Job job = launcher.get(id);
+    if (job == null) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "no such job");
+    }
+    return job.toStatusMap();
+  }
+
+  @GetMapping(value = "/launch/{id}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  public SseEmitter launchStream(@PathVariable("id") String id) {
+    LaunchService.Job job = launcher.get(id);
+    if (job == null) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "no such job");
+    }
+    SseEmitter emitter = new SseEmitter(0L); // never time out
+    launcher.subscribe(id, emitter);
+    return emitter;
   }
 
   /**

@@ -109,6 +109,25 @@ export interface InstallResult {
   host_command: string;
 }
 
+/** Response of POST /onboarding/launch — 202 Accepted with the created job. */
+export interface LaunchStart {
+  job_id: string;
+  packages: string[];
+  started_at: string;
+}
+
+/** Response of GET /onboarding/launch/{id} — snapshot of a launch job. */
+export interface LaunchStatus {
+  id: string;
+  state: 'running' | 'success' | 'failed';
+  packages: string[];
+  started_at: string;
+  finished_at: string | null;
+  exit_code: number | null;
+  failure_reason: string | null;
+  tail: string[];
+}
+
 /** Wire shape of GET /onboarding/plan. Server uses snake_case. */
 interface PlanWire {
   packages_to_enable: string[];
@@ -186,6 +205,30 @@ export const OnboardingApi = {
   async install(): Promise<InstallResult> {
     const { data } = await http.post<InstallResult>('/onboarding/install');
     return data;
+  },
+
+  /**
+   * Kick off `scripts/up.sh` server-side. Iter-1 UX: replaces the SSH cliff
+   * on the Done page. Backend reads the enabled packages from `.state.yml`
+   * (never accepts them from the client).
+   */
+  async startLaunch(): Promise<LaunchStart> {
+    const { data } = await http.post<LaunchStart>('/onboarding/launch');
+    return data;
+  },
+
+  async getLaunchStatus(id: string): Promise<LaunchStatus> {
+    const { data } = await http.get<LaunchStatus>(`/onboarding/launch/${id}`);
+    return data;
+  },
+
+  /**
+   * Open a Server-Sent Events stream for a launch job. Returns the raw
+   * EventSource — callers wire up their own `log` / `done` / `ping` handlers.
+   * The dev server proxies /api → :8090 so this works in both dev and prod.
+   */
+  openLaunchStream(id: string): EventSource {
+    return new EventSource(`/api/onboarding/launch/${id}/stream`);
   },
   async complete(): Promise<void> {
     await http.post('/onboarding/complete');

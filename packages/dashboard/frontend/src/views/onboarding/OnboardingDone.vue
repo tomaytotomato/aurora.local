@@ -1,23 +1,69 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { useRouter } from 'vue-router';
 import Button from '@/components/ui/Button.vue';
 import Card from '@/components/ui/Card.vue';
-import Alert from '@/components/ui/Alert.vue';
+import LaunchProgress from '@/components/onboarding/LaunchProgress.vue';
+import { OnboardingApi } from '@/api/onboarding';
 
 const store = useOnboardingStore();
 const router = useRouter();
 
-const toStart = computed(() => store.installResult?.packages_to_start ?? []);
-const toStop = computed(() => store.installResult?.packages_to_stop ?? []);
-const hostCmd = computed(
-  () => store.installResult?.host_command ?? 'cd ~/aurora.local && ./scripts/up.sh',
+// Packages Aurora will bring up. `packages_to_start` is populated by the
+// install() call on Review; if the user reloaded, fall back to the store's
+// selection so the CTA still makes sense.
+const toStart = computed<string[]>(() =>
+  store.installResult?.packages_to_start ?? store.selectedPackages ?? [],
 );
 
+const launchJobId = ref<string | null>(null);
+const launchState = ref<'idle' | 'running' | 'success' | 'failed'>('idle');
+const launchError = ref<string | null>(null);
+const starting = ref(false);
+
+const canGoToDashboard = computed(() => {
+  // No packages to start? User can leave immediately.
+  if (toStart.value.length === 0) return true;
+  return launchState.value === 'success';
+});
+
+async function startServices(): Promise<void> {
+  starting.value = true;
+  launchError.value = null;
+  try {
+    const res = await OnboardingApi.startLaunch();
+    launchJobId.value = res.job_id;
+    launchState.value = 'running';
+  } catch (e: unknown) {
+    launchError.value = extractError(e) ?? 'Could not start the launch.';
+  } finally {
+    starting.value = false;
+  }
+}
+
+function onLaunchSuccess(): void {
+  launchState.value = 'success';
+}
+
+function onLaunchFailed(reason: string): void {
+  launchState.value = 'failed';
+  launchError.value = reason;
+}
+
+async function onLaunchRetry(): Promise<void> {
+  launchJobId.value = null;
+  await startServices();
+}
+
+function extractError(e: unknown): string | null {
+  if (typeof e === 'object' && e !== null && 'message' in e) {
+    return String((e as { message: unknown }).message);
+  }
+  return null;
+}
+
 function toDashboard(): void {
-  // Onboarding is already committed by Review's install() flow. Nothing to
-  // POST here \u2014 just clean up local drafts and hand off.
   store.clearAllDrafts();
   router.push('/');
 }
@@ -26,42 +72,54 @@ function toDashboard(): void {
 <template>
   <div>
     <div class="eyebrow mb-3">Step 9 of 9</div>
-    <h1 class="mb-4">You're up.</h1>
+    <h1 class="mb-4">You're set.</h1>
     <p class="text-ink-2 mb-8">
-      Your onboarding is committed. Below is what to do next.
+      Aurora is configured. Bring your services online, then head to the dashboard.
     </p>
 
-    <!-- Host action required: some enabled packages aren't running yet.
-         Aurora can't spawn containers itself (no docker CLI in this image),
-         so tell the operator exactly what to type. -->
-    <div v-if="toStart.length > 0" class="border border-line rounded-lg p-5 mb-6 bg-surface-2/60">
-      <div class="eyebrow mb-2" style="color: var(--color-accent)">Action required on the host</div>
-      <p class="text-sm text-ink-2 mb-3">
-        These packages are enabled but not running yet. SSH into the box and run:
-      </p>
-      <pre class="bg-[var(--color-ink)] text-[var(--color-canvas)] font-mono text-xs px-4 py-3 rounded overflow-auto mb-3">{{ hostCmd }}</pre>
-      <div class="flex flex-wrap gap-1.5">
+    <!-- Bring your services online -->
+    <div
+      v-if="toStart.length > 0 && launchState === 'idle'"
+      class="border border-line rounded-lg p-5 mb-6 bg-surface-2/60"
+      data-testid="launch-cta"
+    >
+      <div class="eyebrow mb-2" style="color: var(--color-accent)">Almost there</div>
+      <h3 class="mb-2">Bring your services online</h3>
+      <p class="text-sm text-ink-2 mb-4">
+        Aurora will start
         <span
-          v-for="p in toStart"
+          v-for="(p, i) in toStart"
           :key="p"
-          class="font-mono text-xs px-2 py-0.5 rounded border border-line bg-surface"
-        >{{ p }}</span>
+          class="font-mono text-xs px-1.5 py-0.5 rounded border border-line bg-surface ml-1"
+        >{{ p }}<template v-if="i < toStart.length - 1">&nbsp;</template></span>
+        for you. No typing required.
+      </p>
+      <div class="flex items-center gap-3">
+        <Button
+          variant="primary"
+          size="lg"
+          :loading="starting"
+          :disabled="starting"
+          data-testid="start-services"
+          data-cta="primary"
+          @click="startServices"
+        >Start services</Button>
+        <span v-if="launchError" class="text-sm text-red-700" data-testid="launch-error">{{ launchError }}</span>
       </div>
     </div>
 
-    <!-- Informational: containers running for packages you deselected. v0.1
-         doesn't stop them automatically, so surface it. -->
-    <Alert v-if="toStop.length > 0" tone="info" class="mb-6">
-      Deselected packages have containers still running:
-      <span
-        v-for="p in toStop"
-        :key="p"
-        class="font-mono text-xs ml-1 px-1.5 py-0.5 rounded border border-line bg-surface"
-      >{{ p }}</span>
-      &mdash; run <code>./scripts/down.sh &lt;pkg&gt;</code> on the host to stop them.
-    </Alert>
+    <div v-if="launchJobId && launchState !== 'idle'" class="mb-6">
+      <LaunchProgress
+        :job-id="launchJobId"
+        :packages="toStart"
+        @success="onLaunchSuccess"
+        @failed="onLaunchFailed"
+        @retry="onLaunchRetry"
+      />
+    </div>
 
-    <div class="grid grid-cols-2 gap-4 mb-10">
+    <!-- Follow-up tiles: unchanged in iter-1. iter-2 owns the checklist grid. -->
+    <div class="grid grid-cols-2 gap-4 mb-10" v-if="launchState !== 'running'">
       <Card hover>
         <div class="eyebrow mb-1">Home</div>
         <h3 class="mb-2">Aurora</h3>
@@ -94,11 +152,11 @@ function toDashboard(): void {
 
       <Card v-if="store.selectedPackages.includes('storage')" hover>
         <div class="eyebrow mb-1">Files</div>
-        <h3 class="mb-2">Mount the SMB share</h3>
+        <h3 class="mb-2">Mount the shared folder</h3>
         <p class="text-sm text-ink-3 mb-4">
-          Samba is up on the LAN. On macOS: <kbd>&#8984;K</kbd> then
-          <code class="text-ink">smb://{{ store.domain }}</code>. On Windows: File Explorer &rarr;
-          <code class="text-ink">\\{{ store.domain }}</code>.
+          Files is up on the LAN. On macOS: use Connect to Server with
+          <code class="text-ink">{{ store.domain }}</code>. On Windows: open File Explorer and
+          browse to <code class="text-ink">{{ store.domain }}</code>.
         </p>
       </Card>
     </div>
@@ -108,7 +166,13 @@ function toDashboard(): void {
         <div class="eyebrow mb-1">Reminder</div>
         One box, one URL, one dashboard. That's the whole point.
       </div>
-      <Button variant="primary" size="lg" @click="toDashboard">Take me to Aurora</Button>
+      <Button
+        variant="primary"
+        size="lg"
+        :disabled="!canGoToDashboard"
+        data-testid="to-dashboard"
+        @click="toDashboard"
+      >Take me to Aurora</Button>
     </div>
   </div>
 </template>

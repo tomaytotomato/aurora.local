@@ -44,10 +44,16 @@ RUN mvn -B -T1C package -Dmaven.test.skip=true
 FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
+# Runtime dependencies for the /api/onboarding/launch endpoint:
+#   - bash: scripts/up.sh starts with #!/usr/bin/env bash
+#   - docker-cli + docker-cli-compose: up.sh shells out to `docker compose`
+# Also install /var/log/aurora as a writable log destination for LaunchService.
+RUN apk add --no-cache bash docker-cli docker-cli-compose
+
 # Non-root user; UID overridden at runtime by compose (user: "${AURORA_UID}:${DOCKER_GID}").
 RUN addgroup -S aurora && adduser -S -G aurora -u 1000 aurora \
- && mkdir -p /data /repo /host/proc \
- && chown -R aurora:aurora /data /app
+ && mkdir -p /data /repo /host/proc /var/log/aurora \
+ && chown -R aurora:aurora /data /app /var/log/aurora
 
 COPY --from=backend /app/backend/target/aurora.jar /app/aurora.jar
 
