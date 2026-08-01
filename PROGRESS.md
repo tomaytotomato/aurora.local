@@ -6,3 +6,4 @@
 - [x] step-4 iter-1 plan
 
 - [x] step-5 iter-1 impl (fc3b13a, E2E: 28/30 focused pass; done-launch 2/2; no-cli done 4/4; 15 out-of-scope failures deferred to iter-2/3)
+- [x] step-6 iter-2 plan (living checklist + per-package probing; blocker-first ordering; AdGuard first-run detection)
