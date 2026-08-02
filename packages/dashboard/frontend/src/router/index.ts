@@ -30,7 +30,7 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     component: AppShell,
     children: [
-      { path: '', component: () => import('@/views/DashboardHome.vue') },
+      { path: '', component: () => import('@/views/DashboardHome.vue'), meta: { photoBg: true } },
       { path: 'packages', component: () => import('@/views/PackagesList.vue') },
       { path: 'packages/:name', component: () => import('@/views/PackageDetail.vue') },
       { path: 'security', component: () => import('@/views/SecurityPosture.vue') },
