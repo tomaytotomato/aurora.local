@@ -124,3 +124,32 @@ Unblocks the 10+ E2E reds noted in `MORNING_BRIEFING_3.md` §9. Full stack in on
 
 ### Next iteration target
 A5 — TD1 SSE for `/api/services/status`. Same `SseEmitter` pattern as `EventsController`. Frontend composable `useServiceStatusStream.ts` with poll fallback. Backend unit test with `MockMvc` async support. This drops the 5s poll cliff and is the last high-value v0.2 close-out before Phase B.
+
+## Iter 4 · 2026-08-02 23:55 · commit ff47bd9
+**A5 (TD1) SSE surface + FE composable — drops the 5s poll cliff.**
+
+### What shipped
+
+- `GET /api/services/status/stream` — SseEmitter(0L), initial snapshot fires synchronously on subscribe so first-paint doesn't wait a tick. `ScheduledExecutorService` (2 daemon threads) fans a 2s tick + 15s heartbeat comment to each emitter. Cleanup on onCompletion/onTimeout/onError; `@PreDestroy` shuts the pool down.
+- Poll fallback (`GET /api/services/status`) unchanged.
+- SecurityConfig broadens the GET permitAll to include the stream endpoint.
+- New `composables/useServiceStatusStream.ts` — exports `{data, error, source}` refs. Opens `EventSource` on mount, closes on scope dispose. Failure ladder: 3 fails within 30s → switch to 5s polling; `document.hidden` pauses both loops.
+
+### Verification
+
+- `mvn -o test -Dtest='StatusControllerStreamTests'` → **3/3 green.**
+- Full backend suite: **136 tests, 1 pre-existing failure, 0 introduced.** (+3.)
+- `vue-tsc --noEmit` → exit 0 (bind-mount via `node:22-alpine`).
+
+### Files touched
+- `controllers/StatusController.java` (rewritten to add stream endpoint, +126 -4)
+- `config/SecurityConfig.java` (+1 line, +stream to permitAll)
+- `test/.../StatusControllerStreamTests.java` (+105, new)
+- `frontend/src/composables/useServiceStatusStream.ts` (+179, new)
+
+### Deferred to iter-5
+- Wire `useServiceStatusStream` into `DoneChecklist.vue` and `DashboardHome.vue` Packages card. Explicitly held back — DoneChecklist has 300 lines of pendingStarts optimistic-overlay logic from commit 9db9c27 and the safe migration wants its own iter with its own regression tests.
+- New E2E asserting `EventSource` opens on `/dashboard/home` mount.
+
+### Next iteration target
+A6 — container-count honesty in System card. Bruce flagged this in the same clash as A1. A1 broadened `DockerService.listProjectContainers()` filter to include `aurora-*` projects, so the count is now honest given the enlarged filter. Iter-5 verifies the label + number match user expectation and pins the decision (packages-running vs total-host-containers). Small commit.
