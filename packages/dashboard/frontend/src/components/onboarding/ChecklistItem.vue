@@ -111,7 +111,7 @@ function onPrimary() {
     :data-package="service.package"
     :data-row="service.package"
     :data-tone="tone"
-    class="border border-line rounded-lg p-4 bg-[var(--color-surface)]"
+    class="border border-line rounded-lg p-4 bg-[var(--color-surface)] text-ink"
     :class="isCollapsed ? 'py-2' : ''"
   >
     <div class="flex items-start justify-between gap-4">

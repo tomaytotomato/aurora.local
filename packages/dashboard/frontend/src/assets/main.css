@@ -194,28 +194,47 @@
 
   /* iter-3 light-mode fix: outside-card content on the aurora photo
      background needs light text regardless of theme (the photo is dark in
-     both themes). Scope with `.on-photo` on the wrapping section so cards
-     inside it aren't affected — Card carries an opaque surface bg that
-     shields its interior tokens. */
-  .on-photo,
-  .on-photo .eyebrow {
+     both themes). Scoped tightly to DIRECT children so the cascade doesn't
+     bleed into opaque nested surfaces (Cards, ChecklistItem li, banners).
+     Every opaque surface component (Card, ChecklistItem, DoneChecklist
+     banner, Alert) explicitly declares its own `text-ink` so nested
+     content shows correctly. */
+  .on-photo {
     color: rgba(255, 255, 255, 0.92);
   }
-  .on-photo h1,
-  .on-photo h2,
-  .on-photo h3,
-  .on-photo h4 {
+  .on-photo > h1,
+  .on-photo > h2,
+  .on-photo > h3,
+  .on-photo > h4,
+  .on-photo > div > h1,
+  .on-photo > div > h2,
+  .on-photo > div > h3,
+  .on-photo > div > h4 {
     color: rgba(255, 255, 255, 0.96);
   }
-  .on-photo .eyebrow {
+  .on-photo > .eyebrow,
+  .on-photo > div > .eyebrow {
     color: rgba(255, 255, 255, 0.72);
   }
 
-  /* Content column */
+  /* Content column.
+     iter-3 padding audit: bumped padding-inline 2rem → 2.5rem so pages
+     don't feel flush against the sidebar on narrower displays where
+     margin-inline: auto has no room to breathe. */
   .content {
     max-width: var(--content-max);
     margin-inline: auto;
-    padding-inline: 2rem;
+    padding-inline: 2.5rem;
+  }
+
+  /* iter-3 padding audit: opt-in `.page` wrapper standardises the
+     vertical rhythm every top-level view uses. `<section>` on
+     DashboardHome/PackagesList/SettingsView/etc. can grow this class to
+     stop each view from hand-rolling `mb-10` on the header and
+     `space-y-*` on the body inconsistently. Not adopted everywhere yet
+     to keep this iteration minimal; use for new pages. */
+  .page {
+    padding-block: 1.5rem;
   }
 }
 

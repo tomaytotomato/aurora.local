@@ -45,9 +45,12 @@ onMounted(() => {
   <aside class="border-r border-line/60 bg-surface flex flex-col">
     <div class="px-6 py-5 border-b border-line/60">
       <RouterLink to="/" class="flex items-center gap-2.5 no-underline">
-        <svg viewBox="0 0 32 32" class="w-6 h-6">
+        <svg viewBox="0 0 32 32" class="w-6 h-6" aria-hidden="true">
+          <!-- iter-3 theme-flip: bg uses --color-ink (dark in light mode,
+               near-white in dark mode); stroke + dot use the inverting
+               --color-on-ink token so the A-glyph always contrasts. -->
           <rect width="32" height="32" rx="6" fill="var(--color-ink)"/>
-          <path d="M8 22 L16 8 L24 22" stroke="#FAF9F6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M8 22 L16 8 L24 22" stroke="var(--color-on-ink)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="16" cy="22" r="1.5" fill="var(--color-accent)"/>
         </svg>
         <span class="font-serif text-lg leading-none text-ink">Aurora</span>

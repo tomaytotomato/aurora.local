@@ -41,7 +41,7 @@ function passkey(): void {
       <div class="flex items-center gap-2.5 mb-10">
         <svg viewBox="0 0 32 32" class="w-7 h-7">
           <rect width="32" height="32" rx="6" fill="var(--color-ink)"/>
-          <path d="M8 22 L16 8 L24 22" stroke="#FAF9F6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M8 22 L16 8 L24 22" stroke="var(--color-on-ink)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="16" cy="22" r="1.5" fill="var(--color-accent)"/>
         </svg>
         <span class="font-serif text-xl leading-none text-ink">Aurora</span>
