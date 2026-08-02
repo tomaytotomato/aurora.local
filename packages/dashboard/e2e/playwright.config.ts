@@ -24,6 +24,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // iter-3 BL5: default storage state is the authed fixture seeded by
+    // global-setup.ts. Specs that need the pre-auth (fresh-box) state
+    // override with `test.use({ storageState: { cookies: [], origins: [] } })`.
+    storageState: 'fixtures/authed-state.json',
   },
   projects: [
     {
