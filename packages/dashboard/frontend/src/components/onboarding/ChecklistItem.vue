@@ -97,6 +97,12 @@ const canOverride = computed(() =>
 
 function onPrimary() {
   const s = props.service;
+  // iter-3 Start-button UX: hard belt-and-braces click guard at the
+  // child level too. Vue disables the DOM button when :disabled=true
+  // but a synthetic-event-in-flight can still fire onPrimary once more
+  // during the transition tick. Silently ignore when the parent has
+  // already flipped us to 'starting'.
+  if (s.state === 'starting') return;
   if (s.state === 'failed') {
     emit('retry', s.package);
   } else if (s.state === 'not-started') {
@@ -168,9 +174,22 @@ function onPrimary() {
         v-else
         type="button"
         :disabled="ctaDisabled"
-        class="inline-flex items-center h-9 px-3 text-sm rounded-md border border-line bg-surface hover:bg-surface-2 text-ink disabled:opacity-40"
+        :aria-busy="ctaDisabled || undefined"
+        data-test="row-cta"
+        class="inline-flex items-center gap-2 h-9 px-3 text-sm rounded-md border border-line bg-surface hover:bg-surface-2 text-ink disabled:opacity-40 disabled:cursor-not-allowed"
         @click="onPrimary"
-      >{{ ctaLabel }}</button>
+      >
+        <!-- iter-3 Start-button UX: spinner + aria-busy when the row is
+             in the 'starting' state (either the backend reported it, or
+             DoneChecklist's optimistic overlay set it). Reuses the same
+             inline spinner pattern as components/ui/Button.vue loading. -->
+        <span
+          v-if="ctaDisabled"
+          class="inline-block h-3 w-3 border border-current border-t-transparent rounded-full animate-spin"
+          aria-hidden="true"
+        />
+        {{ ctaLabel }}
+      </button>
       <button
         v-if="canOverride"
         type="button"
