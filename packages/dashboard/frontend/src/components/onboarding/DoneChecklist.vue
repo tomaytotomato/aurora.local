@@ -134,18 +134,34 @@ function onSkip(pkg: string): void {
   try { sessionStorage.setItem(`aurora.checklist.${pkg}.skipped`, 'true'); } catch { /* noop */ }
 }
 
-async function onRetry(): Promise<void> {
-  // Reuse iter-1 launch endpoint. Scope narrowing is not implemented in
-  // iter-2 backend — it re-runs the full enabled set. Safe and idempotent.
+async function onRetry(pkg: string): Promise<void> {
+  // iter-3 dashboard-home fix: DoneChecklist used to unconditionally call
+  // OnboardingApi.startLaunch() which POSTs /api/onboarding/launch — that
+  // endpoint 409s once onboarding is complete (guarded to the wizard
+  // phase). Sarah / Bruce hit it every click on /dashboard/home and saw
+  // '409 Conflict: onboarding already complete; use authenticated
+  // endpoints'.
+  //
+  // DoneChecklist has two callers: OnboardingDone.vue (during the wizard,
+  // no session cookie yet) and DashboardHome.vue (post-onboarding, session
+  // cookie present). Try the authenticated per-package endpoint first;
+  // fall back to the wizard-scoped batch launch on 401 (pre-login
+  // onboarding path). Any other error is swallowed — next probe reveals
+  // the truth.
+  try {
+    await ServicesApi.start(pkg);
+    return;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status !== 401 && status !== 403) return; // 409 / 5xx / timeout — next probe.
+  }
   try {
     await OnboardingApi.startLaunch();
-  } catch {
-    // launch may already be running (409). Silent — the next probe will show truth.
-  }
+  } catch { /* swallow: next probe reveals truth */ }
 }
 
-async function onStart(): Promise<void> {
-  await onRetry();
+async function onStart(pkg: string): Promise<void> {
+  await onRetry(pkg);
 }
 </script>
 
