@@ -215,3 +215,53 @@ media parent: running
 ```
 
 Backend 99/99 green. Test suite unchanged (probe URL is data, not code).
+
+## Start-button UX hardening · commit 9db9c27
+Bruce reported the Notes package Start button stayed clickable for ~5 s
+after the first click (until the next scheduled probe), so a double-click
+landed a duplicate `POST /api/services/notes/start` → HTTP 409
+(launch-already-in-flight). Bad UX.
+
+**Pattern-doc excerpt from DoneChecklist.vue:**
+```
+// pendingStarts[pkg] = epoch-ms timestamp when the click fired. Cleared
+// either when the backend probe reports 'running', or when the manifest-
+// declared budget elapses (deadline+rollback). While the entry exists:
+//   • the row is force-rendered as state='starting' regardless of what the
+//     probe says (optimistic UI update). This closes the 5-second race
+//     window between clicking and the next scheduled probe.
+//   • any additional click for the same pkg silently no-ops (idempotent
+//     click guard). No second network POST, no 409 toast.
+//
+// This is the standard "kick off a long-running action" pattern used by:
+//   • Stripe Dashboard's "Send test webhook" button (Nick Craver 2019 talk)
+//   • Vercel's "Redeploy" action (optimistic transition then fast-poll)
+//   • Linear's issue-state cycling (button locked until server ack + probe)
+```
+
+**Six-step contract now enforced:**
+1. Optimistic UI overlay (pendingStarts ref → displayServices force-render)
+2. Idempotent click guard (bail if pkg already pending)
+3. Fast-poll window (800 ms cadence until row goes running or budget elapses)
+4. Deadline+rollback (setTimeout(clearPending, startBudgetMs(pkg)))
+5. Swallow 409 races (no toast; fast-poll catches the eventual running state)
+6. aria-busy + spinner + `disabled:cursor-not-allowed` on the disabled CTA
+
+**Files:** `components/onboarding/DoneChecklist.vue` (+128 -4), `components/onboarding/ChecklistItem.vue` (+22 -1), new `packages/dashboard/e2e/tests/start-button-ux.spec.ts` (177 lines, 3 tests).
+
+**Live wire evidence:**
+- ChecklistItem chunk (`ReachInfo.vue_vue_type_script_setup_true_lang-KMVMbNH7.js` — bundled together by Vite): `row-cta`=1, `animate-spin`=1, `aria-busy`=2, `Waiting…`=1 all present.
+- DoneChecklist chunk (same file — code-splitting merged): `setInterval` + `setTimeout` + `clearTimeout` + literal `800` all present.
+
+**Verification:**
+- `npx vue-tsc --noEmit` → 0 exit
+- Backend 99/99 unchanged (frontend-only change).
+- `bash scripts/verify-iter3.sh` → 17/17 green.
+- Live rebuild + jar swap + docker restart → /api/health = 200 in 6 s.
+
+**E2E test suite (start-button-ux.spec.ts):**
+- 3 assertions targeting the 'notes' package (smallest single-container package; the exact one Bruce hit the bug on).
+- Uses `page.route('**/api/services/notes/start')` counter to prove exactly-one-POST.
+- Uses `page.route('**/api/services/status')` stub to prove optimistic overlay survives a hostile probe response.
+- Self-skips if the row is already 'running'.
+- Not yet run against `:8091` — requires the aurora-e2e project to be up; test file typechecks clean (`tsc --noEmit` = 0 exit in `packages/dashboard/e2e/`).
