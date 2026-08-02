@@ -84,3 +84,43 @@ Same class of bug (ingress validation on `PATCH /api/onboarding`), higher severi
 
 ### Next iteration target
 A3 — scrub SSH copy from `OnboardingAdmin.vue` (reviewer P1). Security review noted the SSH-copy line is not present at HEAD, but I'll re-verify + close the task file item honestly. If truly clean, iter 3 pivots to A4 (TD5 wizard-reset endpoint).
+
+## Iter 3 · 2026-08-02 23:20 · commit (see git log)
+**A3 closed by inspection; landed A4 (TD5) in same iter.**
+
+### A3 status: false alarm (as reviewer flagged)
+
+Read `views/onboarding/OnboardingAdmin.vue` in full. Zero references to `ssh`, `SSH`, `scp`, `bootstrap.sh`, `./scripts/`, or `sudo`. Lines 120/141 are password-recovery buttons; nothing SSH-shaped. Reviewer's F-2 note stands: the copy-to-clipboard fallback in `lib/utils.ts` briefly attaches a `<textarea>` with the admin password (accepted risk; password already lives in the reactive store). Closed with no code change.
+
+### A4 (TD5 wizard-reset endpoint) shipped
+
+Unblocks the 10+ E2E reds noted in `MORNING_BRIEFING_3.md` §9. Full stack in one commit because the pieces have no honest split: repo delete methods, service orchestration, controller gate, env wiring, and spec `beforeEach` all move together.
+
+**Layers, in order:**
+
+1. `AdminUserRepo.deleteAll()` — `DELETE FROM admin_user`. Sessions naturally lose auth on next `/api/auth/me`.
+2. `SettingsRepo.delete(key)` — single-row delete for `onboarding.*` cursor keys.
+3. `StateFileService.deleteState()` — `Files.deleteIfExists` on `.state.yml` + `.state.yml.tmp` (catches interrupted atomic write).
+4. `OnboardingService.reset()` — orchestrates 1+2+3 in order (admin wipe first so a mid-request observer sees 401 before it sees torn wizard state). Audit-records the event.
+5. `OnboardingController.reset()` — `POST /api/onboarding/reset`. `@Value("${aurora.e2e-mode:false}")` gate; returns 404 when off (endpoint hidden). No `guardMidOnboarding()` — the point is to blow away the state that guard enforces.
+6. `application.yml` — `aurora.e2e-mode: ${AURORA_E2E:false}`. Prod false; aurora-e2e compose flips on via env.
+7. `e2e/scripts/compose.e2e.yml` — `environment.AURORA_E2E: '1'` on the aurora service only.
+8. Three E2E specs — `test.beforeEach` hits `POST /api/onboarding/reset`. `.catch(() => {})` swallows the 404 from a prod-facing spec run.
+
+### Verification
+
+- `mvn -o test -Dtest='OnboardingControllerResetTests,OnboardingServiceResetTests'` → **6/6 green.**
+- Full backend suite: **133 tests, 1 pre-existing failure, 0 introduced.** (127 → 133, +6.)
+- E2E: typechecks locally against the fixture shape; specs not exercised (aurora-e2e project boot is outside this worktree). Verification deferred to Bruce's morning `bash scripts/verify-iter3.sh VERIFY_E2E=1`.
+
+### Files touched
+- Backend (main): `OnboardingController.java` (+33), `AdminUserRepo.java` (+10), `SettingsRepo.java` (+9), `OnboardingService.java` (+32), `StateFileService.java` (+16), `application.yml` (+6).
+- Backend (test): `OnboardingControllerResetTests.java` (+90, new), `OnboardingServiceResetTests.java` (+106, new).
+- E2E: `compose.e2e.yml` (+5), `wizard-happy-path.spec.ts` (+7 -1), `no-cli-instructions.spec.ts` (+8), `done-launch.spec.ts` (+6).
+
+### Not touched, deferred
+- Run the aurora-e2e project + verify the E2E baseline pass count grows (target ≥72, was 62). Bruce's morning verify sweep.
+- The reviewer's B-1 layer (c) `up.sh` refactor from `. "$ef"` to `docker compose --env-file` — still open, tracked as follow-up.
+
+### Next iteration target
+A5 — TD1 SSE for `/api/services/status`. Same `SseEmitter` pattern as `EventsController`. Frontend composable `useServiceStatusStream.ts` with poll fallback. Backend unit test with `MockMvc` async support. This drops the 5s poll cliff and is the last high-value v0.2 close-out before Phase B.
