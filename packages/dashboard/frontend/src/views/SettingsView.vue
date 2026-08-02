@@ -27,7 +27,7 @@ async function signOut(): Promise<void> {
     </div>
 
     <div class="space-y-6 max-w-2xl">
-      <Card>
+      <Card class="p-8">
         <div class="eyebrow mb-2">Admin</div>
         <h3 class="mb-2">Account</h3>
         <div class="text-sm text-ink-3 mb-4">
@@ -36,13 +36,13 @@ async function signOut(): Promise<void> {
         <Button variant="secondary" size="sm" @click="signOut">Sign out</Button>
       </Card>
 
-      <Card>
+      <Card class="p-8">
         <div class="eyebrow mb-2">Passkey</div>
         <h3 class="mb-2">Second factor</h3>
         <Alert tone="info">Passkey enrollment lands in v0.2.</Alert>
       </Card>
 
-      <Card v-if="info">
+      <Card v-if="info" class="p-8">
         <div class="eyebrow mb-2">System</div>
         <h3 class="mb-4">Metadata</h3>
         <dl class="text-sm space-y-2">

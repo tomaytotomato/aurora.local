@@ -62,14 +62,14 @@ const filtered = computed(() => {
       No packages in this view.
     </div>
 
-    <div v-else class="grid grid-cols-3 gap-4">
+    <div v-else class="grid grid-cols-3 gap-6">
       <router-link
         v-for="pkg in filtered"
         :key="pkg.name"
         :to="`/packages/${pkg.name}`"
-        class="no-underline"
+        class="no-underline block"
       >
-        <Card hover class="h-full">
+        <Card hover class="h-full p-8">
           <div class="flex items-start justify-between mb-3">
             <div>
               <div class="eyebrow mb-1">{{ pkg.category }}</div>
