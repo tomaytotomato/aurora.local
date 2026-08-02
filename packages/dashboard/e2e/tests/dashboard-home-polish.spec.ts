@@ -161,6 +161,28 @@ test('P5 Metrics strip renders shorter than every other card on the page', async
 });
 
 // -----------------------------------------------------------------
+// iter-3 V3 — aggregate health pill lifted into TopBar centre region.
+// Was intentionally empty in iter-2 (pill was still trapped inside
+// DashboardHome). Now shared via `composables/useHealthPill.ts`.
+// -----------------------------------------------------------------
+
+test('V3 TopBar centre region carries the aggregate health pill', async ({ page }) => {
+  if (!(await onboardingComplete(page))) test.skip();
+  await page.goto('/');
+  const centre = page.locator('header [data-region="health"]').first();
+  await expect(centre).toBeVisible();
+  const pill = centre.locator('[data-test="topbar-health-pill"]');
+  await expect(pill).toHaveCount(1);
+  const state = await pill.getAttribute('data-state');
+  expect(state, 'health pill must expose a HealthState via data-state').toMatch(
+    /^(running|not-started|failed|needs-config)$/,
+  );
+  // The pill text must not be the pre-V3 fallback empty string.
+  const text = ((await pill.textContent()) ?? '').trim();
+  expect(text.length, 'health pill text is empty; centre still uses the iter-2 fallback').toBeGreaterThan(0);
+});
+
+// -----------------------------------------------------------------
 // iter-3 B3 — card padding. Bruce reported "all content is squashed up
 // next to the borders" on 2026-08-02 morning. The four dashboard cards
 // each now carry `p-8` (32 px) instead of the default `p-6` (24 px).

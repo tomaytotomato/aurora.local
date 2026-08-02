@@ -10,6 +10,7 @@ import Badge from '@/components/ui/Badge.vue';
 import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
 import { renderIdentity } from '@/lib/identity';
 import { startBudgetMs, type PackageSummary } from '@/api/packages';
+import { useHealthPill } from '@/composables/useHealthPill';
 
 // iter-dash-1 dashboard-home. Closes the four blockers captured in
 // logs/dashboard-bugs-2026-08-01.md and enforces the empty/error state
@@ -130,24 +131,10 @@ const packagesCount = computed(() => {
 });
 
 // Health pill aggregation for the header (UX_SPEC_DASHBOARD.md §3.1).
-// iter-3 B4: previously read `.status === 'degraded'` / `'running'` — the
-// wire never emits `.status`, so both filters always missed. Now derived
-// from the `.running` boolean the backend actually sends. Degraded state
-// will return with the media sub-checklist (BL1).
-type HealthState = 'running' | 'needs-config' | 'failed' | 'not-started';
-const healthState = computed<HealthState>(() => {
-  const xs = packages.enabled;
-  if (xs.length === 0) return 'not-started';
-  if (xs.every((p) => p.running)) return 'running';
-  return 'not-started';
-});
-const healthPill = computed(() => {
-  switch (healthState.value) {
-    case 'running': return { text: 'Running', tone: 'ok' as const };
-    case 'failed':  return { text: 'Attention needed', tone: 'err' as const };
-    default:        return { text: 'Not started', tone: 'neutral' as const };
-  }
-});
+// iter-3 V3: lifted into `composables/useHealthPill.ts` so this view and
+// TopBar share the same derived state. Degraded transitions land with
+// the media sub-checklist (BL1).
+const { pill: healthPill } = useHealthPill();
 
 // Per-package Start (§2.1 fix). Delegates to POST /api/services/{pkg}/start
 // which returns 202 with a job_id. We refresh the package list on both

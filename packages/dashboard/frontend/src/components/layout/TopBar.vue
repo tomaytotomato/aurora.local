@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
 import { useSystemStore } from '@/stores/system';
+import { usePackagesStore } from '@/stores/packages';
 import { renderIdentity } from '@/lib/identity';
 import { useTheme } from '@/composables/useTheme';
+import { useHealthPill } from '@/composables/useHealthPill';
+import Badge from '@/components/ui/Badge.vue';
 import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -20,8 +23,10 @@ import { useRouter } from 'vue-router';
 
 const auth = useAuthStore();
 const system = useSystemStore();
+const packages = usePackagesStore();
 const router = useRouter();
 const { theme, toggle: toggleTheme } = useTheme();
+const { pill: healthPill } = useHealthPill();
 
 // UX_SPEC_DASHBOARD.md §3.1 + D3/D4/D10 + iter-3 B2: hostname/domain source
 // of truth is .state.yml (via /api/system). Delegated to lib/identity.ts
@@ -33,6 +38,11 @@ const hostLabel = computed(() =>
 
 onMounted(() => {
   if (!system.info) system.fetchInfo().catch(() => { /* silent */ });
+  // iter-3 V3: TopBar owns the aggregate health pill in its centre region,
+  // so it also owns the fetch trigger. DashboardHome will also fetch on
+  // mount, but if the user lands on any other authenticated view first,
+  // the pill still resolves to real data instead of "Not started".
+  if (packages.list.length === 0) packages.fetchList().catch(() => { /* silent */ });
 });
 
 async function signOut(): Promise<void> {
@@ -52,8 +62,19 @@ async function signOut(): Promise<void> {
         {{ hostLabel }}
       </div>
 
-      <!-- Health pill region — intentionally empty in iter-2 (P2 fallback). -->
-      <div class="justify-self-center" data-region="health"></div>
+      <!-- iter-3 V3: aggregate health pill lives here. Was intentionally
+           empty in iter-2 because `healthPill` was still trapped inside
+           DashboardHome. Now shared via `composables/useHealthPill.ts`. -->
+      <div class="justify-self-center" data-region="health">
+        <Badge
+          v-if="auth.session?.authenticated"
+          :tone="healthPill.tone"
+          :data-test="'topbar-health-pill'"
+          :data-state="healthPill.state"
+        >
+          {{ healthPill.text }}
+        </Badge>
+      </div>
 
       <div
         class="flex items-center gap-2 justify-self-end text-xs text-ink-3"
