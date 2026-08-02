@@ -62,10 +62,17 @@ services:
     # Seerr (fork/successor of Jellyseerr, actively maintained).
     # https://docs.seerr.dev/getting-started/docker/
     # Runs as the built-in `node` user (UID 1000); doesn't use PUID/PGID.
+    # iter-3 fix: image entrypoint runs as `node` and mkdir /app/config/logs
+    # fails with EACCES when the host bind-mount is owned by anything other
+    # than UID 1000 (e.g. root, or a different bruce UID). We override the
+    # entrypoint to (a) start as root, (b) chown the mount to node:node,
+    # (c) drop to node and exec the real entrypoint. `user: root` is only
+    # for the wrapper shell — su-exec / gosu-equivalent in the wrapper.
     image: ghcr.io/seerr-team/seerr:latest
     container_name: seerr
     restart: unless-stopped
     init: true
+    user: "0:0"
     networks: [aurora_net]
     environment:
       - TZ=${TZ:-Europe/London}
@@ -73,6 +80,14 @@ services:
       - PORT=5055
     volumes:
       - ../../data/seerr:/app/config
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        mkdir -p /app/config/logs
+        chown -R node:node /app/config
+        exec su node -s /bin/sh -c 'docker-entrypoint.sh npm start'
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider",
              "http://localhost:5055/api/v1/settings/public"]

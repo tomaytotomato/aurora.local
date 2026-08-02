@@ -47,7 +47,7 @@ subpackages:
     container: prowlarr
     probe:
       kind: http_json
-      in_cluster_url: http://prowlarr:9696/ping
+      in_cluster_url: http://prowlarr:9696/initialize.json
       external_url: http://{lan_ip}:9696/
       auth_treats_401_as_up: true
   - name: sonarr
@@ -55,7 +55,7 @@ subpackages:
     container: sonarr
     probe:
       kind: http_json
-      in_cluster_url: http://sonarr:8989/ping
+      in_cluster_url: http://sonarr:8989/initialize.json
       external_url: http://{lan_ip}:8989/
       auth_treats_401_as_up: true
   - name: radarr
@@ -63,7 +63,7 @@ subpackages:
     container: radarr
     probe:
       kind: http_json
-      in_cluster_url: http://radarr:7878/ping
+      in_cluster_url: http://radarr:7878/initialize.json
       external_url: http://{lan_ip}:7878/
       auth_treats_401_as_up: true
   - name: bazarr

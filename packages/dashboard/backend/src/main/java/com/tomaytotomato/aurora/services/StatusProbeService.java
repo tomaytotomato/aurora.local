@@ -81,6 +81,13 @@ public class StatusProbeService {
     this.http = HttpClient.newBuilder()
         .connectTimeout(CONNECT_TIMEOUT)
         .followRedirects(HttpClient.Redirect.NEVER)
+        // iter-3 media probe fix: HTTP/2 upgrade negotiation (h2c) stalls
+        // against some Express-based services (Seerr) that don't advertise
+        // the upgrade cleanly — the JDK client waits for the 101 response
+        // that never comes and burns the whole 2 s probe budget. Pin the
+        // whole client to HTTP/1.1 so every child probe uses the same
+        // wire protocol. All the arr apps + AdGuard already serve 1.1.
+        .version(HttpClient.Version.HTTP_1_1)
         .build();
   }
 
