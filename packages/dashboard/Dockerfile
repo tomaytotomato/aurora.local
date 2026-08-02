@@ -47,8 +47,10 @@ WORKDIR /app
 # Runtime dependencies for the /api/onboarding/launch endpoint:
 #   - bash: scripts/up.sh starts with #!/usr/bin/env bash
 #   - docker-cli + docker-cli-compose: up.sh shells out to `docker compose`
+#   - avahi-tools: iter-3 P1c mdns-audit.sh (avahi-browse + avahi-resolve)
+#   - bind-tools: iter-3 P1c mdns-audit.sh (dig +short @224.0.0.251 :5353)
 # Also install /var/log/aurora as a writable log destination for LaunchService.
-RUN apk add --no-cache bash docker-cli docker-cli-compose
+RUN apk add --no-cache bash docker-cli docker-cli-compose avahi-tools bind-tools
 
 # Non-root user; UID overridden at runtime by compose (user: "${AURORA_UID}:${DOCKER_GID}").
 RUN addgroup -S aurora && adduser -S -G aurora -u 1000 aurora \
