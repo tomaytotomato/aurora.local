@@ -8,6 +8,7 @@ import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Badge from '@/components/ui/Badge.vue';
 import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
+import { renderIdentity } from '@/lib/identity';
 
 // iter-dash-1 dashboard-home. Closes the four blockers captured in
 // logs/dashboard-bugs-2026-08-01.md and enforces the empty/error state
@@ -63,16 +64,13 @@ onMounted(async () => {
 });
 
 // ---- header + identity ---------------------------------------------
-// Never emits ${hostname}.${domain} when either side is missing; a bare
-// "aurora.local" fallback keeps the header from reading as broken.
-const identity = computed(() => {
-  const h = system.info?.hostname ?? null;
-  const d = system.info?.domain ?? null;
-  if (!h && !d) return 'aurora.local';
-  if (!h) return `\u2014.${d}`;
-  if (!d) return `${h}.\u2014`;
-  return `${h}.${d}`;
-});
+// iter-3 B2: delegate to lib/identity.ts so TopBar and this view share
+// the same dedup rule (avoid `aurora.aurora.local` when the hostname is
+// already the leading label of the domain). See lib/identity.ts for the
+// full rule set.
+const identity = computed(() =>
+  renderIdentity(system.info?.hostname, system.info?.domain),
+);
 
 // ---- system card ---------------------------------------------------
 const uptimeText = computed(() => humanUptime(system.info?.uptimeSeconds ?? null));

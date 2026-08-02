@@ -56,6 +56,45 @@ test('P2 header exposes identity / health / user data-region slots on grid-cols-
 });
 
 // -----------------------------------------------------------------
+// iter-3 B2 — identity dedup rule. When hostname is already the leading
+// label of the domain (default install: hostname=aurora, domain=aurora.local)
+// the header must render `aurora.local`, not `aurora.aurora.local`. This
+// spec exercises both the auth-gated dashboard-home path and the
+// pre-auth login/system endpoint so the assertion runs even on the fresh
+// e2e box that doesn't complete onboarding.
+// -----------------------------------------------------------------
+
+test('B2 header identity never contains the aurora.aurora.local dupe', async ({ page }) => {
+  await page.goto('/');
+  // Regardless of auth state, the served HTML must not contain the dupe.
+  // The identity string is computed client-side, but the initial fallback
+  // is `aurora.local` and any live response we render should apply the
+  // dedup rule from lib/identity.ts.
+  const html = await page.content();
+  expect(html).not.toContain('aurora.aurora.local');
+});
+
+test('B2 /api/system + renderIdentity contract: hostname=aurora, domain=aurora.local → aurora.local', async ({ page }) => {
+  if (!(await onboardingComplete(page))) {
+    test.skip(true, 'onboarding not complete; /api/system may return nulls');
+  }
+  const res = await page.request.get('/api/system');
+  expect(res.ok()).toBeTruthy();
+  const body = await res.json();
+  // If the box has been set up with the default install shape, the API
+  // returns hostname=aurora, domain=aurora.local. The header identity
+  // must show `aurora.local` (dedup rule), not `aurora.aurora.local`.
+  if (body?.hostname && body?.domain
+      && String(body.domain).toLowerCase().startsWith(String(body.hostname).toLowerCase() + '.')) {
+    await page.goto('/');
+    const identity = page.locator('[data-test="topbar-identity"], [data-region="identity"]').first();
+    await expect(identity).toHaveText(String(body.domain));
+  } else {
+    test.skip(true, 'box is not in dedup shape; skipping positive assertion');
+  }
+});
+
+// -----------------------------------------------------------------
 // The remaining assertions require an authenticated dashboard-home.
 // They self-skip cleanly on the fresh e2e box, matching the pattern
 // established in package-status-probing.spec.ts.

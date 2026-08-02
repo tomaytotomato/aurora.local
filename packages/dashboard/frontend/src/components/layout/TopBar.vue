@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
 import { useSystemStore } from '@/stores/system';
+import { renderIdentity } from '@/lib/identity';
 import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -20,20 +21,13 @@ const auth = useAuthStore();
 const system = useSystemStore();
 const router = useRouter();
 
-// UX_SPEC_DASHBOARD.md §3.1 + D3/D4/D10: hostname/domain source of truth is
-// .state.yml (via /api/system). Never render `undefined`; never emit a
-// bare trailing dot. Falls back to "aurora.local" only when we have no
-// data at all — an em-dash is used per-half when one side is missing.
-const hostLabel = computed(() => {
-  const info = system.info;
-  if (!info) return 'aurora.local';
-  const h = info.hostname ?? null;
-  const d = info.domain ?? null;
-  if (!h && !d) return 'aurora.local';
-  if (!h) return `\u2014.${d}`;
-  if (!d) return `${h}.\u2014`;
-  return `${h}.${d}`;
-});
+// UX_SPEC_DASHBOARD.md §3.1 + D3/D4/D10 + iter-3 B2: hostname/domain source
+// of truth is .state.yml (via /api/system). Delegated to lib/identity.ts
+// which encodes the dedup rule (avoid `aurora.aurora.local` when the
+// hostname is already the leading label of the domain).
+const hostLabel = computed(() =>
+  renderIdentity(system.info?.hostname, system.info?.domain),
+);
 
 onMounted(() => {
   if (!system.info) system.fetchInfo().catch(() => { /* silent */ });
