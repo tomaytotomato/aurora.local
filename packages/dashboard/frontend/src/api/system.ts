@@ -2,6 +2,13 @@ import { http } from './client';
 
 export interface SystemCapabilities {
   metrics: boolean;
+  /**
+   * iter-3 P1b: gates /security. False in v0.2.x — the real rules engine
+   * (host + container + secret audits) lands with milestone M4. While
+   * false, SecurityPosture.vue renders the honest empty-state view and
+   * the sidebar hides the nav link.
+   */
+  securityScanner?: boolean;
 }
 
 export interface SystemInfo {

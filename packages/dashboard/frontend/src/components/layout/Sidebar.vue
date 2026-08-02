@@ -1,26 +1,44 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from 'vue-router';
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
+import { useSystemStore } from '@/stores/system';
 
 const route = useRoute();
+const system = useSystemStore();
 
 interface NavItem {
   to: string;
   label: string;
   icon: string; // svg path 'd'
+  requiresCapability?: keyof (import('@/api/system').SystemCapabilities);
 }
 
+// iter-3 P1b: `/security` is gated behind capabilities.securityScanner.
+// Until M4 lands the capability is false and the nav entry hides so
+// Sarah can't route into what is honestly a placeholder page.
 const nav: NavItem[] = [
   { to: '/', label: 'Overview', icon: 'M3 12 L12 3 L21 12 M5 10 V21 H19 V10' },
   { to: '/packages', label: 'Packages', icon: 'M3 7 L12 3 L21 7 L12 11 Z M3 7 V17 L12 21 M21 7 V17 L12 21' },
-  { to: '/security', label: 'Security', icon: 'M12 3 L20 6 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V6 Z' },
+  { to: '/security', label: 'Security', icon: 'M12 3 L20 6 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V6 Z', requiresCapability: 'securityScanner' },
   { to: '/settings', label: 'Settings', icon: 'M12 8 A4 4 0 1 1 12 16 A4 4 0 1 1 12 8 M12 2 V4 M12 20 V22 M4 12 H2 M22 12 H20 M5 5 L6.5 6.5 M17.5 17.5 L19 19 M5 19 L6.5 17.5 M17.5 6.5 L19 5' },
 ];
+
+const visibleNav = computed<NavItem[]>(() =>
+  nav.filter((item) => {
+    if (!item.requiresCapability) return true;
+    // Fetch may still be pending on first mount — hide by default.
+    return system.info?.capabilities?.[item.requiresCapability] === true;
+  }),
+);
 
 const isActive = (to: string): boolean => {
   if (to === '/') return route.path === '/';
   return route.path.startsWith(to);
 };
+
+onMounted(() => {
+  if (!system.info) system.fetchInfo().catch(() => { /* silent */ });
+});
 </script>
 
 <template>
@@ -39,7 +57,7 @@ const isActive = (to: string): boolean => {
 
     <nav class="flex-1 py-4 px-3">
       <RouterLink
-        v-for="item in nav"
+        v-for="item in visibleNav"
         :key="item.to"
         :to="item.to"
         class="flex items-center gap-3 px-3 py-2 rounded-md text-sm no-underline transition-colors duration-150"
