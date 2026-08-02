@@ -154,7 +154,7 @@ async function onStart(): Promise<void> {
     <div
       v-if="showBringingUp"
       data-banner="bringing-up"
-      class="border border-line rounded-lg p-3 mb-3 bg-surface-2/60 text-sm text-ink-2"
+      class="border border-line rounded-lg p-3 mb-3 bg-[var(--color-surface-2)] text-sm text-ink-2"
     >
       Aurora is still bringing these online. Nothing for you to type.
     </div>

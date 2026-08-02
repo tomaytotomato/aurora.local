@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import { useSystemStore } from '@/stores/system';
 import { usePackagesStore } from '@/stores/packages';
 import { useEventsStore } from '@/stores/events';
@@ -13,6 +14,13 @@ import { startBudgetMs, type PackageSummary } from '@/api/packages';
 import { useHealthPill } from '@/composables/useHealthPill';
 import ReachInfo from '@/components/ReachInfo.vue';
 import DoneChecklist from '@/components/onboarding/DoneChecklist.vue';
+
+// iter-3 light-mode fix: when photoBg is on, the aurora photo is dark in
+// both themes. Outside-card content (page header, section eyebrows) needs
+// light text regardless of theme so it reads over the photo. Inside-card
+// text is unaffected because Card carries an opaque surface bg.
+const route = useRoute();
+const photoBg = computed<boolean>(() => Boolean(route.meta?.photoBg));
 
 // iter-dash-1 dashboard-home. Closes the four blockers captured in
 // logs/dashboard-bugs-2026-08-01.md and enforces the empty/error state
@@ -174,10 +182,10 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
 
 <template>
   <section>
-    <div class="mb-10">
+    <div class="mb-10" :class="photoBg && 'on-photo'">
       <div class="eyebrow mb-2">Overview</div>
       <h1 class="mb-2" data-test="identity">{{ identity }}</h1>
-      <p class="text-ink-3">
+      <p :class="photoBg ? 'text-white/80' : 'text-ink-3'">
         {{ distroText }} · {{ cpuText }} vCPU · Docker {{ dockerText }}
       </p>
     </div>
@@ -407,6 +415,7 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
     <section
       v-if="packages.enabled.length > 0"
       class="mt-4"
+      :class="photoBg && 'on-photo'"
       data-test="dashboard-done-checklist"
     >
       <div class="eyebrow mb-3">Bring your box online</div>

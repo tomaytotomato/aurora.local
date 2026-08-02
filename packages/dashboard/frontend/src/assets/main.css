@@ -192,6 +192,25 @@
     font-weight: 500;
   }
 
+  /* iter-3 light-mode fix: outside-card content on the aurora photo
+     background needs light text regardless of theme (the photo is dark in
+     both themes). Scope with `.on-photo` on the wrapping section so cards
+     inside it aren't affected — Card carries an opaque surface bg that
+     shields its interior tokens. */
+  .on-photo,
+  .on-photo .eyebrow {
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .on-photo h1,
+  .on-photo h2,
+  .on-photo h3,
+  .on-photo h4 {
+    color: rgba(255, 255, 255, 0.96);
+  }
+  .on-photo .eyebrow {
+    color: rgba(255, 255, 255, 0.72);
+  }
+
   /* Content column */
   .content {
     max-width: var(--content-max);
