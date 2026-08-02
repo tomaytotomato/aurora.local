@@ -10,6 +10,9 @@ const props = defineProps<{
 
 const system = useSystemStore();
 const showMountPanel = ref(false);
+// iter-3 BL1: child sub-package rows (media → prowlarr/sonarr/...).
+const showChildren = ref(false);
+const hasChildren = computed<boolean>(() => (props.service.children?.length ?? 0) > 0);
 
 // iter-3 BL3: expandable per-OS mount instructions replace the raw
 // `smb://` link on the storage row. Kept behind an explicit toggle so
@@ -126,6 +129,14 @@ function onPrimary() {
     </div>
     <div class="flex items-center gap-2 shrink-0">
       <button
+        v-if="hasChildren"
+        type="button"
+        class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line"
+        :aria-expanded="showChildren"
+        data-test="row-children-toggle"
+        @click="showChildren = !showChildren"
+      >{{ showChildren ? 'Hide' : 'Show' }} {{ service.children!.length }} services</button>
+      <button
         v-if="isStorageRunning"
         type="button"
         class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line"
@@ -180,5 +191,21 @@ function onPrimary() {
       :lan-ip="system.info?.lanIp"
       :mdns-host="system.info?.domain"
     />
+
+    <!-- iter-3 BL1: child sub-package rows rendered as a nested list
+         when the caller toggles "Show" on a row that declares children.
+         Recursive: each child gets its own ChecklistItem so `probe.kind`
+         and Copy/CTA logic re-use the parent code path unchanged. -->
+    <ul
+      v-if="hasChildren && showChildren"
+      class="mt-3 ml-4 pl-4 border-l border-line/60 space-y-2"
+      data-test="row-children"
+    >
+      <ChecklistItem
+        v-for="child in service.children"
+        :key="child.package"
+        :service="child"
+      />
+    </ul>
   </li>
 </template>

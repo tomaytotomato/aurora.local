@@ -166,23 +166,78 @@ public class StatusProbeService {
     String inCluster = probeCfg.get("in_cluster_url") instanceof String s ? s : null;
     boolean auth401AsUp = Boolean.TRUE.equals(probeCfg.get("auth_treats_401_as_up"));
 
+    ProbeResult parent;
     try {
       switch (kind) {
         case "self":
-          return ProbeResult.running(pkg, container, externalUrl, ms(started));
+          parent = ProbeResult.running(pkg, container, externalUrl, ms(started));
+          break;
         case "adguard":
-          return probeAdguard(pkg, container, inCluster, externalUrl, started);
+          parent = probeAdguard(pkg, container, inCluster, externalUrl, started);
+          break;
         case "http_json":
-          return probeHttpJson(pkg, container, inCluster, externalUrl, auth401AsUp, started);
+          parent = probeHttpJson(pkg, container, inCluster, externalUrl, auth401AsUp, started);
+          break;
+        case "smb":
+          int smbPort = probeCfg.get("port") instanceof Number n ? n.intValue() : 445;
+          parent = probeSmb(pkg, container, smbPort, externalUrl, started);
+          break;
         case "docker":
         default:
-          return probeDocker(pkg, container, externalUrl, started);
+          parent = probeDocker(pkg, container, externalUrl, started);
+          break;
       }
     } catch (Exception e) {
       log.debug("probe({}) exception: {}", pkg, e.toString());
-      return ProbeResult.failed(pkg, container, "Aurora could not reach this service.",
+      parent = ProbeResult.failed(pkg, container, "Aurora could not reach this service.",
           "The last probe hit an unexpected error.", ms(started));
     }
+
+    // iter-3 BL1: probe declared subpackages (e.g. media → prowlarr/sonarr/
+    // radarr/bazarr/seerr). Only probe children when the parent is up
+    // enough to plausibly host them — not-started parent → all children
+    // report not-started too, no HTTP calls.
+    List<Map<String, Object>> subs = packages.readSubpackages(pkg);
+    if (!subs.isEmpty()) {
+      List<ProbeResult> kids = new ArrayList<>();
+      for (Map<String, Object> sub : subs) {
+        try {
+          kids.add(probeSubpackage(pkg, parent, sub));
+        } catch (Exception e) {
+          log.debug("probe({}/sub) exception: {}", pkg, e.toString());
+        }
+      }
+      parent.children = kids;
+    }
+    return parent;
+  }
+
+  @SuppressWarnings("unchecked")
+  private ProbeResult probeSubpackage(String parentPkg, ProbeResult parent, Map<String, Object> sub) {
+    long started = System.nanoTime();
+    String name = sub.get("name") instanceof String s ? s : parentPkg + "-child";
+    String container = sub.get("container") instanceof String s ? s : name;
+    Map<String, Object> probeCfg = sub.get("probe") instanceof Map<?, ?> m
+        ? (Map<String, Object>) m : Map.of();
+    String kind = probeCfg.get("kind") instanceof String s ? s : "docker";
+    String inCluster = probeCfg.get("in_cluster_url") instanceof String s ? s : null;
+    String externalUrl = resolveTemplate(
+        probeCfg.get("external_url") instanceof String s ? s : null);
+    boolean auth401AsUp = Boolean.TRUE.equals(probeCfg.get("auth_treats_401_as_up"));
+
+    // If the parent isn't running yet, don't bother HTTP-probing the child.
+    if ("not-started".equals(parent.state)) {
+      return ProbeResult.notStarted(name, container, externalUrl, ms(started));
+    }
+
+    return switch (kind) {
+      case "http_json" -> probeHttpJson(name, container, inCluster, externalUrl, auth401AsUp, started);
+      case "smb" -> {
+        int port = probeCfg.get("port") instanceof Number n ? n.intValue() : 445;
+        yield probeSmb(name, container, port, externalUrl, started);
+      }
+      default -> probeDocker(name, container, externalUrl, started);
+    };
   }
 
   private ProbeResult probeAdguard(String pkg, String container, String inCluster,
@@ -386,6 +441,8 @@ public class StatusProbeService {
     public final String detail;
     public final String openUrl;
     public final int probedMs;
+    /** iter-3 BL1: child sub-package probes (Prowlarr/Sonarr/... under media). Empty when none. */
+    public List<ProbeResult> children = List.of();
 
     private ProbeResult(String pkg, String container, String state, String reason,
                         String detail, String openUrl, int probedMs) {
@@ -426,6 +483,11 @@ public class StatusProbeService {
       m.put("open_url", openUrl);
       m.put("priority", STATE_PRIORITY.getOrDefault(state, 5));
       m.put("probed_ms", probedMs);
+      if (children != null && !children.isEmpty()) {
+        List<Map<String, Object>> kids = new ArrayList<>();
+        for (ProbeResult c : children) kids.add(c.toJson());
+        m.put("children", kids);
+      }
       return m;
     }
   }

@@ -111,6 +111,35 @@ public class PackagesService {
     }
   }
 
+  /**
+   * iter-3 BL1: return the manifest's declared subpackages (child services
+   * that share the parent package's compose file but get their own status
+   * probe). Empty when the manifest has no {@code subpackages:} block.
+   *
+   * <p>Each returned entry has {@code name}, optional {@code title},
+   * optional {@code container}, and a {@code probe} sub-map with the same
+   * shape as top-level {@code probe}.
+   */
+  @SuppressWarnings("unchecked")
+  public List<Map<String, Object>> readSubpackages(String name) {
+    Path p = Path.of(props.repoPath()).resolve("packages").resolve(name).resolve("manifest.yml");
+    if (!Files.isRegularFile(p)) return List.of();
+    try (var in = Files.newInputStream(p)) {
+      Map<String, Object> m = new Yaml().load(in);
+      if (m == null) return List.of();
+      Object raw = m.get("subpackages");
+      if (!(raw instanceof List<?> list)) return List.of();
+      List<Map<String, Object>> out = new ArrayList<>();
+      for (Object entry : list) {
+        if (entry instanceof Map<?, ?> em) out.add((Map<String, Object>) em);
+      }
+      return out;
+    } catch (IOException e) {
+      log.warn("readSubpackages({}) failed: {}", name, e.getMessage());
+      return List.of();
+    }
+  }
+
   @SuppressWarnings("unchecked")
   public List<Map<String, Object>> readWarnings(String name) {
     Path p = Path.of(props.repoPath()).resolve("packages").resolve(name).resolve("manifest.yml");

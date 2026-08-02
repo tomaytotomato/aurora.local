@@ -19,6 +19,8 @@ export interface ServiceStatus {
   open_url: string | null;
   priority: number;
   probed_ms: number;
+  /** iter-3 BL1: child sub-package probes (e.g. Prowlarr/Sonarr under media). */
+  children?: ServiceStatus[];
 }
 
 export interface ServicesStatusResponse {

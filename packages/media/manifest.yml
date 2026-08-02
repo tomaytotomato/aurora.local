@@ -36,6 +36,53 @@ requires:
   # a generous poll budget before it declares "Couldn't start".
   start_budget_seconds: 180
 
+# iter-3 BL1: user-facing children rendered under the Media row on
+# /dashboard/home. Each subpackage gets its own status probe so a
+# Prowlarr crash doesn't hide behind a green top-level Media row.
+# Order is the order they appear in the UI (roughly the order Sarah
+# will need them: indexers → shows → movies → subs → requests).
+subpackages:
+  - name: prowlarr
+    title: Prowlarr
+    container: prowlarr
+    probe:
+      kind: http_json
+      in_cluster_url: http://prowlarr:9696/ping
+      external_url: http://{lan_ip}:9696/
+      auth_treats_401_as_up: true
+  - name: sonarr
+    title: Sonarr
+    container: sonarr
+    probe:
+      kind: http_json
+      in_cluster_url: http://sonarr:8989/ping
+      external_url: http://{lan_ip}:8989/
+      auth_treats_401_as_up: true
+  - name: radarr
+    title: Radarr
+    container: radarr
+    probe:
+      kind: http_json
+      in_cluster_url: http://radarr:7878/ping
+      external_url: http://{lan_ip}:7878/
+      auth_treats_401_as_up: true
+  - name: bazarr
+    title: Bazarr
+    container: bazarr
+    probe:
+      kind: http_json
+      in_cluster_url: http://bazarr:6767/
+      external_url: http://{lan_ip}:6767/
+      auth_treats_401_as_up: true
+  - name: seerr
+    title: Seerr
+    container: seerr
+    probe:
+      kind: http_json
+      in_cluster_url: http://seerr:5055/api/v1/status
+      external_url: http://{lan_ip}:5055/
+      auth_treats_401_as_up: true
+
 required_env: []
 
 probe:
