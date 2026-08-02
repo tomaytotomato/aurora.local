@@ -56,6 +56,38 @@
     color-scheme: light;
   }
 
+  /* iter-3 V2: dark mode. Warm-monochrome inversion of the light theme,
+     tuned so the aurora photo background still reads richly. Applied by
+     setting data-theme="dark" on the <html> element (see composables/
+     useTheme.ts and TopBar toggle). Status colours stay editorial. */
+  [data-theme="dark"] {
+    color-scheme: dark;
+
+    --color-canvas: #0e0d0b;
+    --color-surface: #16140f;
+    --color-surface-2: #1e1c16;
+
+    --color-ink: #f5f4ef;
+    --color-ink-2: #d5d3ca;
+    --color-ink-3: #a3a099;
+    --color-ink-4: #706c65;
+
+    --color-line: #2c2a22;
+    --color-line-2: #24221b;
+
+    --color-accent: #d97706;
+    --color-accent-hover: #f59e0b;
+
+    --color-ok-bg: #143020;
+    --color-ok-fg: #86efac;
+    --color-warn-bg: #33260a;
+    --color-warn-fg: #fde68a;
+    --color-err-bg: #341215;
+    --color-err-fg: #fca5a5;
+    --color-info-bg: #0f2637;
+    --color-info-fg: #93c5fd;
+  }
+
   html, body {
     background: var(--color-canvas);
     color: var(--color-ink);
