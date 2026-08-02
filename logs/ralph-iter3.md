@@ -136,3 +136,17 @@
   - env() returns null-not-container-id when state is empty
   - belt-and-braces: env() hostname is never a 12-hex-char short-id
 - **Backend 99/99 green** (up from 96).
+
+## Iter 23 · 2026-08-02 12:44 · commit 817eb8c
+**verify-iter3.sh** — completion-gate script.
+- `bash scripts/verify-iter3.sh` runs an idempotent monitor-rerunnable set of checks:
+  1. Git: commits since `fd8ea9c` baseline.
+  2. Backend: `mvn test` (opt-in via `VERIFY_BUILD=1`; docker-run maven).
+  3. Live curl matrix: `/api/health`, `/api/onboarding/env` (hostname, domain, lanIp),
+     `/api/services/status` (core.state, media.children=5), unauth `/api/system` + start endpoints → 401.
+  4. Deployed SPA bundle grep (24 chunks after ~two-pass modulepreload traversal):
+     no aurora.aurora.local, has data-theme, has lanIp/LAN IP token, no fabricated
+     Review checks →, no rendered NaN copy, has capabilities gate.
+  5. E2E rerun (opt-in via `VERIFY_E2E=1`; asserts pass ≥ baseline 41).
+- Env overrides: `AURORA_LIVE_URL`, `AURORA_E2E_PROJECT`, `AURORA_BASELINE`, `VERIFY_E2E`, `VERIFY_BUILD`.
+- Current: **17/17 green** with `VERIFY_BUILD=1 VERIFY_E2E=0`.
