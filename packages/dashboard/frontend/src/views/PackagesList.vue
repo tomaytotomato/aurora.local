@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue';
 import { usePackagesStore } from '@/stores/packages';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
-import type { PackageStatus } from '@/api/packages';
 
 const packages = usePackagesStore();
 
@@ -19,12 +18,11 @@ const filtered = computed(() => {
   return packages.list;
 });
 
-const toneFor = (s: PackageStatus): 'ok' | 'warn' | 'err' | 'neutral' => {
-  if (s === 'running') return 'ok';
-  if (s === 'degraded') return 'warn';
-  if (s === 'stopped') return 'err';
-  return 'neutral';
-};
+// iter-3 B4: `toneFor` used to select the badge tone from the ghost
+// `.status` field on PackageSummary. The wire never emitted `.status`
+// so the Badge now goes off the `.running` boolean directly (see
+// template). PackageStatus stays exported from @/api/packages for the
+// upcoming BL1 degraded-state work.
 </script>
 
 <template>
@@ -77,14 +75,11 @@ const toneFor = (s: PackageStatus): 'ok' | 'warn' | 'err' | 'neutral' => {
               <div class="eyebrow mb-1">{{ pkg.category }}</div>
               <h3 class="text-ink">{{ pkg.name }}</h3>
             </div>
-            <Badge :tone="pkg.enabled ? toneFor(pkg.status) : 'neutral'">
-              {{ pkg.enabled ? pkg.status : 'off' }}
+            <Badge :tone="pkg.enabled ? (pkg.running ? 'ok' : 'neutral') : 'neutral'">
+              {{ pkg.enabled ? (pkg.running ? 'running' : 'stopped') : 'off' }}
             </Badge>
           </div>
           <p class="text-sm text-ink-3 line-clamp-3">{{ pkg.description }}</p>
-          <div v-if="pkg.enabled && pkg.containers" class="mt-4 text-xs text-ink-4 font-mono">
-            {{ pkg.containers }} container{{ pkg.containers === 1 ? '' : 's' }}
-          </div>
         </Card>
       </router-link>
     </div>

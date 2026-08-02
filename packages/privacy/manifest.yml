@@ -28,6 +28,7 @@ requires:
   min_ram_mb: 512
   min_disk_gb: 2
   host_roles: []
+  start_budget_seconds: 60  # gluetun + adguard: allow VPN handshake time.
 
 required_env:
   - VPN_SERVICE_PROVIDER

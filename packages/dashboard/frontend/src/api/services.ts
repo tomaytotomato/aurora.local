@@ -42,10 +42,18 @@ export const ServicesApi = {
    * Kick off a single-package launch after onboarding is complete. Sibling
    * of POST /api/onboarding/launch (which is wizard-scoped and 409s
    * post-complete). See UX_SPEC_DASHBOARD.md §2.1.
+   *
+   * iter-3 B4: extend the axios timeout for this call specifically. The
+   * backend returns 202 fast, but the whole HTTP round-trip can bounce
+   * through session setup + wizard-status checks. Give it 30 s so we
+   * don't hit the client default (15 s) and misreport a real 202 as an
+   * axios timeout → red row.
    */
   async start(pkg: string): Promise<ServiceStartResponse> {
     const res = await http.post<ServiceStartResponse>(
       `/services/${encodeURIComponent(pkg)}/start`,
+      undefined,
+      { timeout: 30_000 },
     );
     return res.data;
   },

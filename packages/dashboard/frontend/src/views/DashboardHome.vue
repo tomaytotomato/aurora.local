@@ -9,6 +9,7 @@ import Button from '@/components/ui/Button.vue';
 import Badge from '@/components/ui/Badge.vue';
 import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
 import { renderIdentity } from '@/lib/identity';
+import { startBudgetMs, type PackageSummary } from '@/api/packages';
 
 // iter-dash-1 dashboard-home. Closes the four blockers captured in
 // logs/dashboard-bugs-2026-08-01.md and enforces the empty/error state
@@ -112,10 +113,11 @@ setTimeout(() => {
 }, 3000);
 
 // ---- packages card + count semantics -------------------------------
-// UX_SPEC_DASHBOARD.md §4.3: numerator = probe==='running'; denominator =
-// enabled_packages.length. Guard against numerator > denominator.
+// UX_SPEC_DASHBOARD.md §4.3 + iter-3 B4: numerator = `.running` boolean
+// (was `.status === 'running'` — wire never emitted `.status`, so this
+// always resolved to 0). Denominator = enabled_packages.length.
 const runningCount = computed(() => {
-  const n = packages.enabled.filter((p) => p.status === 'running').length;
+  const n = packages.enabled.filter((p) => p.running).length;
   const d = packages.enabled.length;
   return n > d ? d : n;
 });
@@ -128,13 +130,15 @@ const packagesCount = computed(() => {
 });
 
 // Health pill aggregation for the header (UX_SPEC_DASHBOARD.md §3.1).
-// Iter-1: simplified — running iff every enabled package is running.
+// iter-3 B4: previously read `.status === 'degraded'` / `'running'` — the
+// wire never emits `.status`, so both filters always missed. Now derived
+// from the `.running` boolean the backend actually sends. Degraded state
+// will return with the media sub-checklist (BL1).
 type HealthState = 'running' | 'needs-config' | 'failed' | 'not-started';
 const healthState = computed<HealthState>(() => {
   const xs = packages.enabled;
   if (xs.length === 0) return 'not-started';
-  if (xs.some((p) => p.status === 'degraded')) return 'failed';
-  if (xs.every((p) => p.status === 'running')) return 'running';
+  if (xs.every((p) => p.running)) return 'running';
   return 'not-started';
 });
 const healthPill = computed(() => {
@@ -168,8 +172,10 @@ async function onStart(name: string): Promise<void> {
 // eye lands on the row that needs a Start click.
 const enabledSorted = computed(() =>
   [...packages.enabled].sort((a, b) => {
-    const rank = (s: string): number => (s === 'running' ? 3 : s === 'degraded' ? 0 : s === 'stopped' ? 1 : 2);
-    return rank(a.status) - rank(b.status);
+    // iter-3 B4: rank on `.running` boolean; degraded state returns
+    // with the media sub-checklist (BL1).
+    const rank = (p: PackageSummary): number => (p.running ? 3 : 1);
+    return rank(a) - rank(b);
   }),
 );
 
@@ -321,16 +327,15 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
               :key="p.name"
               class="flex items-center justify-between text-sm gap-3"
               :data-package="p.name"
-              :data-status="p.status"
+              :data-status="p.running ? 'running' : 'stopped'"
             >
               <span class="text-ink truncate">{{ p.title || p.name }}</span>
               <div class="flex items-center gap-2 shrink-0">
-                <span v-if="p.status === 'running'" class="text-xs text-ink-3">Running</span>
-                <span v-else-if="p.status === 'degraded'" class="text-xs text-ink-3">Attention</span>
+                <span v-if="p.running" class="text-xs text-ink-3">Running</span>
                 <span v-else-if="startState[p.name] === 'starting'" class="text-xs text-ink-3">Starting…</span>
                 <span v-else-if="startState[p.name] === 'error'" class="text-xs text-ink-3">Couldn't start</span>
                 <Button
-                  v-if="p.status !== 'running' && startState[p.name] !== 'starting'"
+                  v-if="!p.running && startState[p.name] !== 'starting'"
                   variant="secondary"
                   size="sm"
                   :data-cta="startState[p.name] === 'error' ? 'retry' : 'start'"

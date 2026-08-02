@@ -31,6 +31,10 @@ requires:
   min_ram_mb: 2048
   min_disk_gb: 20
   host_roles: []
+  # iter-3 B4: 7-container stack (flaresolverr, prowlarr, sonarr, radarr,
+  # bazarr, rdtclient, seerr) plus first-run image pulls. Give the frontend
+  # a generous poll budget before it declares "Couldn't start".
+  start_budget_seconds: 180
 
 required_env: []
 

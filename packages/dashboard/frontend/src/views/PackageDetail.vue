@@ -32,7 +32,7 @@ onMounted(async () => {
       <div class="flex items-baseline gap-3 mt-4">
         <h1>{{ name }}</h1>
         <Badge v-if="detail" :tone="detail.enabled ? 'ok' : 'neutral'">
-          {{ detail.enabled ? detail.status : 'disabled' }}
+          {{ detail.enabled ? (detail.running ? 'running' : 'stopped') : 'disabled' }}
         </Badge>
       </div>
       <p v-if="detail" class="text-ink-3 mt-2">{{ detail.description }}</p>
@@ -54,15 +54,15 @@ onMounted(async () => {
         <div v-else class="grid grid-cols-2 gap-4">
           <Card>
             <div class="eyebrow mb-1">Runtime</div>
-            <h3 class="mb-3">Containers</h3>
-            <div class="text-3xl font-mono text-ink">{{ detail.containers }}</div>
+            <h3 class="mb-3">Status</h3>
+            <div class="text-3xl font-mono text-ink">{{ detail.running ? 'running' : 'stopped' }}</div>
           </Card>
           <Card>
             <div class="eyebrow mb-1">Network</div>
             <h3 class="mb-3">vhosts</h3>
             <ul class="text-sm font-mono text-ink-2 space-y-0.5">
-              <li v-for="v in detail.vhosts" :key="v">{{ v }}</li>
-              <li v-if="!detail.vhosts.length" class="text-ink-4">none</li>
+              <li v-for="v in (detail.vhosts ?? [])" :key="v">{{ v }}</li>
+              <li v-if="!(detail.vhosts ?? []).length" class="text-ink-4">none</li>
             </ul>
           </Card>
         </div>
@@ -80,8 +80,8 @@ onMounted(async () => {
         <div v-if="detail" class="text-sm text-ink-3">
           <div class="mb-2"><span class="eyebrow">Dependencies:</span></div>
           <div class="flex gap-2 flex-wrap">
-            <span v-for="d in detail.dependencies" :key="d" class="font-mono text-xs px-2 py-1 rounded border border-line">{{ d }}</span>
-            <span v-if="!detail.dependencies?.length" class="text-ink-4">none</span>
+            <span v-for="d in (detail.dependsOn ?? [])" :key="d" class="font-mono text-xs px-2 py-1 rounded border border-line">{{ d }}</span>
+            <span v-if="!(detail.dependsOn ?? []).length" class="text-ink-4">none</span>
           </div>
         </div>
       </div>
