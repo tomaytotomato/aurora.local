@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import Button from '@/components/ui/Button.vue';
 import LaunchProgress from '@/components/onboarding/LaunchProgress.vue';
 import DoneChecklist from '@/components/onboarding/DoneChecklist.vue';
+import ReachInfo from '@/components/ReachInfo.vue';
 import { OnboardingApi } from '@/api/onboarding';
 
 const store = useOnboardingStore();
@@ -18,6 +19,13 @@ const toStart = computed<string[]>(() =>
 );
 
 const launchJobId = ref<string | null>(null);
+
+// iter-3 P1a: reach info — mDNS host + LAN IP. Sourced from
+// /api/onboarding/env which is public (pre-auth). Falls back to the
+// onboarding store's domain if the env fetch races or fails.
+const reachHostname = ref<string | null>(null);
+const reachLanIp = ref<string | null>(null);
+const reachDomain = computed<string | null>(() => store.domain ?? null);
 const launchState = ref<'idle' | 'running' | 'success' | 'failed'>('idle');
 const launchError = ref<string | null>(null);
 const starting = ref(false);
@@ -101,6 +109,14 @@ function toDashboard(): void {
 // P2 #5: on mount, if we have a stored jobId, ask the backend what state
 // it's in and rehydrate the UI accordingly. Handles reload-mid-launch.
 onMounted(async () => {
+  // iter-3 P1a: pull hostname + LAN IP from the public env endpoint.
+  // Kept out of the store because it is a one-shot terminal-page read.
+  try {
+    const env = await OnboardingApi.env();
+    reachHostname.value = env.hostname ?? null;
+    reachLanIp.value = env.lanIp ?? null;
+  } catch { /* fine — ReachInfo just skips the row it lacks */ }
+
   const stored = readStoredJob();
   if (!stored) return;
   try {
@@ -180,6 +196,20 @@ onMounted(async () => {
       v-if="launchState !== 'running'"
       :enabled-packages="toStart"
       class="mb-10"
+    />
+
+    <!-- iter-3 P1a: how to reach the box — mDNS host + LAN IP with copy
+         buttons. The LAN IP is the always-works fallback for browsers
+         that block LAN mDNS (Firefox on macOS Sequoia without Local
+         Network permission being the case in point). Fetched via
+         /api/onboarding/env on mount below. -->
+    <ReachInfo
+      v-if="reachDomain || reachLanIp"
+      class="mb-8"
+      :hostname="reachHostname"
+      :domain="reachDomain"
+      :lan-ip="reachLanIp"
+      variant="card"
     />
 
     <div class="flex items-center justify-between border-t border-line pt-6">

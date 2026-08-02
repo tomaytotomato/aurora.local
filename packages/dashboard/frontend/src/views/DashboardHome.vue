@@ -11,6 +11,7 @@ import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
 import { renderIdentity } from '@/lib/identity';
 import { startBudgetMs, type PackageSummary } from '@/api/packages';
 import { useHealthPill } from '@/composables/useHealthPill';
+import ReachInfo from '@/components/ReachInfo.vue';
 
 // iter-dash-1 dashboard-home. Closes the four blockers captured in
 // logs/dashboard-bugs-2026-08-01.md and enforces the empty/error state
@@ -196,6 +197,18 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
         <p class="text-xs text-ink-4 font-mono mb-4" data-test="uptime">
           uptime {{ uptimeText }}
         </p>
+
+        <!-- iter-3 P1a: reach-info banner. Renders the mDNS host + LAN IP
+             so a user watching the dashboard can find both entry points
+             without hunting through Settings. Silent when both are null. -->
+        <ReachInfo
+          v-if="system.info?.domain || system.info?.lanIp"
+          :hostname="system.info?.hostname"
+          :domain="system.info?.domain"
+          :lan-ip="system.info?.lanIp"
+          variant="inline"
+          class="mb-6 pb-4 border-b border-line/60"
+        />
 
         <!-- error state (§5) -->
         <div v-if="systemErr" data-state="error" role="alert">
