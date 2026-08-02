@@ -152,16 +152,23 @@ public class SystemService {
    * Small facts safe to expose before login. Used by the onboarding wizard
    * so it can echo the box's identity back to the operator.
    *
-   * <p>Prefer host values when they're mounted: reads {@code /repo/.state.yml}
-   * for hostname/domain, {@code /host/etc/os-release} for distro, and
-   * {@code /host/proc/version} for kernel. Falls back to container-local
-   * values so the endpoint always returns something.
+   * <p>Hostname + domain come from {@code .state.yml} via SnakeYAML (same
+   * parser as {@link #info()}). Container-hostname fallback (iter-3 TD2)
+   * has been removed so the pre-onboarding welcome screen never leaks a
+   * Docker container ID like {@code be1523c08f0f} — mirroring the D4
+   * regression fix for {@code /api/system}.
+   *
+   * <p>Distro + kernel + resource facts stay best-effort (may return
+   * {@code null}) so the endpoint always renders.
    */
   public Map<String, Object> env() {
     Map<String, Object> out = new HashMap<>();
-    Map<String, String> stateFile = readStateYml();
-    out.put("hostname", stateFile.getOrDefault("hostname", hostname()));
-    out.put("domain", stateFile.get("domain"));
+    var state = stateFiles.readState();
+    // Nulls are fine — the wizard treats an empty hostname as "unset" and
+    // prompts the operator, whereas a container ID would masquerade as a
+    // real host identity (D4 / iter-3 TD2).
+    out.put("hostname", state.hostname());
+    out.put("domain", state.domain());
     out.put("lanIp", detectLanIp());
     out.put("distro", readDistro());
     out.put("kernel", readKernel());
@@ -174,25 +181,9 @@ public class SystemService {
     return out;
   }
 
-  private Map<String, String> readStateYml() {
-    Map<String, String> out = new HashMap<>();
-    Path p = Path.of(props.repoPath()).resolve(".state.yml");
-    if (!Files.isRegularFile(p)) return out;
-    try {
-      for (String line : Files.readAllLines(p)) {
-        int colon = line.indexOf(':');
-        if (colon < 0) continue;
-        String key = line.substring(0, colon).trim();
-        String val = line.substring(colon + 1).trim();
-        if (val.startsWith("\"") && val.endsWith("\"")) val = val.substring(1, val.length() - 1);
-        if (val.startsWith("'") && val.endsWith("'")) val = val.substring(1, val.length() - 1);
-        if (key.equals("hostname") || key.equals("domain")) out.put(key, val);
-      }
-    } catch (IOException e) {
-      log.debug("readStateYml failed: {}", e.getMessage());
-    }
-    return out;
-  }
+  // iter-3 TD2: readStateYml() (grep-based YAML parser) removed.
+  // env() now reads .state.yml via StateFileService (SnakeYAML), the same
+  // parser info() uses. One YAML parser, one code path for identity.
 
   /** Public accessor for other services (StatusProbeService) that need the LAN IP. */
   public String lanIp() {

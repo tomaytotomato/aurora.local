@@ -136,4 +136,62 @@ class SystemServiceInfoTests {
     assertNotNull(state.get("enabled"), "enabled must never be null in the DTO");
     assertNotNull(state.get("profiles"), "profiles must never be null in the DTO");
   }
+
+  // ---------------------------------------------------------------------
+  // iter-3 TD2 — env() must not leak the container hostname.
+  // ---------------------------------------------------------------------
+
+  @Test
+  void env_readsHostnameAndDomainFromStateFile() {
+    // Same YAML parser as info() — no more grep-based duplicate.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of("core"), List.of()));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Map<String, Object> env = svc.env();
+
+    assertEquals("aurora", env.get("hostname"));
+    assertEquals("aurora.local", env.get("domain"));
+  }
+
+  @Test
+  void env_returnsNullHostnameRatherThanContainerId() {
+    // Contract: pre-onboarding welcome shows "unset" for hostname when
+    // .state.yml has no value — never the container short-id like
+    // `be1523c08f0f`. Regression fix for D4 / iter-3 TD2. The old
+    // env() fell back to InetAddress.getLocalHost().getHostName() which
+    // returned the container ID inside docker.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(null, null, null, null, List.of(), List.of()));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Map<String, Object> env = svc.env();
+
+    assertNull(env.get("hostname"),
+        "missing state.hostname must be null so the wizard renders 'unset', "
+            + "not a docker container short-id");
+    assertNull(env.get("domain"), "missing state.domain must be null");
+    // Resource facts still populate so the welcome screen renders.
+    assertNotNull(env.get("cpu"));
+    assertNotNull(env.get("memory"));
+    assertNotNull(env.get("disks"));
+  }
+
+  @Test
+  void env_neverReturnsAContainerShortIdShapedHostname() {
+    // Belt-and-braces: even if a downstream mistake reintroduces the
+    // hostname() fallback, this test rejects any 12-hex-char value.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of(), List.of()));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Object h = svc.env().get("hostname");
+    if (h != null) {
+      assertTrue(!String.valueOf(h).matches("^[0-9a-f]{12}$"),
+          "env() hostname must never be a docker container short-id, got: " + h);
+    }
+  }
 }
