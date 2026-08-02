@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
 import Alert from '@/components/ui/Alert.vue';
+import AuroraBackground from '@/components/AuroraBackground.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -36,8 +37,14 @@ function passkey(): void {
 </script>
 
 <template>
-  <div class="min-h-screen bg-canvas grid place-items-center px-6">
-    <div class="w-full max-w-sm anim-enter">
+  <!-- Aurora photo fills the viewport; login card floats over it. Same
+       visual language as /dashboard/home and /onboarding/welcome. Strong
+       scrim keeps card copy readable against any of the day-picked photos.
+       See db306d0 for the .on-photo cascade rules. -->
+  <AuroraBackground scrim="strong" />
+
+  <div class="relative z-10 min-h-screen grid place-items-center px-6">
+    <div class="w-full max-w-sm anim-enter login-card p-8 rounded-lg">
       <div class="flex items-center gap-2.5 mb-10">
         <svg viewBox="0 0 32 32" class="w-7 h-7">
           <rect width="32" height="32" rx="6" fill="var(--color-ink)"/>
@@ -47,10 +54,9 @@ function passkey(): void {
         <span class="font-serif text-xl leading-none text-ink">Aurora</span>
       </div>
 
-      <h1 class="mb-2">Sign in</h1>
+      <h1 class="mb-2 text-ink">Sign in</h1>
       <p class="text-ink-3 text-sm mb-8">
         The admin panel for this box.
-        <span class="text-ink-4">Homepage lives at the root domain.</span>
       </p>
 
       <Alert v-if="err" tone="err" class="mb-4">{{ err }}</Alert>
@@ -80,3 +86,15 @@ function passkey(): void {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Warm surface + hairline border matches the onboarding/welcome card
+   tokens. Opaque surface re-establishes the ink text-color context inside
+   the .on-photo scope so form labels/inputs stay readable in both themes. */
+.login-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  color: var(--color-ink);
+  box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.35);
+}
+</style>

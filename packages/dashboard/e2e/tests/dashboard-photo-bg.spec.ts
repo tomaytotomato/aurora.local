@@ -21,13 +21,13 @@ async function onboardingComplete(page: import('@playwright/test').Page): Promis
   }
 }
 
-test('V1 login screen does NOT render the aurora photo background', async ({ page }) => {
+test('V1 login screen renders the aurora photo background', async ({ page }) => {
   await page.goto('/login');
-  // The aurora-bg layer is only mounted when the current route sets
-  // meta.photoBg. LoginView is its own top-level route with no shell,
-  // so the layer must be absent regardless of auth state.
+  // Login-polish (2026-08-02): LoginView now mounts AuroraBackground
+  // directly (parity with /dashboard/home and /onboarding/welcome) so the
+  // layer must be present regardless of auth state.
   const layer = page.locator('.aurora-bg');
-  await expect(layer).toHaveCount(0);
+  await expect(layer).toHaveCount(1);
 });
 
 test('V1 authenticated /dashboard/home renders the aurora photo background', async ({ page }) => {
