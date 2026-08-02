@@ -205,8 +205,8 @@ function retry(): void {
           class="text-lg"
           :class="{
             'text-accent animate-pulse': state === 'running',
-            'text-green-600': state === 'success',
-            'text-red-600': state === 'failed',
+            'text-[var(--color-ok-fg)]': state === 'success',
+            'text-[var(--color-err-fg)]': state === 'failed',
           }"
         >{{ headerGlyph }}</span>
         <div>
@@ -234,7 +234,7 @@ function retry(): void {
       v-if="state === 'failed'"
       data-tone="err"
       role="alert"
-      class="mb-4 px-4 py-3 rounded border border-red-300 bg-red-50 text-red-900 text-sm"
+      class="mb-4 px-4 py-3 rounded border border-[var(--color-err-fg)]/25 bg-[var(--color-err-bg)] text-[var(--color-err-fg)] text-sm"
       data-testid="launch-failure-reason"
     >
       {{ failureReason || 'Something went wrong bringing up your services. The log below has the details.' }}
@@ -254,8 +254,8 @@ function retry(): void {
           :class="{
             'border-line text-ink-3 bg-surface': perPkg[p] === 'not-started',
             'border-accent text-accent bg-surface': perPkg[p] === 'starting',
-            'border-green-600 text-green-700 bg-green-50': perPkg[p] === 'running',
-            'border-red-600 text-red-700 bg-red-50': perPkg[p] === 'failed',
+            'border-[var(--color-ok-fg)]/40 text-[var(--color-ok-fg)] bg-[var(--color-ok-bg)]': perPkg[p] === 'running',
+            'border-[var(--color-err-fg)]/40 text-[var(--color-err-fg)] bg-[var(--color-err-bg)]': perPkg[p] === 'failed',
           }"
         >{{ pillLabel(perPkg[p]) }}</span>
       </li>
@@ -277,7 +277,7 @@ function retry(): void {
 
     <div
       v-if="false"
-      class="mt-3 text-sm text-red-700"
+      class="mt-3 text-sm text-[var(--color-err-fg)]"
     ></div>
   </div>
 </template>

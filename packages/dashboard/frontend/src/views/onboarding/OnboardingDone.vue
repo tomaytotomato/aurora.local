@@ -177,7 +177,7 @@ onMounted(async () => {
           data-cta="primary"
           @click="startServices"
         >Start services</Button>
-        <span v-if="launchError" class="text-sm text-red-700" data-testid="launch-error">{{ launchError }}</span>
+        <span v-if="launchError" class="text-sm text-[var(--color-err-fg)]" data-testid="launch-error">{{ launchError }}</span>
       </div>
     </div>
 

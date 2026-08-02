@@ -26,6 +26,15 @@
   --color-accent: #B45309;
   --color-accent-hover: #92400E;
 
+  /* Foreground colours that must invert cleanly on top of --color-ink or
+     --color-accent surfaces. Used by Button/Checkbox so the primary CTA
+     is readable in both themes (iter-3 dark-mode contrast fix). */
+  --color-on-ink: #FFFFFF;
+  --color-on-accent: #FFFFFF;
+  /* Hover shade for filled primary buttons; darker than --color-ink in
+     light mode, LIGHTER in dark mode so the button doesn't disappear. */
+  --color-ink-hover: #333333;
+
   /* Status — muted, semantic, editorial. */
   --color-ok-bg: #EDF3EC;
   --color-ok-fg: #346538;
@@ -77,6 +86,16 @@
 
     --color-accent: #d97706;
     --color-accent-hover: #f59e0b;
+
+    /* Dark-mode fg-on-ink + fg-on-accent (iter-3 contrast fix):
+       - primary button bg=#f5f4ef (near-white), so text must be near-black
+       - accent bg=#d97706 amber; white on amber only hits ~2.9:1 in dark,
+         canvas-dark on amber gives ~5:1, comfortably WCAG AA. */
+    --color-on-ink: #14120f;
+    --color-on-accent: #14120f;
+    /* Primary button hover in dark: LIGHTER than --color-ink so the CTA
+       reads as "lifting toward the eye" instead of collapsing to bg. */
+    --color-ink-hover: #ffffff;
 
     --color-ok-bg: #143020;
     --color-ok-fg: #86efac;
@@ -186,6 +205,8 @@
   .text-ink-2 { color: var(--color-ink-2); }
   .text-ink-3 { color: var(--color-ink-3); }
   .text-ink-4 { color: var(--color-ink-4); }
+  .text-on-ink { color: var(--color-on-ink); }
+  .text-on-accent { color: var(--color-on-accent); }
   .bg-canvas { background-color: var(--color-canvas); }
   .bg-surface { background-color: var(--color-surface); }
   .bg-surface-2 { background-color: var(--color-surface-2); }

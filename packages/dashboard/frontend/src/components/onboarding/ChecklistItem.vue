@@ -67,19 +67,23 @@ const pillText = computed(() => {
 });
 
 const pillClass = computed(() => {
+  // iter-3 dark-mode contrast fix: switched from hardcoded Tailwind pastels
+  // (light-green / light-red / light-neutral) to the design-token status
+  // pairs so the pills invert cleanly with the theme. Same visual weight in
+  // light mode; readable in dark.
   switch (props.service.state) {
     case 'running':
-      return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      return 'bg-[var(--color-ok-bg)] text-[var(--color-ok-fg)] border-[var(--color-ok-fg)]/25';
     case 'needs-config':
-      return 'bg-red-50 text-red-800 border-red-200';
+      return 'bg-[var(--color-warn-bg)] text-[var(--color-warn-fg)] border-[var(--color-warn-fg)]/25';
     case 'failed':
-      return 'bg-red-100 text-red-900 border-red-300';
+      return 'bg-[var(--color-err-bg)] text-[var(--color-err-fg)] border-[var(--color-err-fg)]/25';
     case 'not-started':
-      return 'bg-neutral-100 text-neutral-700 border-neutral-300';
+      return 'bg-[var(--color-surface-2)] text-[var(--color-ink-2)] border-[var(--color-line)]';
     case 'starting':
-      return 'bg-sky-50 text-sky-800 border-sky-200';
+      return 'bg-[var(--color-info-bg)] text-[var(--color-info-fg)] border-[var(--color-info-fg)]/25';
     default:
-      return 'bg-neutral-100 text-neutral-700 border-neutral-300';
+      return 'bg-[var(--color-surface-2)] text-[var(--color-ink-2)] border-[var(--color-line)]';
   }
 });
 

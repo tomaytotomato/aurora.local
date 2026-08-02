@@ -16,7 +16,7 @@ const cls = computed(() =>
     'inline-flex items-center justify-center h-4 w-4 rounded-[3px] border transition-colors duration-150',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40',
     props.modelValue
-      ? 'bg-[var(--color-ink)] border-[var(--color-ink)] text-white'
+      ? 'bg-[var(--color-ink)] border-[var(--color-ink)] text-[var(--color-on-ink)]'
       : 'bg-[var(--color-surface)] border-[var(--color-line)] hover:border-[var(--color-ink-3)]',
     props.disabled && 'opacity-40 pointer-events-none',
     props.class,

@@ -10,7 +10,7 @@ const button = cva(
     variants: {
       variant: {
         primary:
-          'bg-[var(--color-ink)] text-white hover:bg-[#333333] rounded-md',
+          'bg-[var(--color-ink)] text-[var(--color-on-ink)] hover:bg-[var(--color-ink-hover)] rounded-md',
         secondary:
           'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:bg-[var(--color-surface-2)] rounded-md',
         ghost:
@@ -19,7 +19,7 @@ const button = cva(
         danger:
           'bg-transparent border border-[var(--color-line)] text-[var(--color-err-fg)] hover:bg-[var(--color-err-bg)] rounded-md',
         accent:
-          'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] rounded-md',
+          'bg-[var(--color-accent)] text-[var(--color-on-accent)] hover:bg-[var(--color-accent-hover)] rounded-md',
       },
       size: {
         sm: 'h-8 px-3 text-xs',

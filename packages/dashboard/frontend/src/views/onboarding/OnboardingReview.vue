@@ -162,12 +162,12 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       v-if="installErr"
       data-tone="err"
       role="alert"
-      class="mb-6 flex items-start justify-between gap-4 px-4 py-3 rounded border border-red-300 bg-red-50 text-red-900 text-sm"
+      class="mb-6 flex items-start justify-between gap-4 px-4 py-3 rounded border border-[var(--color-err-fg)]/25 bg-[var(--color-err-bg)] text-[var(--color-err-fg)] text-sm"
     >
       <div class="flex-1">{{ installErr }}</div>
       <button
         type="button"
-        class="shrink-0 text-sm px-3 py-1 rounded border border-red-400 hover:bg-red-100"
+        class="shrink-0 text-sm px-3 py-1 rounded border border-[var(--color-err-fg)]/35 hover:bg-[var(--color-err-fg)]/10"
         @click="retry"
       >Retry</button>
     </div>
