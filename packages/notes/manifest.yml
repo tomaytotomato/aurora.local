@@ -27,6 +27,16 @@ required_env:
   - SB_USER
   - SB_PASSWORD
 
+# The compose service is named `silverbullet` (see compose.yml), not
+# `notes`. Without an explicit probe.container, StatusProbeService
+# defaults to the package name and never finds the running container,
+# so the DoneChecklist reports Not-started while PackagesCard
+# (label-scan-based) correctly reports Running. Manifest → wire fix.
+probe:
+  kind: docker
+  container: silverbullet
+  external_url: "http://notes.{domain}/"
+
 post_install_notes: |
   1. First-run: https://notes.$DOMAIN/ — log in with
      SB_USER / SB_PASSWORD from .env.

@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,6 +31,25 @@ public class DockerService {
   private static final Logger log = LoggerFactory.getLogger(DockerService.class);
   private static final String PROJECT_LABEL = "com.docker.compose.project";
   private static final String PROJECT_NAME = "aurora";
+  /**
+   * Aurora's LaunchService may launch package stacks with any of:
+   * <ul>
+   *   <li>{@code -p aurora} (shared project, historical) → label
+   *       {@code com.docker.compose.project=aurora}</li>
+   *   <li>The per-package name from compose.yml top-level {@code name:}
+   *       (e.g. {@code aurora-notes}, {@code aurora-media}, {@code aurora-core},
+   *       {@code aurora-dashboard}) → label
+   *       {@code com.docker.compose.project=aurora-<pkg>}</li>
+   * </ul>
+   * Historically we filtered on the shared {@code aurora} project only,
+   * which under-counted every stack launched with its declared
+   * per-package name. That produced the System-card {@code Containers 1}
+   * anomaly Bruce reported on 2026-08-02 (aurora + caddy + silverbullet
+   * live, only silverbullet visible to the label filter). Broadening to
+   * {@code aurora} OR {@code aurora-*} keeps the semantics honest without
+   * conflating with unrelated projects.
+   */
+  private static final String PROJECT_PREFIX = "aurora-";
 
   private final DockerClient docker;
 
@@ -38,10 +58,23 @@ public class DockerService {
   }
 
   public List<Container> listProjectContainers() {
-    return docker.listContainersCmd()
+    // Docker's label filter can't express prefix or OR. Two options:
+    //   1. Fetch everything and post-filter in Java.
+    //   2. Issue two calls (exact + label-exists) and merge.
+    // Option 1 is simpler and cheap on a homelab-sized daemon.
+    List<Container> raw = docker.listContainersCmd()
         .withShowAll(true)
-        .withLabelFilter(Map.of(PROJECT_LABEL, PROJECT_NAME))
         .exec();
+    List<Container> out = new ArrayList<>();
+    for (Container c : raw) {
+      if (c.getLabels() == null) continue;
+      String project = c.getLabels().get(PROJECT_LABEL);
+      if (project == null) continue;
+      if (PROJECT_NAME.equals(project) || project.startsWith(PROJECT_PREFIX)) {
+        out.add(c);
+      }
+    }
+    return out;
   }
 
   /**
