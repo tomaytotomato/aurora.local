@@ -125,10 +125,30 @@ public class SystemService {
     return ManagementFactory.getRuntimeMXBean().getUptime() / 1000L;
   }
 
+  /**
+   * Count of aurora-managed containers currently running.
+   *
+   * <p>Scope: matches whatever {@link DockerService#listProjectContainers()}
+   * returns — iter-1 A1 broadened that from {@code project=aurora} to
+   * {@code aurora} OR {@code aurora-*}, so the number now spans the
+   * dashboard container itself, core (caddy), and every per-package
+   * stack. Filtered here to state={@code running} so exited/dead
+   * containers don't inflate the header's "Containers N" pill.
+   *
+   * <p>Non-aurora containers on the same host (e.g. an unrelated
+   * {@code docker run nextcloud}) are intentionally excluded so the
+   * count reflects what Aurora can act on, not the raw output of
+   * {@code docker ps}.
+   */
   private Integer dockerContainerCount() {
     try {
       var xs = docker.listProjectContainers();
-      return xs == null ? null : xs.size();
+      if (xs == null) return null;
+      int running = 0;
+      for (var c : xs) {
+        if ("running".equalsIgnoreCase(c.getState())) running++;
+      }
+      return running;
     } catch (Exception e) {
       log.debug("dockerContainerCount failed: {}", e.getMessage());
       return null;
