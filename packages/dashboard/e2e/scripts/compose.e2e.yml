@@ -25,3 +25,29 @@ services:
     # Repo + state mounts are supplied via env by reset-aurora-e2e.sh:
     #   AURORA_REPO_PATH_HOST=/tmp/aurora-e2e-state/repo
     # No caddy in front of this instance — tests hit :8091 directly.
+
+  # iter-3 BL6: AdGuard sidecar for adguard-password-check.spec.ts.
+  # Runs the real AdGuardHome image so the backend probe (probeAdguard
+  # in StatusProbeService) exercises a live target instead of skipping.
+  # First-run state — no password set, /control/status returns
+  # {"configured": false, ...}, which is exactly what the spec needs.
+  #
+  # Ports intentionally not published. The test container reaches it via
+  # the aurora-e2e_net bridge on port 80 (AdGuard's default web port
+  # unless configured); the aurora container probes it by name
+  # `adguard` on that network.
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: aurora-e2e-adguard
+    restart: unless-stopped
+    networks: [aurora_net]
+    # AdGuard's initial-setup screen listens on :3000 by default. Bind
+    # that as the probe target on the shared bridge network. We don't
+    # need to publish it — the aurora backend reaches it via docker
+    # DNS as `adguard:3000`.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/ >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
