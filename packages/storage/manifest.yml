@@ -26,8 +26,9 @@ requires:
 required_env: []
 
 probe:
-  kind: docker
+  kind: smb
   container: samba
+  port: 445
   external_url: smb://{lan_ip}/
 
 post_install_notes: |

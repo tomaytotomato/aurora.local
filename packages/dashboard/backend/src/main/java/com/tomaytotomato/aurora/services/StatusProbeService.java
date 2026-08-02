@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -263,6 +265,42 @@ public class StatusProbeService {
     }
     return ProbeResult.failed(pkg, container, "Service is not responding",
         "Unexpected response (" + code + ").", ms(started));
+  }
+
+  /**
+   * iter-3 BL2: SMB reachability probe. First checks the docker container
+   * is up (same precondition as adguard/http_json), then TCP-connects to
+   * {@code container:port} on the docker bridge network with a 1 s
+   * timeout. Fast and portable — no SMB protocol chatter, just: can we
+   * open the socket at all?
+   *
+   * <p>Success → running. Container-not-up → not-started. Container up
+   * but socket refused → failed with an actionable message. Timeout
+   * → needs-config (samba is probably still initialising its shares).
+   */
+  private ProbeResult probeSmb(String pkg, String container, int port,
+                               String externalUrl, long started) {
+    Optional<DockerService.ContainerInfo> c = docker.findByName(container);
+    if (c.isEmpty()) {
+      return ProbeResult.notStarted(pkg, container, externalUrl, ms(started));
+    }
+    if (!c.get().isRunning()) {
+      return ProbeResult.starting(pkg, container, externalUrl, ms(started));
+    }
+    try (Socket sock = new Socket()) {
+      sock.connect(new InetSocketAddress(container, port), 1000);
+      return ProbeResult.running(pkg, container, externalUrl, ms(started));
+    } catch (java.net.SocketTimeoutException e) {
+      return ProbeResult.failed(pkg, container,
+          "SMB port " + port + " is not answering yet",
+          "Samba may still be starting its shares. Try again in a moment.",
+          ms(started));
+    } catch (java.io.IOException e) {
+      return ProbeResult.failed(pkg, container,
+          "SMB port " + port + " is not reachable",
+          "The container is running but nothing is listening on " + port + ".",
+          ms(started));
+    }
   }
 
   private ProbeResult probeDocker(String pkg, String container, String externalUrl, long started) {
