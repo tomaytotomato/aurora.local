@@ -265,3 +265,59 @@ landed a duplicate `POST /api/services/notes/start` → HTTP 409
 - Uses `page.route('**/api/services/status')` stub to prove optimistic overlay survives a hostile probe response.
 - Self-skips if the row is already 'running'.
 - Not yet run against `:8091` — requires the aurora-e2e project to be up; test file typechecks clean (`tsc --noEmit` = 0 exit in `packages/dashboard/e2e/`).
+
+## Login photo bg · commit baeb764
+LoginView now mounts `<AuroraBackground scrim="strong">` directly (parity
+with /dashboard/home via AppShell.photoBg and /onboarding/welcome via
+OnboardingShell). Login card becomes an opaque warm surface floating on
+top: `background: var(--color-surface)`, `border: 1px solid
+var(--color-line)`, `box-shadow: 0 20px 60px -20px rgba(0,0,0,.35)`,
+`p-8` + `rounded-lg`. Re-establishes ink text-color context inside the
+`.on-photo` scope so form labels/inputs stay readable in both themes
+(rules from db306d0).
+
+Files: `views/LoginView.vue` (+15/-5), `e2e/tests/dashboard-photo-bg.spec.ts`
+(assertion flipped: `/login` MUST now expose `.aurora-bg`, not omit it).
+
+vue-tsc --noEmit → 0 exit. No form/auth code touched.
+
+## Login onboarding-CTA gate · commit 70e2fe0
+Post-install the login screen was still pointing at the wizard. Now the
+"First time here? Start onboarding" `<p>` renders only when
+`onboarding.status?.bootstrap_mode || !onboarding.status?.complete`.
+When onboarding is done → clean login card only.
+
+`/login` is `public: true` so the router beforeEach guard may fail-open
+without populating the store. LoginView calls `onboarding.hydrate()`
+onMounted (guarded by `hydrated` ref to avoid double-fetch). On network
+failure the CTA stays hidden — safer default than dangling users at a
+wizard we can't confirm is needed.
+
+Files: `views/LoginView.vue` (+27/-2), `e2e/tests/login-polish.spec.ts`
+(+95 lines, 3 assertions).
+
+## Deploy + live smoke
+- `docker build -t aurora-dashboard:0.1.0 packages/dashboard` → new image
+  sha256:df299b8c7f94 (583 MB), backend mvn test 99/99 embedded.
+- `docker compose up -d --force-recreate` in packages/dashboard/ (plain
+  `docker restart` was insufficient — same tag, container held old sha).
+  Container: aurora, status Up healthy in <6s.
+- `curl -sSo /dev/null -w '%{http_code}' http://localhost:8090/login` → **200**
+- `docker exec aurora stat /app/aurora.jar` → mtime 21:34, size 65877703
+  (fresh — was 18:19 pre-deploy).
+
+## Wire evidence (fresh chunks)
+```
+LoginView-BMe0wtZm.js: onboarding-cta=1  login-card=1  "Start onboarding"=1
+LoginView-5ETE4cnE.css:
+  .login-card[data-v-56cee760]{background:var(--color-surface);
+    border:1px solid var(--color-line);color:var(--color-ink);
+    box-shadow:0 20px 60px -20px #00000059}
+index-MASyy-m-.js: aurora-bg=1   (shared AuroraBackground chunk)
+```
+`showOnboardingCta` + `AuroraBackground` are minified to single-letter
+identifiers — expected. The runtime data-test hook + CSS classes are
+what actually gate the UI; both present on the wire.
+
+## Pushed
+`git push origin rename/aurora` → `f9c4406..70e2fe0`.
