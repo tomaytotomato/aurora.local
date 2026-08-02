@@ -124,3 +124,15 @@
   - simulated mid-write crash: pre-existing broken `.tmp` does not corrupt subsequent `readState()`, and the next successful write cleans it up
 - **Backend 96/96 green** (up from 92).
 - TD4 + TD5 deferred to iter-4.
+
+## Iter 22 · 2026-08-02 12:32 · commit 0985b6f
+**TD2** — SystemService.env() cleanup.
+- `env()`: uses `stateFiles.readState()` (SnakeYAML) instead of the grep-based `readStateYml()`.
+- Dropped `hostname()` fallback (was `InetAddress.getLocalHost().getHostName()` → container short-id inside docker).
+- Missing state.hostname now returns `null`, not the container ID Bruce saw as `be1523c08f0f.undefined`.
+- Removed the private `readStateYml()` method (dead code after fix).
+- +3 unit tests in `SystemServiceInfoTests`:
+  - env() reads hostname+domain from .state.yml
+  - env() returns null-not-container-id when state is empty
+  - belt-and-braces: env() hostname is never a 12-hex-char short-id
+- **Backend 99/99 green** (up from 96).
