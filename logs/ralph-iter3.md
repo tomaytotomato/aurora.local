@@ -162,3 +162,56 @@
 - Iter-4 residuals cleanly documented in briefing §9; nothing hanging.
 
 **Final: backend 45 → 99 tests, E2E 41 → 62 passing, 26 commits, live at http://192.168.0.110:8090.**
+
+## Iter (post-24) · Media probe + seerr fix — 2026-08-02 17:36
+Bruce reported all 5 media child rows showing 'Not responding'. Three real bugs.
+
+### Bug 1 — arr `/ping` returns 500
+
+`docker exec aurora wget -qO- http://prowlarr:9696/ping` → HTTP/1.1 500 (before).
+`docker exec aurora wget -qO- http://prowlarr:9696/initialize.json` → HTTP/1.1 200 (after).
+Same for sonarr / radarr. `/initialize.json` is stable + JSON-shaped, no API key needed.
+
+Fix: swapped `in_cluster_url` in `packages/media/manifest.yml` for prowlarr/sonarr/radarr
+from `/ping` → `/initialize.json`. Bazarr already probed `/` (200), unchanged.
+
+### Bug 2 — seerr restart loop (EACCES on mkdir /app/config/logs)
+
+Container ran as UID 1000 (`node`), but `../../data/seerr` on host had the wrong
+owner (root:root because the previous e2e-state teardown left it there). Container
+tries `mkdir /app/config/logs` on startup → EACCES → node exit → restart loop.
+
+Fix: added `user: "0:0"` + custom `entrypoint` to compose.yml/seerr so the container
+starts as root, `mkdir -p /app/config/logs && chown -R node:node /app/config`, then
+`exec su node -s /bin/sh -c 'docker-entrypoint.sh npm start'`. Durable across
+teardowns because the chown happens at every container start.
+
+Container went from `Restarting (1) 27 seconds ago` (loop) → `Up 11 seconds (healthy)`.
+Verified `wget -qO- http://seerr:5055/api/v1/status` returns 200 JSON.
+
+### Bug 3 — JDK HttpClient hangs on Seerr Express server (HTTP/2 upgrade stall)
+
+Even after seerr healthy, aurora probe stayed at `failed` with `probed_ms=2057` (2 s
+timeout burn). Wget/curl from inside aurora responded in <10 ms. Difference: JDK
+HttpClient defaults to HTTP_2 and sends h2c Upgrade headers on the first request;
+Seerr's Express stack accepts the TCP connection but never returns the 101 →
+client waits for the header response until the wall-clock timeout fires.
+
+Fix: `StatusProbeService.http = HttpClient.newBuilder()… .version(HttpClient.Version.HTTP_1_1) …build();`
+Pins every probe to HTTP/1.1. All arr apps + AdGuard already serve 1.1 natively.
+
+Seerr probe went from `probed_ms=2057 state=failed` → `probed_ms=270 state=running`.
+
+### Final wire dump
+
+```
+$ curl -sS http://192.168.0.110:8090/api/services/status | jq '.services[] | select(.package=="media") | {state, children: [.children[] | {package, state, probed_ms}]}'
+media parent: running
+  prowlarr   running   probed_ms=66
+  sonarr     running   probed_ms=79
+  radarr     running   probed_ms=66
+  bazarr     running   probed_ms=53
+  seerr      running   probed_ms=270
+```
+
+Backend 99/99 green. Test suite unchanged (probe URL is data, not code).
