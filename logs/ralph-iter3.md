@@ -97,3 +97,30 @@
 - Dockerfile: `apk add avahi-tools bind-tools` in runtime stage so the script works inside the aurora container too.
 - Host smoke: script correctly reports missing avahi-utils (host has daemon but not CLI). Full run deferred to inside-container test post D2 rebuild.
 - **P1 productionize-footguns batch complete (P1a+P1b+P1c). D2 rebuild next.**
+
+## Iter 20 · 2026-08-02 12:10 · (no commit — attempted TD5 + TD4 both reverted)
+**TD5** attempted skip-when-onboarded guard on wizard-happy-path, no-cli-instructions, done-launch specs.
+- Approach: `test.use({storageState: {cookies:[], origins:[]}})` + beforeEach probe of `/api/onboarding/status` → `test.skip()` when `complete===true`.
+- Killed 17 fails but blanket-skipped 28 previously-green tests in the same suites. Net delta pass 62→34, fail 23→6, skip 3→49. Bad tradeoff.
+- Root fix: E2E-only `POST /api/onboarding/reset` endpoint so wizard specs can rewind between suites. iter-4 material.
+- Reverted `git reset --hard HEAD~1` back to `a240faf`.
+
+**TD4** pivot: install `mikefarah/yq` v4 in Aurora Dockerfile.
+- Dockerfile change was clean (apk deps + wget of `yq_linux_amd64` from GH releases).
+- Blocked at build: host docker overlayfs consistently fails to extract `docker-cli` from alpine apk (`ERROR: docker-cli-29.5.2-r0: failed to extract usr/bin/docker: I/O error`).
+- Reproducible on stock `alpine:latest apk add docker-cli` — not a Dockerfile issue, a host docker health issue.
+- Reverted via `git checkout packages/dashboard/Dockerfile`.
+- Needs host investigation before any Dockerfile rebuild can land.
+
+## Iter 21 · 2026-08-02 12:22 · commit 0c8bbdb
+**TD3** — atomic `.state.yml` write.
+- `StateFileService.mutateState`: write to `<file>.tmp`, then `Files.move(tmp, target, ATOMIC_MOVE, REPLACE_EXISTING)`.
+- `AtomicMoveNotSupportedException` fallback to non-atomic `REPLACE_EXISTING` (still safer than the previous in-place truncation).
+- `finally { Files.deleteIfExists(tmp) }` cleans up stray `.tmp` on failure.
+- +4 unit tests in `StateFileServiceTests`:
+  - success leaves no `.tmp` sibling
+  - preserves `hostname`/`bootstrap_version`/`installed_at` when mutating enabled[]
+  - writes via `.tmp` (proven by pre-seeded broken `.tmp` that must be consumed by the move)
+  - simulated mid-write crash: pre-existing broken `.tmp` does not corrupt subsequent `readState()`, and the next successful write cleans it up
+- **Backend 96/96 green** (up from 92).
+- TD4 + TD5 deferred to iter-4.
