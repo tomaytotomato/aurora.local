@@ -150,3 +150,15 @@
   5. E2E rerun (opt-in via `VERIFY_E2E=1`; asserts pass ≥ baseline 41).
 - Env overrides: `AURORA_LIVE_URL`, `AURORA_E2E_PROJECT`, `AURORA_BASELINE`, `VERIFY_E2E`, `VERIFY_BUILD`.
 - Current: **17/17 green** with `VERIFY_BUILD=1 VERIFY_E2E=0`.
+
+## Iter 24 · 2026-08-02 12:52 · commit 164d80b — COMPLETE
+**MORNING_BRIEFING_3.md** shipped + branch pushed.
+- Human-facing briefing at repo root: TL;DR, per-bug delta, polish delta, backlog delta, click-through checklist, E2E triage (all 23 fails categorised as iter-4 residuals), verify command, iter-4 backlog ranked by pain, full iteration ledger.
+- `git push origin rename/aurora` → `fd8ea9c..164d80b` — 26 commits public.
+- Completion gate — all three requirements green:
+  - (a) every P0 item checked (B1/B2/B3/B4/D1);
+  - (b) `bash scripts/verify-iter3.sh` exits 0 with 17/17 checks;
+  - (c) MORNING_BRIEFING_3.md present at repo root.
+- Iter-4 residuals cleanly documented in briefing §9; nothing hanging.
+
+**Final: backend 45 → 99 tests, E2E 41 → 62 passing, 26 commits, live at http://192.168.0.110:8090.**
