@@ -215,6 +215,17 @@ public class PackagesService {
     try (var in = Files.newInputStream(manifest)) {
       Map<String, Object> m = new Yaml().load(in);
       if (m == null) return Optional.empty();
+      // B1: a package with probe.kind == 'self' means "the dashboard itself".
+      // If we are responding to this request, we are running — regardless of
+      // whether a docker compose project label points back at /packages/<name>/.
+      // Without this, Aurora (started at bootstrap, not from packages/core/) is
+      // never marked running by runningPackageNames() and the Packages card
+      // shows a Start button for Core. See logs/dashboard-bugs-2026-08-01.md.
+      boolean effectiveRunning = running;
+      if (!effectiveRunning && m.get("probe") instanceof Map probeMap) {
+        Object kind = probeMap.get("kind");
+        if ("self".equals(kind)) effectiveRunning = true;
+      }
       return Optional.of(new Package(
           str(m, "name"),
           str(m, "title"),
@@ -228,7 +239,7 @@ public class PackagesService {
           strList(m.get("required_env")),
           str(m, "post_install_notes"),
           enabled,
-          running
+          effectiveRunning
       ));
     } catch (IOException e) {
       log.warn("failed to parse {}: {}", manifest, e.getMessage());
