@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -96,8 +97,23 @@ public class StateFileService {
       var dumper = new DumperOptions();
       dumper.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
       var yaml = new Yaml(dumper);
-      try (Writer w = Files.newBufferedWriter(p)) {
+      // iter-3 TD3: write to a sibling .tmp then atomic-rename so a mid-write
+      // crash never leaves .state.yml truncated. Same filesystem as target so
+      // ATOMIC_MOVE is honoured on ext4/xfs/overlayfs.
+      Path tmp = p.resolveSibling(p.getFileName().toString() + ".tmp");
+      try (Writer w = Files.newBufferedWriter(tmp)) {
         yaml.dump(data, w);
+      }
+      try {
+        Files.move(tmp, p, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+      } catch (java.nio.file.AtomicMoveNotSupportedException amnse) {
+        // Cross-device or FS without atomic-move (rare on Linux). Fall back
+        // to a non-atomic replace; still safer than truncating the target.
+        log.warn("atomic move not supported for {} -> {}; falling back to REPLACE_EXISTING", tmp, p);
+        Files.move(tmp, p, StandardCopyOption.REPLACE_EXISTING);
+      } finally {
+        // Belt-and-braces: if move() threw before renaming, don't leak the tmp.
+        try { Files.deleteIfExists(tmp); } catch (IOException ignored) { }
       }
       log.info("wrote {}", p);
     } catch (IOException e) {
