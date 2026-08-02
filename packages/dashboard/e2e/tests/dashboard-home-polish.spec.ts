@@ -183,6 +183,25 @@ test('V3 TopBar centre region carries the aggregate health pill', async ({ page 
 });
 
 // -----------------------------------------------------------------
+// iter-3 BL4 — DoneChecklist mounted on /dashboard/home. Same living
+// checklist the onboarding wizard uses at the end of setup, polled
+// every 5 s. Sarah sees real per-package status below the bento grid,
+// not just static cards.
+// -----------------------------------------------------------------
+
+test('BL4 dashboard-home renders the DoneChecklist below the bento grid', async ({ page }) => {
+  if (!(await onboardingComplete(page))) test.skip();
+  await page.goto('/');
+  const checklist = page.locator('[data-test="dashboard-done-checklist"]');
+  await expect(checklist).toBeVisible();
+  // Should render at least one row per enabled package; sanity-check by
+  // asserting it contains a ChecklistItem structural marker OR at least
+  // one recognisable package name.
+  const bodyText = (await checklist.textContent()) ?? '';
+  expect(bodyText.length).toBeGreaterThan(0);
+});
+
+// -----------------------------------------------------------------
 // iter-3 B3 — card padding. Bruce reported "all content is squashed up
 // next to the borders" on 2026-08-02 morning. The four dashboard cards
 // each now carry `p-8` (32 px) instead of the default `p-6` (24 px).

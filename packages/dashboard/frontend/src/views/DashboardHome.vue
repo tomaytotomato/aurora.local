@@ -12,6 +12,7 @@ import { renderIdentity } from '@/lib/identity';
 import { startBudgetMs, type PackageSummary } from '@/api/packages';
 import { useHealthPill } from '@/composables/useHealthPill';
 import ReachInfo from '@/components/ReachInfo.vue';
+import DoneChecklist from '@/components/onboarding/DoneChecklist.vue';
 
 // iter-dash-1 dashboard-home. Closes the four blockers captured in
 // logs/dashboard-bugs-2026-08-01.md and enforces the empty/error state
@@ -398,5 +399,18 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
         </div>
       </Card>
     </div>
+
+    <!-- iter-3 BL4: living checklist — the same component the Done page uses
+         at the end of onboarding. Sarah's post-onboarding home surface now
+         shows real per-package status (polled every 5 s), not just static
+         bento cards. Renders only when there are enabled packages. -->
+    <section
+      v-if="packages.enabled.length > 0"
+      class="mt-4"
+      data-test="dashboard-done-checklist"
+    >
+      <div class="eyebrow mb-3">Bring your box online</div>
+      <DoneChecklist :enabled-packages="packages.enabled.map((p) => p.name)" />
+    </section>
   </section>
 </template>
