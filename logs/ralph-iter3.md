@@ -38,3 +38,62 @@
 - New E2E `services-start-race.spec.ts` (self-skips without auth fixture).
 - Backend: **88/88 green.** vue-tsc: clean.
 - **P0 batch complete — D1 rebuild next.**
+
+## Iter 6 · 2026-08-02 09:47 · commit a151863
+**V1** — aurora photo background on /dashboard/home.
+- AppShell reads `route.meta.photoBg` → renders `<AuroraBackground scrim="strong">` (existing component, day-deterministic pick, drift, credit bubble).
+- Only DashboardHome opts in (route meta). Other authenticated views keep the plain warm-white shell for content density.
+- Approach: keep Sidebar + TopBar opaque; drop `bg-canvas` from outer wrapper so photo peeks around content edges + below footer. No text-colour surgery on Sidebar/TopBar.
+- Footer border + text tokens flip to `text-white/70`/`border-white/15` in photo mode.
+- E2E: new `dashboard-photo-bg.spec.ts` (2 assertions).
+- vue-tsc clean. Live rebuild deferred to D2.
+
+## Iter 7 · 2026-08-02 09:54 · commit HEAD
+**V2** — dark mode toggle with prefers-color-scheme + localStorage.
+- `[data-theme="dark"]` block in `assets/main.css` overrides the warm-monochrome tokens with a night-aurora palette. Amber accent kept.
+- New composable `composables/useTheme.ts` — reactive singleton, applies attr at import (no flash of light), reads localStorage → prefers-color-scheme → light.
+- TopBar right region: sun/moon toggle button before the username interpunct. aria-label + aria-pressed + data-test hook.
+- E2E: new `theme-toggle.spec.ts` (3 assertions — 2 auth-free, 1 auth-gated).
+- vue-tsc clean.
+
+## Iter 8 · 2026-08-02 10:01 · commit 9cfdb7d
+**V3** — lift healthPill into shared composable + mount in TopBar centre.
+- New `composables/useHealthPill.ts` — derived view over packages store, no new fetches.
+- DashboardHome now imports the shared pill; local HealthState declaration deleted.
+- TopBar centre region renders Badge with `data-region="health"`, `data-test="topbar-health-pill"`, `data-state=<HealthState>`.
+- TopBar triggers `packages.fetchList()` on mount when store empty so pill works from any authenticated view.
+- E2E: +1 auth-gated assertion in dashboard-home-polish.spec.ts.
+- vue-tsc clean. **P1 visual polish batch complete.**
+
+## Iter 9 · 2026-08-02 10:09 · commit 02c0469
+**P1a** — reach-info panel (mDNS host + LAN IP + Copy).
+- New shared  with card + inline variants; uses shared `renderIdentity`.
+- DashboardHome System card mounts inline variant above the resources block.
+- OnboardingDone mounts card variant above the Go-to-dashboard CTA; fetches hostname + lanIp from public /api/onboarding/env.
+- Help text names the exact Firefox-on-macOS failure mode Bruce hit today.
+- E2E: new reach-info.spec.ts (3 assertions).
+- vue-tsc clean.
+
+## Iter 9 · 2026-08-02 10:09 · commit 02c0469
+**P1a** — reach-info panel (mDNS host + LAN IP + Copy).
+- New shared `components/ReachInfo.vue` with card + inline variants; uses shared `renderIdentity`.
+- DashboardHome System card mounts inline variant above the resources block.
+- OnboardingDone mounts card variant above the Go-to-dashboard CTA; fetches hostname + lanIp from public /api/onboarding/env.
+- Help text names the exact Firefox-on-macOS failure mode Bruce hit today.
+- E2E: new reach-info.spec.ts (3 assertions).
+- vue-tsc clean.
+
+## Iter 10 · 2026-08-02 10:15 · commit 0d1ec50
+**P1b** — /security route gate.
+- Backend `SystemService.info()` now emits `capabilities.securityScanner: false`.
+- `SecurityPosture.vue` rewritten around the flag; false → honest empty-state Card + six planned M4 checks. Every fabricated string (score=78, UFW, fail2ban, backup, unattended-upgrades) deleted.
+- Sidebar hides `/security` nav link when the capability flag is false.
+- E2E: new `security-gate.spec.ts` (3 assertions).
+- Backend 88/88; vue-tsc clean.
+
+## Iter 11 · 2026-08-02 10:22 · commit 142148b
+**P1c** — mDNS collision diagnostic on the box.
+- New `scripts/mdns-audit.sh` — avahi-browse + avahi-resolve + multicast dig + collision detection + LAN interface enumeration. Writes to `logs/mdns-audit-YYYY-MM-DD.txt` and stdout.
+- Dockerfile: `apk add avahi-tools bind-tools` in runtime stage so the script works inside the aurora container too.
+- Host smoke: script correctly reports missing avahi-utils (host has daemon but not CLI). Full run deferred to inside-container test post D2 rebuild.
+- **P1 productionize-footguns batch complete (P1a+P1b+P1c). D2 rebuild next.**
