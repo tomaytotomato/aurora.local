@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useOnboardingStore } from '@/stores/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
@@ -10,12 +11,35 @@ import AuroraBackground from '@/components/AuroraBackground.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
+const onboarding = useOnboardingStore();
 
 const username = ref('');
 const password = ref('');
 const err = ref<string | null>(null);
 const busy = ref(false);
 const passkeyToast = ref<string | null>(null);
+
+// Onboarding CTA gate: only surface the "Start onboarding" link when the
+// wizard is not yet complete (or the box is in bootstrap_mode from a
+// half-run install). Post-install that path is closed and just confuses
+// the operator. /login is `public: true` so the router guard may fail-
+// open without populating the store — hydrate explicitly on mount.
+onMounted(async () => {
+  if (!onboarding.hydrated) {
+    try {
+      await onboarding.hydrate();
+    } catch {
+      // Leave hydrated=false; showOnboardingCta stays false so we default
+      // to the clean login card rather than surface a stale CTA.
+    }
+  }
+});
+
+const showOnboardingCta = computed<boolean>(() => {
+  const s = onboarding.status;
+  if (!s) return false;
+  return Boolean(s.bootstrap_mode) || !s.complete;
+});
 
 async function submit(): Promise<void> {
   err.value = null;
@@ -79,7 +103,11 @@ function passkey(): void {
         </Button>
       </form>
 
-      <p class="mt-10 text-xs text-ink-4">
+      <p
+        v-if="showOnboardingCta"
+        class="mt-10 text-xs text-ink-4"
+        data-test="onboarding-cta"
+      >
         First time here?
         <router-link to="/onboarding" class="text-ink-3">Start onboarding</router-link>.
       </p>
