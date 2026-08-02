@@ -159,3 +159,25 @@ test('P5 Metrics strip renders shorter than every other card on the page', async
     expect(mBox.height, `metrics strip must be shorter than the ${key} card`).toBeLessThan(oBox.height);
   }
 });
+
+// -----------------------------------------------------------------
+// iter-3 B3 — card padding. Bruce reported "all content is squashed up
+// next to the borders" on 2026-08-02 morning. The four dashboard cards
+// each now carry `p-8` (32 px) instead of the default `p-6` (24 px).
+// Geometrically the inner content wrapper must sit ≥ 24 px from the
+// card border on all four sides.
+// -----------------------------------------------------------------
+
+test('B3 each dashboard card has ≥ 24 px internal padding on all sides', async ({ page }) => {
+  if (!(await onboardingComplete(page))) test.skip();
+  await page.goto('/');
+  for (const key of ['system', 'packages', 'security', 'metrics']) {
+    const card = page.locator(`[data-card="${key}"]`);
+    await expect(card, `card=${key} not visible`).toBeVisible();
+    // computed style: padding-top / -right / -bottom / -left all ≥ 24 px.
+    for (const side of ['padding-top', 'padding-right', 'padding-bottom', 'padding-left']) {
+      const px = await card.evaluate((el, s) => parseFloat(getComputedStyle(el).getPropertyValue(s)), side);
+      expect(px, `card=${key} ${side} = ${px}px, expected ≥ 24`).toBeGreaterThanOrEqual(24);
+    }
+  }
+});

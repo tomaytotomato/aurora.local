@@ -187,13 +187,17 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
       </p>
     </div>
 
-    <!-- Bento grid: four tiles, asymmetric -->
-    <div class="grid grid-cols-6 gap-4 mb-10">
+    <!-- Bento grid: four tiles, asymmetric.
+         iter-3 B3: gap bumped 4 → 6 and card padding bumped p-6 → p-8 on
+         each Card via class prop override. twMerge keeps the later
+         padding class. Also loosened row `space-y-3` → `space-y-4` on
+         the System hydrated block for more air. -->
+    <div class="grid grid-cols-6 gap-6 mb-10">
       <!-- System card.
            iter-dash-polish-2 P3: eyebrow → h3 → subtitle → body anatomy.
            The `uptime` string moved out of the top-right corner into the
            subtitle slot so all four cards share the same slot rhythm. -->
-      <Card class="col-span-3 row-span-2" data-card="system">
+      <Card class="col-span-3 row-span-2 p-8" data-card="system">
         <div class="eyebrow mb-1">System</div>
         <h3 class="mb-1">Resources</h3>
         <p class="text-xs text-ink-4 font-mono mb-4" data-test="uptime">
@@ -225,7 +229,7 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
         </div>
 
         <!-- hydrated data -->
-        <div v-else class="space-y-3 text-sm">
+        <div v-else class="space-y-4 text-sm">
           <div class="flex items-center justify-between">
             <span class="text-ink-3">Memory</span>
             <span class="font-mono text-ink" data-test="memory">
@@ -286,7 +290,7 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
       </Card>
 
       <!-- Packages card -->
-      <Card class="col-span-3" data-card="packages">
+      <Card class="col-span-3 p-8" data-card="packages">
         <div class="eyebrow mb-1">Packages</div>
         <h3 class="mb-3" data-test="packages-count">{{ packagesCount.text }}</h3>
 
@@ -349,7 +353,7 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
            iter-dash-polish-2 P3 + P4: h3 promoted to the empty-state
            headline; body wrapped in the centred glyph pattern so the
            card reads as a designed empty state, not a stub. -->
-      <Card class="col-span-3" data-card="security">
+      <Card class="col-span-3 p-8" data-card="security">
         <div class="eyebrow mb-1">Security</div>
         <h3 class="mb-4">Security posture</h3>
         <div
@@ -372,7 +376,7 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
            footer, not a broken chart region.
            P3 + P4: eyebrow → h3 (empty-state headline) → subtitle → body,
            with the §4 glyph pattern. -->
-      <Card class="col-span-6" data-card="metrics">
+      <Card class="col-span-6 p-8" data-card="metrics">
         <div class="eyebrow mb-1">Metrics</div>
         <h3 class="mb-1">Metrics land next release.</h3>
         <p class="text-xs text-ink-4 mb-2">Last 24 hours</p>
