@@ -11,6 +11,10 @@
 # with the LAN IP of this box.
 
 {
+	# auto_https disable_redirects: keep http:// listening on :80 without
+	# forcing 301 → https. Browsers with a cached HSTS from a previous
+	# aurora.local install would otherwise be locked out until they
+	# manually cleared HSTS.
 	auto_https disable_redirects
 	log {
 		output file /var/log/caddy/access.log {
@@ -21,14 +25,35 @@
 	}
 }
 
+# Reusable snippet: strip any HSTS the upstream might set, so nothing
+# Caddy proxies can lock a browser into https-only. Bruce's Firefox on
+# macOS was hitting exactly this after an earlier home.local install.
+(no_hsts) {
+	header -Strict-Transport-Security
+}
+
 # ---- Aurora dashboard (apex) ----------------------------------------
 # Aurora IS the landing page: served at the bare domain, plus raw LAN IP
 # fallback. Homepage retired in v0.1.
+# /caddy-health is a fast-path Caddy answers itself (no upstream trip)
+# so the docker healthcheck stays honest during aurora restarts.
 http://{$DOMAIN}, http://aurora.local, http://192.168.0.110 {
+	import no_hsts
+	handle /caddy-health {
+		respond "caddy ok" 200 {
+			close
+		}
+	}
 	reverse_proxy aurora:8090
 }
 https://{$DOMAIN}, https://aurora.local {
 	tls internal
+	import no_hsts
+	handle /caddy-health {
+		respond "caddy ok" 200 {
+			close
+		}
+	}
 	reverse_proxy aurora:8090
 }
 
