@@ -28,6 +28,12 @@ aurora:
   repo-path: ${AURORA_REPO_PATH:/repo}
   # Path to host /proc for metrics reads.
   host-proc-path: ${AURORA_HOST_PROC:/host/proc}
+  # TD5 (2026-08-02): when true, exposes POST /api/onboarding/reset for
+  # E2E test rewinds. Backed by env AURORA_E2E so the Playwright
+  # aurora-e2e compose project can flip it on for one run without
+  # touching production settings. Default false — endpoint returns 404
+  # in prod, hiding its existence.
+  e2e-mode: ${AURORA_E2E:false}
   docker:
     # Overridden by DOCKER_HOST env for isolated-daemon tests.
     host: ${DOCKER_HOST:unix:///var/run/docker.sock}

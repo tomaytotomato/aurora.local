@@ -68,4 +68,14 @@ public class AdminUserRepo {
     Number k = kh.getKey();
     return k == null ? -1L : k.longValue();
   }
+
+  /**
+   * TD5 (2026-08-02): wipe every admin user. Intended for the
+   * {@code POST /api/onboarding/reset} E2E-only endpoint so Playwright
+   * suites can rewind between specs. Guarded at the controller by
+   * {@code aurora.e2e-mode}; do not call in production paths.
+   */
+  public int deleteAll() {
+    return jdbc.update("DELETE FROM admin_user");
+  }
 }

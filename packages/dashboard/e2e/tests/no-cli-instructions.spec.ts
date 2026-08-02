@@ -23,6 +23,14 @@ const WIZARD_STEPS = [
   '/onboarding/done',
 ] as const;
 
+// TD5 (2026-08-02): rewind the box before every spec so a suite that
+// already ran to completion doesn't redirect /onboarding/* to
+// /dashboard/home. Endpoint is gated on AURORA_E2E=1 in the aurora-e2e
+// compose project; 404 in prod, silently ignored here.
+test.beforeEach(async ({ request }) => {
+  await request.post('/api/onboarding/reset').catch(() => {});
+});
+
 for (const route of WIZARD_STEPS) {
   /** UX_SPEC §3.1 G2 + G3 — no <pre>, no <code> with shell text. */
   test(`${route}: no <pre> or shell-text <code>`, async ({ page }) => {

@@ -626,6 +626,38 @@ public class OnboardingService {
     audit.record(null, "onboarding.complete", null, null);
   }
 
+  /**
+   * TD5 (2026-08-02): wipe every trace of a completed or in-progress
+   * onboarding, returning the box to bootstrap mode. Intended solely for
+   * the E2E-only {@code POST /api/onboarding/reset} endpoint so
+   * Playwright suites can rewind between specs — the whole
+   * wizard-happy-path family (BL5 aftermath) needs a clean fixture.
+   *
+   * <p>Scope, in order:
+   * <ol>
+   *   <li>All admin users deleted (session cookies naturally lose their
+   *       backing row; subsequent /api/auth/me returns 401).</li>
+   *   <li>Every {@code onboarding.*} settings row deleted — complete,
+   *       step, dns_mode. On the next hydrate the wizard defaults to
+   *       {@code step=welcome}.</li>
+   *   <li>{@code .state.yml} deleted so
+   *       {@link StateFileService#readState()} yields the empty default
+   *       ({@code enabled=[]}, no domain, no hostname).</li>
+   * </ol>
+   *
+   * <p>Idempotent — safe to call on an already-reset box. Audits the
+   * event so a live prod misuse (should be prevented by the controller
+   * gate) leaves a paper trail.
+   */
+  public void reset() {
+    users.deleteAll();
+    settings.delete(KEY_COMPLETE);
+    settings.delete(KEY_STEP);
+    settings.delete(KEY_DNS_MODE);
+    stateFiles.deleteState();
+    audit.record(null, "onboarding.reset", null, null);
+  }
+
   // --- .env mutation (v0.1: only the DOMAIN key in packages/core/.env) ---
 
   private static final Pattern DOMAIN_LINE = Pattern.compile("^\\s*DOMAIN\\s*=.*$");
