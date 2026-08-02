@@ -1,10 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { ServiceStatus } from '@/api/services';
+import StorageMountPanel from '@/components/StorageMountPanel.vue';
+import { useSystemStore } from '@/stores/system';
 
 const props = defineProps<{
   service: ServiceStatus;
 }>();
+
+const system = useSystemStore();
+const showMountPanel = ref(false);
+
+// iter-3 BL3: expandable per-OS mount instructions replace the raw
+// `smb://` link on the storage row. Kept behind an explicit toggle so
+// the row height doesn't balloon by default.
+const isStorageRunning = computed(() =>
+  props.service.package === 'storage' && props.service.state === 'running',
+);
 
 const emit = defineEmits<{
   (e: 'markDone', pkg: string): void;
@@ -92,10 +104,11 @@ function onPrimary() {
     :data-package="service.package"
     :data-row="service.package"
     :data-tone="tone"
-    class="border border-line rounded-lg p-4 flex items-start justify-between gap-4"
+    class="border border-line rounded-lg p-4"
     :class="isCollapsed ? 'py-2' : ''"
   >
-    <div class="flex-1 min-w-0">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex-1 min-w-0">
       <div class="flex items-center gap-2">
         <span
           :data-status="service.state"
@@ -112,6 +125,14 @@ function onPrimary() {
       </p>
     </div>
     <div class="flex items-center gap-2 shrink-0">
+      <button
+        v-if="isStorageRunning"
+        type="button"
+        class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line"
+        :aria-expanded="showMountPanel"
+        data-test="storage-mount-toggle"
+        @click="showMountPanel = !showMountPanel"
+      >{{ showMountPanel ? 'Hide mount steps' : 'How to mount' }}</button>
       <template v-if="ctaLabel === 'Open' || ctaLabel === 'Finish setup'">
         <a
           v-if="service.open_url"
@@ -148,5 +169,16 @@ function onPrimary() {
         @click="emit('skip', service.package)"
       >Skip</button>
     </div>
+    </div>
+
+    <!-- iter-3 BL3: per-OS mount instructions for the storage row.
+         Rendered only when explicitly toggled so the checklist stays
+         compact by default. -->
+    <StorageMountPanel
+      v-if="isStorageRunning && showMountPanel"
+      class="mt-4"
+      :lan-ip="system.info?.lanIp"
+      :mdns-host="system.info?.domain"
+    />
   </li>
 </template>
