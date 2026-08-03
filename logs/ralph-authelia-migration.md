@@ -129,3 +129,35 @@ Tests are hermetic — no Spring context, `@TempDir` per-test, `AdminUserRepo` m
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 400 tests (386 → 400, +14). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
 
 **Next.** D4 — `packages/identity/authelia/configuration.yml` finalisation: access-control rules driven from the manifest `sso:` block (see D5), session cookie scoped to `.{$DOMAIN}` so it federates across subdomains, redirection URL back to the requesting service.
+
+### iter-5 (2026-08-03) — D4 Authelia configuration.yml finalisation
+
+**Item:** D4 — `packages/identity/authelia/configuration.yml` finalisation. Access-control rules that respect the D2 role → groups cascade, session cookie scoped to the apex `.{$DOMAIN}` for federation across every subdomain.
+
+**What changed in `configuration.yml`.**
+- **Apex is now `bypass`** (was `one_factor`). Aurora runs its own username+password flow with server-side sessions at the apex domain. Letting Authelia gate the apex too would have the two auth systems fight for every request — chicken-and-egg on the login form itself. Bypass at Authelia, gate at Aurora.
+- **auth.{DOMAIN} stays `bypass`** so the login portal is reachable pre-auth.
+- **`*.{DOMAIN}` default remains `two_factor`.** Per-package overrides (via manifest `sso.min_role`) will layer on top when D6 emits the per-vhost matcher.
+- **New `identity_validation` block** — Authelia 4.38+ refuses to boot without it for reset-password flows. Explicit `jwt_secret: '{{ env "AUTHELIA_JWT_SECRET" }}'` so an image upgrade doesn't silently start denying reset requests.
+- **New `totp:` block** with 6-digit / 30-second / 1-skew defaults. Matches every mainstream authenticator app (Google Authenticator, Aegis, 1Password).
+- **New `webauthn:` block** enabling passkeys. Recommended second factor over TOTP — no shared secret, phishing-resistant, works with platform authenticators (Touch ID / Face ID / Windows Hello) and hardware keys (YubiKey).
+- **Session inactivity/expiration bumped** to 15m / 8h (was 5m / 1h). Homelab feel — Sarah shouldn't have to re-auth every time she gets distracted at her desk.
+- **Full comment block** explaining the Aurora role → Authelia group cascade (`ADMIN → [admins, users, guests]`, `USER → [users, guests]`, `GUEST → [guests]`) so an operator peeking at the file understands what `subject: group:users` will mean once D6 emits per-package rules.
+- **Cross-references** to the Java service names (`AutheliaService`, `IdentitySecretsService`) so a bug hunter can jump from yaml → Java in one grep.
+
+**Tests — 9 new** (`identity/AutheliaConfigurationInvariantsTests`).
+- `default_policy: deny` (fail-closed for unmapped subdomains).
+- Auth portal + apex both `bypass` (login flows don't deadlock).
+- Wildcard `*.DOMAIN` falls back to `two_factor`.
+- Session cookie scope covers every subdomain (SSO federation invariant).
+- `authentication_backend.file.watch: true` (Authelia reloads when Aurora's projector writes).
+- argon2id parameters match Aurora's own hashing defaults so cross-side hash verification stays consistent.
+- `identity_validation` block present with the JWT secret env reference.
+- Managed secrets never appear literally in the file (repo-history threat guard).
+- `snapshot_matches_source` — drift check between the test-resource copy and the source file (runs only when the sibling `packages/identity/` tree is visible; the verify script's maven container mounts only `packages/dashboard/backend`, so this drift check silently passes there, and the other 8 invariants still enforce the shape).
+
+**Verify-script quirk documented.** `scripts/verify-v03-overnight.sh` mounts only `packages/dashboard/backend/` into `/app` for the maven container, so tests can't reach `../../packages/identity/authelia/configuration.yml`. Fixed by shipping a byte-for-byte snapshot at `src/test/resources/identity/configuration.yml` with a README explaining the sync rule + the drift-check test above.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 409 tests (400 → 409, +9). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
+
+**Next.** D5 — manifest `sso:` block schema (`protect`, `min_role`, `trusted_headers`) + fill in for Notes / Grafana / Paperless / Forgejo / Home-Automation. Backend parser + validator.
