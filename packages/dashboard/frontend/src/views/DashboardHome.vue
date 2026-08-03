@@ -78,7 +78,12 @@ onMounted(async () => {
   await Promise.allSettled([fetchSystem(), fetchPackages()]);
   // B2-followup (iter-22): metrics fetch fires after system.info lands
   // so capabilities.metrics is up-to-date before the guard runs.
-  if (metricsCapable.value) void loadMetric();
+  // iter-24: sparkline fetch fans out in parallel so the pill picks up
+  // context without gating on the main chart's user-facing error copy.
+  if (metricsCapable.value) {
+    void loadMetric();
+    void loadCpuSparkline();
+  }
 });
 
 // ---- header + identity ---------------------------------------------
@@ -213,6 +218,15 @@ const metricSeries = ref<{ ts: number[]; values: number[] }>({ ts: [], values: [
 const metricLoading = ref(false);
 const metricErr = ref<string | null>(null);
 
+// iter-24 sparkline: shared with the main chart above but always sys.cpu_pct.
+// Kept as its own ref so switching the picker doesn't overwrite the pill's
+// context and vice versa.
+const cpuSpark = ref<{ ts: number[]; values: number[] }>({ ts: [], values: [] });
+const cpuSparkLatest = computed<number | null>(() => {
+  const v = cpuSpark.value.values;
+  return v.length > 0 ? v[v.length - 1] : null;
+});
+
 const metricsCapable = computed<boolean>(() =>
   system.info?.capabilities?.metrics === true,
 );
@@ -235,6 +249,21 @@ async function loadMetric(): Promise<void> {
     metricSeries.value = { ts: [], values: [] };
   } finally {
     metricLoading.value = false;
+  }
+}
+
+// iter-24: always-CPU sparkline fetch. Silent on failure — the sparkline
+// just stays hidden. The main chart handles user-facing error copy.
+async function loadCpuSparkline(): Promise<void> {
+  if (!metricsCapable.value) return;
+  try {
+    const rows = await MetricsApi.last24h('sys.cpu_pct', 5);
+    cpuSpark.value = {
+      ts: rows.map((r: MetricBucket) => r.ts),
+      values: rows.map((r: MetricBucket) => r.avg),
+    };
+  } catch {
+    cpuSpark.value = { ts: [], values: [] };
   }
 }
 
@@ -333,6 +362,29 @@ function pickMetric(key: string): void {
           <div class="flex items-center justify-between">
             <span class="text-ink-3">Containers</span>
             <span class="font-mono text-ink">{{ containersText }}</span>
+          </div>
+
+          <!-- iter-24 sparkline: last-24h CPU % under the pill row so a
+               user glancing at the pill sees whether that number is a
+               steady state or a spike. Hidden entirely until the
+               metrics sampler has recorded at least one bucket. -->
+          <div
+            v-if="metricsCapable && cpuSpark.ts.length > 0"
+            class="pt-3"
+            data-test="system-cpu-sparkline"
+          >
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-ink-4">CPU last 24h</span>
+              <span class="font-mono text-ink-3">
+                {{ cpuSparkLatest === null ? '\u2014' : cpuSparkLatest.toFixed(1) + '%' }}
+              </span>
+            </div>
+            <MetricChart
+              :series="cpuSpark"
+              label="CPU %"
+              unit="%"
+              :height="56"
+            />
           </div>
         </div>
 
