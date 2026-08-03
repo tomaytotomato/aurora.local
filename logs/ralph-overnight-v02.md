@@ -1520,3 +1520,42 @@ Iter-30: **GET /api/audit/events** — read endpoint with filter
 by action/actor/date range so a settings-side viewer can render.
 Table exists (V1__init.sql); repo already has a partial API surface
 via AuditEventRepo. Backend-only iter.
+
+## Iter 30 · 2026-08-03 10:15 · commit 86e5666
+**GET /api/audit/events + AuditEventRepo.query.**
+
+Closes the "settings-side audit viewer needs GET /audit/events"
+deferred bullet from iters 27/28/29.
+
+### What shipped
+- `AuditEventRepo.query(actionPrefix, userId, since, until, limit)`:
+  dynamic composed SQL, LIKE-escaped action prefix, ORDER BY ts DESC
+  + id DESC, limit clamped to [1, `MAX_LIMIT=500`]. Null-safe user_id
+  round-trip via `wasNull()`. Empty on JDBC failure.
+- New `AuditController`: query params `action` / `userId` / `since`
+  / `until` / `limit` with regex + range + ISO-8601 validation; 400
+  on shape violation before hitting the repo.
+- +16 tests (`AuditEventRepoTests` 8 + `AuditControllerTests` 8).
+- Baselines refreshed 332 → 348.
+
+### Verification
+- Touched suites: 16/16 new tests green.
+- Full backend: **348 tests, 0 failures, 0 errors**.
+- `vue-tsc --noEmit` → exit 0.
+- `bash scripts/verify-v03-overnight.sh` → 4/4 with new floor.
+
+### Files touched
+- `backend/…/persistence/AuditEventRepo.java` (+65 -3, query + escapeLike)
+- `backend/…/controllers/AuditController.java` (+95, new)
+- 2 new test files (+265 total)
+- `logs/ralph-overnight-v02.md`, `scripts/verify-v03-overnight.sh` (~5 lines)
+
+### Deferred (accepted)
+- FE audit-log viewer.
+- SSE live tail.
+- Cursor pagination.
+
+### Next iteration target
+Iter-31: **Settings audit-log viewer**. New `/settings/audit` route
+(or inline card on `/settings`) consuming `/api/audit/events` with
+action + date filters. Small; hardest part is the empty/error copy.
