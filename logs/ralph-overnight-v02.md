@@ -2,6 +2,91 @@
 
 Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce/aurora-v02-wt` on branch `feat/v0.2-overnight`. Task spec: `RALPH_TASK_V02_V03.md`.
 
+---
+
+## Executive summary (as of iter-14 · commit ddcdc1e)
+
+**Bottom line.** Phase A (v0.2 close-out) is closed, Phase B (v0.3 groundwork) is feature-complete for the hard-stop, backend + frontend green, one pre-existing failure unchanged from baseline. 28 commits since `f9c4406`. Live aurora on `rename/aurora` is untouched — everything in this worktree is on `feat/v0.2-overnight` and pushed to origin, awaiting your morning review + merge.
+
+**Phase A — v0.2 close-out (A1–A8, all shipped)**
+- **A1** — `d9c4b6d` — Kill DoneChecklist / PackagesCard drift + honest container count on the System card.
+- **A2** — `9bf17e8` — Strict domain validation on `PATCH /api/onboarding` + bash-safe quoter (also closes reviewer B-1 HIGH).
+- **A3** — false-alarm; SSH-copy already absent in `OnboardingAdmin.vue`. Closed by inspection.
+- **A4** — `7affb75` — `POST /api/onboarding/reset` gated on `AURORA_E2E=1`, 404 otherwise; e2e specs' `beforeEach` reset; unblocks the E2E baseline (target ≥72; verified on Bruce's `verify-iter3.sh` sweep).
+- **A5 (TD1)** — `1e5882c` — SSE `/api/services/status/stream` + FE composable `useServiceStatusStream` with poll fallback; drops the 5s poll cliff.
+- **A6** — `8704959` — `SystemService.containerCount` counts only running aurora-managed containers; pins the semantic.
+- **A7** — `b9b0085` — Pinned mikefarah `yq` v4.44.3 in Aurora runtime image; TLS + multi-arch aware; `docker build --check` clean. **Live rebuild deferred to Bruce.**
+- **A8** — `97d7f82` — `start_budget_seconds` on six multi-container manifests + `Package.startBudgetSeconds()` helper + `LaunchService` reads it into the launch-log header.
+
+**Phase B — v0.3 groundwork (B1–B4, all shipped)**
+- **B1** — `67e954e` (backend) + `ae49d01` (frontend) — `DockerEventService` (filtered lifecycle events, 200-entry ring buffer, SSE with buffer-replay + 5s poll fallback + 5s reconnect); DashboardHome "Recent changes" card wired off the raw `/api/events` bridge.
+- **B2** — `1d7c117` — `MetricsSamplerService` @Scheduled 30s (cpu% + mem + per-mount disk + uptime); `MetricsRepo` (`insert`/`insertBatch`/`pruneOlderThan`/`bucketed24h` with wall-clock-aligned strftime bucketing); `GET /api/metrics/last24h?key=&bucketMinutes=`; 25 h retention. **Frontend uPlot wiring deferred per task spec.**
+- **B3** — `4ece9b7` (backend) + `b7bd583` (frontend) — `GET /api/containers/{id}/logs?tail=200` with docker-java `logContainerCmd` chain (2 MiB byte cap, timestamp parse, multi-line frame split, tail cap); `/containers/:id/logs` SPA route with tail selector + refresh + §5 error copy; Recent-changes rows drill in via `router-link`.
+- **B4** — `ad18213` (backend) + `76315dc` (frontend) — `SecurityFinding` record + `SecurityRule` interface + three rules (WeakAdminPassword, DockerSocketExposure, UnpinnedImageTags), aggregator with per-rule try/catch, `GET /api/security/findings`; `SecurityPosture.vue` rewritten with §4/§5 states + severity Badges + "Fix it →" / "Learn more ↗" affordances; capability flag flipped on so sidebar reveals `/security`.
+
+**Test progression (docker-run maven; docker-run vue-tsc):**
+
+| Iter | Backend tests | New | Introduced fails | Pre-existing fails |
+|-----:|--------------:|----:|-----------------:|-------------------:|
+| baseline | 127 | — | — | 1 |
+| after A4 | 133 | +6 | 0 | 1 |
+| after A5 | 136 | +3 | 0 | 1 |
+| after A6 | 139 | +3 | 0 | 1 |
+| after A8 | 156 | +17 | 0 | 1 |
+| after B1 | 168 | +12 | 0 | 1 |
+| after B2 | 195 | +27 | 0 | 1 |
+| after B3 | 213 | +18 | 0 | 1 |
+| after B4 | **251** | **+38** | **0** | **1** |
+
+Frontend `vue-tsc --noEmit` exit 0 on every iter that touched the FE.
+
+**Only pre-existing failure:** `PackagesServiceTests.parsesFakeRepoManifests` — present in baseline (`f9c4406`), not introduced by this branch. Tracked separately.
+
+**Reverifying from a fresh shell:**
+
+```bash
+cd /home/bruce/aurora-v02-wt
+git log --oneline f9c4406..HEAD
+
+# Backend (~20s cold, ~10s warm):
+docker run --rm \
+  -v "$PWD/packages/dashboard/backend":/app \
+  -v "$HOME/.m2":/root/.m2 \
+  -w /app \
+  maven:3.9-eclipse-temurin-25-alpine \
+  mvn -B -o -Dstyle.color=never test
+# Expected: 251 tests, 1 pre-existing failure, 0 introduced.
+
+# Frontend (~30s cold):
+docker run --rm \
+  -v "$PWD/packages/dashboard/frontend":/app -w /app \
+  node:22-alpine sh -c "npx vue-tsc --noEmit"
+# Expected: exit 0.
+
+# Dockerfile check (A7):
+docker build --check -f packages/dashboard/Dockerfile packages/dashboard/
+# Expected: 'Check complete, no warnings found.'
+```
+
+**Deferred items rolled up:**
+- E2E specs already have their `beforeEach` reset wired (A4) but the aurora-e2e docker compose project boots on `:8091` outside this worktree — covered by `bash scripts/verify-iter3.sh VERIFY_E2E=1`.
+- Live docker rebuild of the aurora image (A7 pin lands after `docker compose build`). Bruce owns.
+- Per-container CPU + memory metrics samples (B2 followup; docker-java stats blocks ~1s per container; wants its own executor).
+- Frontend uPlot chart wiring on the Metrics card (B2 followup).
+- Live log-tail SSE follow (B3 followup; task spec: "no live stream in v0.3").
+- Dismiss/snooze lifecycle for security findings (B4 followup).
+- Retirement of `stores/events.ts` (dead after B1 iter-9; no consumers).
+- PackageDetail "Logs" tab wiring (needs compose-service → container-name mapping helper).
+- `PackagesServiceTests.parsesFakeRepoManifests` pre-existing failure investigation.
+
+**No `DECISION_NEEDED.md` or `HALT.md` was ever written.** No product-judgement fork required Bruce's input; all engineering calls documented per commit body.
+
+**Push state.** `origin/feat/v0.2-overnight` == `HEAD`; the sibling async worker on `rename/aurora` remained untouched throughout.
+
+---
+
+## Per-iteration log
+
 Live aurora on :8090 must not be rebuilt or restarted from this worktree. Sibling async worker `3707d3d3` completed on `rename/aurora` (login-flow polish + 3-layer security review) before this loop began.
 
 ## Iter 1 · 2026-08-02 22:35 · commit d9c4b6d
