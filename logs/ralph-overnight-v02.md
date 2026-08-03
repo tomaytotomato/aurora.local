@@ -1956,3 +1956,55 @@ Iter-40 (final): **executive summary refresh + completion promise**.
 Update the top-of-log summary to reflect all iters 25-39 shipped,
 refresh baselines, and verify the completion gate is fully satisfied
 before emitting `<promise>COMPLETE</promise>`.
+
+## Iter 40 (final) · 2026-08-03 11:17 · commit ea14b27
+**Executive summary refresh + completion promise.**
+
+Final iter. Refreshed the top-of-log executive summary + RALPH_TASK
+expected-output block to reflect the final state. Everything Bruce
+asked for in the morning brief is in place.
+
+### Completion gate — every condition satisfied
+
+1. **Final verification command** exists:
+   `bash scripts/verify-v03-overnight.sh` (iter-18 `c692b62`).
+2. **Recorded** in `RALPH_TASK_V02_V03.md` "Final verification
+   command" tail section with the exact invocation, env-var
+   reference, and expected-output block updated iter-40.
+3. **Artifacts preserved**: every source in git; docker-run tooling
+   uses `maven:3.9-eclipse-temurin-25-alpine` + `node:22-alpine`
+   which the script pulls on demand.
+4. **No cleanup blocks** anything: the run creates and consumes
+   temp files under `/tmp/verify-v03-*.log`; no host caches / build
+   directories / dylibs / virtualenvs need recreating.
+5. **Externally rerunnable**: verified 5/5 checks pass on HEAD
+   after iter-39 + iter-40 commits landed. Fresh-shell reproducible.
+
+### Final verification (against `HEAD`)
+
+```
+▶ Commits since baseline (f9c4406)
+  ✓ 77 commits on feat/v0.2-overnight since f9c4406
+  · HEAD: ea14b27 — aurora: iter-40 (final) — executive summary refresh + completion promise
+▶ Backend tests (docker-run maven, no host JDK)
+  ✓ mvn test green — Tests run: 348, Failures: 0, Errors: 0, Skipped: 0
+▶ Frontend typecheck (docker-run vue-tsc, no host node)
+  ✓ vue-tsc --noEmit exit 0
+▶ Frontend vitest (docker-run, no host node)
+  ✓ vitest:  Test Files  4 passed (4)       Tests  32 passed (32)
+▶ Dockerfile static check (docker build --check)
+  ✓ docker build --check: no warnings
+✓ verify-v03-overnight.sh: 5 checks passed, 0 failed
+```
+
+### Loop-level outcome
+
+- Phase A (A1–A8): shipped.
+- Phase B (B1–B4): shipped (backend + frontend where applicable).
+- Every deferred followup identified in the per-iter logs: shipped.
+- No `DECISION_NEEDED.md` was ever written — no product-judgement
+  fork required Bruce's input across 40 iterations.
+- No `HALT.md` was ever written — no 3-consecutive-iter regression.
+- Sibling branch `rename/aurora` untouched throughout per safety rail.
+
+**Loop complete.**
