@@ -75,7 +75,7 @@ public class LaunchService {
   private final AuroraProperties props;
   private final AuditEventRepo audit;
   /**
-   * Optional manifest lookup used by {@link #resolveBudgetSeconds(java.util.List)}
+   * Optional manifest lookup used by {@link #resolveBudgetSeconds(String)}
    * to render the effective per-package + total start budget into the
    * launch header. Null in unit tests that stub {@code up.sh}; wired by
    * Spring in production so {@code startLaunch()} logs an honest budget
@@ -84,6 +84,14 @@ public class LaunchService {
    * {@link Package#startBudgetSeconds()}).
    */
   private final PackagesService packages;
+  /**
+   * iter-29: optional principal lookup for audit-trail attribution.
+   * Null in unit tests so the pre-attribution behaviour (userId=null on
+   * audit.record) is preserved; wired by Spring in production so a
+   * launch initiated via the DashboardHome Start button records the
+   * acting admin's id.
+   */
+  private final com.tomaytotomato.aurora.services.CurrentUserService currentUser;
 
   private final Map<String, Job> jobs = new ConcurrentHashMap<>();
   private final AtomicReference<String> activeJobId = new AtomicReference<>(null);
@@ -96,19 +104,29 @@ public class LaunchService {
       });
 
   /**
-   * Test-only constructor. Prod path uses the {@code (props, audit,
-   * packages)} form Spring auto-wires; unit tests stage a fake up.sh
-   * and don't exercise budget-header logging.
+   * Test-only constructor. Prod path uses the 4-arg {@code (props, audit,
+   * packages, currentUser)} form Spring auto-wires; unit tests stage a
+   * fake up.sh and don't exercise budget-header logging or audit
+   * attribution.
    */
   public LaunchService(AuroraProperties props, AuditEventRepo audit) {
-    this(props, audit, null);
+    this(props, audit, null, null);
+  }
+
+  /**
+   * Two-arg-with-packages test convenience for the budget-header suite.
+   */
+  public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages) {
+    this(props, audit, packages, null);
   }
 
   @Autowired
-  public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages) {
+  public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
+                       com.tomaytotomato.aurora.services.CurrentUserService currentUser) {
     this.props = props;
     this.audit = audit;
     this.packages = packages;
+    this.currentUser = currentUser;
     // Fires every 15s. Cheap; iterates active job's emitters only.
     heartbeat.scheduleAtFixedRate(this::sendHeartbeats, 15, 15, TimeUnit.SECONDS);
   }
@@ -152,7 +170,7 @@ public class LaunchService {
       job.logFile = null;
     }
 
-    audit.record(null, "onboarding.launch.start", "job:" + id,
+    audit.record(currentUserId(), "onboarding.launch.start", "job:" + id,
         "{\"packages\":" + toJsonArray(job.packages) + "}");
 
     Thread runner = new Thread(() -> run(job), "aurora-launch-" + id.substring(0, 8));
@@ -318,7 +336,7 @@ public class LaunchService {
     }
     job.emitters.clear();
     activeJobId.compareAndSet(job.id, null);
-    audit.record(null, "onboarding.launch.finish", "job:" + job.id,
+    audit.record(currentUserId(), "onboarding.launch.finish", "job:" + job.id,
         "{\"state\":\"" + state.name().toLowerCase() + "\",\"exit\":" + exit + "}");
   }
 
@@ -511,6 +529,22 @@ public class LaunchService {
       // Manifest lookup shouldn't hard-fail a launch. Default and move on.
       log.debug("budget lookup failed for {}: {}", pkg, e.getMessage());
       return Package.DEFAULT_START_BUDGET_SECONDS;
+    }
+  }
+
+  /**
+   * iter-29: audit-trail attribution. Returns the authenticated admin id
+   * when a session exists; null in unit tests + wizard-phase paths where
+   * no session is yet available. Null propagates to {@code audit_event.user_id}
+   * matching the pre-attribution behaviour.
+   */
+  Long currentUserId() {
+    if (currentUser == null) return null;
+    try {
+      return currentUser.currentUserId().orElse(null);
+    } catch (RuntimeException e) {
+      log.debug("currentUserId lookup failed: {}", e.getMessage());
+      return null;
     }
   }
 

@@ -61,7 +61,7 @@ fi
 BACKEND=packages/dashboard/backend
 if [ "$SKIP_BACKEND" = "1" ]; then
   step "Backend tests (skipped — set SKIP_BACKEND=0 to run)"
-  info "cached expectation: 327 tests, 0 failures, 0 errors (as of iter-28 principal attribution)"
+  info "cached expectation: 332 tests, 0 failures, 0 errors (as of iter-29 LaunchService attribution)"
 elif [ ! -d "$BACKEND" ]; then
   step "Backend tests"; bad "$BACKEND not found"
 else
@@ -77,8 +77,8 @@ else
     ok "mvn test green — ${SUMMARY:-(exit 0, summary parse missed)}"
     # Belt-and-braces: expected floor is 257.
     RUN=$(printf '%s' "$SUMMARY" | sed -nE 's/^Tests run: ([0-9]+),.*/\1/p')
-    if [ -n "$RUN" ] && [ "$RUN" -lt 327 ]; then
-      bad "test count $RUN below iter-28 baseline 327 — check for silently-removed tests"
+    if [ -n "$RUN" ] && [ "$RUN" -lt 332 ]; then
+      bad "test count $RUN below iter-29 baseline 332 — check for silently-removed tests"
     fi
   else
     bad "mvn test failed — tail $LOG"

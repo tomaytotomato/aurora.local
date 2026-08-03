@@ -58,6 +58,7 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 | iter-26 (snooze duration picker) | 314 | — | 0 | 0 |
 | **iter-27 (audit events on dismiss/restore)** | **319** | **+5** | **0** | **0** |
 | iter-28 (principal attribution on audits) | 327 | +8 | 0 | 0 |
+| **iter-29 (LaunchService audit attribution)** | **332** | **+5** | **0** | **0** |
 
 Frontend `vue-tsc --noEmit` exit 0 on every iter that touched the FE.
 
@@ -78,7 +79,7 @@ docker run --rm \
   -w /app \
   maven:3.9-eclipse-temurin-25-alpine \
   mvn -B -o -Dstyle.color=never test
-# Expected: 327 tests, 0 failures, 0 errors.
+# Expected: 332 tests, 0 failures, 0 errors.
 
 # Frontend (~30s cold):
 docker run --rm \
