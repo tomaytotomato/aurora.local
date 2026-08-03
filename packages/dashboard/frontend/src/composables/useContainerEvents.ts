@@ -4,6 +4,12 @@ import {
   openContainerEventsStream,
   type ContainerEventItem,
 } from '@/api/containers';
+import {
+  MAX_EVENTS,
+  pushDeduped,
+  replaceCapped,
+  pruneFailureWindow,
+} from '@/lib/container-events';
 
 /**
  * B1 (v0.3, iter-9): live feed of docker container-lifecycle events for
@@ -42,7 +48,10 @@ export interface ContainerEventsStream {
 }
 
 /** Client-side cap; matches DockerEventService.BUFFER_MAX. */
-const MAX_EVENTS = 200;
+// Re-exported via lib/container-events for parity, but keep the alias
+// so tsc doesn't complain about the unused local when consumers refer
+// to MAX_EVENTS via the composable module.
+void MAX_EVENTS;
 
 export function useContainerEvents(): ContainerEventsStream {
   const events = ref<ContainerEventItem[]>([]);
@@ -58,31 +67,18 @@ export function useContainerEvents(): ContainerEventsStream {
   const POLL_INTERVAL_MS = 5_000;
 
   function pushEvent(e: ContainerEventItem): void {
-    // Dedupe protection: SSE stream replays the buffer on subscribe, and
-    // the poll fallback returns the same buffer. If we re-connect after a
-    // failure, we might see events we've already recorded — key on
-    // (ts, container, action) which is the only stable identity docker
-    // gives us. Cheap because the check is against the tail (recent
-    // events are the ones that could collide).
-    const tail = events.value[events.value.length - 1];
-    if (
-      tail !== undefined &&
-      tail.ts === e.ts &&
-      tail.container === e.container &&
-      tail.action === e.action
-    ) {
-      return;
-    }
-    events.value.push(e);
-    if (events.value.length > MAX_EVENTS) {
-      events.value.splice(0, events.value.length - MAX_EVENTS);
+    // iter-36: dedupe + cap logic lives in lib/container-events so
+    // vitest can pin the arithmetic without mounting the composable.
+    const next = pushDeduped(events.value, e);
+    if (next !== events.value) {
+      events.value = next as ContainerEventItem[];
     }
   }
 
   function replaceEvents(list: ContainerEventItem[]): void {
-    // Poll refresh path: the backend already returns oldest-first. Trust
-    // that shape and swap wholesale so the reactive array watches once.
-    events.value = list.slice(-MAX_EVENTS);
+    // Poll refresh path: backend returns oldest-first; slice-tail via
+    // the helper so the client cap stays honest.
+    events.value = replaceCapped(list) as ContainerEventItem[];
   }
 
   function stopPoll() {
@@ -122,12 +118,10 @@ export function useContainerEvents(): ContainerEventsStream {
   function recordFailureAndMaybeFallback(): void {
     const now = Date.now();
     failureTimestamps.push(now);
-    while (
-      failureTimestamps.length > 0 &&
-      now - failureTimestamps[0] > FAILURE_WINDOW_MS
-    ) {
-      failureTimestamps.shift();
-    }
+    // iter-36: window prune via extracted helper.
+    const kept = pruneFailureWindow(failureTimestamps, now, FAILURE_WINDOW_MS);
+    failureTimestamps.length = 0;
+    failureTimestamps.push(...kept);
     if (failureTimestamps.length >= FAILURE_THRESHOLD) {
       closeSse();
       startPoll();
