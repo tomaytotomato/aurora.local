@@ -133,7 +133,7 @@ async function proceed(): Promise<void> {
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 4 of 9</div>
+    <div class="eyebrow mb-3">Step 4 of 10</div>
     <h1 class="mb-4">Pick your packages.</h1>
     <p class="text-foreground mb-6">
       Each package is a small compose stack with sensible defaults. You can add or

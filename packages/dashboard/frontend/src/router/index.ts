@@ -18,6 +18,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'admin', component: () => import('@/views/onboarding/OnboardingAdmin.vue') },
       { path: 'domain', component: () => import('@/views/onboarding/OnboardingDomain.vue') },
       { path: 'packages', component: () => import('@/views/onboarding/OnboardingPackages.vue') },
+      { path: 'sso', component: () => import('@/views/onboarding/OnboardingSso.vue') },
       { path: 'secrets', component: () => import('@/views/onboarding/OnboardingSecrets.vue') },
       { path: 'dns', component: () => import('@/views/onboarding/OnboardingDns.vue') },
       { path: 'tls', component: () => import('@/views/onboarding/OnboardingTls.vue') },

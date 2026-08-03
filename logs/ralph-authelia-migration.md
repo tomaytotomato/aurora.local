@@ -364,3 +364,39 @@ Not yet exercised (deferred to D15 tests iter): full mount of `UsersView.vue` wi
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 455 unchanged. Vitest 20 files / 177 tests (169 → 177, +8). vue-tsc clean. Dockerfile clean.
 
 **Next.** D10 — onboarding wizard "Single sign-on for services" step. Auto-generates the three Authelia secrets, opts identity into the enabled[] list, explains what happens next.
+
+### iter-11 (2026-08-03) — D10 onboarding "Single sign-on for services" step
+
+**Formal reflection checkpoint** (Ralph iter-10 was informal). Full write-up in the reply that opened iter-11. Summary: D1-D9 complete in 10 iters, 455 backend + 177 vitest tests, no product-judgement forks, two latent bugs caught by tests during construction, approach unchanged.
+
+**Item:** D10 — onboarding wizard "Single sign-on for services" step. Auto-generates the three Authelia secrets, adds `identity` to enabled[], explains what happens.
+
+**Wizard flow changed.** Old: 9 steps (welcome → admin → domain → packages → **secrets** → dns → tls → review → done). New: 10 steps with SSO inserted between packages and secrets. `STEPS` + `STEP_LABELS` grown. All 9 existing views had their hard-coded `Step X of 9` eyebrow bumped:
+- welcome / admin / domain / packages stayed at 1-4 → `1 of 10 / 2 of 10 / 3 of 10 / 4 of 10`.
+- secrets 5 → 6, dns 6 → 7, tls 7 → 8, review 8 → 9, done 9 → 10.
+
+**Frontend view (`OnboardingSso.vue`).**
+- `<Checkbox>` from Phase C — pre-ticked (recommended default). Homelab operators who take the wizard almost always want SSO; pre-ticking shortens the happy path by one click.
+- Two conditional info blocks:
+  - `<Alert variant="info">` when SSO is on — enumerated numbered list ("What Aurora does when you continue: adds identity to packages, generates 32-byte secrets, protects every vhost").
+  - `<Alert variant="warning">` when SSO is off — "You can turn this on later" copy with the path (Packages → identity → Enable).
+- Handles both directions: opting IN calls `POST /onboarding/sso {enable: true}`, opting OUT calls the same endpoint with `false` so the enabled list stays consistent if the user unchecks after a previous tick.
+- Toast on success ("SSO enabled — Authelia will front every protected service.").
+- Inline error via `humanCopyForError`; the API call opts out of the global 5xx toast.
+
+**Backend endpoint (`POST /api/onboarding/sso`).**
+- `enable: true` → adds `identity` to `.state.yml` enabled[] (idempotent — no-op when already there), calls `IdentitySecretsService.ensureSecrets()` which writes `packages/identity/.env` if secrets are missing.
+- `enable: false` → removes `identity` from enabled[] (idempotent). Does NOT touch the .env file — a re-tick later reuses existing secrets rather than forcing a rotation.
+- Audit rows: `onboarding.sso.enable` / `onboarding.sso.skip`, target `packages/identity`.
+- Guarded by `guardMidOnboarding()` so a completed wizard can't retroactively flip SSO from the wire.
+- Wired new deps into `OnboardingController` (IdentitySecretsService + AuditEventRepo). Two pre-existing MockMvc-standalone tests (`OnboardingControllerPatchTests`, `OnboardingControllerResetTests`) had their constructor calls extended with matching mocks so the compile passed.
+
+**Tests — 4 new** (`OnboardingControllerSsoTests`).
+- `enable: true` adds identity + calls ensureSecrets + records audit + calls guardMidOnboarding.
+- `enable: true` when identity already enabled short-circuits the state file write (still calls ensureSecrets — idempotent).
+- `enable: false` removes identity, does NOT touch secrets, records skip audit.
+- `enable: false` when identity absent is a no-op on the state file.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 459 tests (455 → 459, +4). Vitest 20 files / 177 tests unchanged. vue-tsc clean. Dockerfile clean.
+
+**Next.** D11 — migrate `packages/notes` (SilverBullet) as the pilot. Verifies the end-to-end path: log into Aurora → click Notes → no second login. Since notes' sso block was filled in D5 (`protect=true, min_role=user, trusted_headers=false`), the CaddySnippetService from D6 already knows what to emit. This iter checks Bruce needs to test live once Phase D merges.

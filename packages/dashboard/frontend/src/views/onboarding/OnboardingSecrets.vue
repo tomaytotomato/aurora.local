@@ -13,7 +13,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 5 of 9</div>
+    <div class="eyebrow mb-3">Step 6 of 10</div>
     <h1 class="mb-4">Configure secrets.</h1>
     <p class="text-foreground mb-8">
       Each selected package has an <code class="bg-muted px-1 py-0.5 rounded border border-border">.env</code>

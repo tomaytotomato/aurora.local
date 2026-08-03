@@ -14,7 +14,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 7 of 9</div>
+    <div class="eyebrow mb-3">Step 8 of 10</div>
     <h1 class="mb-4">Trust the TLS root.</h1>
     <p class="text-foreground mb-8">
       Caddy on this box issues its own TLS certificates for

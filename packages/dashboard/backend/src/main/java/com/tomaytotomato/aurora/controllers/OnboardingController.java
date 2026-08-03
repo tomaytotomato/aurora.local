@@ -4,6 +4,9 @@ import com.tomaytotomato.aurora.services.LaunchService;
 import com.tomaytotomato.aurora.services.OnboardingService;
 import com.tomaytotomato.aurora.services.PackagesService;
 import com.tomaytotomato.aurora.services.StateFileService;
+import com.tomaytotomato.aurora.services.IdentitySecretsService;
+import com.tomaytotomato.aurora.persistence.AuditEventRepo;
+import com.tomaytotomato.aurora.domain.RepoState;
 import com.tomaytotomato.aurora.services.SystemService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -53,6 +56,8 @@ public class OnboardingController {
   private final SystemService system;
   private final LaunchService launcher;
   private final StateFileService stateFiles;
+  private final IdentitySecretsService identitySecrets;
+  private final AuditEventRepo audit;
 
   /**
    * TD5: when true, exposes {@code POST /api/onboarding/reset}. Bound from
@@ -64,11 +69,14 @@ public class OnboardingController {
   private boolean e2eMode;
 
   public OnboardingController(OnboardingService onboarding, SystemService system,
-                              LaunchService launcher, StateFileService stateFiles) {
+                              LaunchService launcher, StateFileService stateFiles,
+                              IdentitySecretsService identitySecrets, AuditEventRepo audit) {
     this.onboarding = onboarding;
     this.system = system;
     this.launcher = launcher;
     this.stateFiles = stateFiles;
+    this.identitySecrets = identitySecrets;
+    this.audit = audit;
   }
 
   // --- canonical shape ------------------------------------------------
@@ -283,6 +291,62 @@ public class OnboardingController {
     return patch(new PatchReq(null, null, req.enabled(), req.names(), null, null));
   }
 
+  /**
+   * Phase D iter-11 (D10). Turn Authelia SSO on/off during onboarding.
+   *
+   * <p>When {@code enable == true}:
+   * <ol>
+   *   <li>Adds {@code identity} to the {@code .state.yml} enabled[] list
+   *       (idempotent — nothing changes if it's already there).</li>
+   *   <li>Calls {@link IdentitySecretsService#ensureSecrets()} which
+   *       generates any missing {@code AUTHELIA_*_SECRET} values and
+   *       writes {@code packages/identity/.env} with 0600 perms.</li>
+   *   <li>Records an audit row {@code onboarding.sso.enable}.</li>
+   * </ol>
+   *
+   * <p>When {@code enable == false}: removes {@code identity} from
+   * the enabled list (if present). The .env file stays on disk in case
+   * the operator wants to opt back in later without re-generating
+   * secrets. Records an {@code onboarding.sso.skip} audit row.
+   *
+   * <p>Guard: bootstrap-mode only. Same posture as every other
+   * onboarding endpoint — no admin role required because there IS
+   * no admin session yet when the wizard runs.
+   */
+  @PostMapping("/sso")
+  public ResponseEntity<Map<String, Object>> setSso(@Valid @RequestBody SetSsoReq req) {
+    onboarding.guardMidOnboarding();
+    RepoState state = stateFiles.readState();
+    var enabled = new java.util.ArrayList<>(
+        state.enabled() == null ? java.util.List.<String>of() : state.enabled());
+    boolean changed;
+    if (req.enable()) {
+      changed = !enabled.contains("identity") && enabled.add("identity");
+    } else {
+      changed = enabled.remove("identity");
+    }
+    if (changed) stateFiles.writeEnabled(enabled);
+
+    if (req.enable()) {
+      try {
+        identitySecrets.ensureSecrets();
+      } catch (java.io.IOException e) {
+        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+            "failed to write identity secrets: " + e.getMessage());
+      }
+    }
+
+    audit.record(null,
+        "onboarding.sso." + (req.enable() ? "enable" : "skip"),
+        "packages/identity",
+        null);
+
+    return ResponseEntity.ok(Map.of(
+        "enabled", req.enable(),
+        "packages", enabled
+    ));
+  }
+
   // --- request DTOs ---------------------------------------------------
 
   public record CreateAdminReq(
@@ -295,6 +359,9 @@ public class OnboardingController {
 
   /** Accepts either {enabled:[...]} or {names:[...]} for frontend compat. */
   public record SetPackagesReq(List<String> enabled, List<String> names) {}
+
+  /** D10 body: {@code {enable: boolean}}. */
+  public record SetSsoReq(boolean enable) {}
 
   /**
    * Partial-update body. All fields optional; unset fields are no-ops.

@@ -48,7 +48,9 @@ class OnboardingControllerPatchTests {
             onboarding,
             mock(SystemService.class),
             mock(LaunchService.class),
-            mock(StateFileService.class))).build();
+            mock(StateFileService.class),
+            mock(com.tomaytotomato.aurora.services.IdentitySecretsService.class),
+            mock(com.tomaytotomato.aurora.persistence.AuditEventRepo.class))).build();
 
     String body = JSON.writeValueAsString(Map.of("enabled_packages", List.of("../etc")));
     mvc.perform(patch("/api/onboarding")
@@ -72,7 +74,9 @@ class OnboardingControllerPatchTests {
             onboarding,
             mock(SystemService.class),
             mock(LaunchService.class),
-            mock(StateFileService.class))).build();
+            mock(StateFileService.class),
+            mock(com.tomaytotomato.aurora.services.IdentitySecretsService.class),
+            mock(com.tomaytotomato.aurora.persistence.AuditEventRepo.class))).build();
 
     String body = JSON.writeValueAsString(Map.of("enabled_packages", List.of("foo")));
     mvc.perform(patch("/api/onboarding")

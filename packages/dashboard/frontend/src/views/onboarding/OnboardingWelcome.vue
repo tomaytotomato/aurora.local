@@ -100,7 +100,7 @@ const diskRowsExtra = computed(() => Math.max(0, diskRows.value.length - 4));
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 1 of 9</div>
+    <div class="eyebrow mb-3">Step 1 of 10</div>
     <h1 class="mb-4">Welcome to Aurora.</h1>
     <p class="text-foreground text-base leading-relaxed mb-8">
       Aurora is the admin panel for this box. It's opinionated on purpose — most homelab
