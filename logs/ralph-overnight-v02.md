@@ -447,3 +447,63 @@ sampling CPU%, mem, disk-per-mount, per-container CPU+mem. Persist to
 older than 25h on write. New `GET /api/metrics/last24h?key=…` returns
 downsampled 5-min buckets. Backend-only; Metrics card empty state
 stays "Metrics land next release" until a follow-up wires uPlot.
+
+## Iter 10 · 2026-08-03 08:29 · commit (see git log -1)
+**B2 — MetricsSamplerService + MetricsRepo + /api/metrics/last24h.**
+
+### What shipped
+
+Retires the v0.1 `MetricSampler` stub in favour of a real sampler that
+persists CPU%, memory, per-mount disk, and app uptime every 30s into
+the `metric_sample` ring-buffer table, with a 25h retention window
+pruned on every write. New `GET /api/metrics/last24h?key=…&bucketMinutes=5`
+returns wall-clock-aligned bucketed series (`{ts, avg, min, max, count}`)
+for the DashboardHome charts once uPlot lands.
+
+- `services/ProcStatSampler.java`: /proc/stat delta CPU%. First-tick
+  null, zero-delta null, clock-stall guard, [0,100] clamp.
+- `services/MetricsSamplerService.java`: @Scheduled(30s,initialDelay=5s);
+  cpu + mem + disk + uptime batch; per-probe try/catch so a bad source
+  doesn't torpedo the tick; prune older than
+  `MetricsRepo.RETENTION_HOURS`. `safeKey(mount)` translates '/' → 'root'
+  and interior '/' → '_'.
+- `persistence/MetricsRepo.java`: insert / insertBatch / pruneOlderThan
+  / bucketed24h. Preserved V1 schema (ts TEXT, name, value REAL) — the
+  task's aspirational (id, ts, key, value) shape doesn't buy anything
+  the existing index (`idx_metric_sample_name_ts`) doesn't already
+  give us.
+- `controllers/MetricsController.java`: key regex
+  `^[a-z][a-z0-9._-]{0,63}$`, bucketMinutes ∈ {1,2,5,10,15,30,60}.
+  Auth via SecurityConfig default `.anyRequest().authenticated()`.
+
+### Verification
+- Touched suites: 27/27 green.
+- Full backend: 195 tests, 1 pre-existing failure unchanged, 0
+  introduced (168 → 195, +27).
+- `vue-tsc --noEmit` → exit 0 (frontend untouched).
+
+### Files touched
+- backend/…/services/ProcStatSampler.java (+130, new)
+- backend/…/services/MetricsSamplerService.java (+178, new; replaces
+  MetricSampler.java, deleted)
+- backend/…/persistence/MetricsRepo.java (+140, new)
+- backend/…/controllers/MetricsController.java (+80, new)
+- 4 new test files: ProcStatSamplerTests (7), MetricsSamplerServiceTests
+  (6), MetricsRepoTests (9), MetricsControllerTests (5).
+
+### Deferred
+- Per-container CPU/mem samples via docker-java stats subscribe.
+  ~1s dwell per container; separate bean with own executor. B2-followup.
+- uPlot chart wiring on Metrics card. Task spec explicit: empty state
+  stays until follow-up.
+- End-to-end SQLite integration test for the bucket SQL. Mocked
+  JdbcTemplate covers argv contract; SQL string validated by hand
+  against SQLite strftime semantics.
+
+### Next iteration target
+B3 — Container logs tail. `GET /api/containers/{id}/logs?tail=200` via
+`docker-java` `logContainerCmd().withTail(200)`. Auth: admin session.
+No live stream (v0.3 snapshot only). Frontend: new route
+`/containers/{id}/logs` renders <pre> with mono font + refresh button;
+wired from `RecentChangesList` row click (that list already exists
+per B1 iter-9). Backend piece this iter; UI piece next.
