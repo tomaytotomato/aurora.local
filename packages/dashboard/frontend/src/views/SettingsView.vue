@@ -5,7 +5,17 @@ import { AuditApi, type AuditEvent } from '@/api/audit';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
-import { Alert, AlertDescription } from '@/components/ui';
+import {
+  Alert,
+  AlertDescription,
+  Input,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui';
 import { useRouter } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 
@@ -112,11 +122,11 @@ onMounted(() => { void loadAudit(); });
           </div>
           <div class="flex items-center gap-2">
             <label for="audit-filter" class="sr-only">Filter by action prefix</label>
-            <input
+            <Input
               id="audit-filter"
               v-model="auditFilter"
               placeholder="e.g. security."
-              class="text-xs rounded border border-border bg-card text-foreground px-2 py-1 w-40"
+              class="h-8 w-40 text-xs"
               data-test="audit-filter"
               @keydown.enter="loadAudit"
             />
@@ -141,20 +151,25 @@ onMounted(() => { void loadAudit(); });
           launching a package appear here.
         </div>
 
-        <ul v-else class="space-y-1.5" data-test="audit-list">
-          <li
-            v-for="e in auditEvents"
-            :key="e.id"
-            class="grid grid-cols-[auto_auto_1fr] gap-3 items-baseline text-xs font-mono"
-          >
-            <span class="text-muted-foreground whitespace-nowrap">{{ formatAuditTs(e.ts) }}</span>
-            <span class="text-foreground">{{ e.action }}</span>
-            <span class="text-muted-foreground truncate">
-              <span v-if="e.user_id !== null" class="text-muted-foreground">user #{{ e.user_id }} · </span>
-              {{ e.target ?? '' }}
-            </span>
-          </li>
-        </ul>
+        <Table v-else data-test="audit-list" class="font-mono text-xs">
+          <TableHeader>
+            <TableRow class="hover:bg-transparent">
+              <TableHead class="w-40">Time</TableHead>
+              <TableHead class="w-56">Action</TableHead>
+              <TableHead>Actor · Target</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="e in auditEvents" :key="e.id">
+              <TableCell class="text-muted-foreground whitespace-nowrap align-baseline">{{ formatAuditTs(e.ts) }}</TableCell>
+              <TableCell class="text-foreground align-baseline">{{ e.action }}</TableCell>
+              <TableCell class="text-muted-foreground truncate align-baseline">
+                <span v-if="e.user_id !== null" class="text-muted-foreground">user #{{ e.user_id }} · </span>
+                {{ e.target ?? '' }}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </Card>
     </div>
   </section>

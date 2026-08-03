@@ -389,3 +389,30 @@ All three keep their `data-test` hooks (`logs-tail-select`, `sec-snooze-picker`,
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 14 files / 120 tests (112 → 120, +8). vue-tsc clean. Dockerfile clean.
 
 **Next.** C10.4 — Toast/Sonner (needs an axios interceptor hook, more work than Skeleton/Dialog/Select) or C10.5 Table for the SettingsView audit log. Toast has broader UX impact; Table has smaller blast radius. Depending on remaining loop budget will pick Toast next.
+
+### iter-17 (2026-08-03) — C10 shadcn Table (bonus)
+
+**Item:** C10.4 — introduce Table sub-primitives + migrate SettingsView audit-log rows.
+
+**Primitives.** Six tiny wrapper components mirroring shadcn-vue's canonical Table split:
+- `Table.vue` — `<table>` inside a `<div class="relative w-full overflow-x-auto">` wrapper. Horizontal scroll keeps wide audit rows from breaking the layout when narrow.
+- `TableHeader.vue` — `<thead>` with `[&_tr]:border-b [&_tr]:border-border` (bottom border on every child row).
+- `TableBody.vue` — `<tbody>` with `[&_tr:last-child]:border-0` (no bottom border on the final row).
+- `TableRow.vue` — `<tr>` with `hover:bg-muted/50` + `data-[state=selected]:bg-muted` + `border-b border-border`.
+- `TableHead.vue` — `<th>` with `text-muted-foreground font-medium h-10`.
+- `TableCell.vue` — `<td>` with `p-2 align-middle`.
+
+Each carries `data-slot="table-<part>"` so scoped styles / e2e can target sub-parts without brittle DOM traversal.
+
+**Deliberately skipped** (out of scope for a token-migration bonus): sorting, pagination, column-picker, sticky headers, row selection state. If a caller needs those, they compose the primitives with view-level logic — same pattern as shadcn's canonical example.
+
+**Migration.** `SettingsView.vue` audit log — was a `<ul>` with `grid-cols-[auto_auto_1fr]` fake-table rows. Now a proper `<Table>` with a header row (Time / Action / Actor · Target) and one `<TableRow>` per event. Semantic HTML win: screen readers announce it as a table, columns get proper widths (`w-40` / `w-56` on the header cells), and the hover state is uniform.
+
+Also swapped the raw filter `<input>` for the Aurora `<Input>` primitive (`class="h-8 w-40 text-xs"` matches the button height beside it). Data-test hook `audit-list` preserved on the Table so the existing e2e wiring keeps working.
+
+- Barrel-exports `Table` + all five sub-parts from `src/components/ui/index.ts`.
+- `Table.spec.ts` — 10 tests covering all six primitives: overflow wrapper + inner `<table>`, `<thead>` / `<tbody>` semantic tags, `<tr>` hover + selected tokens, `<th>` typography, `<td>` alignment, class-merge on every part (including verification that a caller's `hover:bg-transparent` correctly overrides the default `hover:bg-muted/50` via tailwind-merge).
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 15 files / 128 tests (120 → 128, +8). vue-tsc clean. Dockerfile clean.
+
+**Next.** C10.5 — Toast/Sonner. Bigger scope: needs a toast provider mounted at App level + an axios interceptor to route silent 4xx/5xx into a user-visible toast. Will need one iter for provider + primitive and probably a second for the axios hook.
