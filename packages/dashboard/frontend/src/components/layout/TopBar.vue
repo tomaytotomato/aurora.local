@@ -6,6 +6,7 @@ import { renderIdentity } from '@/lib/identity';
 import { useTheme } from '@/composables/useTheme';
 import { useHealthPill } from '@/composables/useHealthPill';
 import Badge from '@/components/ui/Badge.vue';
+import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui';
 import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -52,10 +53,10 @@ async function signOut(): Promise<void> {
 </script>
 
 <template>
-  <header class="border-b border-line/60 bg-canvas">
+  <header class="border-b border-border/60 bg-background">
     <div class="content h-14 grid grid-cols-3 items-center">
       <div
-        class="font-mono text-xs text-ink-3 justify-self-start"
+        class="font-mono text-xs text-muted-foreground justify-self-start"
         data-test="topbar-identity"
         data-region="identity"
       >
@@ -77,7 +78,7 @@ async function signOut(): Promise<void> {
       </div>
 
       <div
-        class="flex items-center gap-2 justify-self-end text-xs text-ink-3"
+        class="flex items-center gap-2 justify-self-end text-xs text-muted-foreground"
         data-region="user"
       >
         <!--
@@ -88,7 +89,7 @@ async function signOut(): Promise<void> {
         -->
         <button
           type="button"
-          class="p-1.5 rounded-md hover:text-ink hover:bg-surface-2/60 transition-colors"
+          class="p-1.5 rounded-md hover:text-foreground hover:bg-muted/60 transition-colors"
           :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
           :aria-pressed="theme === 'dark'"
           data-test="theme-toggle"
@@ -105,28 +106,46 @@ async function signOut(): Promise<void> {
         </button>
         <span
           v-if="auth.session?.username || auth.session?.authenticated"
-          class="text-ink-4"
+          class="text-muted-foreground"
           aria-hidden="true"
         >·</span>
         <!--
           UX_SPEC_DASHBOARD.md D5: `Back to Homepage` removed. Homepage was
           retired in v0.1 (see packages/core/compose.yml). The dashboard IS
-          the home.
+          the home. iter-20 (Phase C.10.7): username + Sign-out consolidated
+          into a DropdownMenu so future account items (Preferences, Change
+          password) can land without further TopBar reshuffling.
         -->
-        <span v-if="auth.session?.username">{{ auth.session.username }}</span>
-        <span
-          v-if="auth.session?.username && auth.session?.authenticated"
-          class="text-ink-4"
-          aria-hidden="true"
-        >·</span>
-        <button
-          v-if="auth.session?.authenticated"
-          type="button"
-          class="hover:text-ink"
-          @click="signOut"
-        >
-          Sign out
-        </button>
+        <DropdownMenu v-if="auth.session?.authenticated" data-test="user-menu">
+          <template #trigger>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs hover:bg-muted/60 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :aria-label="`Open user menu for ${auth.session?.username ?? 'signed-in user'}`"
+              data-test="user-menu-trigger"
+            >
+              <span v-if="auth.session?.username">{{ auth.session.username }}</span>
+              <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          </template>
+
+          <router-link
+            to="/settings"
+            role="menuitem"
+            data-menu-item
+            data-slot="dropdown-item"
+            data-test="user-menu-settings"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-sm outline-none text-left hover:bg-muted focus:bg-muted transition-colors no-underline text-foreground"
+          >
+            Settings
+          </router-link>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem data-test="user-menu-signout" @select="signOut">
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenu>
       </div>
     </div>
   </header>

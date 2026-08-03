@@ -1,7 +1,14 @@
 <script setup lang="ts">
+import type { HTMLAttributes } from 'vue';
+import { computed } from 'vue';
 import { cn } from '@/lib/utils';
-import { computed, ref } from 'vue';
 
+// shadcn-vue Input (C5 iter-7).
+// Migrated onto shadcn semantic tokens (bg-background / border-input /
+// text-muted-foreground / ring-ring). The previous primitive tracked
+// focused state with a ref to swap border colours — replaced by the
+// standard focus-visible ring so keyboard users get a proper affordance
+// even before typing.
 const props = defineProps<{
   modelValue?: string | number;
   type?: string;
@@ -11,7 +18,7 @@ const props = defineProps<{
   autocomplete?: string;
   autofocus?: boolean;
   id?: string;
-  class?: string;
+  class?: HTMLAttributes['class'];
   invalid?: boolean;
 }>();
 
@@ -21,19 +28,14 @@ const emit = defineEmits<{
   focus: [ev: FocusEvent];
 }>();
 
-const focused = ref(false);
-
 const cls = computed(() =>
   cn(
-    'w-full h-10 px-3 text-sm rounded-md bg-[var(--color-surface)]',
-    'border transition-colors duration-150',
-    props.invalid
-      ? 'border-[var(--color-err-fg)]/40'
-      : focused.value
-        ? 'border-[var(--color-ink)]'
-        : 'border-[var(--color-line)]',
-    'placeholder:text-[var(--color-ink-4)]',
-    'disabled:bg-[var(--color-surface-2)] disabled:text-[var(--color-ink-3)]',
+    'flex w-full h-10 px-3 py-2 text-sm rounded-md bg-background',
+    'border border-input transition-colors duration-150',
+    'placeholder:text-muted-foreground',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+    'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-60',
+    props.invalid && 'border-destructive focus-visible:ring-destructive',
     props.class,
   ),
 );
@@ -49,9 +51,10 @@ const cls = computed(() =>
     :readonly="readonly"
     :autocomplete="autocomplete"
     :autofocus="autofocus"
+    :aria-invalid="invalid || undefined"
     :class="cls"
     @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
-    @focus="(ev) => { focused = true; emit('focus', ev); }"
-    @blur="(ev) => { focused = false; emit('blur', ev); }"
+    @focus="(ev) => emit('focus', ev)"
+    @blur="(ev) => emit('blur', ev)"
   />
 </template>

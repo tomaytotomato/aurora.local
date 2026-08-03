@@ -18,7 +18,7 @@ import { ContainersApi, type ContainerLogLine } from '@/api/containers';
 import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/Alert.vue';
+import { Alert, AlertDescription, Skeleton, Select } from '@/components/ui';
 import Badge from '@/components/ui/Badge.vue';
 
 interface RouteError {
@@ -81,40 +81,42 @@ function formatTs(ts: string | undefined): string {
 <template>
   <section>
     <div class="mb-6">
-      <router-link to="/" class="text-xs text-ink-3 no-underline">← Dashboard</router-link>
+      <router-link to="/" class="text-xs text-muted-foreground no-underline">← Dashboard</router-link>
       <div class="flex items-baseline justify-between gap-3 mt-4">
         <h1 data-test="logs-container-id">{{ containerId }}</h1>
         <div class="flex items-center gap-2 text-sm">
-          <label for="tail" class="text-ink-3">Show</label>
-          <select
+          <label for="tail" class="text-muted-foreground">Show</label>
+          <Select
             id="tail"
-            v-model.number="tail"
-            class="rounded border border-line bg-surface text-ink px-2 py-1 text-sm"
+            :model-value="tail"
+            :options="TAIL_OPTIONS.map((n) => ({ value: n, label: String(n) }))"
+            class="h-8 w-24 text-sm"
             data-test="logs-tail-select"
-          >
-            <option v-for="n in TAIL_OPTIONS" :key="n" :value="n">{{ n }}</option>
-          </select>
-          <span class="text-ink-4">lines</span>
+            @update:model-value="tail = $event as number"
+          />
+          <span class="text-muted-foreground">lines</span>
           <Button variant="secondary" size="sm" :disabled="loading" @click="load"
                   data-test="logs-refresh">
             {{ loading ? 'Refreshing…' : 'Refresh' }}
           </Button>
         </div>
       </div>
-      <p class="text-xs text-ink-4 mt-2">
+      <p class="text-xs text-muted-foreground mt-2">
         Snapshot from the container's log stream. Live tail lands in a
         later release.
       </p>
     </div>
 
-    <Alert v-if="err" tone="err" class="mb-6" data-test="logs-error">
-      {{ err.message }}
+    <Alert v-if="err" variant="destructive" class="mb-6" data-test="logs-error">
+      <AlertDescription>{{ err.message }}</AlertDescription>
     </Alert>
 
-    <Alert v-if="truncated" tone="warn" class="mb-4" data-test="logs-truncated">
-      Log payload hit Aurora's 2 MiB collection cap. Older lines were
-      dropped. Reduce the tail count or use <code>docker logs</code> for
-      full history.
+    <Alert v-if="truncated" variant="warning" class="mb-4" data-test="logs-truncated">
+      <AlertDescription>
+        Log payload hit Aurora's 2 MiB collection cap. Older lines were
+        dropped. Reduce the tail count or use <code>docker logs</code> for
+        full history.
+      </AlertDescription>
     </Alert>
 
     <Card class="p-0" data-card="container-logs">
@@ -123,8 +125,8 @@ function formatTs(ts: string | undefined): string {
         class="p-8 text-center"
         data-state="empty"
       >
-        <p class="text-sm text-ink-2 mb-1">No log lines yet.</p>
-        <p class="text-xs text-ink-4">
+        <p class="text-sm text-foreground mb-1">No log lines yet.</p>
+        <p class="text-xs text-muted-foreground">
           This container hasn't written to stdout or stderr in the last
           {{ tail }} lines.
         </p>
@@ -132,10 +134,14 @@ function formatTs(ts: string | undefined): string {
 
       <div
         v-else-if="!err && loading && lines.length === 0"
-        class="p-8 text-center"
-        data-state="empty"
+        class="p-8 space-y-2"
+        data-state="loading"
+        data-test="container-logs-skeleton"
       >
-        <p class="text-sm text-ink-2">Loading…</p>
+        <Skeleton class="h-3 w-3/4" />
+        <Skeleton class="h-3 w-2/3" />
+        <Skeleton class="h-3 w-5/6" />
+        <Skeleton class="h-3 w-1/2" />
       </div>
 
       <pre
@@ -143,7 +149,7 @@ function formatTs(ts: string | undefined): string {
         class="p-4 overflow-x-auto text-xs font-mono leading-relaxed max-h-[70vh]"
         data-test="logs-pre"
       >
-<template v-for="(l, i) in lines" :key="i"><span class="text-ink-4 select-none">{{ formatTs(l.ts) }}</span> <Badge :tone="l.stream === 'stderr' ? 'warn' : 'neutral'" class="align-middle">{{ l.stream }}</Badge> <span :class="l.stream === 'stderr' ? 'text-ink' : 'text-ink-2'">{{ l.line }}</span>
+<template v-for="(l, i) in lines" :key="i"><span class="text-muted-foreground select-none">{{ formatTs(l.ts) }}</span> <Badge :tone="l.stream === 'stderr' ? 'warn' : 'neutral'" class="align-middle">{{ l.stream }}</Badge> <span :class="l.stream === 'stderr' ? 'text-foreground' : 'text-foreground'">{{ l.line }}</span>
 </template>
       </pre>
     </Card>

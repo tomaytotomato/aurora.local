@@ -10,6 +10,7 @@ import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Badge from '@/components/ui/Badge.vue';
+import { Select } from '@/components/ui';
 import MetricChart from '@/components/MetricChart.vue';
 import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
 import { renderIdentity } from '@/lib/identity';
@@ -279,7 +280,7 @@ function pickMetric(key: string): void {
     <div class="mb-10" :class="photoBg && 'on-photo'">
       <div class="eyebrow mb-2">Overview</div>
       <h1 class="mb-2" data-test="identity">{{ identity }}</h1>
-      <p :class="photoBg ? 'text-white/80' : 'text-ink-3'">
+      <p :class="photoBg ? 'text-white/80' : 'text-muted-foreground'">
         {{ distroText }} · {{ cpuText }} vCPU · Docker {{ dockerText }}
       </p>
     </div>
@@ -297,7 +298,7 @@ function pickMetric(key: string): void {
       <Card class="col-span-3 row-span-2 p-8" data-card="system">
         <div class="eyebrow mb-1">System</div>
         <h3 class="mb-1">Resources</h3>
-        <p class="text-xs text-ink-4 font-mono mb-4" data-test="uptime">
+        <p class="text-xs text-muted-foreground font-mono mb-4" data-test="uptime">
           uptime {{ uptimeText }}
         </p>
 
@@ -310,13 +311,13 @@ function pickMetric(key: string): void {
           :domain="system.info?.domain"
           :lan-ip="system.info?.lanIp"
           variant="inline"
-          class="mb-6 pb-4 border-b border-line/60"
+          class="mb-6 pb-4 border-b border-border/60"
         />
 
         <!-- error state (§5) -->
         <div v-if="systemErr" data-state="error" role="alert">
-          <p class="text-sm text-ink-2 mb-1">Aurora couldn't read the box's stats.</p>
-          <p class="text-sm text-ink-3 mb-3">Refresh the page or try again below.</p>
+          <p class="text-sm text-foreground mb-1">Aurora couldn't read the box's stats.</p>
+          <p class="text-sm text-muted-foreground mb-3">Refresh the page or try again below.</p>
           <Button variant="secondary" size="sm" @click="fetchSystem">Try again</Button>
         </div>
 
@@ -327,39 +328,39 @@ function pickMetric(key: string): void {
           data-state="empty"
           class="flex flex-col items-center text-center py-6"
         >
-          <svg viewBox="0 0 24 24" class="w-6 h-6 text-ink-4 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="w-6 h-6 text-muted-foreground mb-2" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
             <rect x="3" y="4" width="18" height="7" rx="1" />
             <rect x="3" y="13" width="18" height="7" rx="1" />
             <circle cx="7" cy="7.5" r="0.5" fill="currentColor" />
             <circle cx="7" cy="16.5" r="0.5" fill="currentColor" />
           </svg>
-          <p class="text-sm text-ink-2 mb-1">Warming up</p>
-          <p class="text-xs text-ink-4">Aurora is taking your box's first measurement.</p>
+          <p class="text-sm text-foreground mb-1">Warming up</p>
+          <p class="text-xs text-muted-foreground">Aurora is taking your box's first measurement.</p>
         </div>
 
         <!-- hydrated data -->
         <div v-else class="space-y-4 text-sm">
           <div class="flex items-center justify-between">
-            <span class="text-ink-3">Memory</span>
-            <span class="font-mono text-ink" data-test="memory">
+            <span class="text-muted-foreground">Memory</span>
+            <span class="font-mono text-foreground" data-test="memory">
               {{ memText }}
-              <span class="text-ink-4 ml-1">
+              <span class="text-muted-foreground ml-1">
                 ({{ memPct === null ? '\u2014' : memPct + '%' }})
               </span>
             </span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-ink-3">Disk</span>
-            <span class="font-mono text-ink" data-test="disk">
+            <span class="text-muted-foreground">Disk</span>
+            <span class="font-mono text-foreground" data-test="disk">
               {{ diskText }}
-              <span class="text-ink-4 ml-1">
+              <span class="text-muted-foreground ml-1">
                 ({{ diskPct === null ? '\u2014' : diskPct + '%' }})
               </span>
             </span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-ink-3">Containers</span>
-            <span class="font-mono text-ink">{{ containersText }}</span>
+            <span class="text-muted-foreground">Containers</span>
+            <span class="font-mono text-foreground">{{ containersText }}</span>
           </div>
 
           <!-- iter-24 sparkline: last-24h CPU % under the pill row so a
@@ -372,8 +373,8 @@ function pickMetric(key: string): void {
             data-test="system-cpu-sparkline"
           >
             <div class="flex items-center justify-between text-xs mb-1">
-              <span class="text-ink-4">CPU last 24h</span>
-              <span class="font-mono text-ink-3">
+              <span class="text-muted-foreground">CPU last 24h</span>
+              <span class="font-mono text-muted-foreground">
                 {{ cpuSparkLatest === null ? '\u2014' : cpuSparkLatest.toFixed(1) + '%' }}
               </span>
             </div>
@@ -396,13 +397,13 @@ function pickMetric(key: string): void {
           class="flex flex-col items-center text-center py-6"
           data-state="empty"
         >
-          <svg viewBox="0 0 24 24" class="w-6 h-6 text-ink-4 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="w-6 h-6 text-muted-foreground mb-2" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
             <rect x="3" y="7" width="8" height="5" rx="0.5" />
             <rect x="13" y="7" width="8" height="5" rx="0.5" />
             <rect x="8" y="13" width="8" height="5" rx="0.5" />
           </svg>
-          <p class="text-sm text-ink-2">Nothing has changed recently.</p>
-          <p class="text-ink-4 text-xs">Container starts and stops will show up here.</p>
+          <p class="text-sm text-foreground">Nothing has changed recently.</p>
+          <p class="text-muted-foreground text-xs">Container starts and stops will show up here.</p>
         </div>
         <ul v-else class="space-y-2 text-xs font-mono" data-test="recent-changes-list">
           <li
@@ -410,13 +411,13 @@ function pickMetric(key: string): void {
             :key="e.ts + '|' + e.container + '|' + e.action"
             class="flex items-center gap-2"
           >
-            <span class="text-ink-4">{{ new Date(e.ts).toLocaleTimeString() }}</span>
-            <span class="text-ink-2">{{ e.action }}</span>
+            <span class="text-muted-foreground">{{ new Date(e.ts).toLocaleTimeString() }}</span>
+            <span class="text-foreground">{{ e.action }}</span>
             <!-- B3 (iter-12): row-click drill into log tail. router-link
                  stays inline so keyboard tab order + focus ring behave. -->
             <router-link
               :to="`/containers/${encodeURIComponent(e.container)}/logs`"
-              class="text-ink no-underline hover:underline"
+              class="text-foreground no-underline hover:underline"
               data-test="recent-changes-log-link"
             >{{ e.container }}</router-link>
           </li>
@@ -430,17 +431,17 @@ function pickMetric(key: string): void {
 
         <!-- error state -->
         <div v-if="packagesErr" data-state="error" role="alert">
-          <p class="text-sm text-ink-2 mb-1">Aurora couldn't reach the package service.</p>
-          <p class="text-sm text-ink-3 mb-3">Refresh the page or try again below.</p>
+          <p class="text-sm text-foreground mb-1">Aurora couldn't reach the package service.</p>
+          <p class="text-sm text-muted-foreground mb-3">Refresh the page or try again below.</p>
           <Button variant="secondary" size="sm" @click="fetchPackages">Try again</Button>
         </div>
 
         <!-- empty state -->
         <div v-else-if="packages.enabled.length === 0" data-state="empty">
-          <p class="text-sm text-ink-2 mb-1">You haven't enabled any packages yet.</p>
-          <p class="text-sm text-ink-3">
+          <p class="text-sm text-foreground mb-1">You haven't enabled any packages yet.</p>
+          <p class="text-sm text-muted-foreground">
             Add a package from
-            <router-link to="/packages" class="text-ink-2 underline">Settings → Packages</router-link>.
+            <router-link to="/packages" class="text-foreground underline">Settings → Packages</router-link>.
           </p>
         </div>
 
@@ -457,11 +458,11 @@ function pickMetric(key: string): void {
               :data-package="p.name"
               :data-status="p.running ? 'running' : 'stopped'"
             >
-              <span class="text-ink truncate">{{ p.title || p.name }}</span>
+              <span class="text-foreground truncate">{{ p.title || p.name }}</span>
               <div class="flex items-center gap-2 shrink-0">
-                <span v-if="p.running" class="text-xs text-ink-3">Running</span>
-                <span v-else-if="startState[p.name] === 'starting'" class="text-xs text-ink-3">Starting…</span>
-                <span v-else-if="startState[p.name] === 'error'" class="text-xs text-ink-3">Couldn't start</span>
+                <span v-if="p.running" class="text-xs text-muted-foreground">Running</span>
+                <span v-else-if="startState[p.name] === 'starting'" class="text-xs text-muted-foreground">Starting…</span>
+                <span v-else-if="startState[p.name] === 'error'" class="text-xs text-muted-foreground">Couldn't start</span>
                 <Button
                   v-if="!p.running && startState[p.name] !== 'starting'"
                   variant="secondary"
@@ -474,7 +475,7 @@ function pickMetric(key: string): void {
               </div>
             </li>
           </ul>
-          <router-link to="/packages" class="text-sm text-ink-3">Manage packages →</router-link>
+          <router-link to="/packages" class="text-sm text-muted-foreground">Manage packages →</router-link>
         </div>
       </Card>
 
@@ -493,12 +494,12 @@ function pickMetric(key: string): void {
           data-state="empty"
           class="flex flex-col items-center text-center py-6"
         >
-          <svg viewBox="0 0 24 24" class="w-6 h-6 text-ink-4 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="w-6 h-6 text-muted-foreground mb-2" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
             <path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z" />
             <path d="m9 12 2 2 4-4" />
           </svg>
-          <p class="text-sm text-ink-2 mb-1">Watching for common misconfigurations</p>
-          <p class="text-xs text-ink-4">
+          <p class="text-sm text-foreground mb-1">Watching for common misconfigurations</p>
+          <p class="text-xs text-muted-foreground">
             Aurora will start scanning your box once the security module ships.
           </p>
         </div>
@@ -519,21 +520,18 @@ function pickMetric(key: string): void {
             <div class="eyebrow mb-1">Metrics</div>
             <h3 v-if="!metricsCapable" class="mb-1">Metrics land next release.</h3>
             <h3 v-else class="mb-1">{{ selectedMetric.label }}</h3>
-            <p class="text-xs text-ink-4">Last 24 hours</p>
+            <p class="text-xs text-muted-foreground">Last 24 hours</p>
           </div>
           <div v-if="metricsCapable" class="flex items-center gap-2">
             <label for="metric-picker" class="sr-only">Metric</label>
-            <select
+            <Select
               id="metric-picker"
-              class="rounded border border-line bg-surface text-ink px-2 py-1 text-sm"
-              :value="selectedMetric.key"
+              :model-value="selectedMetric.key"
+              :options="METRIC_OPTIONS.map((m) => ({ value: m.key, label: m.label }))"
+              class="h-8 w-40 text-sm"
               data-test="metric-picker"
-              @change="pickMetric(($event.target as HTMLSelectElement).value)"
-            >
-              <option v-for="m in METRIC_OPTIONS" :key="m.key" :value="m.key">
-                {{ m.label }}
-              </option>
-            </select>
+              @update:model-value="pickMetric($event as string)"
+            />
             <Button variant="secondary" size="sm" :disabled="metricLoading" @click="loadMetric"
                     data-test="metric-refresh">
               {{ metricLoading ? 'Loading…' : 'Refresh' }}
@@ -547,17 +545,17 @@ function pickMetric(key: string): void {
           class="flex items-center justify-center gap-3 text-sm py-2"
           data-state="empty"
         >
-          <svg viewBox="0 0 24 24" class="w-5 h-5 text-ink-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="w-5 h-5 text-muted-foreground shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
             <path d="M3 20V4" />
             <path d="M3 20h18" />
             <path d="m6 15 4-5 4 3 5-7" />
           </svg>
-          <p class="text-ink-4 text-xs">Aurora will chart your box's last 24 hours here.</p>
+          <p class="text-muted-foreground text-xs">Aurora will chart your box's last 24 hours here.</p>
         </div>
 
         <div
           v-else-if="metricErr"
-          class="text-xs text-ink-2 py-2"
+          class="text-xs text-foreground py-2"
           data-state="error"
           role="alert"
         >

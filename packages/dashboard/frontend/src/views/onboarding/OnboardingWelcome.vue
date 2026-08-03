@@ -3,7 +3,7 @@ import { onMounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/Alert.vue';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui';
 import { humanBytes } from '@/lib/utils';
 
 const store = useOnboardingStore();
@@ -102,39 +102,41 @@ const diskRowsExtra = computed(() => Math.max(0, diskRows.value.length - 4));
   <div>
     <div class="eyebrow mb-3">Step 1 of 9</div>
     <h1 class="mb-4">Welcome to Aurora.</h1>
-    <p class="text-ink-2 text-base leading-relaxed mb-8">
+    <p class="text-foreground text-base leading-relaxed mb-8">
       Aurora is the admin panel for this box. It's opinionated on purpose — most homelab
       setups fail on the same handful of decisions, so we make them for you and get out
       of your way.
     </p>
 
     <div v-if="err">
-      <Alert tone="err" class="mb-6">{{ err }}</Alert>
+      <Alert variant="destructive" class="mb-6">
+        <AlertDescription>{{ err }}</AlertDescription>
+      </Alert>
     </div>
 
-    <div v-else-if="!env" class="text-sm text-ink-4 mb-8">Reading system info…</div>
+    <div v-else-if="!env" class="text-sm text-muted-foreground mb-8">Reading system info…</div>
 
-    <div v-else class="border border-line rounded-lg mb-6">
-      <dl class="divide-y divide-[var(--color-line-2)]">
+    <div v-else class="border border-border rounded-lg mb-6">
+      <dl class="divide-y divide-border">
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
-          <dt class="text-ink-3">Hostname</dt>
-          <dd class="col-span-2 font-mono text-ink">{{ env.hostname ?? '—' }}</dd>
+          <dt class="text-muted-foreground">Hostname</dt>
+          <dd class="col-span-2 font-mono text-foreground">{{ env.hostname ?? '—' }}</dd>
         </div>
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
-          <dt class="text-ink-3">LAN IP</dt>
-          <dd class="col-span-2 font-mono text-ink">{{ env.lanIp ?? '—' }}</dd>
+          <dt class="text-muted-foreground">LAN IP</dt>
+          <dd class="col-span-2 font-mono text-foreground">{{ env.lanIp ?? '—' }}</dd>
         </div>
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
-          <dt class="text-ink-3">Distribution</dt>
-          <dd class="col-span-2 font-mono text-ink">{{ env.distro ?? '—' }}</dd>
+          <dt class="text-muted-foreground">Distribution</dt>
+          <dd class="col-span-2 font-mono text-foreground">{{ env.distro ?? '—' }}</dd>
         </div>
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
-          <dt class="text-ink-3">Kernel</dt>
-          <dd class="col-span-2 font-mono text-ink">{{ env.kernel ?? '—' }}</dd>
+          <dt class="text-muted-foreground">Kernel</dt>
+          <dd class="col-span-2 font-mono text-foreground">{{ env.kernel ?? '—' }}</dd>
         </div>
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
-          <dt class="text-ink-3">Docker</dt>
-          <dd class="col-span-2 font-mono text-ink">{{ env.dockerVersion ?? '—' }}</dd>
+          <dt class="text-muted-foreground">Docker</dt>
+          <dd class="col-span-2 font-mono text-foreground">{{ env.dockerVersion ?? '—' }}</dd>
         </div>
       </dl>
     </div>
@@ -147,57 +149,60 @@ const diskRowsExtra = computed(() => Math.max(0, diskRows.value.length - 4));
     -->
     <div v-if="env" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
       <!-- CPU -->
-      <div class="border border-line rounded-lg px-5 py-4 bg-surface">
-        <div class="eyebrow text-ink-3 mb-2">CPU</div>
-        <div class="font-serif text-lg leading-snug text-ink truncate" :title="cpuModel ?? undefined">
+      <div class="border border-border rounded-lg px-5 py-4 bg-card">
+        <div class="eyebrow text-muted-foreground mb-2">CPU</div>
+        <div class="font-serif text-lg leading-snug text-foreground truncate" :title="cpuModel ?? undefined">
           {{ cpuModel ?? '—' }}
         </div>
-        <div class="font-mono text-xs text-ink-2 mt-1">{{ cpuLine ?? '—' }}</div>
-        <div class="font-mono text-xs text-ink-4 mt-0.5">
+        <div class="font-mono text-xs text-foreground mt-1">{{ cpuLine ?? '—' }}</div>
+        <div class="font-mono text-xs text-muted-foreground mt-0.5">
           load1: {{ cpuLoad ?? '—' }}
         </div>
-        <div v-if="gpuMissing" class="text-xs text-ink-4 mt-2 italic">no GPU detected</div>
-        <div v-else-if="gpuLine" class="text-xs text-ink-3 mt-2 truncate" :title="gpuLine">
+        <div v-if="gpuMissing" class="text-xs text-muted-foreground mt-2 italic">no GPU detected</div>
+        <div v-else-if="gpuLine" class="text-xs text-muted-foreground mt-2 truncate" :title="gpuLine">
           GPU: {{ gpuLine }}
         </div>
       </div>
 
       <!-- RAM -->
-      <div class="border border-line rounded-lg px-5 py-4 bg-surface">
-        <div class="eyebrow text-ink-3 mb-2">RAM</div>
-        <div class="font-serif text-lg leading-snug text-ink">{{ memTotal ?? '—' }}</div>
-        <div class="font-mono text-xs text-ink-2 mt-1">
+      <div class="border border-border rounded-lg px-5 py-4 bg-card">
+        <div class="eyebrow text-muted-foreground mb-2">RAM</div>
+        <div class="font-serif text-lg leading-snug text-foreground">{{ memTotal ?? '—' }}</div>
+        <div class="font-mono text-xs text-foreground mt-1">
           <template v-if="memFree">{{ memFree }} free</template>
           <template v-else>—</template>
         </div>
       </div>
 
       <!-- Disks -->
-      <div class="border border-line rounded-lg px-5 py-4 bg-surface">
-        <div class="eyebrow text-ink-3 mb-2">Disks</div>
+      <div class="border border-border rounded-lg px-5 py-4 bg-card">
+        <div class="eyebrow text-muted-foreground mb-2">Disks</div>
         <template v-if="diskRows.length > 0">
           <div v-for="row in diskRowsVisible" :key="row.key" class="mb-1.5 last:mb-0">
-            <div class="font-mono text-xs text-ink truncate" :title="row.mount">
-              <span class="text-ink">{{ row.mount }}</span>
-              <span class="text-ink-3"> · {{ row.total }}</span>
+            <div class="font-mono text-xs text-foreground truncate" :title="row.mount">
+              <span class="text-foreground">{{ row.mount }}</span>
+              <span class="text-muted-foreground"> · {{ row.total }}</span>
             </div>
-            <div class="font-mono text-[11px] text-ink-4 leading-tight">
+            <div class="font-mono text-[11px] text-muted-foreground leading-tight">
               {{ row.usedPct ?? '—' }}
             </div>
           </div>
-          <div v-if="diskRowsExtra > 0" class="text-xs text-ink-4 mt-1">
+          <div v-if="diskRowsExtra > 0" class="text-xs text-muted-foreground mt-1">
             +{{ diskRowsExtra }} more
           </div>
         </template>
         <template v-else>
-          <div class="font-mono text-xs text-ink-4">—</div>
+          <div class="font-mono text-xs text-muted-foreground">—</div>
         </template>
       </div>
     </div>
 
-    <Alert v-if="notDebian" tone="warn" title="Untested distribution" class="mb-8">
-      Aurora is designed for Debian and Ubuntu. Other distros may work, but the host
-      Ansible playbooks and firewall roles assume Debian's package layout.
+    <Alert v-if="notDebian" variant="warning" class="mb-8">
+      <AlertTitle>Untested distribution</AlertTitle>
+      <AlertDescription>
+        Aurora is designed for Debian and Ubuntu. Other distros may work, but the host
+        Ansible playbooks and firewall roles assume Debian's package layout.
+      </AlertDescription>
     </Alert>
 
     <div class="flex justify-end">

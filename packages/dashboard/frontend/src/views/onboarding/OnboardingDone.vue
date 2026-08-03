@@ -146,24 +146,24 @@ onMounted(async () => {
   <div>
     <div class="eyebrow mb-3">Step 9 of 9</div>
     <h1 class="mb-4">You're set.</h1>
-    <p class="text-ink-2 mb-8">
+    <p class="text-foreground mb-8">
       Aurora is configured. Bring your services online, then head to the dashboard.
     </p>
 
     <!-- Bring your services online -->
     <div
       v-if="toStart.length > 0 && launchState === 'idle'"
-      class="border border-line rounded-lg p-5 mb-6 bg-surface-2/60"
+      class="border border-border rounded-lg p-5 mb-6 bg-muted/60"
       data-testid="launch-cta"
     >
       <div class="eyebrow mb-2" style="color: var(--color-accent)">Almost there</div>
       <h3 class="mb-2">Bring your services online</h3>
-      <p class="text-sm text-ink-2 mb-4">
+      <p class="text-sm text-foreground mb-4">
         Aurora will start
         <span
           v-for="(p, i) in toStart"
           :key="p"
-          class="font-mono text-xs px-1.5 py-0.5 rounded border border-line bg-surface ml-1"
+          class="font-mono text-xs px-1.5 py-0.5 rounded border border-border bg-card ml-1"
         >{{ p }}<template v-if="i < toStart.length - 1">&nbsp;</template></span>
         for you. No typing required.
       </p>
@@ -177,7 +177,7 @@ onMounted(async () => {
           data-cta="primary"
           @click="startServices"
         >Start services</Button>
-        <span v-if="launchError" class="text-sm text-[var(--color-err-fg)]" data-testid="launch-error">{{ launchError }}</span>
+        <span v-if="launchError" class="text-sm text-destructive" data-testid="launch-error">{{ launchError }}</span>
       </div>
     </div>
 
@@ -212,8 +212,8 @@ onMounted(async () => {
       variant="card"
     />
 
-    <div class="flex items-center justify-between border-t border-line pt-6">
-      <div class="text-sm text-ink-3">
+    <div class="flex items-center justify-between border-t border-border pt-6">
+      <div class="text-sm text-muted-foreground">
         <div class="eyebrow mb-1">Reminder</div>
         One box, one URL, one dashboard. That's the whole point.
       </div>

@@ -5,7 +5,17 @@ import { AuditApi, type AuditEvent } from '@/api/audit';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/Alert.vue';
+import {
+  Alert,
+  AlertDescription,
+  Input,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui';
 import { useRouter } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 
@@ -73,8 +83,8 @@ onMounted(() => { void loadAudit(); });
       <Card class="p-8">
         <div class="eyebrow mb-2">Admin</div>
         <h3 class="mb-2">Account</h3>
-        <div class="text-sm text-ink-3 mb-4">
-          Signed in as <span class="font-mono text-ink">{{ auth.session?.username ?? '—' }}</span>.
+        <div class="text-sm text-muted-foreground mb-4">
+          Signed in as <span class="font-mono text-foreground">{{ auth.session?.username ?? '—' }}</span>.
         </div>
         <Button variant="secondary" size="sm" @click="signOut">Sign out</Button>
       </Card>
@@ -82,18 +92,20 @@ onMounted(() => { void loadAudit(); });
       <Card class="p-8">
         <div class="eyebrow mb-2">Passkey</div>
         <h3 class="mb-2">Second factor</h3>
-        <Alert tone="info">Passkey enrollment lands in v0.2.</Alert>
+        <Alert variant="info">
+          <AlertDescription>Passkey enrollment lands in v0.2.</AlertDescription>
+        </Alert>
       </Card>
 
       <Card v-if="info" class="p-8">
         <div class="eyebrow mb-2">System</div>
         <h3 class="mb-4">Metadata</h3>
         <dl class="text-sm space-y-2">
-          <div class="flex justify-between"><dt class="text-ink-3">Hostname</dt><dd class="font-mono">{{ info.hostname }}</dd></div>
-          <div class="flex justify-between"><dt class="text-ink-3">Domain</dt><dd class="font-mono">{{ info.domain }}</dd></div>
-          <div class="flex justify-between"><dt class="text-ink-3">LAN IP</dt><dd class="font-mono">{{ info.lanIp }}</dd></div>
-          <div class="flex justify-between"><dt class="text-ink-3">Kernel</dt><dd class="font-mono">{{ info.kernel }}</dd></div>
-          <div class="flex justify-between"><dt class="text-ink-3">Docker</dt><dd class="font-mono">{{ info.dockerVersion }}</dd></div>
+          <div class="flex justify-between"><dt class="text-muted-foreground">Hostname</dt><dd class="font-mono">{{ info.hostname }}</dd></div>
+          <div class="flex justify-between"><dt class="text-muted-foreground">Domain</dt><dd class="font-mono">{{ info.domain }}</dd></div>
+          <div class="flex justify-between"><dt class="text-muted-foreground">LAN IP</dt><dd class="font-mono">{{ info.lanIp }}</dd></div>
+          <div class="flex justify-between"><dt class="text-muted-foreground">Kernel</dt><dd class="font-mono">{{ info.kernel }}</dd></div>
+          <div class="flex justify-between"><dt class="text-muted-foreground">Docker</dt><dd class="font-mono">{{ info.dockerVersion }}</dd></div>
         </dl>
       </Card>
 
@@ -106,15 +118,15 @@ onMounted(() => { void loadAudit(); });
           <div>
             <div class="eyebrow mb-2">Audit</div>
             <h3>Recent activity</h3>
-            <p class="text-xs text-ink-4 mt-1">Newest first, last 100 events.</p>
+            <p class="text-xs text-muted-foreground mt-1">Newest first, last 100 events.</p>
           </div>
           <div class="flex items-center gap-2">
             <label for="audit-filter" class="sr-only">Filter by action prefix</label>
-            <input
+            <Input
               id="audit-filter"
               v-model="auditFilter"
               placeholder="e.g. security."
-              class="text-xs rounded border border-line bg-surface text-ink px-2 py-1 w-40"
+              class="h-8 w-40 text-xs"
               data-test="audit-filter"
               @keydown.enter="loadAudit"
             />
@@ -125,11 +137,13 @@ onMounted(() => { void loadAudit(); });
           </div>
         </div>
 
-        <Alert v-if="auditErr" tone="err" class="mb-3" data-test="audit-error">{{ auditErr }}</Alert>
+        <Alert v-if="auditErr" variant="destructive" class="mb-3" data-test="audit-error">
+          <AlertDescription>{{ auditErr }}</AlertDescription>
+        </Alert>
 
         <div
           v-else-if="!auditLoading && auditEvents.length === 0"
-          class="text-xs text-ink-4 py-4"
+          class="text-xs text-muted-foreground py-4"
           data-state="empty"
           data-test="audit-empty"
         >
@@ -137,20 +151,25 @@ onMounted(() => { void loadAudit(); });
           launching a package appear here.
         </div>
 
-        <ul v-else class="space-y-1.5" data-test="audit-list">
-          <li
-            v-for="e in auditEvents"
-            :key="e.id"
-            class="grid grid-cols-[auto_auto_1fr] gap-3 items-baseline text-xs font-mono"
-          >
-            <span class="text-ink-4 whitespace-nowrap">{{ formatAuditTs(e.ts) }}</span>
-            <span class="text-ink-2">{{ e.action }}</span>
-            <span class="text-ink-3 truncate">
-              <span v-if="e.user_id !== null" class="text-ink-4">user #{{ e.user_id }} · </span>
-              {{ e.target ?? '' }}
-            </span>
-          </li>
-        </ul>
+        <Table v-else data-test="audit-list" class="font-mono text-xs">
+          <TableHeader>
+            <TableRow class="hover:bg-transparent">
+              <TableHead class="w-40">Time</TableHead>
+              <TableHead class="w-56">Action</TableHead>
+              <TableHead>Actor · Target</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="e in auditEvents" :key="e.id">
+              <TableCell class="text-muted-foreground whitespace-nowrap align-baseline">{{ formatAuditTs(e.ts) }}</TableCell>
+              <TableCell class="text-foreground align-baseline">{{ e.action }}</TableCell>
+              <TableCell class="text-muted-foreground truncate align-baseline">
+                <span v-if="e.user_id !== null" class="text-muted-foreground">user #{{ e.user_id }} · </span>
+                {{ e.target ?? '' }}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </Card>
     </div>
   </section>

@@ -55,7 +55,7 @@ async function copy(kind: 'mdns' | 'ip'): Promise<void> {
 <template>
   <section
     :class="variant === 'card'
-      ? 'border border-line rounded-lg p-5 bg-surface-2/60'
+      ? 'border border-border rounded-lg p-5 bg-muted/60'
       : ''"
     data-test="reach-info"
   >
@@ -66,12 +66,12 @@ async function copy(kind: 'mdns' | 'ip'): Promise<void> {
       <div class="flex items-center gap-3">
         <span
           v-if="variant === 'inline'"
-          class="text-ink-3 text-xs uppercase tracking-wide flex-shrink-0"
+          class="text-muted-foreground text-xs uppercase tracking-wide flex-shrink-0"
         >mDNS</span>
-        <code class="font-mono text-sm text-ink flex-1 truncate" data-test="reach-mdns">{{ mdnsUrl }}</code>
+        <code class="font-mono text-sm text-foreground flex-1 truncate" data-test="reach-mdns">{{ mdnsUrl }}</code>
         <button
           type="button"
-          class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line hover:border-ink-4 transition-colors flex-shrink-0"
+          class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-muted-foreground transition-colors flex-shrink-0"
           data-test="reach-copy-mdns"
           :aria-label="`Copy ${mdnsUrl}`"
           @click="copy('mdns')"
@@ -84,12 +84,12 @@ async function copy(kind: 'mdns' | 'ip'): Promise<void> {
       <div v-if="ipUrl" class="flex items-center gap-3">
         <span
           v-if="variant === 'inline'"
-          class="text-ink-3 text-xs uppercase tracking-wide flex-shrink-0"
+          class="text-muted-foreground text-xs uppercase tracking-wide flex-shrink-0"
         >LAN IP</span>
-        <code class="font-mono text-sm text-ink flex-1 truncate" data-test="reach-ip">{{ ipUrl }}</code>
+        <code class="font-mono text-sm text-foreground flex-1 truncate" data-test="reach-ip">{{ ipUrl }}</code>
         <button
           type="button"
-          class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line hover:border-ink-4 transition-colors flex-shrink-0"
+          class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-muted-foreground transition-colors flex-shrink-0"
           data-test="reach-copy-ip"
           :aria-label="`Copy ${ipUrl}`"
           @click="copy('ip')"
@@ -101,7 +101,7 @@ async function copy(kind: 'mdns' | 'ip'): Promise<void> {
 
     <p
       v-if="variant === 'card'"
-      class="text-xs text-ink-4 mt-4"
+      class="text-xs text-muted-foreground mt-4"
       data-test="reach-help"
     >
       Use the mDNS name from any device that supports Bonjour / Avahi.

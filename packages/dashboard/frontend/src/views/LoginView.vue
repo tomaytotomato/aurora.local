@@ -7,7 +7,7 @@ import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
-import Alert from '@/components/ui/Alert.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 import AuroraBackground from '@/components/AuroraBackground.vue';
 
 const router = useRouter();
@@ -89,20 +89,24 @@ function passkey(): void {
     <div class="w-full max-w-sm anim-enter login-card p-8 rounded-lg">
       <div class="flex items-center gap-2.5 mb-10">
         <svg viewBox="0 0 32 32" class="w-7 h-7">
-          <rect width="32" height="32" rx="6" fill="var(--color-ink)"/>
-          <path d="M8 22 L16 8 L24 22" stroke="var(--color-on-ink)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect width="32" height="32" rx="6" fill="var(--color-foreground)"/>
+          <path d="M8 22 L16 8 L24 22" stroke="var(--color-primary-foreground)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="16" cy="22" r="1.5" fill="var(--color-accent)"/>
         </svg>
-        <span class="font-serif text-xl leading-none text-ink">Aurora</span>
+        <span class="font-serif text-xl leading-none text-foreground">Aurora</span>
       </div>
 
-      <h1 class="mb-2 text-ink">Sign in</h1>
-      <p class="text-ink-3 text-sm mb-8">
+      <h1 class="mb-2 text-foreground">Sign in</h1>
+      <p class="text-muted-foreground text-sm mb-8">
         The admin panel for this box.
       </p>
 
-      <Alert v-if="err" tone="err" class="mb-4">{{ err }}</Alert>
-      <Alert v-if="passkeyToast" tone="info" class="mb-4">{{ passkeyToast }}</Alert>
+      <Alert v-if="err" variant="destructive" class="mb-4">
+        <AlertDescription>{{ err }}</AlertDescription>
+      </Alert>
+      <Alert v-if="passkeyToast" variant="info" class="mb-4">
+        <AlertDescription>{{ passkeyToast }}</AlertDescription>
+      </Alert>
 
       <form class="space-y-4" @submit.prevent="submit">
         <div>
@@ -123,11 +127,11 @@ function passkey(): void {
 
       <p
         v-if="showOnboardingCta"
-        class="mt-10 text-xs text-ink-4"
+        class="mt-10 text-xs text-muted-foreground"
         data-test="onboarding-cta"
       >
         First time here?
-        <router-link to="/onboarding" class="text-ink-3">Start onboarding</router-link>.
+        <router-link to="/onboarding" class="text-muted-foreground">Start onboarding</router-link>.
       </p>
     </div>
   </div>
@@ -138,9 +142,9 @@ function passkey(): void {
    tokens. Opaque surface re-establishes the ink text-color context inside
    the .on-photo scope so form labels/inputs stay readable in both themes. */
 .login-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  color: var(--color-ink);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground);
   box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.35);
 }
 </style>

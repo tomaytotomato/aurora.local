@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { OnboardingApi, type InstallPlan } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/Alert.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -153,71 +153,73 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
   <div>
     <div class="eyebrow mb-3">Step 8 of 9</div>
     <h1 class="mb-4">Review and install.</h1>
-    <p class="text-ink-2 mb-8">
+    <p class="text-foreground mb-8">
       Here's what Aurora will do. Nothing has been written yet.
     </p>
 
-    <Alert v-if="planErr" tone="warn" class="mb-6">{{ planErr }}</Alert>
+    <Alert v-if="planErr" variant="warning" class="mb-6">
+      <AlertDescription>{{ planErr }}</AlertDescription>
+    </Alert>
     <div
       v-if="installErr"
       data-tone="err"
       role="alert"
-      class="mb-6 flex items-start justify-between gap-4 px-4 py-3 rounded border border-[var(--color-err-fg)]/25 bg-[var(--color-err-bg)] text-[var(--color-err-fg)] text-sm"
+      class="mb-6 flex items-start justify-between gap-4 px-4 py-3 rounded border border-destructive/25 bg-destructive/10 text-destructive text-sm"
     >
       <div class="flex-1">{{ installErr }}</div>
       <button
         type="button"
-        class="shrink-0 text-sm px-3 py-1 rounded border border-[var(--color-err-fg)]/35 hover:bg-[var(--color-err-fg)]/10"
+        class="shrink-0 text-sm px-3 py-1 rounded border border-destructive/35 hover:bg-destructive/10"
         @click="retry"
       >Retry</button>
     </div>
 
-    <div class="border border-line rounded-lg divide-y divide-[var(--color-line-2)] mb-6">
+    <div class="border border-border rounded-lg divide-y divide-border mb-6">
       <div class="grid grid-cols-3 gap-4 px-5 py-4">
-        <div class="text-ink-3 text-sm">Domain</div>
+        <div class="text-muted-foreground text-sm">Domain</div>
         <div class="col-span-2 font-mono text-sm">{{ store.domain ?? '—' }}</div>
       </div>
       <div class="grid grid-cols-3 gap-4 px-5 py-4">
-        <div class="text-ink-3 text-sm">Admin</div>
+        <div class="text-muted-foreground text-sm">Admin</div>
         <div class="col-span-2 font-mono text-sm">
           {{ store.draft?.admin_username ?? store.admin?.username ?? '—' }}
         </div>
       </div>
       <div class="grid grid-cols-3 gap-4 px-5 py-4">
-        <div class="text-ink-3 text-sm">DNS</div>
+        <div class="text-muted-foreground text-sm">DNS</div>
         <div class="col-span-2 text-sm">{{ store.dnsMode ?? '—' }}</div>
       </div>
       <div class="grid grid-cols-3 gap-4 px-5 py-4">
-        <div class="text-ink-3 text-sm">Packages</div>
+        <div class="text-muted-foreground text-sm">Packages</div>
         <div class="col-span-2 flex flex-wrap gap-1.5">
           <span
             v-for="p in packagesToShow"
             :key="p"
-            class="font-mono text-xs px-2 py-0.5 rounded border border-line bg-surface"
+            class="font-mono text-xs px-2 py-0.5 rounded border border-border bg-card"
           >{{ p }}</span>
-          <span v-if="packagesToShow.length === 0" class="text-ink-4 text-sm">
+          <span v-if="packagesToShow.length === 0" class="text-muted-foreground text-sm">
             No packages selected.
           </span>
         </div>
       </div>
       <div class="grid grid-cols-3 gap-4 px-5 py-4">
-        <div class="text-ink-3 text-sm">vhosts</div>
+        <div class="text-muted-foreground text-sm">vhosts</div>
         <div class="col-span-2 space-y-0.5">
           <div
             v-for="v in vhostsToShow"
             :key="v"
-            class="font-mono text-xs text-ink-2"
+            class="font-mono text-xs text-foreground"
           >{{ v }}</div>
-          <div v-if="vhostsToShow.length === 0" class="text-ink-4 text-sm">
+          <div v-if="vhostsToShow.length === 0" class="text-muted-foreground text-sm">
             Set the domain to preview vhosts.
           </div>
         </div>
       </div>
       <div class="grid grid-cols-3 gap-4 px-5 py-4">
-        <div class="text-ink-3 text-sm">Ports</div>
+        <div class="text-muted-foreground text-sm">Ports</div>
         <div class="col-span-2 font-mono text-xs">
           <span v-if="portsToShow.length > 0">{{ portsToShow.join(', ') }}</span>
-          <span v-else class="text-ink-4 text-sm font-sans">
+          <span v-else class="text-muted-foreground text-sm font-sans">
             None — package manifests declare no host ports.
           </span>
         </div>
@@ -227,13 +229,15 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
     <Alert
       v-for="(w, i) in warningsToShow"
       :key="i"
-      tone="warn"
+      variant="warning"
       class="mb-3"
-    >{{ w }}</Alert>
+    >
+      <AlertDescription>{{ w }}</AlertDescription>
+    </Alert>
 
-    <div v-if="installing || logLines.length" class="border border-line rounded-lg p-4 mb-8 bg-[var(--color-ink)] text-[var(--color-canvas)] font-mono text-xs max-h-64 overflow-auto" role="log" aria-live="polite">
+    <div v-if="installing || logLines.length" class="border border-border rounded-lg p-4 mb-8 bg-foreground text-background font-mono text-xs max-h-64 overflow-auto" role="log" aria-live="polite">
       <div v-for="(l, i) in logLines" :key="i">{{ l }}</div>
-      <div v-if="installing" class="text-ink-4/60">…</div>
+      <div v-if="installing" class="text-muted-foreground/60">…</div>
     </div>
 
     <div class="mt-6 flex items-center justify-between">

@@ -198,33 +198,33 @@ function retry(): void {
 </script>
 
 <template>
-  <div class="border border-line rounded-lg p-5 bg-surface-2/60" data-testid="launch-progress">
+  <div class="border border-border rounded-lg p-5 bg-muted/60" data-testid="launch-progress">
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center gap-3">
         <span
           class="text-lg"
           :class="{
-            'text-accent animate-pulse': state === 'running',
-            'text-[var(--color-ok-fg)]': state === 'success',
-            'text-[var(--color-err-fg)]': state === 'failed',
+            'text-[var(--color-accent)] animate-pulse': state === 'running',
+            'text-success': state === 'success',
+            'text-destructive': state === 'failed',
           }"
         >{{ headerGlyph }}</span>
         <div>
           <div class="font-medium">{{ headerLine }}</div>
-          <div class="text-xs text-ink-3 mt-0.5" v-if="state === 'running'">
+          <div class="text-xs text-muted-foreground mt-0.5" v-if="state === 'running'">
             elapsed {{ elapsedLabel }}
           </div>
         </div>
       </div>
       <button
         v-if="state === 'failed'"
-        class="text-sm px-3 py-1 rounded border border-line hover:bg-surface"
+        class="text-sm px-3 py-1 rounded border border-border hover:bg-card"
         @click="retry"
         data-testid="launch-retry"
       >Retry</button>
       <span
         v-else-if="stalled"
-        class="text-xs px-2 py-0.5 rounded-full border border-line text-ink-3 bg-surface"
+        class="text-xs px-2 py-0.5 rounded-full border border-border text-muted-foreground bg-card"
         data-testid="launch-reconnecting"
         role="status"
       >Reconnecting…</span>
@@ -234,13 +234,13 @@ function retry(): void {
       v-if="state === 'failed'"
       data-tone="err"
       role="alert"
-      class="mb-4 px-4 py-3 rounded border border-[var(--color-err-fg)]/25 bg-[var(--color-err-bg)] text-[var(--color-err-fg)] text-sm"
+      class="mb-4 px-4 py-3 rounded border border-destructive/25 bg-destructive/10 text-destructive text-sm"
       data-testid="launch-failure-reason"
     >
       {{ failureReason || 'Something went wrong bringing up your services. The log below has the details.' }}
     </div>
 
-    <ul class="divide-y divide-line border-t border-line" data-testid="launch-package-list">
+    <ul class="divide-y divide-border border-t border-border" data-testid="launch-package-list">
       <li
         v-for="p in packages"
         :key="p"
@@ -252,21 +252,21 @@ function retry(): void {
         <span
           class="text-xs px-2 py-0.5 rounded-full border"
           :class="{
-            'border-line text-ink-3 bg-surface': perPkg[p] === 'not-started',
-            'border-accent text-accent bg-surface': perPkg[p] === 'starting',
-            'border-[var(--color-ok-fg)]/40 text-[var(--color-ok-fg)] bg-[var(--color-ok-bg)]': perPkg[p] === 'running',
-            'border-[var(--color-err-fg)]/40 text-[var(--color-err-fg)] bg-[var(--color-err-bg)]': perPkg[p] === 'failed',
+            'border-border text-muted-foreground bg-card': perPkg[p] === 'not-started',
+            'border-[var(--color-accent)] text-[var(--color-accent)] bg-card': perPkg[p] === 'starting',
+            'border-success/40 text-success bg-success/10': perPkg[p] === 'running',
+            'border-destructive/40 text-destructive bg-destructive/10': perPkg[p] === 'failed',
           }"
         >{{ pillLabel(perPkg[p]) }}</span>
       </li>
     </ul>
 
     <details :open="logOpen" class="mt-4 group">
-      <summary class="text-xs text-ink-3 cursor-pointer select-none">
+      <summary class="text-xs text-muted-foreground cursor-pointer select-none">
         Live log ({{ logLines.length }} line{{ logLines.length === 1 ? '' : 's' }})
       </summary>
       <div
-        class="mt-2 bg-[var(--color-ink)] text-[var(--color-canvas)] font-mono text-xs px-3 py-2 rounded max-h-64 overflow-auto"
+        class="mt-2 bg-foreground text-background font-mono text-xs px-3 py-2 rounded max-h-64 overflow-auto"
         data-testid="launch-log"
         role="log"
         aria-live="polite"
@@ -277,7 +277,7 @@ function retry(): void {
 
     <div
       v-if="false"
-      class="mt-3 text-sm text-[var(--color-err-fg)]"
+      class="mt-3 text-sm text-destructive"
     ></div>
   </div>
 </template>

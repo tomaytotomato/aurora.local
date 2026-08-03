@@ -49,7 +49,7 @@ async function copy(kind: string, text: string): Promise<void> {
 
 <template>
   <div
-    class="border border-line rounded-md bg-surface-2/40 p-4"
+    class="border border-border rounded-md bg-muted/40 p-4"
     data-test="storage-mount-panel"
   >
     <div class="eyebrow mb-3">Mount instructions</div>
@@ -57,7 +57,7 @@ async function copy(kind: string, text: string): Promise<void> {
     <!-- tabs -->
     <div
       role="tablist"
-      class="flex gap-1 border-b border-line/60 mb-4"
+      class="flex gap-1 border-b border-border/60 mb-4"
       data-test="storage-mount-tabs"
     >
       <button
@@ -69,92 +69,92 @@ async function copy(kind: string, text: string): Promise<void> {
         :data-tab="t.key"
         class="px-3 py-1.5 text-sm rounded-t-md border-b-2 transition-colors"
         :class="active === t.key
-          ? 'text-ink border-ink-2'
-          : 'text-ink-3 hover:text-ink border-transparent'"
+          ? 'text-foreground border-muted-foreground'
+          : 'text-muted-foreground hover:text-foreground border-transparent'"
         @click="active = t.key"
       >{{ t.label }}</button>
     </div>
 
     <!-- panels -->
     <div v-if="active === 'mac'" role="tabpanel" data-panel="mac" class="space-y-3">
-      <p class="text-sm text-ink-2">
+      <p class="text-sm text-foreground">
         In Finder press <kbd>⌘</kbd>+<kbd>K</kbd> ("Connect to Server…") and paste:
       </p>
       <div class="flex items-center gap-3">
-        <code class="font-mono text-sm text-ink flex-1 truncate">{{ smbUrl }}</code>
+        <code class="font-mono text-sm text-foreground flex-1 truncate">{{ smbUrl }}</code>
         <button
           type="button"
-          class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line"
+          class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border"
           data-test="storage-mount-copy"
           @click="copy('mac', smbUrl)"
         >{{ copiedKey === 'mac' ? 'Copied' : 'Copy' }}</button>
       </div>
-      <p class="text-xs text-ink-4">
+      <p class="text-xs text-muted-foreground">
         Click <em>Connect</em>, then choose <em>Guest</em> or type the share credentials.
       </p>
     </div>
 
     <div v-else-if="active === 'windows'" role="tabpanel" data-panel="windows" class="space-y-3">
-      <p class="text-sm text-ink-2">
+      <p class="text-sm text-foreground">
         Open File Explorer, click the address bar, and paste:
       </p>
       <div class="flex items-center gap-3">
-        <code class="font-mono text-sm text-ink flex-1 truncate">{{ uncPath }}</code>
+        <code class="font-mono text-sm text-foreground flex-1 truncate">{{ uncPath }}</code>
         <button
           type="button"
-          class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line"
+          class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border"
           data-test="storage-mount-copy"
           @click="copy('windows', uncPath)"
         >{{ copiedKey === 'windows' ? 'Copied' : 'Copy' }}</button>
       </div>
-      <p class="text-xs text-ink-4">
+      <p class="text-xs text-muted-foreground">
         Or from a terminal: <code class="font-mono">net use Z: {{ uncPath }} /persistent:yes</code>.
       </p>
     </div>
 
     <div v-else-if="active === 'ios'" role="tabpanel" data-panel="ios" class="space-y-3">
-      <p class="text-sm text-ink-2">
+      <p class="text-sm text-foreground">
         Open the Files app, tap <em>⋯</em> → <em>Connect to Server</em>, and paste:
       </p>
       <div class="flex items-center gap-3">
-        <code class="font-mono text-sm text-ink flex-1 truncate">{{ smbUrl }}</code>
+        <code class="font-mono text-sm text-foreground flex-1 truncate">{{ smbUrl }}</code>
         <button
           type="button"
-          class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line"
+          class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border"
           data-test="storage-mount-copy"
           @click="copy('ios', smbUrl)"
         >{{ copiedKey === 'ios' ? 'Copied' : 'Copy' }}</button>
       </div>
-      <p class="text-xs text-ink-4" data-test="storage-mount-qr-placeholder">
+      <p class="text-xs text-muted-foreground" data-test="storage-mount-qr-placeholder">
         QR code for the URL lands in the next release. Until then, tap the address bar,
         long-press → <em>Paste</em>.
       </p>
     </div>
 
     <div v-else-if="active === 'android'" role="tabpanel" data-panel="android" class="space-y-3">
-      <p class="text-sm text-ink-2">
+      <p class="text-sm text-foreground">
         Install <em>Solid Explorer</em> or <em>CX File Explorer</em>, add a new <em>SMB / LAN</em>
         location with:
       </p>
-      <ul class="text-sm text-ink-2 space-y-1 font-mono">
+      <ul class="text-sm text-foreground space-y-1 font-mono">
         <li>Host: <code>{{ hostTarget }}</code></li>
         <li>Share: <code>{{ props.share || '/' }}</code></li>
       </ul>
       <div class="flex items-center gap-3 pt-1">
-        <code class="font-mono text-sm text-ink flex-1 truncate">{{ smbUrl }}</code>
+        <code class="font-mono text-sm text-foreground flex-1 truncate">{{ smbUrl }}</code>
         <button
           type="button"
-          class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line"
+          class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border"
           data-test="storage-mount-copy"
           @click="copy('android', smbUrl)"
         >{{ copiedKey === 'android' ? 'Copied' : 'Copy' }}</button>
       </div>
-      <p class="text-xs text-ink-4" data-test="storage-mount-qr-placeholder">
+      <p class="text-xs text-muted-foreground" data-test="storage-mount-qr-placeholder">
         QR code for the URL lands in the next release.
       </p>
     </div>
 
-    <p class="text-xs text-ink-4 mt-4">
+    <p class="text-xs text-muted-foreground mt-4">
       Reach the box via mDNS name <code class="font-mono">{{ mdnsHost || 'aurora.local' }}</code>
       or the LAN IP <code class="font-mono">{{ lanIp || '—' }}</code>. If one fails, try the other.
     </p>

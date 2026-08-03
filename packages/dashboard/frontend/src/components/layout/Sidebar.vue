@@ -108,18 +108,18 @@ watch(() => route.path, (path, prev) => {
 </script>
 
 <template>
-  <aside class="border-r border-line/60 bg-surface flex flex-col">
-    <div class="px-6 py-5 border-b border-line/60">
+  <aside class="border-r border-border/60 bg-card flex flex-col">
+    <div class="px-6 py-5 border-b border-border/60">
       <RouterLink to="/" class="flex items-center gap-2.5 no-underline">
         <svg viewBox="0 0 32 32" class="w-6 h-6" aria-hidden="true">
           <!-- iter-3 theme-flip: bg uses --color-ink (dark in light mode,
                near-white in dark mode); stroke + dot use the inverting
                --color-on-ink token so the A-glyph always contrasts. -->
-          <rect width="32" height="32" rx="6" fill="var(--color-ink)"/>
-          <path d="M8 22 L16 8 L24 22" stroke="var(--color-on-ink)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect width="32" height="32" rx="6" fill="var(--color-foreground)"/>
+          <path d="M8 22 L16 8 L24 22" stroke="var(--color-primary-foreground)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="16" cy="22" r="1.5" fill="var(--color-accent)"/>
         </svg>
-        <span class="font-serif text-lg leading-none text-ink">Aurora</span>
+        <span class="font-serif text-lg leading-none text-foreground">Aurora</span>
       </RouterLink>
       <div class="mt-1 eyebrow">admin plane</div>
     </div>
@@ -131,8 +131,8 @@ watch(() => route.path, (path, prev) => {
         :to="item.to"
         class="flex items-center gap-3 px-3 py-2 rounded-md text-sm no-underline transition-colors duration-150"
         :class="isActive(item.to)
-          ? 'bg-surface-2 text-ink'
-          : 'text-ink-3 hover:text-ink hover:bg-surface-2/60'"
+          ? 'bg-muted text-foreground'
+          : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'"
       >
         <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5">
           <path :d="item.icon" stroke-linecap="round" stroke-linejoin="round" />
@@ -147,9 +147,9 @@ watch(() => route.path, (path, prev) => {
           v-if="item.badgeKey === 'security' && totalSecurity() > 0"
           class="inline-flex items-center justify-center min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[0.6875rem] font-medium tabular-nums"
           :class="{
-            'bg-[var(--color-err-bg)] text-[var(--color-err-fg)]': highestSeverityToneRow() === 'err',
-            'bg-[var(--color-warn-bg)] text-[var(--color-warn-fg)]': highestSeverityToneRow() === 'warn',
-            'bg-[var(--color-info-bg)] text-[var(--color-info-fg)]': highestSeverityToneRow() === 'info',
+            'bg-destructive/10 text-destructive': highestSeverityToneRow() === 'err',
+            'bg-warning/10 text-warning': highestSeverityToneRow() === 'warn',
+            'bg-info/10 text-info': highestSeverityToneRow() === 'info',
           }"
           data-test="sidebar-security-badge"
           :aria-label="totalSecurity() + ' open security findings'"
@@ -157,11 +157,11 @@ watch(() => route.path, (path, prev) => {
       </RouterLink>
     </nav>
 
-    <div class="px-6 py-5 border-t border-line/60">
+    <div class="px-6 py-5 border-t border-border/60">
       <div class="eyebrow mb-2">Documentation</div>
-      <a href="/docs/DASHBOARD_BRIEF.md" class="text-xs text-ink-3">Brief</a>
-      <span class="mx-2 text-ink-4">·</span>
-      <a href="/docs/PACKAGE_CONTRACT.md" class="text-xs text-ink-3">Packages</a>
+      <a href="/docs/DASHBOARD_BRIEF.md" class="text-xs text-muted-foreground">Brief</a>
+      <span class="mx-2 text-muted-foreground">·</span>
+      <a href="/docs/PACKAGE_CONTRACT.md" class="text-xs text-muted-foreground">Packages</a>
     </div>
   </aside>
 </template>

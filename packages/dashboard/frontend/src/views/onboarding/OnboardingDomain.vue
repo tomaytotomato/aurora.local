@@ -5,7 +5,7 @@ import { useOnboardingStore } from '@/stores/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
-import Alert from '@/components/ui/Alert.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -34,26 +34,28 @@ async function proceed(): Promise<void> {
   <div>
     <div class="eyebrow mb-3">Step 3 of 9</div>
     <h1 class="mb-4">Pick your domain.</h1>
-    <p class="text-ink-2 mb-8">
+    <p class="text-foreground mb-8">
       Aurora and every package it manages live under one domain. The default,
-      <code class="bg-surface-2 px-1 py-0.5 rounded border border-line">aurora.local</code>,
+      <code class="bg-muted px-1 py-0.5 rounded border border-border">aurora.local</code>,
       resolves over mDNS on your LAN and needs no external DNS.
     </p>
 
-    <Alert v-if="err" tone="err" class="mb-6">{{ err }}</Alert>
+    <Alert v-if="err" variant="destructive" class="mb-6">
+      <AlertDescription>{{ err }}</AlertDescription>
+    </Alert>
 
     <div class="mb-8">
       <Label for="domain">Domain</Label>
       <Input id="domain" v-model="domain" autocomplete="off" class="font-mono" />
-      <p class="text-xs text-ink-4 mt-2">
+      <p class="text-xs text-muted-foreground mt-2">
         Services will appear at <code>&lt;name&gt;.{{ domain }}</code>. The admin panel
-        (this) lives at <code class="text-ink-2">admin.{{ domain }}</code>.
+        (this) lives at <code class="text-foreground">admin.{{ domain }}</code>.
       </p>
     </div>
 
-    <div class="border border-line rounded-lg p-5 mb-8 bg-surface-2/50">
+    <div class="border border-border rounded-lg p-5 mb-8 bg-muted/50">
       <div class="eyebrow mb-2">What changes if you edit this</div>
-      <ul class="text-sm text-ink-3 space-y-1.5">
+      <ul class="text-sm text-muted-foreground space-y-1.5">
         <li>Caddy vhosts are re-issued for the new apex.</li>
         <li>Every <code>.env</code> that references <code>${'{'}DOMAIN{'}'}</code> re-renders.</li>
         <li>AdGuard DNS rewrites are updated.</li>

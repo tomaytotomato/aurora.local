@@ -74,16 +74,16 @@ function buildOptions(width: number): uPlot.Options {
       { label: 'time' },
       {
         label: props.label,
-        stroke: 'var(--color-ink-2, currentColor)',
+        stroke: 'var(--color-foreground, currentColor)',
         width: 1.5,
         points: { show: false },
         value: (_self, rawValue) => formatValue(rawValue),
       },
     ],
     axes: [
-      { stroke: 'var(--color-ink-3, currentColor)' },
+      { stroke: 'var(--color-muted-foreground, currentColor)' },
       {
-        stroke: 'var(--color-ink-3, currentColor)',
+        stroke: 'var(--color-muted-foreground, currentColor)',
         values: (_self, ticks) => ticks.map((t) => formatValue(t)),
       },
     ],
@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
   <div class="w-full" :style="{ minHeight: `${height}px` }">
     <div
       v-if="series.ts.length === 0"
-      class="text-xs text-ink-4 py-6 text-center"
+      class="text-xs text-muted-foreground py-6 text-center"
       data-state="empty"
     >
       No samples yet — data will appear as Aurora records them.
