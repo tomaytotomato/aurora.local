@@ -1279,3 +1279,85 @@ Iter-25: **Settings dismissed-findings view**. Backend already exposes
 `GET /api/security/dismissals` (iter-23); FE reads it, renders a small
 "Currently suppressed" list with restore buttons under the SecurityPosture
 findings feed. Contained diff.
+
+## Iter 25 · 2026-08-03 09:45 · commit 7ce07b2 + reflection
+**Suppressed-findings management (last B4-followup deferred bullet) + Ralph reflection.**
+
+### Reflection (Ralph reflectEvery=8 third checkpoint)
+
+**1. What's been accomplished?**
+Since iter-17 reflection: verify-v03-overnight.sh completion-gate
+scripted (iter-18); dead events store retired (iter-19);
+ContainerStatsSampler for per-container CPU + mem (iter-20); metrics
+/keys discovery endpoint (iter-21); DashboardHome uPlot chart with
+picker + refresh (iter-22); V2 migration + dismiss/snooze endpoints +
+Dismiss 7d button (iter-23); System-card CPU sparkline + baseline
+refresh (iter-24); suppressed-findings collapsible section + restore
+(iter-25). Every B4-followup deferred bullet has now shipped.
+50 commits total since baseline.
+
+**2. What's working well?**
+- The `verify-v03-overnight.sh` gate is the single source of truth
+  for "is the branch mergeable" — I run it after every code commit,
+  no exceptions.
+- Splitting each item into (implementation commit) + (log commit)
+  keeps the executive summary rebuildable from git log even without
+  the log file. Every commit body is self-contained.
+- Baseline-drift discipline: every time the test count moves, I
+  refresh the executive summary + verify-v03 floor + task-file
+  expected-output block in the same commit. No drift so far.
+
+**3. What's not working?**
+- E2E infra still blocked outside the worktree — accepted.
+- No FE component tests / vitest suite. Every FE change relies on
+  vue-tsc + manual template review. This is the biggest quality gap
+  in the branch. Would want to bring in Vitest + @vue/test-utils
+  before the next big FE push.
+
+**4. Should the approach be adjusted?**
+Continuing one item per iter for the remaining 15 iters (26-40). Every
+remaining backlog item is small enough to fit one iter cleanly. If a
+larger item surfaces (e.g. WebAuthn from DASHBOARD_BRIEF §M5), I would
+DECISION_NEEDED and stop — but nothing on the current list qualifies.
+
+**5. Product-judgement forks?**
+Still none. Every design decision has been documented per commit body
+(e.g. inline suppressed section vs Settings tab this iter; 7-day fixed
+snooze in iter-23; docker-CLI CPU% semantics in iter-20; discovery
+endpoint auth posture in iter-21).
+
+### What shipped (iter-25)
+
+- `api/security.ts`: `SecurityApi.listDismissals()` + `DismissalRow`
+  type mirroring the backend LinkedHashMap key order.
+- `views/SecurityPosture.vue`:
+  - Collapsible **"Suppressed findings (N)"** section under the
+    active feed.
+  - Restore button per row with optimistic remove + rollback on
+    failure; re-fetches active findings so the restored one reappears
+    without a page reload.
+  - Helpers: `formatIso` (locale short date); `dismissalExpiryLabel`
+    (`permanent`/`2d left`/`18h left`/`expired`).
+  - `onDismiss` now triggers a silent `fetchSuppressed` so the toggle
+    count stays fresh.
+  - `onMounted` pre-fetches suppressed alongside active findings.
+
+### Verification
+- `vue-tsc --noEmit` → exit 0.
+- Full backend: 314 tests, 0 failures, 0 errors (unchanged; FE-only).
+- `bash scripts/verify-v03-overnight.sh` → 4/4 checks pass.
+
+### Files touched
+- `frontend/src/api/security.ts` (+30 -1)
+- `frontend/src/views/SecurityPosture.vue` (+130 -3)
+
+### Deferred (accepted, not blocking)
+- Snooze duration picker.
+- Audit event on dismiss/restore.
+- Live log-tail SSE follow (v0.4).
+- Vitest + component tests infrastructure.
+
+### Next iteration target
+Iter-26: **snooze duration picker** on the dismiss button. Small
+dropdown (1d / 7d / 30d / permanent) that unlocks the days parameter
+the backend already accepts. Keeps the Fix-it row compact.
