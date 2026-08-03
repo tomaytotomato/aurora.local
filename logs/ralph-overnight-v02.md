@@ -1180,3 +1180,52 @@ Iter-23 candidates:
 
 Recommend option 4 first (cheap, keeps morning verification honest)
 then option 2 (small, high-signal — the pill number gets context).
+
+## Iter 23 · 2026-08-03 09:32 · commit d81ebd7
+**B4-followup — dismiss/snooze security findings (backend + FE).**
+
+### What shipped
+- **V2 migration** `V2__security_dismissal.sql`:
+  `security_dismissal(finding_id PK, dismissed_at, expires_at?, reason?)`
+  + `idx_security_dismissal_expires_at`. Wired into
+  `spring.sql.init.schema-locations` after V1.
+- **`persistence/SecurityDismissalRepo`** (new): `dismiss`, `restore`,
+  `activeDismissals(now)` set, `listAll()`, `pruneExpired(now)`.
+- **`security/SecurityFindingsService`**: constructor now takes an
+  optional `SecurityDismissalRepo`; `allFindings()` filters against
+  `activeDismissals` by default; `allFindings(true)` surfaces
+  suppressed items and skips the repo call.
+- **`controllers/SecurityController`** (rewritten):
+  `GET /findings?includeDismissed=`, `GET /dismissals`,
+  `POST /findings/{id}/dismiss {days?, reason?}` (days 1..365 or
+  omitted for permanent), `DELETE /findings/{id}/dismiss`. ID regex
+  `^[a-z][a-z0-9_-]{0,63}(:[A-Za-z0-9_.-]{1,63})?$`.
+- **Frontend**: `SecurityApi.dismiss/restore`; `SecurityPosture.vue`
+  per-row **"Dismiss 7d"** button with optimistic remove + rollback
+  on failure.
+
+### Verification
+- Touched suites: 35/35 green (Repo 12 + Service 8 + Controller 15).
+- Full backend: **314 tests, 0 failures, 0 errors** (286 → 314, +28).
+- `vue-tsc --noEmit` → exit 0.
+- `bash scripts/verify-v03-overnight.sh` → 4/4 checks pass.
+
+### Files touched
+- `V2__security_dismissal.sql` (new)
+- `application.yml` (schema-locations extended)
+- `backend/…/persistence/SecurityDismissalRepo.java` (new)
+- `backend/…/security/SecurityFindingsService.java` (+30 -12)
+- `backend/…/controllers/SecurityController.java` (rewritten +100)
+- 3 test files (+/rewritten, 28 total tests)
+- `frontend/src/api/security.ts` (+20)
+- `frontend/src/views/SecurityPosture.vue` (+60 -20)
+
+### Deferred
+- Custom snooze duration picker (1d/7d/30d/permanent). Fixed 7d now.
+- Dismissed-findings settings view rendered off `/dismissals`.
+- Audit event emission on dismiss/restore.
+
+### Next iteration target
+Iter-24: baseline refresh + summary rewrite for the 314 test count +
+uPlot + dismissals. Then a small polish: System-card sparkline via
+MetricChart(height=48) for `sys.cpu_pct` context on the pill.
