@@ -1594,3 +1594,35 @@ the sidebar reveals /security only if `capabilities.securityScanner`.
 Add a small badge showing the number of open findings so a
 posture-worthy issue nudges the operator without needing to visit
 the page.
+
+## Iter 32 · 2026-08-03 10:28 · commit bc0b943
+**Sidebar badge for /security open findings.**
+
+### What shipped
+- `Sidebar.vue` gets a per-item `badgeKey` extension; Security row
+  carries `badgeKey='security'`.
+- New silent-load `refreshSecurityCounts()` computes `{high, medium,
+  low}` from `SecurityApi.findings()`; total + highest-severity tone
+  drive the badge.
+- Fired on mount + on AWAY-from-/security route transitions so
+  dismiss / restore actions update the pill on the way out.
+- a11y: `aria-label` reads `N open security findings`;
+  `tabular-nums` prevents width flicker.
+
+### Verification
+- `vue-tsc --noEmit` → exit 0.
+- Backend 348/0/0 unchanged (FE-only).
+- `bash scripts/verify-v03-overnight.sh` → 4/4.
+
+### Files touched
+- `frontend/src/components/layout/Sidebar.vue` (+70 -6)
+
+### Deferred (accepted)
+- Real-time SSE badge update.
+- Grouped tooltip breakdown per severity.
+
+### Next iteration target
+Iter-33: **surface the pill's severity into the page `<title>`** so
+a browser tab preview shows the open count when the user is on
+another tab. Small; document-level side effect via `useHead` /
+manual `document.title` write in the `App.vue` layer.
