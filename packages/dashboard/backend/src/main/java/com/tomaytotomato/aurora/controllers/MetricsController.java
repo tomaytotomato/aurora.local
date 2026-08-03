@@ -47,6 +47,9 @@ public class MetricsController {
    */
   private static final Pattern KEY_SHAPE = Pattern.compile("^[a-z][a-z0-9._-]{0,63}$");
 
+  /** Prefix shares the key shape — same charset, same length ceiling. */
+  private static final Pattern PREFIX_SHAPE = KEY_SHAPE;
+
   /**
    * Only allow bucket widths that divide 60 evenly so the SQL grouping
    * lands on clean wall-clock boundaries. 1h buckets are the coarsest
@@ -74,5 +77,28 @@ public class MetricsController {
           "bucketMinutes must be one of " + ALLOWED_BUCKETS);
     }
     return repo.bucketed24h(key, bucketMinutes, Instant.now());
+  }
+
+  /**
+   * B2-followup (iter-21): metric key discovery. Enables an FE dropdown
+   * of populated keys without hardcoding container names or per-mount
+   * disk keys. Prefix filter is optional; when supplied it must match the
+   * same shape as a full key. Prefixes with a trailing '.' are the
+   * intended usage (e.g. {@code container.} or {@code sys.disk.}); the
+   * regex accepts partial keys as well because a lookup for
+   * {@code container.aurora-} filtered to a package prefix is useful.
+   *
+   * <p>Auth: same as {@code /last24h} — falls under
+   * {@code SecurityConfig.anyRequest().authenticated()}.
+   */
+  @GetMapping("/keys")
+  public List<String> keys(
+      @RequestParam(name = "prefix", required = false) String prefix
+  ) {
+    if (prefix != null && !prefix.isEmpty() && !PREFIX_SHAPE.matcher(prefix).matches()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "prefix must match ^[a-z][a-z0-9._-]{0,63}$");
+    }
+    return repo.distinctKeys(prefix);
   }
 }

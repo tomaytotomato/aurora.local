@@ -145,4 +145,63 @@ class MetricsRepoTests {
     MetricsRepo repo = new MetricsRepo(jdbc);
     assertEquals(List.of(), repo.bucketed24h("sys.cpu_pct", 5, Instant.now()));
   }
+
+  // -- distinctKeys / escapeLike (B2-followup iter-21) ------------------
+
+  @Test
+  void distinctKeys_no_prefix_lists_all_keys() {
+    JdbcTemplate jdbc = Mockito.mock(JdbcTemplate.class);
+    Mockito.when(jdbc.queryForList(
+        eq("SELECT DISTINCT name FROM metric_sample ORDER BY name ASC"),
+        eq(String.class)))
+        .thenReturn(List.of("app.uptime_ms", "sys.cpu_pct", "sys.mem_used_bytes"));
+    MetricsRepo repo = new MetricsRepo(jdbc);
+    List<String> got = repo.distinctKeys(null);
+    assertEquals(3, got.size());
+    assertEquals("app.uptime_ms", got.get(0));
+  }
+
+  @Test
+  void distinctKeys_empty_prefix_treated_as_no_prefix() {
+    JdbcTemplate jdbc = Mockito.mock(JdbcTemplate.class);
+    Mockito.when(jdbc.queryForList(anyString(), eq(String.class)))
+        .thenReturn(List.of("a", "b"));
+    MetricsRepo repo = new MetricsRepo(jdbc);
+    assertEquals(List.of("a", "b"), repo.distinctKeys(""));
+    // No two-arg variant should be called.
+    Mockito.verify(jdbc).queryForList(
+        eq("SELECT DISTINCT name FROM metric_sample ORDER BY name ASC"),
+        eq(String.class));
+  }
+
+  @Test
+  void distinctKeys_with_prefix_binds_escaped_like_pattern() {
+    JdbcTemplate jdbc = Mockito.mock(JdbcTemplate.class);
+    Mockito.when(jdbc.queryForList(
+        anyString(),
+        eq(String.class),
+        eq("container.%")))
+        .thenReturn(List.of("container.aurora.cpu_pct", "container.aurora.mem_used_bytes"));
+    MetricsRepo repo = new MetricsRepo(jdbc);
+    List<String> got = repo.distinctKeys("container.");
+    assertEquals(2, got.size());
+  }
+
+  @Test
+  void distinctKeys_returns_empty_on_failure() {
+    JdbcTemplate jdbc = Mockito.mock(JdbcTemplate.class);
+    Mockito.when(jdbc.queryForList(anyString(), eq(String.class)))
+        .thenThrow(new RuntimeException("locked"));
+    MetricsRepo repo = new MetricsRepo(jdbc);
+    assertEquals(List.of(), repo.distinctKeys(null));
+  }
+
+  @Test
+  void escapeLike_escapes_backslash_percent_underscore() {
+    assertEquals("container.", MetricsRepo.escapeLike("container."));
+    assertEquals("a\\%b", MetricsRepo.escapeLike("a%b"));
+    assertEquals("a\\_b", MetricsRepo.escapeLike("a_b"));
+    // Backslash escaped first to avoid double-escaping.
+    assertEquals("\\\\pct\\%", MetricsRepo.escapeLike("\\pct%"));
+  }
 }

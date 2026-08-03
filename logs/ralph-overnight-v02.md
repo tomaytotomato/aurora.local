@@ -4,9 +4,9 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 
 ---
 
-## Executive summary (as of iter-17 · commit 4d1a5cb)
+## Executive summary (as of iter-21 · commit HEAD)
 
-**Bottom line.** Phase A (v0.2 close-out) is closed, Phase B (v0.3 groundwork) is feature-complete for the hard-stop, plus PackageDetail Logs tab wired (iter-16) and the pre-existing test failure fixed (iter-17). Backend + frontend fully green — the first time this branch has been top-to-bottom clean. 32 commits since `f9c4406`. Live aurora on `rename/aurora` is untouched — everything in this worktree is on `feat/v0.2-overnight` and pushed to origin, awaiting your morning review + merge.
+**Bottom line.** Phase A (v0.2 close-out) is closed, Phase B (v0.3 groundwork) is feature-complete for the hard-stop, plus PackageDetail Logs tab wired (iter-16), pre-existing failure fixed (iter-17), completion-gate verification scripted (iter-18), dead events store retired (iter-19), per-container metrics sampler (iter-20), and metrics key discovery endpoint (iter-21). Backend + frontend fully green. 41 commits since `f9c4406`. Live aurora on `rename/aurora` is untouched — everything in this worktree is on `feat/v0.2-overnight` and pushed to origin, awaiting your morning review + merge.
 
 **Phase A — v0.2 close-out (A1–A8, all shipped)**
 - **A1** — `d9c4b6d` — Kill DoneChecklist / PackagesCard drift + honest container count on the System card.
@@ -37,8 +37,10 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 | after B2 | 195 | +27 | 0 | 1 |
 | after B3 | 213 | +18 | 0 | 1 |
 | after B4 | 251 | +38 | 0 | 1 |
-| iter-16 (PackageDetail Logs) | 257 | +6 | 0 | 1 |
-| **iter-17 (fix fake-repo state)** | **257** | — | **0** | **0** |
+| iter-17 (fix fake-repo state) | 257 | — | 0 | 0 |
+| iter-19 (retire dead events store) | 257 | — | 0 | 0 |
+| iter-20 (ContainerStatsSampler) | 277 | +20 | 0 | 0 |
+| **iter-21 (metrics /keys endpoint)** | **286** | **+9** | **0** | **0** |
 
 Frontend `vue-tsc --noEmit` exit 0 on every iter that touched the FE.
 
@@ -59,7 +61,7 @@ docker run --rm \
   -w /app \
   maven:3.9-eclipse-temurin-25-alpine \
   mvn -B -o -Dstyle.color=never test
-# Expected: 257 tests, 0 failures, 0 errors.
+# Expected: 286 tests, 0 failures, 0 errors.
 
 # Frontend (~30s cold):
 docker run --rm \

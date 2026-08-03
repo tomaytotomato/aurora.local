@@ -98,4 +98,57 @@ class MetricsControllerTests {
           .andExpect(status().isBadRequest());
     }
   }
+
+  // -- /keys discovery (B2-followup iter-21) ---------------------------
+
+  @Test
+  void keys_no_prefix_returns_all_distinct_keys() throws Exception {
+    MetricsRepo repo = Mockito.mock(MetricsRepo.class);
+    when(repo.distinctKeys(null))
+        .thenReturn(List.of("app.uptime_ms", "sys.cpu_pct", "container.aurora.cpu_pct"));
+    MockMvc mvc = MockMvcBuilders.standaloneSetup(new MetricsController(repo)).build();
+    mvc.perform(get("/api/metrics/keys"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(3))
+        .andExpect(jsonPath("$[0]").value("app.uptime_ms"));
+  }
+
+  @Test
+  void keys_with_prefix_delegates_to_repo() throws Exception {
+    MetricsRepo repo = Mockito.mock(MetricsRepo.class);
+    when(repo.distinctKeys("container."))
+        .thenReturn(List.of("container.aurora.cpu_pct", "container.aurora.mem_used_bytes"));
+    MockMvc mvc = MockMvcBuilders.standaloneSetup(new MetricsController(repo)).build();
+    mvc.perform(get("/api/metrics/keys").param("prefix", "container."))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(2));
+  }
+
+  @Test
+  void keys_rejects_malformed_prefix() throws Exception {
+    MetricsRepo repo = Mockito.mock(MetricsRepo.class);
+    MockMvc mvc = MockMvcBuilders.standaloneSetup(new MetricsController(repo)).build();
+    for (String bad : new String[] {
+        "UPPER",
+        "has space",
+        "1leading",
+        "drop;table",
+        "container.%%",
+    }) {
+      mvc.perform(get("/api/metrics/keys").param("prefix", bad))
+          .andExpect(status().isBadRequest());
+    }
+    Mockito.verifyNoInteractions(repo);
+  }
+
+  @Test
+  void keys_empty_prefix_returns_all_keys() throws Exception {
+    // ?prefix= is treated as null (skips validation, delegates to repo).
+    MetricsRepo repo = Mockito.mock(MetricsRepo.class);
+    when(repo.distinctKeys("")).thenReturn(List.of("a"));
+    MockMvc mvc = MockMvcBuilders.standaloneSetup(new MetricsController(repo)).build();
+    mvc.perform(get("/api/metrics/keys").param("prefix", ""))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1));
+  }
 }

@@ -141,4 +141,44 @@ public class MetricsRepo {
       return List.of();
     }
   }
+
+  /**
+   * B2-followup (iter-21): distinct metric keys currently in the ring
+   * buffer, optionally filtered by prefix. Sorted alphabetically so the
+   * frontend renders a stable dropdown order.
+   *
+   * <p>Empty result when no samples exist for the prefix (fresh install
+   * or key range never populated). The regex-shape guard on the caller
+   * ({@link com.tomaytotomato.aurora.controllers.MetricsController}) is
+   * defence-in-depth; JdbcTemplate parameterises the value.
+   *
+   * @param prefix optional metric-name prefix (e.g. {@code "sys."} or
+   *               {@code "container."}). Null / empty returns every key.
+   */
+  public java.util.List<String> distinctKeys(String prefix) {
+    try {
+      if (prefix == null || prefix.isEmpty()) {
+        return jdbc.queryForList(
+            "SELECT DISTINCT name FROM metric_sample ORDER BY name ASC",
+            String.class);
+      }
+      return jdbc.queryForList(
+          "SELECT DISTINCT name FROM metric_sample WHERE name LIKE ? ESCAPE '\\' ORDER BY name ASC",
+          String.class,
+          escapeLike(prefix) + "%");
+    } catch (Exception e) {
+      log.warn("distinctKeys failed: {}", e.getMessage());
+      return java.util.List.of();
+    }
+  }
+
+  /**
+   * Escape SQL LIKE wildcards in a user-supplied prefix so a hostile
+   * client can't get an oversized OR-pattern (e.g. {@code %}) through
+   * even if the caller's regex misses. The controller's shape guard
+   * already rejects wildcards; this stays defensive.
+   */
+  static String escapeLike(String s) {
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+  }
 }
