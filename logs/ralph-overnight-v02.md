@@ -1076,3 +1076,53 @@ Iter-21 candidates:
 
 Recommend option 2 (summary refresh, cheap) then option 1
 (discovery endpoint prepares the ground for the chart).
+
+## Iter 21 · 2026-08-03 09:17 · commit d1e318c
+**GET /api/metrics/keys discovery endpoint + iter-21 baseline refresh.**
+
+### What shipped
+
+- **Discovery endpoint:**
+  - `MetricsRepo.distinctKeys(prefix)`: `SELECT DISTINCT name ORDER BY
+    name ASC`, with `WHERE name LIKE ? ESCAPE '\\'` when a prefix is
+    given. `escapeLike()` escapes `%`/`_`/`\\` in user input as
+    defence-in-depth.
+  - `MetricsController.keys(prefix?)`: prefix regex matches the
+    existing `KEY_SHAPE`; empty passes through. Same auth as
+    `/last24h`.
+- **Baseline refresh** across every "expected count" surface (the
+  place that always drifts):
+  - Executive summary in `logs/ralph-overnight-v02.md` (test count
+    257→286, commit count 28→41, table extended).
+  - `RALPH_TASK_V02_V03.md` "Final verification command" expected
+    output block updated to 286/0/0.
+  - `scripts/verify-v03-overnight.sh` cached-expectation string +
+    belt-and-braces floor updated to 286.
+
+### Verification
+- Touched suites: 23/23 green (MetricsRepoTests +5, MetricsControllerTests
+  +4).
+- Full backend: **286 tests, 0 failures, 0 errors** (277 → 286, +9).
+- `vue-tsc --noEmit` → exit 0.
+- `bash scripts/verify-v03-overnight.sh` → 4/4 checks pass with the
+  new 286 floor active.
+
+### Files touched
+- `backend/…/persistence/MetricsRepo.java` (+38 -1)
+- `backend/…/controllers/MetricsController.java` (+35 -2)
+- `backend/…/test/…/persistence/MetricsRepoTests.java` (+55)
+- `backend/…/test/…/controllers/MetricsControllerTests.java` (+55)
+- `logs/ralph-overnight-v02.md` (+3 lines of table + summary rewrite)
+- `RALPH_TASK_V02_V03.md` (+2 -2, expected-output block)
+- `scripts/verify-v03-overnight.sh` (+2 -2, floor + cached string)
+
+### Deferred
+None from this iter. Metrics FE chart wiring still pending — will
+consume /keys once the uPlot poc lands.
+
+### Next iteration target
+Iter-22: frontend uPlot chart POC on the Metrics card. Consume
+`/api/metrics/keys?prefix=sys.` for a "which metric" dropdown, then
+`/api/metrics/last24h?key=…` for the series. Real work; may be 2 iters
+(uPlot bindings + data-shape adapter + empty/error states + typecheck
+around the uplot-vue package).
