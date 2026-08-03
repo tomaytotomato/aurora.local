@@ -507,3 +507,50 @@ No live stream (v0.3 snapshot only). Frontend: new route
 `/containers/{id}/logs` renders <pre> with mono font + refresh button;
 wired from `RecentChangesList` row click (that list already exists
 per B1 iter-9). Backend piece this iter; UI piece next.
+
+## Iter 11 · 2026-08-03 08:36 · commit (see git log -1)
+**B3 (backend) — /api/containers/{id}/logs?tail=200 snapshot endpoint.**
+
+### What shipped
+
+- `DockerService.inspectContainer(idOrName)`: O(1) existence check
+  against the docker daemon; fails closed on NotFoundException +
+  generic errors so 404 is emitted rather than 500. Distinct from
+  findByName() which is scoped to the aurora compose project — B3
+  must tail any container the operator can see.
+- `DockerService.tailLogs(id, tail, timeout)`: docker-java
+  logContainerCmd chain with stdout+stderr+timestamps+no-follow.
+  Frames decoded UTF-8, split on `\n`, each line's RFC3339 timestamp
+  peeled off into `ts`. LOG_BYTES_CAP = 2 MiB — past that,
+  truncated=true and subsequent frames dropped. Belt-and-braces
+  cap: final list capped at `tail` in case docker over-emits. Records
+  `LogLine(ts, stream, line)` + `LogTail(lines, truncated)`.
+- `ContainersController.logs(id, tail)`: GET /api/containers/{id}/logs.
+  id regex `^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`; tail ∈ [1, 2000].
+  400 on shape violations (skips docker), 404 on no-such-container
+  (skips tailLogs), 200 with `{container_id, tail, truncated, lines}`
+  otherwise. Auth via SecurityConfig default.
+
+### Verification
+- Touched suites: 18/18 green.
+- Full backend: 213 tests, 1 pre-existing failure unchanged,
+  0 introduced (195 → 213, +18).
+- `vue-tsc --noEmit` → exit 0.
+
+### Files touched
+- `backend/…/services/DockerService.java` (+130 -1)
+- `backend/…/controllers/ContainersController.java` (+95 -3)
+- `backend/…/test/…/services/DockerServiceLogsTests.java` (+195, new)
+- `backend/…/test/…/controllers/ContainersControllerLogsTests.java` (+140, new)
+
+### Deferred
+- Frontend route `/containers/{id}/logs` — <pre>-mono view + refresh
+  button + row-click wiring from RecentChangesList. Own iter.
+- Live SSE follow — task spec explicit ('no live stream in v0.3').
+- E2E test hitting :8091 — aurora-e2e infra debt.
+
+### Next iteration target
+B3 frontend: new route `/containers/{id}/logs`, view component
+rendering `<pre>` mono, refresh button, wiring the "row click" on
+RecentChangesList. Small typecheck-only iter (existing composable
+pattern applies).
