@@ -487,3 +487,30 @@ Caught mid-iter: the adapter builder didn't attach `config` to the rejected Axio
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 17 files / 153 tests (142 → 153, +11). vue-tsc clean. Dockerfile clean.
 
 **Next.** C10.7 — DropdownMenu, the last remaining bonus primitive on the checklist. Aurora doesn't currently render a full contextual menu anywhere; would land alongside the theme-toggle expansion or the TopBar user menu (currently a bare "Sign out" button). Small utility; probably one clean iter.
+
+### iter-20 (2026-08-03) — C10 shadcn DropdownMenu (bonus, final C10)
+
+**Item:** C10.7 — introduce DropdownMenu primitive + migrate the TopBar user cluster.
+
+**Primitives.** Three tiny files split along shadcn lines:
+- `DropdownMenu.vue` — root `<div class="relative inline-block">` with `#trigger` + default slots. Owns open/close state, click-to-toggle, click-outside-to-close, ESC-to-close, arrow-key focus roving between `[data-menu-item]` children, focus returned to trigger on close. Right-aligned popover by default (`right-0`); `align="left"` flips to `left-0`. ARIA: `aria-haspopup="menu"`, `aria-expanded` tracks state.
+- `DropdownMenuItem.vue` — role=menuitem button with `data-menu-item` so the parent's ArrowUp/ArrowDown finds it. Shadcn tokens (`focus:bg-muted hover:bg-muted`), `destructive?: boolean` variant (`text-destructive hover:bg-destructive/10`), disabled state, `select` emit.
+- `DropdownMenuSeparator.vue` — hair-line `<div role="separator" class="h-px bg-border">`. Not focusable (no `data-menu-item`).
+
+**Migration.** TopBar user cluster.
+- Was: bare `<span>{{ username }}</span> · <button>Sign out</button>` inline in the header.
+- Now: `<DropdownMenu data-test="user-menu">` with a compact trigger button (username + chevron), a `<router-link to="/settings">` "Settings" item styled inline to match `DropdownMenuItem` (keeps native `<a>` semantics for router-link navigation), a `<DropdownMenuSeparator />`, and a `<DropdownMenuItem @select="signOut">` "Sign out" row.
+- **Theme toggle stays inline** (deliberate) — it's a high-frequency affordance that shouldn't require a click to open a menu. Only the identity + Sign-out consolidated.
+- Data-test hooks: `user-menu`, `user-menu-trigger`, `user-menu-settings`, `user-menu-signout` for future e2e.
+- Trigger has `focus-visible:ring-ring` + an accessible label describing whose menu it opens.
+
+**Deferred.** Full compound API (nested submenus, checkboxes, radios) — Aurora has no caller for those; when one arrives we'll expand along the canonical shadcn split.
+
+- Barrel-exports `DropdownMenu` + `DropdownMenuItem` + `DropdownMenuSeparator` from `src/components/ui/index.ts`.
+- `DropdownMenu.spec.ts` — 12 tests. DropdownMenu (initial closed state, click-open + aria-expanded flip, click-again close, click-outside close, ESC close, alignment, shadcn popover tokens). DropdownMenuItem (role + tokens + data-menu-item, select emit, disabled blocks emit + opacity, destructive tokens). DropdownMenuSeparator (role=separator + hair-line tokens). Arrow-key nav is not exercised in this unit spec; a follow-up e2e can cover the a11y happy path.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 18 files / 165 tests (153 → 165, +12). vue-tsc clean. Dockerfile clean.
+
+**C10 complete.** All six bonus primitives shipped (Skeleton, Dialog, Select, Table, Toast + axios bridge, DropdownMenu). Phase C is done.
+
+**Next.** Final completion iter — refresh executive summary + verify command, mark C10 complete on the checklist, run the monitor-rerunnable command one more time, sign off with `<promise>COMPLETE</promise>`.

@@ -37,3 +37,7 @@ export { default as TableCell } from './TableCell.vue';
 
 export { default as Toast } from './Toast.vue';
 export { default as Toaster } from './Toaster.vue';
+
+export { default as DropdownMenu } from './DropdownMenu.vue';
+export { default as DropdownMenuItem } from './DropdownMenuItem.vue';
+export { default as DropdownMenuSeparator } from './DropdownMenuSeparator.vue';
