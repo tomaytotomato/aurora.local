@@ -162,3 +162,37 @@ Bruce will find:
 - Backend + frontend still green
 
 The morning walk-through will be: read the summary at the top of `logs/ralph-overnight-v02.md`, `git log --oneline f9c4406..origin/feat/v0.2-overnight`, then rebase or merge into `rename/aurora`.
+
+## Final verification command
+
+Externally rerunnable from a fresh shell inside this worktree. Uses only docker-run tooling — no host JDK, no host node. Never touches the live aurora on `http://192.168.0.110:8090`.
+
+```bash
+cd /home/bruce/aurora-v02-wt
+bash scripts/verify-v03-overnight.sh
+```
+
+Environment (all optional):
+- `WORKTREE` (default `$PWD`) — override the worktree location.
+- `AURORA_BASELINE` (default `f9c4406`) — branch-point on `rename/aurora`.
+- `SKIP_BACKEND` / `SKIP_FRONTEND` / `SKIP_DOCKER_CHECK` (default 0) — opt-out per phase for fast reruns.
+
+Expected output (as of iter-17, commit `4d1a5cb`; rerun any time on `HEAD`):
+
+```
+✓ Commits since baseline (f9c4406)
+  33 commits on feat/v0.2-overnight since f9c4406
+✓ Backend tests (docker-run maven, no host JDK)
+  mvn test green — Tests run: 257, Failures: 0, Errors: 0, Skipped: 0
+✓ Frontend typecheck (docker-run vue-tsc, no host node)
+  vue-tsc --noEmit exit 0
+✓ Dockerfile static check (docker build --check)
+  docker build --check: no warnings
+✓ verify-v03-overnight.sh: 4 checks passed, 0 failed
+```
+
+Artifacts preserved for a rerun in a fresh shell:
+- `logs/ralph-overnight-v02.md` — executive summary + per-iter log.
+- `packages/dashboard/backend/src/test/resources/fake-repo/.state.yml` — test fixture protected by a `.gitignore` exception (iter-17 fix).
+- `scripts/verify-v03-overnight.sh` — the command itself.
+- No caches or build directories required; the script re-creates everything it needs inside the docker-run steps.
