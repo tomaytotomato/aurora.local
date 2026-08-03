@@ -30,6 +30,13 @@ requires:
   # the host (apt: nvidia-container-toolkit; then `systemctl restart
   # docker`). No dedicated Ansible role yet.
   host_roles: []
+  # A8 (iter-7): ollama + openwebui + friends. First-run image pull is
+  # ~4GB (ollama), model pulls are separate but user-triggered. 240s
+  # covers docker compose up -d after the ollama image is cached; the
+  # frontend row flips "Couldn't start" past this so users don't wait
+  # forever on a genuinely wedged pull. Cold-cache first launch is
+  # covered by the pull step's own dedicated poller (see StatusProbe).
+  start_budget_seconds: 240
 
 required_env:
   - WEBUI_SECRET_KEY

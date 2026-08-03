@@ -24,6 +24,12 @@ const ADMIN = {
 const ENABLED = ['core'];
 
 test.describe('/onboarding/done launch happy path', () => {
+
+  test.beforeEach(async ({ request }) => {
+    // TD5 (2026-08-02): rewind before each spec. Endpoint is gated on
+    // AURORA_E2E=1; 404 in prod, silently ignored here.
+    await request.post('/api/onboarding/reset').catch(() => {});
+  });
   test('Start services POSTs /launch and streams events', async ({ page, request }) => {
     // Seed admin (idempotent-ish; 409 on repeat is fine for the isolated E2E box).
     const admin = await request.post('/api/onboarding/admin', {

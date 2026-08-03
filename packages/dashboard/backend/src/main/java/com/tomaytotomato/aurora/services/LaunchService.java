@@ -1,9 +1,11 @@
 package com.tomaytotomato.aurora.services;
 
 import com.tomaytotomato.aurora.config.AuroraProperties;
+import com.tomaytotomato.aurora.domain.Package;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -72,6 +74,24 @@ public class LaunchService {
 
   private final AuroraProperties props;
   private final AuditEventRepo audit;
+  /**
+   * Optional manifest lookup used by {@link #resolveBudgetSeconds(String)}
+   * to render the effective per-package + total start budget into the
+   * launch header. Null in unit tests that stub {@code up.sh}; wired by
+   * Spring in production so {@code startLaunch()} logs an honest budget
+   * derived from {@code packages/<name>/manifest.yml}
+   * ({@code requires.start_budget_seconds}; see
+   * {@link Package#startBudgetSeconds()}).
+   */
+  private final PackagesService packages;
+  /**
+   * iter-29: optional principal lookup for audit-trail attribution.
+   * Null in unit tests so the pre-attribution behaviour (userId=null on
+   * audit.record) is preserved; wired by Spring in production so a
+   * launch initiated via the DashboardHome Start button records the
+   * acting admin's id.
+   */
+  private final com.tomaytotomato.aurora.services.CurrentUserService currentUser;
 
   private final Map<String, Job> jobs = new ConcurrentHashMap<>();
   private final AtomicReference<String> activeJobId = new AtomicReference<>(null);
@@ -83,9 +103,30 @@ public class LaunchService {
         return t;
       });
 
+  /**
+   * Test-only constructor. Prod path uses the 4-arg {@code (props, audit,
+   * packages, currentUser)} form Spring auto-wires; unit tests stage a
+   * fake up.sh and don't exercise budget-header logging or audit
+   * attribution.
+   */
   public LaunchService(AuroraProperties props, AuditEventRepo audit) {
+    this(props, audit, null, null);
+  }
+
+  /**
+   * Two-arg-with-packages test convenience for the budget-header suite.
+   */
+  public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages) {
+    this(props, audit, packages, null);
+  }
+
+  @Autowired
+  public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
+                       com.tomaytotomato.aurora.services.CurrentUserService currentUser) {
     this.props = props;
     this.audit = audit;
+    this.packages = packages;
+    this.currentUser = currentUser;
     // Fires every 15s. Cheap; iterates active job's emitters only.
     heartbeat.scheduleAtFixedRate(this::sendHeartbeats, 15, 15, TimeUnit.SECONDS);
   }
@@ -120,7 +161,8 @@ public class LaunchService {
       Files.createDirectories(Path.of(LOG_DIR));
       job.logFile = Path.of(LOG_DIR, "launch-" + id + ".log");
       String header = "# aurora launch " + id + " started " + job.startedAt + "\n"
-              + "# packages: " + String.join(",", job.packages) + "\n";
+              + "# packages: " + String.join(",", job.packages) + "\n"
+              + "# start_budget: " + renderBudgetHeader(job.packages) + "\n";
       Files.writeString(job.logFile, header, StandardCharsets.UTF_8);
       job.logBytesWritten = header.getBytes(StandardCharsets.UTF_8).length;
     } catch (IOException e) {
@@ -128,7 +170,7 @@ public class LaunchService {
       job.logFile = null;
     }
 
-    audit.record(null, "onboarding.launch.start", "job:" + id,
+    audit.record(currentUserId(), "onboarding.launch.start", "job:" + id,
         "{\"packages\":" + toJsonArray(job.packages) + "}");
 
     Thread runner = new Thread(() -> run(job), "aurora-launch-" + id.substring(0, 8));
@@ -294,7 +336,7 @@ public class LaunchService {
     }
     job.emitters.clear();
     activeJobId.compareAndSet(job.id, null);
-    audit.record(null, "onboarding.launch.finish", "job:" + job.id,
+    audit.record(currentUserId(), "onboarding.launch.finish", "job:" + job.id,
         "{\"state\":\"" + state.name().toLowerCase() + "\",\"exit\":" + exit + "}");
   }
 
@@ -443,6 +485,67 @@ public class LaunchService {
       b.append("\"").append(jsonEscape(xs.get(i))).append("\"");
     }
     return b.append("]").toString();
+  }
+
+  // ------------------------------------------------------------------
+  // A8 (iter-7): per-package start budget resolution.
+  //
+  // Manifests may declare `requires.start_budget_seconds` to give the UI
+  // a longer optimistic-start window for multi-container stacks (media,
+  // monitoring, documents, ai, photos, home-automation, dev, privacy).
+  // We surface the effective per-package budgets in the launch log
+  // header so a post-mortem can tell whether a hung stack ran under a
+  // 30s default or the manifest's declared 180s. The frontend has always
+  // consumed this via `startBudgetMs()` (frontend/src/api/packages.ts);
+  // this is the honest backend read.
+  //
+  // Package.startBudgetSeconds() clamps to [30, 600]. When PackagesService
+  // is null (unit-test constructor path), we render "n/a" without
+  // failing the launch — the tail buffer still captures up.sh's own logs.
+  // ------------------------------------------------------------------
+
+  String renderBudgetHeader(List<String> pkgs) {
+    if (packages == null || pkgs == null || pkgs.isEmpty()) return "n/a";
+    StringBuilder b = new StringBuilder();
+    int total = 0;
+    for (int i = 0; i < pkgs.size(); i++) {
+      if (i > 0) b.append(", ");
+      String p = pkgs.get(i);
+      int budget = resolveBudgetSeconds(p);
+      total += budget;
+      b.append(p).append('=').append(budget).append('s');
+    }
+    b.append(" (total=").append(total).append("s)");
+    return b.toString();
+  }
+
+  int resolveBudgetSeconds(String pkg) {
+    if (packages == null || pkg == null) return Package.DEFAULT_START_BUDGET_SECONDS;
+    try {
+      return packages.find(pkg)
+          .map(Package::startBudgetSeconds)
+          .orElse(Package.DEFAULT_START_BUDGET_SECONDS);
+    } catch (RuntimeException e) {
+      // Manifest lookup shouldn't hard-fail a launch. Default and move on.
+      log.debug("budget lookup failed for {}: {}", pkg, e.getMessage());
+      return Package.DEFAULT_START_BUDGET_SECONDS;
+    }
+  }
+
+  /**
+   * iter-29: audit-trail attribution. Returns the authenticated admin id
+   * when a session exists; null in unit tests + wizard-phase paths where
+   * no session is yet available. Null propagates to {@code audit_event.user_id}
+   * matching the pre-attribution behaviour.
+   */
+  Long currentUserId() {
+    if (currentUser == null) return null;
+    try {
+      return currentUser.currentUserId().orElse(null);
+    } catch (RuntimeException e) {
+      log.debug("currentUserId lookup failed: {}", e.getMessage());
+      return null;
+    }
   }
 
   // ------------------------------------------------------------------

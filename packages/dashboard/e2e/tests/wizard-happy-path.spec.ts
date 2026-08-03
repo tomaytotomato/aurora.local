@@ -14,7 +14,12 @@ import { expect } from '../fixtures/ux-matchers';
  */
 
 test.describe('wizard happy path (Sarah persona)', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, request }) => {
+    // TD5 (2026-08-02): rewind the wizard between specs so a suite that
+    // already ran to completion doesn't redirect us straight to
+    // /dashboard/home. Endpoint is gated on AURORA_E2E=1 in the aurora-e2e
+    // compose project; 404 in prod, silently ignored here.
+    await request.post('/api/onboarding/reset').catch(() => {});
     await page.goto('/');
     // Redirect should send a fresh box to /onboarding/welcome.
     await page.waitForURL(/\/onboarding\/(welcome|admin|domain|packages|secrets|dns|tls|review|done)/, {

@@ -30,6 +30,10 @@ requires:
   min_ram_mb: 1024
   min_disk_gb: 4
   host_roles: []
+  # A8 (iter-7): home-assistant + zigbee2mqtt + mosquitto + friends.
+  # Home Assistant init pass eats ~30s alone; 90s is a comfortable
+  # warm-relaunch budget.
+  start_budget_seconds: 90
 
 required_env:
   - TZ

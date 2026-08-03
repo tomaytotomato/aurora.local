@@ -80,6 +80,22 @@ public class StateFileService {
     mutateState(m -> m.put("enabled", new ArrayList<>(enabled)));
   }
 
+  /**
+   * TD5 (2026-08-02): delete {@code .state.yml} entirely so the next
+   * {@link #readState()} returns the empty default. Used by the E2E
+   * {@code POST /api/onboarding/reset} endpoint. Safe when the file
+   * doesn't exist. Also removes any leftover {@code .state.yml.tmp}
+   * from an interrupted atomic write.
+   */
+  public void deleteState() {
+    try {
+      Files.deleteIfExists(stateFile());
+      Files.deleteIfExists(stateFile().resolveSibling(".state.yml.tmp"));
+    } catch (IOException e) {
+      throw new RuntimeException("failed to delete " + stateFile(), e);
+    }
+  }
+
   @SuppressWarnings("unchecked")
   private void mutateState(java.util.function.Consumer<Map<String, Object>> mutator) {
     Path p = stateFile();

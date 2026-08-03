@@ -82,11 +82,14 @@ class SystemServiceInfoTests {
   }
 
   @Test
-  void info_capabilitiesFlagsMetricsFalseInIter1() {
-    // UX_SPEC_DASHBOARD.md §4.5 + §6 non-goal: no metrics backend in iter-1.
-    // Frontend must gate the metrics fetch on this flag so /dashboard/home
-    // never issues a 404 request. Guard the flag here so the toggle is one
-    // line of Java when the real backend lands.
+  void info_capabilitiesFlagsMetricsTrueAsOfIter22() {
+    // UX_SPEC_DASHBOARD.md §4.5 + §6: the metrics fetch is gated on this
+    // capability flag so DashboardHome doesn't 404 when the backend has
+    // no timeseries endpoint. iter-1 kept it false; iter-10 shipped
+    // MetricsSamplerService + MetricsRepo + /api/metrics/last24h; iter-22
+    // flipped this flag true so the DashboardHome Metrics card renders
+    // a real uPlot chart of the last 24 h. The gate now means: 'you may
+    // fetch metrics', not 'metrics aren't available'.
     StateFileService stateFiles = Mockito.mock(StateFileService.class);
     Mockito.when(stateFiles.readState()).thenReturn(
         new RepoState(1, "aurora", "aurora.local", null, List.of("core"), List.of()));
@@ -97,8 +100,8 @@ class SystemServiceInfoTests {
     @SuppressWarnings("unchecked")
     Map<String, Object> caps = (Map<String, Object>) info.get("capabilities");
     assertNotNull(caps, "capabilities block must exist");
-    assertEquals(false, caps.get("metrics"),
-        "capabilities.metrics must be false until a real timeseries backend ships");
+    assertEquals(true, caps.get("metrics"),
+        "capabilities.metrics must be true now that MetricsSamplerService + /api/metrics/last24h ship");
   }
 
   @Test
@@ -193,5 +196,78 @@ class SystemServiceInfoTests {
       assertTrue(!String.valueOf(h).matches("^[0-9a-f]{12}$"),
           "env() hostname must never be a docker container short-id, got: " + h);
     }
+  }
+
+  // --- A6 container count (2026-08-02) ---------------------------------
+
+  private static com.github.dockerjava.api.model.Container ct(String state) {
+    var c = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(c.getState()).thenReturn(state);
+    return c;
+  }
+
+  @Test
+  void containerCount_countsOnlyRunning_notExitedOrCreated() {
+    // A1 broadened DockerService.listProjectContainers() to include
+    // aurora + aurora-* projects. A6 pins the semantic: header says
+    // "Containers N" and users read that as "currently running", not
+    // "aurora has ever known about". Exited containers linger in
+    // `docker ps -a` output until the operator prunes; they must not
+    // inflate the pill.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of(), List.of()));
+
+    DockerService docker = Mockito.mock(DockerService.class);
+    Mockito.when(docker.version()).thenReturn(java.util.Optional.of("29.6.2"));
+    var running1 = ct("running");
+    var running2 = ct("running");
+    var running3 = ct("running");
+    var exited = ct("exited");
+    var dead = ct("dead");
+    var created = ct("created");
+    Mockito.when(docker.listProjectContainers()).thenReturn(
+        java.util.List.of(running1, running2, running3, exited, dead, created));
+
+    SystemService svc = new SystemService(props(), docker, stateFiles);
+    Object count = svc.info().get("containerCount");
+
+    assertEquals(3, count,
+        "containerCount must count running only; exited/dead/created must not inflate");
+  }
+
+  @Test
+  void containerCount_isZeroNotNullWhenAllAuroraContainersAreDown() {
+    // Contract: null means "docker unreachable" (frontend renders —).
+    // Zero means "aurora is up but nothing else is running" (frontend
+    // renders 0). Distinct states — don't collapse them.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of(), List.of()));
+
+    DockerService docker = Mockito.mock(DockerService.class);
+    Mockito.when(docker.version()).thenReturn(java.util.Optional.of("29.6.2"));
+    // Non-null empty list — docker reachable, nothing to count.
+    Mockito.when(docker.listProjectContainers()).thenReturn(java.util.List.of());
+
+    SystemService svc = new SystemService(props(), docker, stateFiles);
+    assertEquals(0, svc.info().get("containerCount"));
+  }
+
+  @Test
+  void containerCount_isNullWhenDockerUnreachable() {
+    // Contract: docker throwing must not crash /api/system/info; return
+    // null and let the frontend show —.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of(), List.of()));
+
+    DockerService docker = Mockito.mock(DockerService.class);
+    Mockito.when(docker.version()).thenReturn(java.util.Optional.of("29.6.2"));
+    Mockito.when(docker.listProjectContainers())
+        .thenThrow(new RuntimeException("docker daemon unreachable"));
+
+    SystemService svc = new SystemService(props(), docker, stateFiles);
+    assertNull(svc.info().get("containerCount"));
   }
 }

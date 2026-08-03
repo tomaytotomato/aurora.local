@@ -4,6 +4,7 @@ import { OnboardingApi } from '@/api/onboarding';
 import { ServicesApi, type ServiceStatus } from '@/api/services';
 import { usePackagesStore } from '@/stores/packages';
 import { startBudgetMs } from '@/api/packages';
+import { httpStatusFromError } from '@/lib/http-error-copy';
 import ChecklistItem from './ChecklistItem.vue';
 
 const props = defineProps<{
@@ -256,7 +257,7 @@ async function onRetry(pkg: string): Promise<void> {
     startFastPoll(budget);
     return;
   } catch (err: unknown) {
-    const status = (err as { response?: { status?: number } })?.response?.status;
+    const status = httpStatusFromError(err);
     if (status === 409) {
       // A launch is already in flight (race between tabs, or a click
       // squeezed past the guard). State is already correct — don't

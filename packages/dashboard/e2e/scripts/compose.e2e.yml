@@ -18,6 +18,11 @@ networks:
 services:
   aurora:
     container_name: aurora-e2e
+    # TD5 (2026-08-02): expose POST /api/onboarding/reset in this
+    # instance only. Backend reads env AURORA_E2E and binds it into
+    # aurora.e2e-mode; the endpoint returns 404 in prod (no env set).
+    environment:
+      AURORA_E2E: "1"
     # No ports override — the base compose.yml already reads
     # ${AURORA_HOST_PORT:-8090}:8090 and reset-aurora-e2e.sh exports
     # AURORA_HOST_PORT=8091 before invoking compose. Overriding the

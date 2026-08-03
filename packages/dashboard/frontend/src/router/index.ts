@@ -33,6 +33,8 @@ const routes: RouteRecordRaw[] = [
       { path: '', component: () => import('@/views/DashboardHome.vue'), meta: { photoBg: true } },
       { path: 'packages', component: () => import('@/views/PackagesList.vue') },
       { path: 'packages/:name', component: () => import('@/views/PackageDetail.vue') },
+      // B3 (v0.3): container log tail. Snapshot only.
+      { path: 'containers/:id/logs', component: () => import('@/views/ContainerLogsView.vue') },
       { path: 'security', component: () => import('@/views/SecurityPosture.vue') },
       { path: 'settings', component: () => import('@/views/SettingsView.vue') },
     ],

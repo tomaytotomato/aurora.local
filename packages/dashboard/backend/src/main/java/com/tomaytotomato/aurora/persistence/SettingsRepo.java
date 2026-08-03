@@ -30,4 +30,13 @@ public class SettingsRepo {
             + "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')",
         key, value);
   }
+
+  /**
+   * TD5 (2026-08-02): remove a single settings row. Used by
+   * {@code OnboardingService.reset()} to wipe the onboarding.* cursor
+   * keys so a fresh wizard walk starts from step:welcome.
+   */
+  public int delete(String key) {
+    return jdbc.update("DELETE FROM settings WHERE key = ?", key);
+  }
 }

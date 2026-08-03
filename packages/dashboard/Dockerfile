@@ -49,8 +49,35 @@ WORKDIR /app
 #   - docker-cli + docker-cli-compose: up.sh shells out to `docker compose`
 #   - avahi-tools: iter-3 P1c mdns-audit.sh (avahi-browse + avahi-resolve)
 #   - bind-tools: iter-3 P1c mdns-audit.sh (dig +short @224.0.0.251 :5353)
+#   - ca-certificates: TLS verification for the yq download below (and future
+#     runtime https calls). Without it wget --https-only fails on Alpine.
 # Also install /var/log/aurora as a writable log destination for LaunchService.
-RUN apk add --no-cache bash docker-cli docker-cli-compose avahi-tools bind-tools
+RUN apk add --no-cache bash docker-cli docker-cli-compose avahi-tools bind-tools ca-certificates
+
+# ── mikefarah yq (v4) ──────────────────────────────────────────────────────
+# scripts/lib/manifest.sh + scripts/lib/state.sh (invoked by scripts/up.sh)
+# hard-require either `yq` (mikefarah v4) or `python3 + PyYAML` to parse
+# manifests and update `.state.yml`. The upstream Alpine repo has a `yq`
+# package but it's kislyuk/yq (Python fork) which is API-incompatible with
+# mikefarah v4 — the scripts explicitly gate on `yq --version` matching
+# `v?4`. Ship the pinned upstream binary so `docker exec aurora up.sh …`
+# from inside the container works for richer flows (media stack, etc.).
+#
+# Pin: v4.44.3 (2025-09, stable, matches manifest.sh gate).
+# Arch: TARGETARCH resolves to amd64/arm64 under BuildKit; falls back to
+# amd64 for legacy `docker build` (Optiplex target).
+ARG TARGETARCH=amd64
+ARG YQ_VERSION=v4.44.3
+RUN set -eux; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) yq_arch=amd64 ;; \
+      arm64) yq_arch=arm64 ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    wget -q --https-only -O /usr/local/bin/yq \
+      "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${yq_arch}"; \
+    chmod 0755 /usr/local/bin/yq; \
+    /usr/local/bin/yq --version | grep -qE 'version v?4'
 
 # Non-root user; UID overridden at runtime by compose (user: "${AURORA_UID}:${DOCKER_GID}").
 RUN addgroup -S aurora && adduser -S -G aurora -u 1000 aurora \

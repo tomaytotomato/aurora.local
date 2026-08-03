@@ -3,11 +3,14 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useSystemStore } from '@/stores/system';
 import { usePackagesStore } from '@/stores/packages';
-import { useEventsStore } from '@/stores/events';
+import { useContainerEvents } from '@/composables/useContainerEvents';
 import { ServicesApi } from '@/api/services';
+import { MetricsApi, type MetricBucket } from '@/api/metrics';
+import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Badge from '@/components/ui/Badge.vue';
+import MetricChart from '@/components/MetricChart.vue';
 import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
 import { renderIdentity } from '@/lib/identity';
 import { startBudgetMs, type PackageSummary } from '@/api/packages';
@@ -37,7 +40,12 @@ const photoBg = computed<boolean>(() => Boolean(route.meta?.photoBg));
 
 const system = useSystemStore();
 const packages = usePackagesStore();
-const events = useEventsStore();
+// B1 (iter-9): swap the raw /api/events docker bridge for the filtered
+// /api/containers/events/stream endpoint. The composable owns SSE +
+// poll fallback + tab-visibility pause. The old events store is left in
+// place for future job/system-event consumers; no callers besides this
+// view use it today.
+const containerEvents = useContainerEvents();
 
 // Per-card error banners drive the §5 error-state contract without ever
 // exposing an axios error.message to the DOM.
@@ -68,11 +76,15 @@ async function fetchPackages(): Promise<void> {
 }
 
 onMounted(async () => {
-  events.connect();
   await Promise.allSettled([fetchSystem(), fetchPackages()]);
-  // iter-1: no metrics fetch. Gated on capabilities.metrics; empty state
-  // in the Metrics strip renders unconditionally until the flag flips true.
-  // See UX_SPEC_DASHBOARD.md §4.5 + §6.
+  // B2-followup (iter-22): metrics fetch fires after system.info lands
+  // so capabilities.metrics is up-to-date before the guard runs.
+  // iter-24: sparkline fetch fans out in parallel so the pill picks up
+  // context without gating on the main chart's user-facing error copy.
+  if (metricsCapable.value) {
+    void loadMetric();
+    void loadCpuSparkline();
+  }
 });
 
 // ---- header + identity ---------------------------------------------
@@ -177,7 +189,89 @@ const enabledSorted = computed(() =>
 );
 
 // ---- recent events / containers card -------------------------------
-const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
+// B1 (iter-9): source of truth is now the filtered container-events
+// stream. Newest first, capped at 5 for the card; deeper history lives
+// behind a follow-up drill-down that hasn't shipped yet.
+const recentEvents = computed(() =>
+  [...containerEvents.events.value].reverse().slice(0, 5),
+);
+
+// ---- metrics chart (B2-followup iter-22) ----------------------------
+// Presented offerings for the picker; keys must exist as first-class
+// samples via MetricsSamplerService (iter-10) or ContainerStatsSampler
+// (iter-20). We deliberately do NOT hit /api/metrics/keys here — that
+// list is used by a future settings-side chooser; the DashboardHome
+// card sticks to the four canonical host metrics so operators see the
+// same shape every visit.
+interface MetricOption {
+  key: string;
+  label: string;
+  unit: '%' | 'B' | 'ms' | '';
+}
+const METRIC_OPTIONS: readonly MetricOption[] = [
+  { key: 'sys.cpu_pct', label: 'Host CPU %', unit: '%' },
+  { key: 'sys.mem_used_bytes', label: 'Host memory used', unit: 'B' },
+  { key: 'sys.disk.root.used_bytes', label: 'Root disk used', unit: 'B' },
+  { key: 'app.uptime_ms', label: 'Aurora uptime', unit: 'ms' },
+] as const;
+const selectedMetric = ref<MetricOption>(METRIC_OPTIONS[0]);
+const metricSeries = ref<{ ts: number[]; values: number[] }>({ ts: [], values: [] });
+const metricLoading = ref(false);
+const metricErr = ref<string | null>(null);
+
+// iter-24 sparkline: shared with the main chart above but always sys.cpu_pct.
+// Kept as its own ref so switching the picker doesn't overwrite the pill's
+// context and vice versa.
+const cpuSpark = ref<{ ts: number[]; values: number[] }>({ ts: [], values: [] });
+const cpuSparkLatest = computed<number | null>(() => {
+  const v = cpuSpark.value.values;
+  return v.length > 0 ? v[v.length - 1] : null;
+});
+
+const metricsCapable = computed<boolean>(() =>
+  system.info?.capabilities?.metrics === true,
+);
+
+async function loadMetric(): Promise<void> {
+  if (!metricsCapable.value) return;
+  metricLoading.value = true;
+  metricErr.value = null;
+  try {
+    const rows = await MetricsApi.last24h(selectedMetric.value.key, 5);
+    metricSeries.value = {
+      ts: rows.map((r: MetricBucket) => r.ts),
+      values: rows.map((r: MetricBucket) => r.avg),
+    };
+  } catch (e: unknown) {
+    metricErr.value = humanCopyForError(e, { subject: 'metrics', action: 'see' });
+    metricSeries.value = { ts: [], values: [] };
+  } finally {
+    metricLoading.value = false;
+  }
+}
+
+// iter-24: always-CPU sparkline fetch. Silent on failure — the sparkline
+// just stays hidden. The main chart handles user-facing error copy.
+async function loadCpuSparkline(): Promise<void> {
+  if (!metricsCapable.value) return;
+  try {
+    const rows = await MetricsApi.last24h('sys.cpu_pct', 5);
+    cpuSpark.value = {
+      ts: rows.map((r: MetricBucket) => r.ts),
+      values: rows.map((r: MetricBucket) => r.avg),
+    };
+  } catch {
+    cpuSpark.value = { ts: [], values: [] };
+  }
+}
+
+function pickMetric(key: string): void {
+  const found = METRIC_OPTIONS.find((m) => m.key === key);
+  if (found) {
+    selectedMetric.value = found;
+    void loadMetric();
+  }
+}
 </script>
 
 <template>
@@ -267,6 +361,29 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
             <span class="text-ink-3">Containers</span>
             <span class="font-mono text-ink">{{ containersText }}</span>
           </div>
+
+          <!-- iter-24 sparkline: last-24h CPU % under the pill row so a
+               user glancing at the pill sees whether that number is a
+               steady state or a spike. Hidden entirely until the
+               metrics sampler has recorded at least one bucket. -->
+          <div
+            v-if="metricsCapable && cpuSpark.ts.length > 0"
+            class="pt-3"
+            data-test="system-cpu-sparkline"
+          >
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-ink-4">CPU last 24h</span>
+              <span class="font-mono text-ink-3">
+                {{ cpuSparkLatest === null ? '\u2014' : cpuSparkLatest.toFixed(1) + '%' }}
+              </span>
+            </div>
+            <MetricChart
+              :series="cpuSpark"
+              label="CPU %"
+              unit="%"
+              :height="56"
+            />
+          </div>
         </div>
 
         <hr class="my-6" />
@@ -287,19 +404,21 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
           <p class="text-sm text-ink-2">Nothing has changed recently.</p>
           <p class="text-ink-4 text-xs">Container starts and stops will show up here.</p>
         </div>
-        <ul v-else class="space-y-2 text-xs font-mono">
+        <ul v-else class="space-y-2 text-xs font-mono" data-test="recent-changes-list">
           <li
             v-for="e in recentEvents"
-            :key="e.ts + (e.kind === 'docker' ? e.container : '')"
+            :key="e.ts + '|' + e.container + '|' + e.action"
             class="flex items-center gap-2"
           >
             <span class="text-ink-4">{{ new Date(e.ts).toLocaleTimeString() }}</span>
-            <span v-if="e.kind === 'docker'">
-              <span class="text-ink-2">{{ e.action }}</span>
-              <span class="text-ink ml-1">{{ e.container }}</span>
-            </span>
-            <span v-else-if="e.kind === 'job'" class="text-ink-2">job {{ e.jobId }} · {{ e.phase }}</span>
-            <span v-else class="text-ink-2">{{ e.event }}</span>
+            <span class="text-ink-2">{{ e.action }}</span>
+            <!-- B3 (iter-12): row-click drill into log tail. router-link
+                 stays inline so keyboard tab order + focus ring behave. -->
+            <router-link
+              :to="`/containers/${encodeURIComponent(e.container)}/logs`"
+              class="text-ink no-underline hover:underline"
+              data-test="recent-changes-log-link"
+            >{{ e.container }}</router-link>
           </li>
         </ul>
       </Card>
@@ -389,12 +508,42 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
            iter-dash-polish-2 P5: strip halved in height so it reads as a
            footer, not a broken chart region.
            P3 + P4: eyebrow → h3 (empty-state headline) → subtitle → body,
-           with the §4 glyph pattern. -->
+           with the §4 glyph pattern.
+           B2-followup (iter-22): scanner capability lands true; the
+           card now renders a real uPlot chart of the last 24 h. Empty
+           state preserved for the fresh-install window (0 samples) or
+           if the fetch errors. -->
       <Card class="col-span-6 p-8" data-card="metrics">
-        <div class="eyebrow mb-1">Metrics</div>
-        <h3 class="mb-1">Metrics land next release.</h3>
-        <p class="text-xs text-ink-4 mb-2">Last 24 hours</p>
+        <div class="flex items-baseline justify-between gap-4 mb-2">
+          <div>
+            <div class="eyebrow mb-1">Metrics</div>
+            <h3 v-if="!metricsCapable" class="mb-1">Metrics land next release.</h3>
+            <h3 v-else class="mb-1">{{ selectedMetric.label }}</h3>
+            <p class="text-xs text-ink-4">Last 24 hours</p>
+          </div>
+          <div v-if="metricsCapable" class="flex items-center gap-2">
+            <label for="metric-picker" class="sr-only">Metric</label>
+            <select
+              id="metric-picker"
+              class="rounded border border-line bg-surface text-ink px-2 py-1 text-sm"
+              :value="selectedMetric.key"
+              data-test="metric-picker"
+              @change="pickMetric(($event.target as HTMLSelectElement).value)"
+            >
+              <option v-for="m in METRIC_OPTIONS" :key="m.key" :value="m.key">
+                {{ m.label }}
+              </option>
+            </select>
+            <Button variant="secondary" size="sm" :disabled="metricLoading" @click="loadMetric"
+                    data-test="metric-refresh">
+              {{ metricLoading ? 'Loading…' : 'Refresh' }}
+            </Button>
+          </div>
+        </div>
+
+        <!-- Empty capability state (unchanged look, kept for downgrade path). -->
         <div
+          v-if="!metricsCapable"
           class="flex items-center justify-center gap-3 text-sm py-2"
           data-state="empty"
         >
@@ -405,6 +554,24 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
           </svg>
           <p class="text-ink-4 text-xs">Aurora will chart your box's last 24 hours here.</p>
         </div>
+
+        <div
+          v-else-if="metricErr"
+          class="text-xs text-ink-2 py-2"
+          data-state="error"
+          role="alert"
+        >
+          {{ metricErr }}
+        </div>
+
+        <MetricChart
+          v-else
+          :series="metricSeries"
+          :label="selectedMetric.label"
+          :unit="selectedMetric.unit"
+          :height="220"
+          data-test="metric-chart"
+        />
       </Card>
     </div>
 

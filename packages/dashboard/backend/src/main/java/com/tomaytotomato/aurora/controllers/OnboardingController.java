@@ -8,6 +8,7 @@ import com.tomaytotomato.aurora.services.SystemService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -52,6 +53,15 @@ public class OnboardingController {
   private final SystemService system;
   private final LaunchService launcher;
   private final StateFileService stateFiles;
+
+  /**
+   * TD5: when true, exposes {@code POST /api/onboarding/reset}. Bound from
+   * {@code aurora.e2e-mode} which reads env {@code AURORA_E2E}. Defaults
+   * to false in prod — the endpoint returns 404 so its existence stays
+   * hidden.
+   */
+  @Value("${aurora.e2e-mode:false}")
+  private boolean e2eMode;
 
   public OnboardingController(OnboardingService onboarding, SystemService system,
                               LaunchService launcher, StateFileService stateFiles) {
@@ -116,6 +126,29 @@ public class OnboardingController {
     }
     onboarding.markComplete();
     return ResponseEntity.ok(Map.of("complete", true));
+  }
+
+  /**
+   * TD5 (2026-08-02): E2E-only. Wipes admin users, onboarding.* settings,
+   * and {@code .state.yml} so a Playwright suite can start every spec
+   * from a pristine bootstrap. Gated on {@code aurora.e2e-mode}
+   * ({@code AURORA_E2E=1}); returns 404 in prod so the endpoint's
+   * existence isn't discoverable by scanning.
+   *
+   * <p>Not covered by {@code guardMidOnboarding()} — the whole point is
+   * to blow away any state, including the {@code complete=true} that
+   * would otherwise gate it. That's why the operational gate lives at
+   * the env-var level rather than in-band with the wizard flow.
+   */
+  @PostMapping("/reset")
+  public ResponseEntity<Map<String, Object>> reset() {
+    if (!e2eMode) {
+      // 404 (not 401/403) intentionally: hide the endpoint's existence
+      // from a scanner that shouldn't know it can exist at all.
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+    }
+    onboarding.reset();
+    return ResponseEntity.ok(Map.of("reset", true));
   }
 
   // --- read-only helpers ----------------------------------------------

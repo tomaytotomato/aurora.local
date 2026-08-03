@@ -79,12 +79,19 @@ public class SystemService {
     // Capability flags let the frontend gate feature fetches without
     // hard-coding a version check. See UX_SPEC_DASHBOARD §4.5.
     Map<String, Object> capabilities = new LinkedHashMap<>();
-    capabilities.put("metrics", false);
-    // iter-3 P1b: security-posture module lands with M4. Until then the
-    // capability flag stays false so the SPA renders the empty-state
-    // view instead of fabricated score/findings, and the sidebar
-    // hides the /security link.
-    capabilities.put("securityScanner", false);
+    // B2 (iter-10) shipped MetricsSamplerService + MetricsRepo + /api/
+    // metrics/last24h; iter-22 flips this capability true so the
+    // DashboardHome Metrics card consumes the endpoint instead of the
+    // 'lands next release' empty state. The card falls back to its own
+    // empty state until the sampler has recorded at least one bucket's
+    // worth of data (~30s after boot).
+    capabilities.put("metrics", true);
+    // B4 (iter-13/14): three-rule scanner ships as v0.3 groundwork
+    // (WeakAdminPassword + DockerSocketExposure + UnpinnedImageTags).
+    // Flipping the capability true means the SecurityPosture view
+    // consumes GET /api/security/findings instead of rendering the
+    // 'lands with M4' empty state, and the sidebar reveals /security.
+    capabilities.put("securityScanner", true);
     out.put("capabilities", capabilities);
     return out;
   }
@@ -125,10 +132,30 @@ public class SystemService {
     return ManagementFactory.getRuntimeMXBean().getUptime() / 1000L;
   }
 
+  /**
+   * Count of aurora-managed containers currently running.
+   *
+   * <p>Scope: matches whatever {@link DockerService#listProjectContainers()}
+   * returns — iter-1 A1 broadened that from {@code project=aurora} to
+   * {@code aurora} OR {@code aurora-*}, so the number now spans the
+   * dashboard container itself, core (caddy), and every per-package
+   * stack. Filtered here to state={@code running} so exited/dead
+   * containers don't inflate the header's "Containers N" pill.
+   *
+   * <p>Non-aurora containers on the same host (e.g. an unrelated
+   * {@code docker run nextcloud}) are intentionally excluded so the
+   * count reflects what Aurora can act on, not the raw output of
+   * {@code docker ps}.
+   */
   private Integer dockerContainerCount() {
     try {
       var xs = docker.listProjectContainers();
-      return xs == null ? null : xs.size();
+      if (xs == null) return null;
+      int running = 0;
+      for (var c : xs) {
+        if ("running".equalsIgnoreCase(c.getState())) running++;
+      }
+      return running;
     } catch (Exception e) {
       log.debug("dockerContainerCount failed: {}", e.getMessage());
       return null;

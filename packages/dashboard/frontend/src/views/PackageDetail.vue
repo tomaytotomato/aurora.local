@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
+import { ContainersApi, type ContainerInfo } from '@/api/containers';
+import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Tabs from '@/components/ui/Tabs.vue';
@@ -16,11 +18,60 @@ const activeTab = ref<'overview' | 'config' | 'logs' | 'related'>('overview');
 const name = computed(() => route.params.name as string);
 const detail = computed(() => packages.byName[name.value]);
 
+// B3-followup (iter-16): Logs tab lists containers scoped to this package
+// so the operator picks the right service (media stack = 7 containers).
+// Each row links into /containers/:id/logs (B3, iter-11+12). Lazy loading:
+// only fetch when the tab becomes active so the overview render isn't
+// gated on a docker roundtrip.
+const containers = ref<ContainerInfo[]>([]);
+const containersLoaded = ref(false);
+const containersErr = ref<string | null>(null);
+const containersLoading = ref(false);
+
+async function loadContainers(): Promise<void> {
+  if (containersLoading.value) return;
+  containersLoading.value = true;
+  containersErr.value = null;
+  try {
+    containers.value = await ContainersApi.list(name.value);
+    containersLoaded.value = true;
+  } catch (e: unknown) {
+    containersErr.value = humanCopyForError(e, {
+      subject: "this package's containers",
+      action: 'list',
+    });
+  } finally {
+    containersLoading.value = false;
+  }
+}
+
+watch(activeTab, (t) => {
+  if (t === 'logs' && !containersLoaded.value && !containersLoading.value) {
+    void loadContainers();
+  }
+});
+
+watch(name, () => {
+  // Package change while sitting on the Logs tab — reset + refetch.
+  containers.value = [];
+  containersLoaded.value = false;
+  if (activeTab.value === 'logs') void loadContainers();
+});
+
+function cleanName(names: string[] | undefined): string {
+  if (!names || names.length === 0) return '';
+  const n = names[0];
+  return n.startsWith('/') ? n.slice(1) : n;
+}
+
 onMounted(async () => {
   try {
     await packages.fetchOne(name.value);
   } catch (e) {
-    err.value = e instanceof Error ? e.message : 'Failed to load package';
+    err.value = humanCopyForError(e, {
+      subject: 'this package',
+      action: 'load',
+    });
   }
 });
 </script>
@@ -73,7 +124,57 @@ onMounted(async () => {
       </div>
 
       <div v-else-if="activeTab === 'logs'">
-        <Alert tone="info">Log tail lands with M3.</Alert>
+        <!--
+          B3-followup (iter-16): honest per-package containers list.
+          The old 'lands with M3' Alert stayed too long — M3 shipped B1
+          + B2 + B3 already, so this promise is due.
+        -->
+        <div v-if="containersErr" data-state="error" role="alert" class="space-y-3">
+          <Alert tone="err">{{ containersErr }}</Alert>
+          <button
+            type="button"
+            class="text-sm text-ink-2 underline"
+            @click="loadContainers"
+          >Try again</button>
+        </div>
+        <div
+          v-else-if="!containersLoaded && (containersLoading || !detail)"
+          data-state="empty"
+          class="text-sm text-ink-4"
+        >Loading…</div>
+        <Card
+          v-else-if="containers.length === 0"
+          data-state="empty"
+          class="p-8 text-center"
+          data-test="package-logs-empty"
+        >
+          <p class="text-sm text-ink-2 mb-1">No containers for this package.</p>
+          <p class="text-xs text-ink-4">
+            Aurora only sees containers labelled with the compose project
+            <span class="font-mono">aurora-{{ name }}</span>. Start the
+            package first, then come back here.
+          </p>
+        </Card>
+        <ul v-else class="space-y-2" data-test="package-logs-list">
+          <li
+            v-for="c in containers"
+            :key="c.id"
+            class="flex items-center justify-between gap-3 border border-line rounded-md px-4 py-3"
+          >
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-sm truncate">{{ cleanName(c.names) }}</span>
+                <Badge :tone="c.state === 'running' ? 'ok' : 'neutral'">{{ c.state }}</Badge>
+              </div>
+              <div class="text-xs text-ink-4 mt-0.5 truncate">{{ c.image }}</div>
+            </div>
+            <router-link
+              :to="`/containers/${encodeURIComponent(cleanName(c.names))}/logs`"
+              class="text-sm text-ink-2 no-underline hover:underline whitespace-nowrap"
+              data-test="package-logs-link"
+            >View logs →</router-link>
+          </li>
+        </ul>
       </div>
 
       <div v-else>

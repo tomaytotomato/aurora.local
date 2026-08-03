@@ -23,6 +23,9 @@ requires:
   min_ram_mb: 1024
   min_disk_gb: 5
   host_roles: []
+  # A8 (iter-7): code-server + supporting services. Extension warm-up
+  # dominates first boot; 60s covers warm relaunch.
+  start_budget_seconds: 60
 
 required_env:
   - CODE_SERVER_PASSWORD

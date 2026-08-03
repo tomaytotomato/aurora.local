@@ -343,6 +343,41 @@ class StatusProbeServiceTests {
     assertTrue(r.state.equals("running") || r.state.equals("failed"));
   }
 
+  // --- Notes / silverbullet (A1: fixed manifest.container drift) --
+
+  @Test
+  void notes_containerNameIsSilverbullet_notPackageName() {
+    // packages/notes/manifest.yml declares probe.container=silverbullet
+    // because the compose service name isn't `notes`. Without that
+    // manifest key, StatusProbeService defaulted container to the
+    // package name and reported not-started while PackagesCard
+    // (label-scan) reported running. This asserts the wire uses the
+    // configured container name and finds the running silverbullet
+    // container.
+    Mockito.when(packages.readProbe("notes")).thenReturn(Map.of(
+        "kind", "docker",
+        "container", "silverbullet",
+        "external_url", "http://notes.{domain}/"));
+    Mockito.when(docker.findByName("silverbullet"))
+        .thenReturn(Optional.of(containerRunning("silverbullet")));
+
+    var r = svc().probe("notes");
+    assertEquals("running", r.state);
+    assertEquals("silverbullet", r.container);
+    assertEquals("http://notes.aurora.local/", r.openUrl);
+  }
+
+  @Test
+  void notes_silverbulletMissing_returnsNotStarted() {
+    Mockito.when(packages.readProbe("notes")).thenReturn(Map.of(
+        "kind", "docker",
+        "container", "silverbullet",
+        "external_url", "http://notes.{domain}/"));
+    Mockito.when(docker.findByName("silverbullet")).thenReturn(Optional.empty());
+
+    assertEquals("not-started", svc().probe("notes").state);
+  }
+
   // --- Priority sort --------------------------------------------------
 
   @Test
