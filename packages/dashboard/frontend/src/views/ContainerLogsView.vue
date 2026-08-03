@@ -18,7 +18,7 @@ import { ContainersApi, type ContainerLogLine } from '@/api/containers';
 import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
-import { Alert, AlertDescription } from '@/components/ui';
+import { Alert, AlertDescription, Skeleton } from '@/components/ui';
 import Badge from '@/components/ui/Badge.vue';
 
 interface RouteError {
@@ -134,10 +134,14 @@ function formatTs(ts: string | undefined): string {
 
       <div
         v-else-if="!err && loading && lines.length === 0"
-        class="p-8 text-center"
-        data-state="empty"
+        class="p-8 space-y-2"
+        data-state="loading"
+        data-test="container-logs-skeleton"
       >
-        <p class="text-sm text-foreground">Loading…</p>
+        <Skeleton class="h-3 w-3/4" />
+        <Skeleton class="h-3 w-2/3" />
+        <Skeleton class="h-3 w-5/6" />
+        <Skeleton class="h-3 w-1/2" />
       </div>
 
       <pre

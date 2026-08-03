@@ -7,7 +7,7 @@ import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Tabs from '@/components/ui/Tabs.vue';
-import { Alert, AlertDescription } from '@/components/ui';
+import { Alert, AlertDescription, Skeleton } from '@/components/ui';
 
 const route = useRoute();
 const packages = usePackagesStore();
@@ -103,7 +103,18 @@ onMounted(async () => {
       ]"
     >
       <div v-if="activeTab === 'overview'">
-        <div v-if="!detail" class="text-sm text-muted-foreground">Loading…</div>
+        <div v-if="!detail" class="grid grid-cols-2 gap-4" data-state="loading" data-test="package-overview-skeleton">
+          <Card>
+            <Skeleton class="h-3 w-16 mb-2" />
+            <Skeleton class="h-5 w-24 mb-3" />
+            <Skeleton class="h-8 w-40" />
+          </Card>
+          <Card>
+            <Skeleton class="h-3 w-16 mb-2" />
+            <Skeleton class="h-5 w-24 mb-3" />
+            <Skeleton class="h-4 w-48" />
+          </Card>
+        </div>
         <div v-else class="grid grid-cols-2 gap-4">
           <Card>
             <div class="eyebrow mb-1">Runtime</div>
@@ -145,9 +156,14 @@ onMounted(async () => {
         </div>
         <div
           v-else-if="!containersLoaded && (containersLoading || !detail)"
-          data-state="empty"
-          class="text-sm text-muted-foreground"
-        >Loading…</div>
+          data-state="loading"
+          data-test="package-logs-skeleton"
+          class="space-y-2"
+        >
+          <Skeleton class="h-14 w-full" />
+          <Skeleton class="h-14 w-full" />
+          <Skeleton class="h-14 w-2/3" />
+        </div>
         <Card
           v-else-if="containers.length === 0"
           data-state="empty"

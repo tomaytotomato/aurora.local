@@ -320,3 +320,20 @@
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 11 files / 99 tests. vue-tsc clean. Dockerfile clean.
 
 **Milestone.** **C1–C9 complete.** Every hand-rolled Aurora `--color-*` token that shadcn has an equivalent for has been retired; every caller flows through shadcn semantic tokens; only brand-amber survives (deliberately). Next iter starts C10 bonus primitives.
+
+### iter-14 (2026-08-03) — C10 shadcn Skeleton (bonus)
+
+**Item:** C10.1 — introduce Skeleton primitive + migrate two visible "Loading…" text nodes to skeleton placeholders.
+
+**Primitive.** `src/components/ui/Skeleton.vue` — a `<div class="animate-pulse rounded-md bg-muted">` with a `class` merge slot for width/height/radius overrides. `aria-hidden="true"` so assistive tech doesn't announce placeholders as empty content while data loads. `data-slot="skeleton"` for future scoped styles. Ships alongside a 4-test smoke spec: default tokens, aria-hidden, data-slot, class merge.
+
+**Migrations.**
+1. **PackageDetail overview panel** — swapped `<div v-if="!detail" class="text-sm text-muted-foreground">Loading…</div>` for a two-Card skeleton grid that mirrors the eventual Runtime/Network layout (eyebrow + h3 + value stubs). Data-test hook `package-overview-skeleton` for future e2e.
+2. **PackageDetail logs panel** — replaced the loading state with three stacked `<Skeleton class="h-14 w-full">` bars, mirroring the future container-row list. Data-test `package-logs-skeleton`.
+3. **ContainerLogsView tail-loading** — swapped the centered "Loading…" paragraph for four stacked short skeletons (`h-3 w-3/4`, `w-2/3`, `w-5/6`, `w-1/2`) that read as a log preamble. Data-test `container-logs-skeleton`.
+
+**Kept "Loading…" copy** in two Button-inline uses (SettingsView audit-log refresh, DashboardHome metric refresh) — those are button labels during action-in-flight, not a page skeleton. Behaviour identical to shadcn's convention.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 12 files / 103 tests (99 → 103, +4). vue-tsc clean. Dockerfile clean.
+
+**Next.** C10.2 — Dialog (replace OnboardingAdmin inline recovery-codes modal + wire the "Dismiss permanently?" confirm from the C-spec).
