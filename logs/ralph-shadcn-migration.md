@@ -416,3 +416,40 @@ Also swapped the raw filter `<input>` for the Aurora `<Input>` primitive (`class
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 15 files / 128 tests (120 → 128, +8). vue-tsc clean. Dockerfile clean.
 
 **Next.** C10.5 — Toast/Sonner. Bigger scope: needs a toast provider mounted at App level + an axios interceptor to route silent 4xx/5xx into a user-visible toast. Will need one iter for provider + primitive and probably a second for the axios hook.
+
+### iter-18 (2026-08-03) — C10 shadcn Toast + Toaster + useToast (bonus)
+
+**Item:** C10.5 — introduce the toast infrastructure (composable + presentation primitive + container) and migrate one silent-inline caller (OnboardingAdmin copy-password) to demonstrate the pattern.
+
+**Composable — `src/composables/useToast.ts`.** Sonner-inspired, self-contained (no dep). Module-scoped reactive queue so `toast()` fires from anywhere (view, composable, future axios interceptor) without prop-drilling.
+
+Public API:
+- `toast({ title?, description, variant?, duration?, actionLabel?, onAction? }) → id`
+- `dismiss(id)` — remove one, cancels timer.
+- `dismissAll()` — clear queue. **Bug caught in tests:** initial version iterated `for (const t of store.queue)` and called dismiss inline; splice() while iterating skipped every other entry (classic mutation-during-iteration). Fixed by snapshotting ids first.
+- `useToastQueue()` → readonly view for the Toaster + tests.
+
+Auto-dismiss: default 5000 ms, per-toast override, `duration <= 0` disables (sticky).
+
+**Primitive — `src/components/ui/Toast.vue`.**
+- Variants mapped onto Alert's shadcn status-token pattern: `default → bg-card`, `success → bg-success/10 + border-success/40 + text-success`, `warning → …warning…`, `destructive → …destructive…`. Same visual family as banner alerts.
+- `role="status"` + `aria-live="polite"` — announced to screen readers without stealing focus.
+- Built-in dismiss X button (top-right) + optional `actionLabel` button (Undo-style).
+- Entry animation: `animate-in fade-in-0 slide-in-from-bottom-2 duration-150`.
+- `data-slot` markers on the card + dismiss + action for scoped styles / e2e targeting.
+
+**Container — `src/components/ui/Toaster.vue`.** Mounted once in `App.vue`. Teleports to `<body>`, renders bottom-right stack (newest at bottom). `role="region"` + `aria-label="Notifications"`. Pointer-events:none on the container, toasts opt back in — so an empty toaster never intercepts clicks.
+
+**Migration.** `OnboardingAdmin.vue` copy-password flow. Kept the inline `copyFailed` fallback message (accessibility + discoverability if the toast is dismissed) but added toasts on both branches:
+- success → `toast({ description: 'Admin password copied to clipboard.', variant: 'success', duration: 3000 })`
+- failure → `toast({ title: "Couldn't copy automatically", description: 'Select the password and copy manually …', variant: 'destructive', duration: 8000 })`
+
+The success toast is the important one — the old UX flipped a button label from "Copy" → "Copied" for 2s, which a keyboard/screen-reader user could easily miss.
+
+**Barrel-exports** `Toast` + `Toaster` from `src/components/ui/index.ts`. `App.vue` mounts `<Toaster />` beside `<router-view />` so notifications survive route changes.
+
+**Tests.** `Toast.spec.ts` — 14 tests split into 3 blocks: Toast presentation (variant tokens, aria-live, action/dismiss buttons), useToast queue (enqueue with defaults, options round-trip, auto-dismiss via fake timers, sticky mode, dismiss(id), dismissAll — with mutation-during-iteration bug caught here), Toaster container (renders one Toast per entry, dismiss click removes).
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 16 files / 142 tests (128 → 142, +14). vue-tsc clean. Dockerfile clean.
+
+**Next.** C10.6 — wire the axios interceptor in `src/api/client.ts` to route non-401 background failures (network drops, 5xx from polling endpoints) into destructive toasts. That's the "silent axios failures" gap the C-spec called out. Deferred to its own commit because it's a behavior change on every currently-silent request.

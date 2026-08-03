@@ -9,6 +9,7 @@ import Label from '@/components/ui/Label.vue';
 import { Alert, AlertDescription, Dialog } from '@/components/ui';
 import Checkbox from '@/components/ui/Checkbox.vue';
 import { generatePassword, copyToClipboard } from '@/lib/utils';
+import { toast } from '@/composables/useToast';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -47,7 +48,15 @@ async function copy(): Promise<void> {
   copied.value = ok;
   copyFailed.value = !ok;
   if (ok) {
+    toast({ description: 'Admin password copied to clipboard.', variant: 'success', duration: 3000 });
     setTimeout(() => { copied.value = false; }, 2000);
+  } else {
+    toast({
+      title: "Couldn't copy automatically",
+      description: 'Select the password and copy manually (Ctrl+C or ⌘C).',
+      variant: 'destructive',
+      duration: 8000,
+    });
   }
 }
 
