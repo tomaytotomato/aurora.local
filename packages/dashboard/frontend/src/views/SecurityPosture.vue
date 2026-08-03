@@ -28,6 +28,9 @@ const system = useSystemStore();
 const findings = ref<SecurityFinding[]>([]);
 const loading = ref(false);
 const err = ref<string | null>(null);
+// B4-followup (iter-23): track per-row 'dismissing' state so the button
+// disables while the POST is in flight and doesn't spam the backend.
+const dismissing = ref<Record<string, boolean>>({});
 
 const scannerLive = computed<boolean>(() =>
   system.info?.capabilities?.securityScanner === true,
@@ -48,6 +51,31 @@ async function fetchFindings(): Promise<void> {
     findings.value = [];
   } finally {
     loading.value = false;
+  }
+}
+
+/**
+ * B4-followup (iter-23): dismiss + optimistic remove. On success the
+ * row leaves the list; on failure we surface a short error banner + roll
+ * back the optimistic update via a re-fetch.
+ */
+async function onDismiss(id: string, days: number = 7): Promise<void> {
+  if (dismissing.value[id]) return;
+  dismissing.value = { ...dismissing.value, [id]: true };
+  const prev = findings.value;
+  findings.value = findings.value.filter((f) => f.id !== id);
+  try {
+    await SecurityApi.dismiss(id, days);
+  } catch (e: unknown) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    err.value = status === 401 || status === 403
+      ? "Session expired — sign in again to dismiss findings."
+      : "Aurora couldn't dismiss that finding just now.";
+    findings.value = prev;
+  } finally {
+    const next = { ...dismissing.value };
+    delete next[id];
+    dismissing.value = next;
   }
 }
 
@@ -174,20 +202,31 @@ const counts = computed(() => {
             <Badge :tone="toneFor(f.severity)" class="uppercase">{{ f.severity }}</Badge>
             <h3 class="text-base font-medium">{{ f.title }}</h3>
           </div>
-          <template v-if="f.remediationUrl">
-            <router-link
-              v-if="isInternalHref(f.remediationUrl)"
-              :to="f.remediationUrl"
-              class="text-sm text-ink-2 no-underline hover:underline whitespace-nowrap"
-            >Fix it →</router-link>
-            <a
-              v-else
-              :href="f.remediationUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-sm text-ink-2 no-underline hover:underline whitespace-nowrap"
-            >Learn more ↗</a>
-          </template>
+          <div class="flex items-center gap-3 whitespace-nowrap">
+            <template v-if="f.remediationUrl">
+              <router-link
+                v-if="isInternalHref(f.remediationUrl)"
+                :to="f.remediationUrl"
+                class="text-sm text-ink-2 no-underline hover:underline"
+              >Fix it →</router-link>
+              <a
+                v-else
+                :href="f.remediationUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-sm text-ink-2 no-underline hover:underline"
+              >Learn more ↗</a>
+            </template>
+            <button
+              type="button"
+              class="text-sm text-ink-3 hover:text-ink-2 disabled:text-ink-4 disabled:cursor-not-allowed"
+              :disabled="!!dismissing[f.id]"
+              data-test="sec-dismiss"
+              @click="onDismiss(f.id, 7)"
+            >
+              {{ dismissing[f.id] ? 'Dismissing…' : 'Dismiss 7d' }}
+            </button>
+          </div>
         </div>
         <p class="text-sm text-ink-3">{{ f.description }}</p>
       </Card>

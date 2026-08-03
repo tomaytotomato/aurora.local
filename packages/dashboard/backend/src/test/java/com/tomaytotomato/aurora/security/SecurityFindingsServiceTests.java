@@ -24,10 +24,14 @@ class SecurityFindingsServiceTests {
     return r;
   }
 
+  private static SecurityFindingsService svc(List<SecurityRule> rules) {
+    return new SecurityFindingsService(rules, null);
+  }
+
   @Test
   void empty_rule_list_yields_empty_findings() {
-    assertEquals(List.of(), new SecurityFindingsService(List.of()).allFindings());
-    assertEquals(List.of(), new SecurityFindingsService(null).allFindings());
+    assertEquals(List.of(), svc(List.of()).allFindings());
+    assertEquals(List.of(), svc(null).allFindings());
   }
 
   @Test
@@ -37,8 +41,8 @@ class SecurityFindingsServiceTests {
     var b = rule("r_b", List.of(
         new SecurityFinding("r_b:1", SecurityFinding.HIGH, "t2", "d2", null),
         new SecurityFinding("r_b:2", SecurityFinding.MEDIUM, "t3", "d3", null)));
-    var svc = new SecurityFindingsService(List.of(a, b));
-    var got = svc.allFindings();
+    var s = svc(List.of(a, b));
+    var got = s.allFindings();
     assertEquals(3, got.size());
   }
 
@@ -50,7 +54,7 @@ class SecurityFindingsServiceTests {
     var b = rule("r_b", List.of(
         new SecurityFinding("r_b:1", SecurityFinding.HIGH, "t3", "d3", null),
         new SecurityFinding("r_b:2", SecurityFinding.MEDIUM, "t4", "d4", null)));
-    var got = new SecurityFindingsService(List.of(a, b)).allFindings();
+    var got = svc(List.of(a, b)).allFindings();
     // HIGHs first, id-sorted; then MEDIUMs; then LOWs.
     assertEquals("r_a:2", got.get(0).id());
     assertEquals("r_b:1", got.get(1).id());
@@ -63,8 +67,8 @@ class SecurityFindingsServiceTests {
     var good = rule("r_good", List.of(
         new SecurityFinding("r_good:1", SecurityFinding.LOW, "t", "d", null)));
     var bad = throwingRule("r_bad");
-    var svc = new SecurityFindingsService(List.of(bad, good));
-    var got = svc.allFindings();
+    var s = svc(List.of(bad, good));
+    var got = s.allFindings();
     // Only the good rule contributes.
     assertEquals(1, got.size());
     assertEquals("r_good:1", got.get(0).id());
@@ -73,7 +77,45 @@ class SecurityFindingsServiceTests {
   @Test
   void rule_returning_null_is_tolerated() {
     var nully = rule("r_null", null);
-    var svc = new SecurityFindingsService(List.of(nully));
-    assertEquals(List.of(), svc.allFindings());
+    var s = svc(List.of(nully));
+    assertEquals(List.of(), s.allFindings());
+  }
+
+  // -- Dismissal filter (iter-23) --------------------------------------
+
+  @Test
+  void active_dismissals_hide_matching_findings_by_default() {
+    var r = rule("r_a", List.of(
+        new SecurityFinding("r_a:1", SecurityFinding.HIGH, "keep", "d", null),
+        new SecurityFinding("r_a:2", SecurityFinding.MEDIUM, "drop", "d", null)));
+    var dismissals = Mockito.mock(com.tomaytotomato.aurora.persistence.SecurityDismissalRepo.class);
+    Mockito.when(dismissals.activeDismissals(Mockito.any())).thenReturn(java.util.Set.of("r_a:2"));
+    var s = new SecurityFindingsService(List.of(r), dismissals);
+    var got = s.allFindings();
+    assertEquals(1, got.size());
+    assertEquals("r_a:1", got.get(0).id());
+  }
+
+  @Test
+  void includeDismissed_true_surfaces_dismissed_findings() {
+    var r = rule("r_a", List.of(
+        new SecurityFinding("r_a:1", SecurityFinding.HIGH, "a", "d", null),
+        new SecurityFinding("r_a:2", SecurityFinding.MEDIUM, "b", "d", null)));
+    var dismissals = Mockito.mock(com.tomaytotomato.aurora.persistence.SecurityDismissalRepo.class);
+    Mockito.when(dismissals.activeDismissals(Mockito.any())).thenReturn(java.util.Set.of("r_a:2"));
+    var s = new SecurityFindingsService(List.of(r), dismissals);
+    var got = s.allFindings(true);
+    assertEquals(2, got.size());
+    // Never calls the repo when includeDismissed=true.
+    Mockito.verify(dismissals, Mockito.never()).activeDismissals(Mockito.any());
+  }
+
+  @Test
+  void null_dismissal_repo_falls_back_to_no_filter() {
+    var r = rule("r_a", List.of(
+        new SecurityFinding("r_a:1", SecurityFinding.HIGH, "a", "d", null)));
+    var s = new SecurityFindingsService(List.of(r), null);
+    assertEquals(1, s.allFindings().size());
+    assertEquals(1, s.allFindings(true).size());
   }
 }
