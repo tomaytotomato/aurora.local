@@ -1483,3 +1483,39 @@ audit attribution or a small Vitest bootstrap.
 Iter-29: propagate `CurrentUserService` into `OnboardingService.audit.record`
 calls so onboarding.* actions carry the acting admin id (currently null
 even after login). Similar shape to iter-28; ~30 lines.
+
+## Iter 29 · 2026-08-03 10:08 · commit e921976
+**LaunchService audit attribution.**
+
+### What shipped
+- `LaunchService` grows a 4-arg `@Autowired` constructor taking
+  `CurrentUserService`; 2/3-arg delegating ctors preserved for
+  test suites (no changes needed to existing LaunchService tests).
+- Null-safe `currentUserId()` helper: null when service unwired,
+  Optional.empty → null, exceptions swallowed to null.
+- `startLaunch()` + `finish()` audit records now attribute the acting
+  admin id when a session exists.
+- **+5 tests** (new `LaunchServiceAuditAttributionTests`): authenticated,
+  no-service, unauthenticated, throwing service, null-helper.
+- Baselines refreshed 327 → 332.
+
+### Verification
+- Touched suite: 5/5 new tests green.
+- Full backend: **332 tests, 0 failures, 0 errors**.
+- `vue-tsc --noEmit` → exit 0.
+- `bash scripts/verify-v03-overnight.sh` → 4/4 with new floor.
+
+### Files touched
+- `backend/…/services/LaunchService.java` (+40 -6)
+- `backend/…/test/…/services/LaunchServiceAuditAttributionTests.java` (+130, new)
+- `logs/ralph-overnight-v02.md`, `scripts/verify-v03-overnight.sh` (~5 lines)
+
+### Deferred (accepted)
+- GET /api/audit/events discovery endpoint + FE viewer.
+- OnboardingService session-aware audit calls (edge case only).
+
+### Next iteration target
+Iter-30: **GET /api/audit/events** — read endpoint with filter
+by action/actor/date range so a settings-side viewer can render.
+Table exists (V1__init.sql); repo already has a partial API surface
+via AuditEventRepo. Backend-only iter.
