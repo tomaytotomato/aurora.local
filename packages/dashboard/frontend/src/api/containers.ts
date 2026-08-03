@@ -28,6 +28,16 @@ export interface ContainerEventItem {
   image?: string;
 }
 
+export interface ContainerInfo {
+  id: string;
+  names: string[];
+  image: string;
+  state: string;
+  status: string;
+  service: string;
+  labels: Record<string, string>;
+}
+
 export interface ContainerLogLine {
   /** RFC3339 timestamp docker prefixed the line with; may be absent. */
   ts?: string;
@@ -49,6 +59,20 @@ export const ContainersApi = {
   /** Poll fallback / initial snapshot. Oldest first. */
   async recentEvents(): Promise<ContainerEventItem[]> {
     const { data } = await http.get<ContainerEventItem[]>('/containers/events');
+    return data;
+  },
+
+  /**
+   * B3-followup (iter-16): list containers, optionally filtered to a
+   * package. Backend maps {@code package=core} to the historical shared
+   * "aurora" compose project and everything else to {@code aurora-<name>}.
+   * Returns [] when the filter matches nothing (fresh install / package
+   * not yet launched); the frontend renders the empty-state copy.
+   */
+  async list(pkg?: string): Promise<ContainerInfo[]> {
+    const { data } = await http.get<ContainerInfo[]>('/containers', {
+      params: pkg ? { package: pkg } : {},
+    });
     return data;
   },
 

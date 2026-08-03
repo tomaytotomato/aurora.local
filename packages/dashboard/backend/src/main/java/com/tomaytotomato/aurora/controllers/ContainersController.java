@@ -35,10 +35,36 @@ public class ContainersController {
     this.events = events;
   }
 
+  private static final Pattern PACKAGE_NAME_SHAPE =
+      Pattern.compile("^[a-z][a-z0-9-]{0,31}$");
+
   @GetMapping
-  public List<Map<String, Object>> list() {
+  public List<Map<String, Object>> list(
+      @RequestParam(name = "package", required = false) String pkg
+  ) {
+    if (pkg != null && !PACKAGE_NAME_SHAPE.matcher(pkg).matches()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "package name is malformed");
+    }
+    // B3-followup (iter-16): when "package=<name>" is supplied, filter
+    // to containers whose compose project label is exactly
+    // "aurora-<name>". Aurora launches each package's stack under its
+    // per-package project name, so this label-equality check gives us a
+    // stable service-→-container listing without parsing compose files.
+    // The historical shared "aurora" project holds aurora itself + a
+    // handful of pre-per-package leftovers (caddy, silverbullet); those
+    // are surfaced under package=core if the caller asks for it, because
+    // packages/core/compose.yml top-level name is exactly "aurora".
+    String targetProject = pkg == null ? null
+        : ("core".equals(pkg) ? "aurora" : "aurora-" + pkg);
+
     List<Map<String, Object>> out = new ArrayList<>();
     for (Container c : docker.listProjectContainers()) {
+      if (targetProject != null) {
+        Map<String, String> labels = c.getLabels();
+        String project = labels == null ? null : labels.get("com.docker.compose.project");
+        if (!targetProject.equals(project)) continue;
+      }
       out.add(Map.of(
           "id", c.getId(),
           "names", c.getNames() == null ? new String[0] : c.getNames(),
