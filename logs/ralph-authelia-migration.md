@@ -588,3 +588,35 @@ Full mount tests covering click flows Phase C primitive-level tests can't reach:
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 479 tests (476 → 479, +3). Vitest 21 files / 183 tests (20/177 → 21/183, +6). vue-tsc clean. Dockerfile clean.
 
 **Next.** D16 — docs. `packages/identity/README.md` rewritten for the "Aurora is source of truth for users" story; `docs/DASHBOARD_BRIEF.md` §7 rewrite for SSO instead of per-service basic-auth.
+
+### iter-17-18 (2026-08-03) — D16 docs
+
+**Item:** D16 — docs pass. Two files rewritten to reflect the Phase D shape.
+
+**`packages/identity/README.md` — from example-yaml walkthrough to Aurora-managed contract.**
+Old README was written for a hand-edited `users_database.yml` + hand-generated argon2id hashes. That workflow is dead: Aurora projects users on every `UserChangedEvent` + drift-guards every 5m, and both paths overwrite hand edits. New README:
+
+- Opening banner: "this package's `users_database.yml` is a projection of Aurora's SQLite users table, not a file you hand-edit."
+- Path A (Aurora wizard, step 5 of 10) — the recommended install flow. Documents what a single tick does end-to-end: secrets bootstrap, `sso.disable_env` neutralise, snippet render.
+- Path B (enabling identity on an existing box) — `POST /api/onboarding/sso`.
+- Roles + group cascade table (`admin → admins/users/guests`, etc.) with pointer to `AutheliaService.groupsFor()`.
+- Manifest `sso:` block spec — `protect / min_role / trusted_headers / disable_env`.
+- Session boundary section — why Aurora logout bounces through Authelia (D13).
+- Secrets rotation section — `IdentitySecretsService` + audit row.
+- Emergency access section — Grafana/Paperless/Forgejo per-package admin fallback when Authelia is down.
+- Full Phase D audit-trail table (10 actions × emitter columns).
+- Threat model / non-goals — file-backed hashes, no LDAP/SAML/OIDC yet, no SMS, Aurora-backend-compromise = users_database.yml compromise.
+- References — Java-side truth pointers (AutheliaService, IdentitySecretsService, CaddySnippetService, UsersController).
+
+**`docs/DASHBOARD_BRIEF.md` §7 + §8 rewrite for SSO.**
+Old §7 was the pre-D API endpoint list; §8 was "Aurora's own security posture" only. New shape:
+
+- §7 endpoint table gains `GET/POST/PUT/DELETE /api/users`, `POST /api/onboarding/sso`, `GET/POST /api/mdns/aliases`. Notes on `/api/auth/logout` returning `{next}` (D13). Explicit "user-management endpoints require role == admin, guard unit-tested at the controller level".
+- §8 split into §8.1 (Aurora's own auth) + §8.2 (SSO across the box).
+- §8.1 gains the BCrypt cost 12 + argon2id-deferred note (Phase D used bcrypt to match Authelia after argon2-jvm's JNA SIGSEGV under musl).
+- §8.2 (new) covers: roles, cascading group membership, propagation via `UserChangedEvent`, session boundary (Aurora ↔ Authelia cookie scopes + logout redirect), trusted-header hardening (strip `Remote-*` before forward-auth), endpoint role guard, emergency access.
+- §5 Domain model table gains `Role` + `SsoBlock` rows.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green (unchanged — docs-only commit). Backend 479 tests, vitest 21 files / 183 tests, vue-tsc clean, docker check clean.
+
+**Phase D checklist status.** All 16 items D0-D16 shipped. Migration log complete. Ralph loop signing off.

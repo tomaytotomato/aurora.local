@@ -308,7 +308,9 @@ patch release. Do not pin transitively — let the BOMs manage it
 | `MetricSample`   | `(ts, name, value)` — cpu, mem, disk, net. Retention 7d.                                  |
 | `SecurityFinding`| Static rule output: severity, category, message, remediation link.                        |
 | `AuditEvent`     | Every admin action: userId, action, target, timestamp, diff. Never deleted.               |
-| `AdminUser`      | Single row (v1). Username, password hash (argon2id), WebAuthn credentials list, TZ.       |
+| `AdminUser`      | Aurora user + role (`admin | user | guest`, D1). Username, bcrypt hash, TZ. Projected into Authelia's users_database.yml (D2). |
+| `Role`           | Phase D RBAC tier. `ADMIN` > `USER` > `GUEST`. Enforced by DB triggers on the `admin_user.role` column. Maps to Authelia groups via `AutheliaService.groupsFor()`. |
+| `SsoBlock`       | Manifest `sso:` block. Fields: `protect`, `min_role`, `trusted_headers`, `disable_env`. Drives Caddy snippet rendering + Authelia access-control (D5, D6). |
 | `Session`        | Spring Security session; JDBC-backed for restart-survival.                                |
 | `BackupRun`      | If backup.sh is on cron: parsed from `~/backups/aurora.local/` timestamps + sizes.          |
 
@@ -412,13 +414,19 @@ schedule (via a systemd timer we install).
 Everything is JSON except `/api/events` (SSE) and file downloads.
 
 ```
-GET    /api/auth/session                           current admin session
+GET    /api/auth/session                           current admin session (includes `role`)
 POST   /api/auth/login                             password login
 POST   /api/auth/webauthn/registration/options
 POST   /api/auth/webauthn/registration/verify
 POST   /api/auth/webauthn/authentication/options
 POST   /api/auth/webauthn/authentication/verify
-POST   /api/auth/logout
+POST   /api/auth/logout                            responds `{next}` = Authelia logout URL when SSO is on (D13)
+
+GET    /api/users                                  list (admin-role only) (D8)
+GET    /api/users/{id}                             one user (admin-role only)
+POST   /api/users                                  create (admin-role only); 409 on username collision
+PUT    /api/users/{id}                             role and/or password (admin-role only); 422 on last-admin demote
+DELETE /api/users/{id}                             delete (admin-role only); 422 on last-admin delete
 
 GET    /api/packages                               all available packages (from manifests)
 GET    /api/packages/{name}                        package detail
@@ -439,6 +447,11 @@ GET    /api/security                               findings list + score
 POST   /api/security/rescan                        re-run checks now
 POST   /api/security/rotate/{pkg}                  wrap rotate-secrets.sh --apply
 
+GET    /api/mdns/aliases                           LAN alias status (D11 of v0.3, unrelated to SSO)
+POST   /api/mdns/reconcile                         force republish
+
+POST   /api/onboarding/sso                         enable/disable Authelia SSO during wizard (D10); body `{enable: bool}`
+
 GET    /api/backups                                list of backup artefacts
 POST   /api/backups                                run backup.sh now
 POST   /api/backups/schedule                       install systemd timer
@@ -451,15 +464,23 @@ GET    /api/audit                                  paginated audit log
 - Every mutating endpoint writes an `AuditEvent` row.
 - Every long-running action returns a job id + streams progress to
   `/api/events` under a `job.{id}` topic.
+- **User-management endpoints (`/api/users/*`) additionally require `role == admin` on the caller's session.** The guard is unit-tested at the controller level, not just wired via Spring Security config. See `UsersController.requireAdmin`.
 
 ---
 
 ## 8. Security posture (for the dashboard itself)
 
-Non-negotiable defaults:
+### 8.1 Aurora's own auth
+
+Non-negotiable defaults for the Aurora dashboard:
 
 - Default admin password is **not shipped**. First-run wizard forces
   creation.
+- BCrypt cost 12 for password hashing (D8). Argon2id was in the
+  original brief but argon2-jvm's JNA-loaded shared object SIGSEGVs
+  under musl/Alpine; a pure-Java pivot is queued for a later phase.
+  **Authelia's hash-algorithm config matches** so cross-side
+  verification works out of the box.
 - WebAuthn passkey is the recommended primary auth. Password remains
   as fallback. **No SMS, no email-based 2FA.**
 - Session cookies: `HttpOnly`, `SameSite=Lax`, `Secure` when behind
@@ -476,6 +497,64 @@ Non-negotiable defaults:
 - CSP: `default-src 'self'; script-src 'self'; style-src 'self'
   'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'`.
 - SBOM emitted at build time (CycloneDX Maven plugin + `npm sbom`).
+
+### 8.2 SSO across the box (Phase D)
+
+Aurora is the source of truth for users + roles. Every service on the
+box trusts Authelia's forward-auth at Caddy for their front door;
+auto-provisioned services (Grafana, Paperless, Forgejo) also trust the
+`Remote-User` header for internal account state.
+
+**Roles.** Three tiers, deliberately narrow so a homelab operator's
+mental model stays legible:
+
+- `admin` — full control. Can create/delete users, rotate secrets.
+- `user`  — standard authenticated identity.
+- `guest` — read-mostly, reserved for shared surfaces.
+
+Cascading group membership (in Authelia):
+`ADMIN → [admins, users, guests]`, `USER → [users, guests]`,
+`GUEST → [guests]`. Lets access-control rules use
+`subject: 'group:users'` to mean "authenticated user or above"
+without repeating the list. Java-side truth:
+`AutheliaService.groupsFor()`.
+
+**Propagation.** `AutheliaService` projects Aurora's users table into
+`data/identity/authelia/users_database.yml` on every `UserChangedEvent`
+(create/update/role-change/password-rotate/delete) + every 5 minutes as
+a drift guard. Atomic rename so Authelia's file watcher never sees a
+torn file. Successful user-driven propagations emit an
+`authelia.users.projected` audit row; startup + drift-guard reconciles
+stay silent so the audit log doesn't flood.
+
+**Session boundary.** Aurora's session cookie sits on the apex domain;
+Authelia's sits on `.{$DOMAIN}` so it federates across every subdomain.
+Aurora sign-out returns `{next: "https://auth.{$DOMAIN}/logout?rd=…"}`
+so the SPA bounces through Authelia to clear the shared cookie server-side.
+Grafana + Forgejo + Paperless sign-outs redirect through Authelia's
+logout too so `auth_proxy` / `reverse_proxy_auth` don't immediately
+re-sign the user back in on the next request.
+
+**Trusted-header hardening.** The reusable `(authelia)` snippet in
+`packages/identity/caddy.snippet` STRIPS incoming `Remote-User` /
+`Remote-Groups` / `Remote-Email` / `Remote-Name` request headers
+**before** calling forward-auth. Without this a LAN device could
+`curl -H 'Remote-User: admin'` and the upstream would trust it
+because the request came from Caddy. The only Remote-* headers that
+reach upstreams are the ones Authelia's forward-auth response injects.
+
+**Endpoint role guard.** Every user-mutating endpoint calls
+`requireAdmin()` which reads the caller's role from the DB on every
+request (not the session cache) so a role change takes effect on the
+next request without needing a session rotate. 401 for unauthenticated,
+403 for authenticated-but-not-admin. Guard tested at the controller
+level in `UsersControllerTests`.
+
+**Emergency access.** Each package Aurora migrated in D12 keeps its
+local super-admin (`GRAFANA_ADMIN_PASSWORD`, `PAPERLESS_ADMIN_PASSWORD`,
+`FORGEJO_ADMIN_PASSWORD`) as an emergency-access fallback for when
+Authelia is down. Direct-container access bypasses Caddy (and
+therefore Authelia).
 
 ---
 
