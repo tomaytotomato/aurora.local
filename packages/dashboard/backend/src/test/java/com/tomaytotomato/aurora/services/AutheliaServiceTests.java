@@ -5,6 +5,7 @@ import com.tomaytotomato.aurora.domain.AdminUser;
 import com.tomaytotomato.aurora.domain.Role;
 import com.tomaytotomato.aurora.events.UserChangedEvent;
 import com.tomaytotomato.aurora.persistence.AdminUserRepo;
+import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -46,18 +47,20 @@ class AutheliaServiceTests {
 
   @TempDir Path repoRoot;
   private AdminUserRepo repo;
+  private AuditEventRepo audit;
   private AutheliaService svc;
 
   @BeforeEach
   void setUp() {
     repo = Mockito.mock(AdminUserRepo.class);
+    audit = Mockito.mock(AuditEventRepo.class);
     AuroraProperties props = new AuroraProperties(
         repoRoot.toString(),
         "/proc",
         java.util.List.of(),
         new AuroraProperties.Docker("unix:///dev/null")
     );
-    svc = new AutheliaService(repo, props);
+    svc = new AutheliaService(repo, props, audit);
   }
 
   // \u2500\u2500\u2500 renderYaml (pure function) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -230,12 +233,76 @@ class AutheliaServiceTests {
         java.util.List.of(),
         new AuroraProperties.Docker("unix:///dev/null")
     );
-    AutheliaService badSvc = new AutheliaService(repo, badProps);
+    AutheliaService badSvc = new AutheliaService(repo, badProps, audit);
     Mockito.when(repo.findAll()).thenReturn(List.of());
 
     int n = badSvc.reconcile(UserChangedEvent.STARTUP);
     assertThat(n).isEqualTo(-1); // \u2192 error sentinel
     assertThat(badSvc.lastError()).isNotNull();
     assertThat(badSvc.lastWriteAt()).isNull(); // never got a successful write
+  }
+
+  // ─── D14 audit trail ────────────────────────────────────────────────
+
+  @Test
+  void reconcile_records_audit_row_on_user_driven_reasons() {
+    Mockito.when(repo.findAll()).thenReturn(List.of(
+        new AdminUser(1, "bruce", "$argon2id$hash", "UTC", "2026-01-01T00:00:00Z", Role.ADMIN)
+    ));
+
+    for (String reason : new String[]{
+        UserChangedEvent.CREATE, UserChangedEvent.UPDATE, UserChangedEvent.ROLE_CHANGE,
+        UserChangedEvent.PASSWORD_ROTATE, UserChangedEvent.DELETE
+    }) {
+      Mockito.reset(audit);
+      svc.reconcile(reason);
+      var action = org.mockito.ArgumentCaptor.forClass(String.class);
+      var target = org.mockito.ArgumentCaptor.forClass(String.class);
+      var diff = org.mockito.ArgumentCaptor.forClass(String.class);
+      Mockito.verify(audit).record(Mockito.isNull(), action.capture(),
+          target.capture(), diff.capture());
+      assertThat(action.getValue()).isEqualTo("authelia.users.projected");
+      assertThat(target.getValue()).isEqualTo("data/identity/authelia/users_database.yml");
+      assertThat(diff.getValue()).contains("\"reason\":\"" + reason + "\"");
+      assertThat(diff.getValue()).contains("\"user_count\":1");
+    }
+  }
+
+  @Test
+  void reconcile_does_NOT_audit_startup_or_drift_reconciles() {
+    // Rationale: the 5-minute drift guard fires on every idle box.
+    // Auditing every one of those would drown the audit log in noise
+    // and make it useless for finding actual user-change events.
+    Mockito.when(repo.findAll()).thenReturn(List.of(
+        new AdminUser(1, "bruce", "$argon2id$hash", "UTC", "2026-01-01T00:00:00Z", Role.ADMIN)
+    ));
+
+    svc.reconcile(UserChangedEvent.STARTUP);
+    svc.reconcile(UserChangedEvent.RECONCILE);
+
+    Mockito.verify(audit, Mockito.never()).record(Mockito.any(),
+        Mockito.eq("authelia.users.projected"),
+        Mockito.any(), Mockito.any());
+  }
+
+  @Test
+  void reconcile_does_NOT_audit_when_write_failed() throws IOException {
+    // Point at an unwritable target so the write throws. The catch
+    // branch sets lastError but must NOT emit an audit row — the
+    // absence of the row is the observable signal that propagation
+    // didn't reach the on-disk file.
+    Path blocker = repoRoot.resolve("blocker-audit");
+    Files.writeString(blocker, "not-a-dir");
+    AuroraProperties badProps = new AuroraProperties(
+        blocker.toString(), "/proc", java.util.List.of(),
+        new AuroraProperties.Docker("unix:///dev/null")
+    );
+    AutheliaService badSvc = new AutheliaService(repo, badProps, audit);
+    Mockito.when(repo.findAll()).thenReturn(List.of());
+
+    badSvc.reconcile(UserChangedEvent.CREATE);
+
+    Mockito.verify(audit, Mockito.never()).record(Mockito.any(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyString());
   }
 }

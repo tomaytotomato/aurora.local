@@ -85,17 +85,35 @@ public class AutheliaService {
   private static final Logger log = LoggerFactory.getLogger(AutheliaService.class);
   private static final String USERS_DB_FILENAME = "users_database.yml";
 
+  /**
+   * Reasons that indicate a real user-driven change (as opposed to the
+   * 5-minute drift guard or the boot-time reconcile). Only these emit
+   * an {@code authelia.users.projected} audit row — the drift guard
+   * would otherwise flood the log with a projection audit every 5
+   * minutes on an idle box.
+   */
+  private static final java.util.Set<String> USER_CHANGE_REASONS = java.util.Set.of(
+      UserChangedEvent.CREATE,
+      UserChangedEvent.UPDATE,
+      UserChangedEvent.ROLE_CHANGE,
+      UserChangedEvent.PASSWORD_ROTATE,
+      UserChangedEvent.DELETE
+  );
+
   private final AdminUserRepo users;
   private final AuroraProperties props;
+  private final com.tomaytotomato.aurora.persistence.AuditEventRepo audit;
 
   /** Last successful write timestamp, for the /api/authelia/status surface. */
   private final AtomicReference<Instant> lastWriteAt = new AtomicReference<>(null);
   /** Last error, cleared on the next successful write. */
   private final AtomicReference<String> lastError = new AtomicReference<>(null);
 
-  public AutheliaService(AdminUserRepo users, AuroraProperties props) {
+  public AutheliaService(AdminUserRepo users, AuroraProperties props,
+                         com.tomaytotomato.aurora.persistence.AuditEventRepo audit) {
     this.users = users;
     this.props = props;
+    this.audit = audit;
   }
 
   // \u2500\u2500\u2500 lifecycle \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -143,6 +161,16 @@ public class AutheliaService {
       lastError.set(null);
       log.info("authelia projector wrote {} user{} to {} (reason={})",
           all.size(), all.size() == 1 ? "" : "s", target, reason);
+      // Phase D iter-15 (D14). Only audit user-driven propagations —
+      // startup / drift-guard reconciles would otherwise flood the log
+      // with a projection row every 5 minutes on an idle box. Failed
+      // propagations (Exception branch below) already surface via
+      // lastError() to the /api/authelia/status endpoint.
+      if (USER_CHANGE_REASONS.contains(reason)) {
+        audit.record(null, "authelia.users.projected",
+            "data/identity/authelia/users_database.yml",
+            "{\"reason\":\"" + reason + "\",\"user_count\":" + all.size() + "}");
+      }
       return all.size();
     } catch (Exception e) {
       // Catch broadly — boot ordering can leave the DB unmigrated when

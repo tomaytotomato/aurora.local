@@ -517,3 +517,43 @@ All three deferrals tracked in scratchpad — worth doing but require live-box +
 **Live-test contract (Bruce, post-merge).** Log into Aurora → click TopBar sign-out → land on Aurora `/login` AFTER a brief bounce through `https://auth.aurora.local/logout`. Verify: browser dev-tools → Application → Cookies → `.aurora.local` — the `authelia_session` cookie is gone. Test: sign in again, visit notes.aurora.local (works — Authelia trusts new session), sign out from notes' inline user menu → land back on Authelia's logout confirmation → notes.aurora.local now requires a fresh login.
 
 **Next.** D14 — audit rows for every user CRUD, role change, propagation event. Most of this already lands via D8 (`users.create/role-change/password-rotate/delete`), D2 (Authelia projector), D3 (identity secrets), D10 (onboarding.sso.enable/skip), D11 (sso.env.neutralise). D14 verifies coverage + gates the audit rows behind an integration test.
+
+### iter-15 (2026-08-03) — D14 audit trail closing gap
+
+**Item:** D14 — audit rows for every user CRUD, role change, propagation event.
+
+**Audit coverage inventory before this iter.**
+
+| Action | Emitter | Introduced |
+|---|---|---|
+| `users.create` | `UsersService.create` | D8 |
+| `users.role-change` | `UsersService.updateRole` | D8 |
+| `users.password-rotate` | `UsersService.rotatePassword` | D8 |
+| `users.delete` | `UsersService.delete` | D8 |
+| `identity.secrets.bootstrap` | `IdentitySecretsService.ensureSecrets` | D3 |
+| `identity.secrets.rotate` | `IdentitySecretsService.rotateSecrets` | D3 |
+| `onboarding.sso.enable` | `OnboardingController.setSso` | D10 |
+| `onboarding.sso.skip` | `OnboardingController.setSso` | D10 |
+| `sso.env.neutralise` | `IdentitySecretsService.neutraliseServiceEnv` | D11 |
+
+**The missing propagation-event row.** AutheliaService writes `data/identity/authelia/users_database.yml` on every `UserChangedEvent` (D2), but nothing recorded that the projection actually reached the file. An operator investigating "user X can't sign into Grafana" couldn't tell if the propagation ever happened — the DB was updated (via `users.create`) but the Authelia-side file might not have.
+
+**D14 change.** `AutheliaService.reconcile()` now emits `authelia.users.projected` after every SUCCESSFUL write on a user-driven reason (`CREATE / UPDATE / ROLE_CHANGE / PASSWORD_ROTATE / DELETE`). Diff JSON carries `{"reason": "...", "user_count": N}` so an operator can grep the audit log for propagation events on a specific user id.
+
+**Deliberately NOT audited.**
+- `STARTUP` reconciles — one per boot; no signal.
+- `RECONCILE` (5-min drift guard) — fires on every idle box; would drown the audit log in noise.
+- **Failed** propagations — the ABSENCE of an `authelia.users.projected` row IS the observable signal that propagation didn't reach the file. `lastError()` on the service surface remains for the operator-facing status endpoint (D8's contract).
+
+**Signature change.** `AutheliaService` now takes an `AuditEventRepo` as its third ctor arg. No production callers broke (Spring auto-wires). Test constructor calls updated in both existing test sites in `AutheliaServiceTests`.
+
+**Tests — 3 new** (`services/AutheliaServiceTests`).
+- **Records an audit row on every user-driven reason** — loops over the five reasons, resets Mockito each iteration, verifies action = `authelia.users.projected`, target = `data/identity/authelia/users_database.yml`, diff contains the reason and user_count.
+- **Does NOT audit `STARTUP` or `RECONCILE`** — the belt-and-braces silence guard on the noise sources.
+- **Does NOT audit when the write failed** — points AutheliaService at an unwritable target so `Files.createDirectories(target.getParent())` throws inside the try, verifies `audit.record` was never called.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 476 tests (473 → 476, +3). Vitest 177 unchanged. vue-tsc clean. Dockerfile clean.
+
+**Coverage of the D14 checklist item.** Every user CRUD action (D8), every role change (D8), every propagation event (this iter) now emits an audit row. Onboarding SSO enable/skip (D10), secrets bootstrap/rotate (D3), SSO env-neutralise fanout (D11) already emit rows too. The audit log is the single source of truth for "what happened when" across Phase D's whole surface.
+
+**Next.** D15 — test coverage pass. Frontend view-level (UsersView.vue mount test) + backend integration test that exercises the whole users-CRUD → projection → audit-row chain end-to-end.
