@@ -247,3 +247,37 @@ All tests hermetic — `@TempDir` per-test, `PackagesService` mocked, no Spring 
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 431 tests (418 → 431, +13). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
 
 **Next.** D7 — finalise `packages/identity/caddy.snippet`. The existing file already has the `(authelia)` reusable snippet + auth.{DOMAIN} vhost. D7 confirms the `copy_headers` list matches every service Aurora will trust (Remote-User / Remote-Groups / Remote-Email / Remote-Name) + adds a `trust_forward` reciprocal for the case where Caddy runs behind another proxy.
+
+### iter-8 (2026-08-03) — D7 packages/identity/caddy.snippet finalisation
+
+**Item:** D7 — finalise `packages/identity/caddy.snippet`. The Authelia login vhost + reusable `(authelia)` forward-auth snippet.
+
+**What changed in the snippet.**
+
+1. **Security hardening — strip client-supplied trusted-header candidates before forward_auth.** The `(authelia)` snippet now starts with `request_header -Remote-User / -Remote-Groups / -Remote-Email / -Remote-Name`. Without this a LAN device could `curl -H 'Remote-User: admin' https://grafana.aurora.local/` and the upstream service would trust the header because the request came from Caddy. Explicit stripping means the ONLY Remote-* headers reaching upstreams are the ones Authelia's forward-auth response injects.
+
+2. **Pinned `X-Forwarded-*` header set** — `X-Forwarded-Method / -Proto / -Host / -Uri / -For` explicitly emitted to Authelia in the forward_auth request. Caddy sends these by default, but pinning them means a future apex Caddyfile edit that scrubs `X-Forwarded-*` headers doesn't silently break Authelia's per-domain rule matching.
+
+3. **`import no_hsts` on the auth vhost** — mirrors the apex + LAN-IP policy in `packages/core/caddy/Caddyfile`. A stale HSTS from a previous home.local install would otherwise lock Bruce into https-only when he first hit `http://auth.aurora.local/` (which won't be signed until he installs the Caddy root cert).
+
+4. **Header comment rewritten** to reflect that Aurora now emits `import authelia` automatically via CaddySnippetService (D6). The old "hand-edit each package's caddy.snippet" instructions are gone — the manifest `sso:` block is the source of truth.
+
+5. **Group cascade documented in-line** — reproduced the `ADMIN → [admins, users, guests]` / `USER → [users, guests]` / `GUEST → [guests]` mapping from AutheliaService so an operator reading only this file understands what `subject: group:users` means in Authelia's `configuration.yml`.
+
+**What Aurora does NOT hand-edit anymore.** The old example (uncomment `import authelia` in each vhost) was removed — that path is now Aurora-driven. The file is smaller and clearer.
+
+**Tests — 8 new** (`identity/AutheliaCaddySnippetInvariantsTests`):
+- `(authelia) {` snippet still defined (renaming = every SSO route breaks).
+- Client-supplied `Remote-*` headers stripped before forward_auth (the security guard rail).
+- `copy_headers Remote-User Remote-Groups Remote-Email Remote-Name` present (trusted-header services depend on it).
+- `forward_auth authelia:9091` + `/api/authz/forward-auth` pinned (container name + endpoint).
+- `X-Forwarded-*` header set explicit in forward_auth block.
+- **Auth portal does NOT `import authelia`** (would redirect-loop the login page).
+- Auth portal serves both http:// and https:// on `auth.{$DOMAIN}` with `tls internal`.
+- `snapshot_matches_source` — drift check between test-resource copy and the source file (silently skips when the sibling `packages/identity/` isn't visible under the sandboxed maven container, same shape as the D4 configuration.yml snapshot test).
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 439 tests (431 → 439, +8). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
+
+**Milestone.** D1–D7 all landed. Aurora backend now has everything it needs to project users into Authelia + gate protected vhosts through Caddy forward-auth. The remaining work is the operator surface (D8 user CRUD API + D9 /users view), the onboarding hook (D10), and the actual per-service migrations (D11 notes pilot + D12 grafana/paperless/forgejo/HA rollout).
+
+**Next.** D8 — `GET/POST/PUT/DELETE /api/users` with admin-role guard tested at the controller level (not just via Spring Security config). Includes password rotation + "invalidate all sessions" for a compromised-credentials response.
