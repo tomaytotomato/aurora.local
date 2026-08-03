@@ -155,3 +155,27 @@
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 8 files / 80 tests (63 → 80, +17). vue-tsc clean. Dockerfile clean.
 
 **Next.** C6 — migrate Tabs (PackageDetail rewrite).
+
+### iter-8 (2026-08-03) — C6 shadcn Tabs
+
+**Item:** C6. Migrate Tabs primitive to shadcn tokens.
+
+**What changed.**
+- Token swap:
+  - `border-[var(--color-line)]`  → `border-border` (tablist underline)
+  - `text-[var(--color-ink)]`     → `text-foreground` (active trigger)
+  - `text-[var(--color-ink-3)]`   → `text-muted-foreground` (inactive)
+  - `hover:text-[var(--color-ink-2)]` → `hover:text-foreground`
+  - `bg-[var(--color-ink)]`       → `bg-foreground` (underline indicator)
+- ARIA tab-pattern bump: **roving tabindex** (`0` on the active trigger, `-1` on the rest) — matches WAI-ARIA Authoring Practices for tabs and keeps keyboard nav sane. Old primitive had no tabindex management so every trigger was in the tab order.
+- Added `focus-visible:ring-2 ring-ring ring-offset-2` + `rounded-sm` on the trigger so keyboard focus is visible; old primitive just had `outline-none`.
+- Added `aria-hidden="true"` on the underline indicator span.
+
+**Public API unchanged.** `<Tabs v-model :tabs>` + default slot for panels. Two caller files (PackageDetail, OnboardingDns) keep working. The spec's "PackageDetail rewrite" note referred to it being the biggest Tabs consumer — no restructure needed once the primitive migration is token-only.
+
+- Barrel-export `Tabs` from `src/components/ui/index.ts`.
+- New `Tabs.spec.ts` — 7 tests pinning tokens on tablist / active / inactive / underline, roving tabindex, click emit, focus ring, slot rendering, class merge.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 9 files / 87 tests (80 → 87, +7). vue-tsc clean. Dockerfile clean.
+
+**Next.** C7 — migrate Card (biggest surface).

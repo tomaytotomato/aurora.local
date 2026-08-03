@@ -15,3 +15,5 @@ export { badgeVariants, type BadgeVariants } from './badgeVariants';
 export { default as Input } from './Input.vue';
 export { default as Label } from './Label.vue';
 export { default as Checkbox } from './Checkbox.vue';
+
+export { default as Tabs } from './Tabs.vue';
