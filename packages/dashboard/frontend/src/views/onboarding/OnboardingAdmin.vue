@@ -6,7 +6,7 @@ import { OnboardingApi } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 import Checkbox from '@/components/ui/Checkbox.vue';
 import { generatePassword, copyToClipboard } from '@/lib/utils';
 
@@ -127,10 +127,12 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
         </p>
       </div>
 
-      <Alert tone="info" class="mb-10">
-        Password fields are hidden on purpose. The generated password from
-        first-run only lives in the browser tab that created it &mdash; a
-        refresh discards it, but the account itself is fine.
+      <Alert variant="info" class="mb-10">
+        <AlertDescription>
+          Password fields are hidden on purpose. The generated password from
+          first-run only lives in the browser tab that created it &mdash; a
+          refresh discards it, but the account itself is fine.
+        </AlertDescription>
       </Alert>
 
       <div class="flex items-center justify-between">
@@ -150,7 +152,9 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
         option on this screen to reset it.
       </p>
 
-      <Alert v-if="err" tone="err" class="mb-6">{{ err }}</Alert>
+      <Alert v-if="err" variant="destructive" class="mb-6">
+        <AlertDescription>{{ err }}</AlertDescription>
+      </Alert>
 
       <div class="space-y-6">
         <div>

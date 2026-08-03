@@ -6,7 +6,7 @@ import { usePackagesStore } from '@/stores/packages';
 import { OnboardingApi } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Checkbox from '@/components/ui/Checkbox.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 import type { PackageCategory } from '@/api/packages';
 
 const store = useOnboardingStore();
@@ -149,7 +149,9 @@ async function proceed(): Promise<void> {
       </div>
     </div>
 
-    <Alert v-if="err" tone="err" class="mb-6">{{ err }}</Alert>
+    <Alert v-if="err" variant="destructive" class="mb-6">
+      <AlertDescription>{{ err }}</AlertDescription>
+    </Alert>
 
     <div class="mb-6">
       <div class="flex items-center gap-1 border-b border-line overflow-x-auto">
@@ -203,9 +205,11 @@ async function proceed(): Promise<void> {
       <Alert
         v-for="(w, i) in previewWarnings"
         :key="i"
-        tone="warn"
+        variant="warning"
         class="mb-2"
-      >{{ w }}</Alert>
+      >
+        <AlertDescription>{{ w }}</AlertDescription>
+      </Alert>
     </div>
     <div v-else-if="previewChecking" class="mb-8 text-xs text-ink-4">
       checking selection…

@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { OnboardingApi } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -55,9 +55,11 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       </div>
     </div>
 
-    <Alert tone="info" class="mb-8">
-      You can skip this and install the root CA later from
-      <em>Settings → TLS</em>. Browsers will show a warning until you do.
+    <Alert variant="info" class="mb-8">
+      <AlertDescription>
+        You can skip this and install the root CA later from
+        <em>Settings → TLS</em>. Browsers will show a warning until you do.
+      </AlertDescription>
     </Alert>
 
     <div class="flex items-center justify-between">

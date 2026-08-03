@@ -7,7 +7,7 @@ import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Tabs from '@/components/ui/Tabs.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 
 const route = useRoute();
 const packages = usePackagesStore();
@@ -89,7 +89,9 @@ onMounted(async () => {
       <p v-if="detail" class="text-ink-3 mt-2">{{ detail.description }}</p>
     </div>
 
-    <Alert v-if="err" tone="err" class="mb-6">{{ err }}</Alert>
+    <Alert v-if="err" variant="destructive" class="mb-6">
+      <AlertDescription>{{ err }}</AlertDescription>
+    </Alert>
 
     <Tabs
       v-model="activeTab"
@@ -120,7 +122,9 @@ onMounted(async () => {
       </div>
 
       <div v-else-if="activeTab === 'config'">
-        <Alert tone="info">Env-form editor lands with M2 (see brief §6.2).</Alert>
+        <Alert variant="info">
+          <AlertDescription>Env-form editor lands with M2 (see brief §6.2).</AlertDescription>
+        </Alert>
       </div>
 
       <div v-else-if="activeTab === 'logs'">
@@ -130,7 +134,9 @@ onMounted(async () => {
           + B2 + B3 already, so this promise is due.
         -->
         <div v-if="containersErr" data-state="error" role="alert" class="space-y-3">
-          <Alert tone="err">{{ containersErr }}</Alert>
+          <Alert variant="destructive">
+            <AlertDescription>{{ containersErr }}</AlertDescription>
+          </Alert>
           <button
             type="button"
             class="text-sm text-ink-2 underline"

@@ -18,7 +18,7 @@ import { ContainersApi, type ContainerLogLine } from '@/api/containers';
 import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 import Badge from '@/components/ui/Badge.vue';
 
 interface RouteError {
@@ -107,14 +107,16 @@ function formatTs(ts: string | undefined): string {
       </p>
     </div>
 
-    <Alert v-if="err" tone="err" class="mb-6" data-test="logs-error">
-      {{ err.message }}
+    <Alert v-if="err" variant="destructive" class="mb-6" data-test="logs-error">
+      <AlertDescription>{{ err.message }}</AlertDescription>
     </Alert>
 
-    <Alert v-if="truncated" tone="warn" class="mb-4" data-test="logs-truncated">
-      Log payload hit Aurora's 2 MiB collection cap. Older lines were
-      dropped. Reduce the tail count or use <code>docker logs</code> for
-      full history.
+    <Alert v-if="truncated" variant="warning" class="mb-4" data-test="logs-truncated">
+      <AlertDescription>
+        Log payload hit Aurora's 2 MiB collection cap. Older lines were
+        dropped. Reduce the tail count or use <code>docker logs</code> for
+        full history.
+      </AlertDescription>
     </Alert>
 
     <Card class="p-0" data-card="container-logs">

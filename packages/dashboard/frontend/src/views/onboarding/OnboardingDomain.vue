@@ -5,7 +5,7 @@ import { useOnboardingStore } from '@/stores/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -40,7 +40,9 @@ async function proceed(): Promise<void> {
       resolves over mDNS on your LAN and needs no external DNS.
     </p>
 
-    <Alert v-if="err" tone="err" class="mb-6">{{ err }}</Alert>
+    <Alert v-if="err" variant="destructive" class="mb-6">
+      <AlertDescription>{{ err }}</AlertDescription>
+    </Alert>
 
     <div class="mb-8">
       <Label for="domain">Domain</Label>

@@ -3,7 +3,7 @@ import { onMounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui';
 import { humanBytes } from '@/lib/utils';
 
 const store = useOnboardingStore();
@@ -109,7 +109,9 @@ const diskRowsExtra = computed(() => Math.max(0, diskRows.value.length - 4));
     </p>
 
     <div v-if="err">
-      <Alert tone="err" class="mb-6">{{ err }}</Alert>
+      <Alert variant="destructive" class="mb-6">
+        <AlertDescription>{{ err }}</AlertDescription>
+      </Alert>
     </div>
 
     <div v-else-if="!env" class="text-sm text-ink-4 mb-8">Reading system info…</div>
@@ -195,9 +197,12 @@ const diskRowsExtra = computed(() => Math.max(0, diskRows.value.length - 4));
       </div>
     </div>
 
-    <Alert v-if="notDebian" tone="warn" title="Untested distribution" class="mb-8">
-      Aurora is designed for Debian and Ubuntu. Other distros may work, but the host
-      Ansible playbooks and firewall roles assume Debian's package layout.
+    <Alert v-if="notDebian" variant="warning" class="mb-8">
+      <AlertTitle>Untested distribution</AlertTitle>
+      <AlertDescription>
+        Aurora is designed for Debian and Ubuntu. Other distros may work, but the host
+        Ansible playbooks and firewall roles assume Debian's package layout.
+      </AlertDescription>
     </Alert>
 
     <div class="flex justify-end">

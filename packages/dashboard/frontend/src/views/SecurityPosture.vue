@@ -20,8 +20,7 @@ import { useSystemStore } from '@/stores/system';
 import { SecurityApi, type SecurityFinding, type SecuritySeverity, type DismissalRow } from '@/api/security';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
-import { Alert as ShadcnAlert, AlertDescription } from '@/components/ui';
+import { Alert, AlertDescription } from '@/components/ui';
 import Badge from '@/components/ui/Badge.vue';
 import Button from '@/components/ui/Button.vue';
 
@@ -261,9 +260,9 @@ const counts = computed(() => {
 
     <!-- Error state — §5 contract. -->
     <template v-else-if="err">
-      <ShadcnAlert variant="destructive" class="mb-4" data-test="sec-error">
+      <Alert variant="destructive" class="mb-4" data-test="sec-error">
         <AlertDescription>{{ err }}</AlertDescription>
-      </ShadcnAlert>
+      </Alert>
       <div class="mb-6">
         <Button variant="secondary" size="sm" @click="fetchFindings">Try again</Button>
       </div>

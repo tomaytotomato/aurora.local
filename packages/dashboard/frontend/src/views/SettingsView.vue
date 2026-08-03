@@ -5,7 +5,7 @@ import { AuditApi, type AuditEvent } from '@/api/audit';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 import { useRouter } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 
@@ -82,7 +82,9 @@ onMounted(() => { void loadAudit(); });
       <Card class="p-8">
         <div class="eyebrow mb-2">Passkey</div>
         <h3 class="mb-2">Second factor</h3>
-        <Alert tone="info">Passkey enrollment lands in v0.2.</Alert>
+        <Alert variant="info">
+          <AlertDescription>Passkey enrollment lands in v0.2.</AlertDescription>
+        </Alert>
       </Card>
 
       <Card v-if="info" class="p-8">
@@ -125,7 +127,9 @@ onMounted(() => { void loadAudit(); });
           </div>
         </div>
 
-        <Alert v-if="auditErr" tone="err" class="mb-3" data-test="audit-error">{{ auditErr }}</Alert>
+        <Alert v-if="auditErr" variant="destructive" class="mb-3" data-test="audit-error">
+          <AlertDescription>{{ auditErr }}</AlertDescription>
+        </Alert>
 
         <div
           v-else-if="!auditLoading && auditEvents.length === 0"

@@ -7,7 +7,7 @@ import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 import AuroraBackground from '@/components/AuroraBackground.vue';
 
 const router = useRouter();
@@ -101,8 +101,12 @@ function passkey(): void {
         The admin panel for this box.
       </p>
 
-      <Alert v-if="err" tone="err" class="mb-4">{{ err }}</Alert>
-      <Alert v-if="passkeyToast" tone="info" class="mb-4">{{ passkeyToast }}</Alert>
+      <Alert v-if="err" variant="destructive" class="mb-4">
+        <AlertDescription>{{ err }}</AlertDescription>
+      </Alert>
+      <Alert v-if="passkeyToast" variant="info" class="mb-4">
+        <AlertDescription>{{ passkeyToast }}</AlertDescription>
+      </Alert>
 
       <form class="space-y-4" @submit.prevent="submit">
         <div>

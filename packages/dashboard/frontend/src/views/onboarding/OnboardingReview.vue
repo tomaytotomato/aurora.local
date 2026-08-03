@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { OnboardingApi, type InstallPlan } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertDescription } from '@/components/ui';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -157,7 +157,9 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       Here's what Aurora will do. Nothing has been written yet.
     </p>
 
-    <Alert v-if="planErr" tone="warn" class="mb-6">{{ planErr }}</Alert>
+    <Alert v-if="planErr" variant="warning" class="mb-6">
+      <AlertDescription>{{ planErr }}</AlertDescription>
+    </Alert>
     <div
       v-if="installErr"
       data-tone="err"
@@ -227,9 +229,11 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
     <Alert
       v-for="(w, i) in warningsToShow"
       :key="i"
-      tone="warn"
+      variant="warning"
       class="mb-3"
-    >{{ w }}</Alert>
+    >
+      <AlertDescription>{{ w }}</AlertDescription>
+    </Alert>
 
     <div v-if="installing || logLines.length" class="border border-line rounded-lg p-4 mb-8 bg-[var(--color-ink)] text-[var(--color-canvas)] font-mono text-xs max-h-64 overflow-auto" role="log" aria-live="polite">
       <div v-for="(l, i) in logLines" :key="i">{{ l }}</div>

@@ -2,7 +2,7 @@
 import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/AlertLegacy.vue';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -21,11 +21,14 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       like a secret.
     </p>
 
-    <Alert tone="info" title="Landing in the next slice" class="mb-8">
-      The per-package secrets form ships with M2. For v0.1, Aurora uses each package's
-      <code>.env.example</code> as-is and auto-generates any missing secrets during
-      install. You can edit them from
-      <em>Packages → &lt;name&gt; → Config</em> after onboarding.
+    <Alert variant="info" class="mb-8">
+      <AlertTitle>Landing in the next slice</AlertTitle>
+      <AlertDescription>
+        The per-package secrets form ships with M2. For v0.1, Aurora uses each package's
+        <code>.env.example</code> as-is and auto-generates any missing secrets during
+        install. You can edit them from
+        <em>Packages → &lt;name&gt; → Config</em> after onboarding.
+      </AlertDescription>
     </Alert>
 
     <div class="border border-line rounded-lg p-6 mb-10 bg-surface-2/40">
