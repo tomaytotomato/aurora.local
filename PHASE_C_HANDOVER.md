@@ -15,21 +15,22 @@
 
 ## Repo layout
 
-- **`/home/bruce/aurora.local`** — canonical repo. Branch `rename/aurora` is the merge target. Live aurora runs from here (`packages/dashboard/compose.yml`). **Do not build or restart from here during the loop** — Bruce owns post-merge rebuilds.
-- **`/home/bruce/aurora-v02-wt`** — worktree from the just-finished overnight loop, branch `feat/v0.2-overnight`. Can be deleted (`git worktree remove /home/bruce/aurora-v02-wt`) once you're confident everything is merged.
+- **`/home/bruce/aurora.local`** — canonical repo. Branch `main` is the merge target (the v0.2/v0.3 PR merged there as commit `146b5a5`). Live aurora runs from here (`packages/dashboard/compose.yml`). **Do not build or restart from here during the loop** — Bruce owns post-merge rebuilds.
 - **`/home/bruce/aurora-c-wt`** — **your worktree**. Create it as your first step:
   ```bash
   cd /home/bruce/aurora.local
-  git worktree add -b feat/c-shadcn /home/bruce/aurora-c-wt rename/aurora
+  git pull --ff-only origin main
+  git worktree add -b feat/c-shadcn /home/bruce/aurora-c-wt main
   cd /home/bruce/aurora-c-wt
   ```
 
 ## Setup checklist for the new session
 
-1. Confirm `rename/aurora` includes the overnight merge:
+1. Confirm `main` includes the overnight merge:
    ```bash
    cd /home/bruce/aurora.local
-   git log --oneline -5   # top should be 791e90b or later; look for b341baa merge commit
+   git pull --ff-only origin main
+   git log --oneline -5   # top should be 146b5a5 ("Merge pull request #2 from tomaytotomato/rename/aurora") or later
    ```
 2. Create the Phase C worktree (see above).
 3. In the new worktree, sanity-check the verify script passes on the baseline **before** touching anything:
@@ -69,7 +70,7 @@
 
 - **Work only in `/home/bruce/aurora-c-wt`.** Live aurora lives at `/home/bruce/aurora.local` — do not touch it.
 - **Do not rebuild or restart docker containers.** Bruce will do that after merge.
-- **Do not push to `rename/aurora`.** Only to `feat/c-shadcn`.
+- **Do not push to `main` directly.** Only to `feat/c-shadcn`. Open a PR when done.
 - **Never edit `.state.yml`, `packages/*/.env`, or `~/.aurora/`.** Live state.
 - **Never edit `packages/dashboard/frontend/node_modules/` directly.** Use npm.
 

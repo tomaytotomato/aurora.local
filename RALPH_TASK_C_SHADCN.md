@@ -1,7 +1,7 @@
 # Aurora — Phase C: migrate to shadcn-vue
 
-**Working directory:** `/home/bruce/aurora-c-wt` (fresh worktree; create with `git worktree add -b feat/c-shadcn ../aurora-c-wt rename/aurora`)
-**Branch:** `feat/c-shadcn` (baseline `rename/aurora` HEAD after the v0.2/v0.3 merge — commit `b341baa` or later)
+**Working directory:** `/home/bruce/aurora-c-wt` (fresh worktree; create with `git worktree add -b feat/c-shadcn ../aurora-c-wt main`)
+**Branch:** `feat/c-shadcn` (baseline `main` HEAD after the v0.2/v0.3 PR merge — commit `146b5a5` or later)
 **Deploy target:** live aurora runs from `/home/bruce/aurora.local`. **DO NOT rebuild / restart the live container from the worktree.** Bruce owns the post-merge rebuild.
 
 ## Goal
