@@ -4,9 +4,9 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 
 ---
 
-## Executive summary (as of iter-14 · commit ddcdc1e)
+## Executive summary (as of iter-17 · commit 4d1a5cb)
 
-**Bottom line.** Phase A (v0.2 close-out) is closed, Phase B (v0.3 groundwork) is feature-complete for the hard-stop, backend + frontend green, one pre-existing failure unchanged from baseline. 28 commits since `f9c4406`. Live aurora on `rename/aurora` is untouched — everything in this worktree is on `feat/v0.2-overnight` and pushed to origin, awaiting your morning review + merge.
+**Bottom line.** Phase A (v0.2 close-out) is closed, Phase B (v0.3 groundwork) is feature-complete for the hard-stop, plus PackageDetail Logs tab wired (iter-16) and the pre-existing test failure fixed (iter-17). Backend + frontend fully green — the first time this branch has been top-to-bottom clean. 32 commits since `f9c4406`. Live aurora on `rename/aurora` is untouched — everything in this worktree is on `feat/v0.2-overnight` and pushed to origin, awaiting your morning review + merge.
 
 **Phase A — v0.2 close-out (A1–A8, all shipped)**
 - **A1** — `d9c4b6d` — Kill DoneChecklist / PackagesCard drift + honest container count on the System card.
@@ -36,11 +36,15 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 | after B1 | 168 | +12 | 0 | 1 |
 | after B2 | 195 | +27 | 0 | 1 |
 | after B3 | 213 | +18 | 0 | 1 |
-| after B4 | **251** | **+38** | **0** | **1** |
+| after B4 | 251 | +38 | 0 | 1 |
+| iter-16 (PackageDetail Logs) | 257 | +6 | 0 | 1 |
+| **iter-17 (fix fake-repo state)** | **257** | — | **0** | **0** |
 
 Frontend `vue-tsc --noEmit` exit 0 on every iter that touched the FE.
 
-**Only pre-existing failure:** `PackagesServiceTests.parsesFakeRepoManifests` — present in baseline (`f9c4406`), not introduced by this branch. Tracked separately.
+**All backend tests now green.** The `PackagesServiceTests.parsesFakeRepoManifests` failure carried across baseline → iter-16 was root-caused (iter-17) to the fake-repo test fixture missing its `.state.yml` (globally gitignored). Fixture-exception line added; canned `.state.yml` shipped. Full suite 257/257 green.
+
+**Only pre-existing failure:** ~~`PackagesServiceTests.parsesFakeRepoManifests`~~ — fixed in iter-17 (`4d1a5cb`).
 
 **Reverifying from a fresh shell:**
 
@@ -55,7 +59,7 @@ docker run --rm \
   -w /app \
   maven:3.9-eclipse-temurin-25-alpine \
   mvn -B -o -Dstyle.color=never test
-# Expected: 251 tests, 1 pre-existing failure, 0 introduced.
+# Expected: 257 tests, 0 failures, 0 errors.
 
 # Frontend (~30s cold):
 docker run --rm \
@@ -76,8 +80,8 @@ docker build --check -f packages/dashboard/Dockerfile packages/dashboard/
 - Live log-tail SSE follow (B3 followup; task spec: "no live stream in v0.3").
 - Dismiss/snooze lifecycle for security findings (B4 followup).
 - Retirement of `stores/events.ts` (dead after B1 iter-9; no consumers).
-- PackageDetail "Logs" tab wiring (needs compose-service → container-name mapping helper).
-- `PackagesServiceTests.parsesFakeRepoManifests` pre-existing failure investigation.
+- ~~PackageDetail "Logs" tab wiring~~ shipped in iter-16 (`59f5118`).
+- ~~`PackagesServiceTests.parsesFakeRepoManifests` pre-existing failure investigation~~ shipped in iter-17 (`4d1a5cb`).
 
 **No `DECISION_NEEDED.md` or `HALT.md` was ever written.** No product-judgement fork required Bruce's input; all engineering calls documented per commit body.
 
@@ -854,3 +858,85 @@ Iter-17 candidates:
 Recommend option 4 (pre-existing failure) — it's been carried across
 14 iters unchanged; if fixable, closes a genuine gap. Fall back to
 option 1 (small cleanup) if 4 needs bigger surgery than one iter.
+
+## Iter 17 · 2026-08-03 09:01 · commit 4d1a5cb + reflection
+**Pre-existing PackagesServiceTests.parsesFakeRepoManifests fixed. Full backend green.**
+
+### Reflection (Ralph reflectEvery=8 second checkpoint)
+
+**1. What's been accomplished?**
+Since iter-8 reflection: B1 (backend+FE), B2 (backend), B3
+(backend+FE + PackageDetail wiring), B4 (backend+FE); executive
+summary shipped; pre-existing failure investigated and fixed. 32
+commits total since baseline; feat/v0.2-overnight consistently
+ahead of origin (kept in sync every iter).
+
+**2. What's working well?**
+- The one-item-per-iter cadence held even for surface-heavy items
+  (B2 shipped 4 new files + 27 tests in one commit; B4 shipped 5 rule
+  classes + 38 tests).
+- Docker-run maven / vue-tsc pattern still fast enough to run full
+  suites per commit — nothing hidden.
+- Executive summary + per-iter log gives a clean morning read.
+- Every commit body includes verification numbers + deferred items,
+  so no stale-truth surprises.
+
+**3. What's not working?**
+- E2E specs still blocked on aurora-e2e project infra outside this
+  worktree — every iter since A4 has deferred E2E addition.
+  Unblockable from here.
+- Frontend has no vitest / component-test story. Typecheck is the
+  only frontend guarantee.
+
+**4. Should the approach be adjusted?**
+No. The queue has drained to carryover cleanup + optional polish
+(retire useEventsStore, per-container metrics stats, uPlot wiring,
+E2E). All of those are opt-in for the remaining 23 iters. Continuing
+one item per iter, prioritising highest-ROI carryover.
+
+**5. Product-judgement forks?**
+Still none warranting DECISION_NEEDED.md. Every judgement call has
+been documented per commit body (severity thresholds in B4, exact
+owner match in DockerSocketExposureRule, 200-entry ring buffer size
+in DockerEventService, 5s reconnect backoff, etc.).
+
+### What shipped
+
+- `.gitignore`: fixture exception `!packages/dashboard/backend/src/
+  test/resources/fake-repo/.state.yml` after the global `.state.yml`
+  rule.
+- `fake-repo/.state.yml` (new): `bootstrap_version: 1`,
+  `enabled: [core, media]`, `profiles: []`. Kept minimal so any
+  future test that relies on hostname/domain/installed_at fails
+  loudly.
+
+### Verification
+- `PackagesServiceTests`: 3/3 green (was 2/3).
+- Full backend: **257 tests, 0 failures, 0 errors.** First fully
+  green build on this branch.
+- `vue-tsc --noEmit` → exit 0 (frontend untouched).
+
+### Files touched
+- `.gitignore` (+4 -1, exception line + comment)
+- `packages/dashboard/backend/src/test/resources/fake-repo/.state.yml`
+  (+17, new fixture)
+
+### Deferred
+None. The pre-existing failure is closed; every other deferred item
+was already stack-ranked in earlier iter logs.
+
+### Next iteration target
+Iter-18 candidates now that the pre-existing failure is closed:
+1. Retire `stores/events.ts` (dead after B1 iter-9; verified no
+   consumers). Small; keeps the tree tidy.
+2. Per-container CPU + memory metrics via docker-java stats — the
+   B2 deferred bullet. Real work; blocks the uPlot chart wiring.
+3. Update executive summary + `verify-iter3.sh` for the 257-test
+   count so morning verify sweeps have the right expectation baked
+   in.
+4. Sanity-audit the SidebarNav for the `/security` route reveal
+   (B4 iter-14 flipped `capabilities.securityScanner`; want to
+   confirm the nav item shows without a page reload).
+
+Recommend option 3 (verify-iter3.sh + summary alignment) — cheap,
+protects the morning workflow. Then option 1.
