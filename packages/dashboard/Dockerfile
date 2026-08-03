@@ -74,7 +74,7 @@ RUN set -eux; \
       arm64) yq_arch=arm64 ;; \
       *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    wget -q --https-only -O /usr/local/bin/yq \
+    wget -q -O /usr/local/bin/yq \
       "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${yq_arch}"; \
     chmod 0755 /usr/local/bin/yq; \
     /usr/local/bin/yq --version | grep -qE 'version v?4'
