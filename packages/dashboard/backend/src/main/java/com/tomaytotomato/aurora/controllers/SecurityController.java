@@ -1,6 +1,7 @@
 package com.tomaytotomato.aurora.controllers;
 
 import com.tomaytotomato.aurora.domain.SecurityFinding;
+import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.persistence.SecurityDismissalRepo;
 import com.tomaytotomato.aurora.security.SecurityFindingsService;
 import org.springframework.http.HttpStatus;
@@ -60,10 +61,14 @@ public class SecurityController {
 
   private final SecurityFindingsService findings;
   private final SecurityDismissalRepo dismissals;
+  private final AuditEventRepo audit;
 
-  public SecurityController(SecurityFindingsService findings, SecurityDismissalRepo dismissals) {
+  public SecurityController(SecurityFindingsService findings,
+                            SecurityDismissalRepo dismissals,
+                            AuditEventRepo audit) {
     this.findings = findings;
     this.dismissals = dismissals;
+    this.audit = audit;
   }
 
   @GetMapping("/findings")
@@ -109,6 +114,15 @@ public class SecurityController {
     }
     Instant expiresAt = days == null ? null : Instant.now().plus(Duration.ofDays(days));
     dismissals.dismiss(id, expiresAt, reason);
+    // iter-27: audit trail so an operator can grep the audit log for
+    // who suppressed what and when. Body is a compact JSON blob rather
+    // than a full SecurityFinding — the finding text is fixed by the
+    // rule engine, not user-provided, so recording the id + expiry is
+    // enough to reconstruct context.
+    String diff = "{\"expires_at\":" + (expiresAt == null ? "null" : "\"" + expiresAt + "\"")
+        + (reason == null ? "" : ",\"reason\":\"" + jsonEscape(reason) + "\"")
+        + "}";
+    audit.record(null, "security.dismiss", "finding:" + id, diff);
     Map<String, Object> resp = new LinkedHashMap<>();
     resp.put("id", id);
     resp.put("expires_at", expiresAt == null ? null : expiresAt.toString());
@@ -126,9 +140,41 @@ public class SecurityController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "finding id is malformed");
     }
     boolean restored = dismissals.restore(id);
+    if (restored) {
+      // iter-27: only audit successful restores so a wave of DELETE
+      // requests against ghost ids doesn't spam the audit table.
+      audit.record(null, "security.restore", "finding:" + id, null);
+    }
     Map<String, Object> resp = new LinkedHashMap<>();
     resp.put("id", id);
     resp.put("restored", restored);
     return resp;
+  }
+
+  /**
+   * Minimal JSON string-value escaper for the diff_json blob. Handles
+   * the couple of chars an operator-supplied reason can carry.
+   * Callers must wrap the result in double quotes.
+   */
+  static String jsonEscape(String s) {
+    if (s == null) return "";
+    StringBuilder b = new StringBuilder(s.length() + 4);
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      switch (c) {
+        case '\\': b.append("\\\\"); break;
+        case '"':  b.append("\\\""); break;
+        case '\n': b.append("\\n"); break;
+        case '\r': b.append("\\r"); break;
+        case '\t': b.append("\\t"); break;
+        default:
+          if (c < 0x20) {
+            b.append(String.format("\\u%04x", (int) c));
+          } else {
+            b.append(c);
+          }
+      }
+    }
+    return b.toString();
   }
 }

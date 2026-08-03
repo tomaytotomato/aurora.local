@@ -1,6 +1,7 @@
 package com.tomaytotomato.aurora.controllers;
 
 import com.tomaytotomato.aurora.domain.SecurityFinding;
+import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.persistence.SecurityDismissalRepo;
 import com.tomaytotomato.aurora.security.SecurityFindingsService;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SecurityControllerTests {
 
   private static MockMvc mvc(SecurityFindingsService svc, SecurityDismissalRepo repo) {
-    return MockMvcBuilders.standaloneSetup(new SecurityController(svc, repo)).build();
+    return MockMvcBuilders.standaloneSetup(
+        new SecurityController(svc, repo, Mockito.mock(AuditEventRepo.class))
+    ).build();
+  }
+
+  private static MockMvc mvc(SecurityFindingsService svc, SecurityDismissalRepo repo, AuditEventRepo audit) {
+    return MockMvcBuilders.standaloneSetup(new SecurityController(svc, repo, audit)).build();
   }
 
   @Test
@@ -215,5 +222,81 @@ class SecurityControllerTests {
     mvc(svc, repo).perform(get("/api/security/dismissals"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].finding_id").value("weak_admin_password:bruce"));
+  }
+
+  // -- audit trail (iter-27) -------------------------------------------
+
+  @Test
+  void dismiss_writes_audit_event() throws Exception {
+    SecurityFindingsService svc = Mockito.mock(SecurityFindingsService.class);
+    SecurityDismissalRepo repo = Mockito.mock(SecurityDismissalRepo.class);
+    AuditEventRepo audit = Mockito.mock(AuditEventRepo.class);
+    mvc(svc, repo, audit).perform(post("/api/security/findings/weak_admin_password:bruce/dismiss")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"days\": 7, \"reason\": \"rotating friday\"}"))
+        .andExpect(status().isOk());
+
+    ArgumentCaptor<String> diff = ArgumentCaptor.forClass(String.class);
+    Mockito.verify(audit).record(
+        eq(null),
+        eq("security.dismiss"),
+        eq("finding:weak_admin_password:bruce"),
+        diff.capture());
+    org.junit.jupiter.api.Assertions.assertTrue(diff.getValue().contains("expires_at"));
+    org.junit.jupiter.api.Assertions.assertTrue(diff.getValue().contains("rotating friday"));
+  }
+
+  @Test
+  void dismiss_permanent_writes_audit_event_with_null_expiry() throws Exception {
+    SecurityFindingsService svc = Mockito.mock(SecurityFindingsService.class);
+    SecurityDismissalRepo repo = Mockito.mock(SecurityDismissalRepo.class);
+    AuditEventRepo audit = Mockito.mock(AuditEventRepo.class);
+    mvc(svc, repo, audit).perform(post("/api/security/findings/id-x/dismiss")
+            .contentType(MediaType.APPLICATION_JSON).content("{}"))
+        .andExpect(status().isOk());
+    Mockito.verify(audit).record(
+        eq(null),
+        eq("security.dismiss"),
+        eq("finding:id-x"),
+        Mockito.argThat((String s) -> s != null && s.contains("\"expires_at\":null")));
+  }
+
+  @Test
+  void restore_writes_audit_event_only_when_row_was_removed() throws Exception {
+    SecurityFindingsService svc = Mockito.mock(SecurityFindingsService.class);
+    SecurityDismissalRepo repo = Mockito.mock(SecurityDismissalRepo.class);
+    AuditEventRepo audit = Mockito.mock(AuditEventRepo.class);
+    when(repo.restore("id-x")).thenReturn(true);
+    when(repo.restore("ghost")).thenReturn(false);
+
+    mvc(svc, repo, audit).perform(delete("/api/security/findings/id-x/dismiss"))
+        .andExpect(status().isOk());
+    mvc(svc, repo, audit).perform(delete("/api/security/findings/ghost/dismiss"))
+        .andExpect(status().isOk());
+
+    Mockito.verify(audit, Mockito.times(1)).record(
+        eq(null), eq("security.restore"), eq("finding:id-x"), eq(null));
+    Mockito.verify(audit, Mockito.never()).record(
+        any(), eq("security.restore"), eq("finding:ghost"), any());
+  }
+
+  @Test
+  void dismiss_does_not_audit_when_id_is_malformed() throws Exception {
+    SecurityFindingsService svc = Mockito.mock(SecurityFindingsService.class);
+    SecurityDismissalRepo repo = Mockito.mock(SecurityDismissalRepo.class);
+    AuditEventRepo audit = Mockito.mock(AuditEventRepo.class);
+    mvc(svc, repo, audit).perform(post("/api/security/findings/UPPER/dismiss"))
+        .andExpect(status().isBadRequest());
+    Mockito.verifyNoInteractions(audit);
+  }
+
+  @Test
+  void jsonEscape_covers_control_chars_and_quotes() {
+    org.junit.jupiter.api.Assertions.assertEquals("plain", SecurityController.jsonEscape("plain"));
+    org.junit.jupiter.api.Assertions.assertEquals("a\\\"b", SecurityController.jsonEscape("a\"b"));
+    org.junit.jupiter.api.Assertions.assertEquals("a\\\\b", SecurityController.jsonEscape("a\\b"));
+    org.junit.jupiter.api.Assertions.assertEquals("a\\nb", SecurityController.jsonEscape("a\nb"));
+    org.junit.jupiter.api.Assertions.assertEquals("a\\u0001b", SecurityController.jsonEscape("a\u0001b"));
+    org.junit.jupiter.api.Assertions.assertEquals("", SecurityController.jsonEscape(null));
   }
 }
