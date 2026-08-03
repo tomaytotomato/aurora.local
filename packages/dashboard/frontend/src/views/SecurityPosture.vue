@@ -32,6 +32,26 @@ const err = ref<string | null>(null);
 // disables while the POST is in flight and doesn't spam the backend.
 const dismissing = ref<Record<string, boolean>>({});
 
+// B4-followup (iter-26): snooze duration picker per finding. Fixed 7d
+// was the iter-23 shipping default; this iter unlocks the days parameter
+// the backend already accepts. Kept out of a modal — the compact inline
+// select keeps the Fix-it row on one line while still being reachable
+// via keyboard tab order.
+type SnoozeChoice = { key: string; label: string; days: number | null };
+const SNOOZE_CHOICES: readonly SnoozeChoice[] = [
+  { key: '1d',  label: '1 day',    days: 1 },
+  { key: '7d',  label: '7 days',   days: 7 },
+  { key: '30d', label: '30 days',  days: 30 },
+  { key: '90d', label: '90 days',  days: 90 },
+  { key: 'perm', label: 'Permanent', days: null },
+];
+// Per-finding selected choice. Defaults to 7d for parity with iter-23.
+const snoozeSelection = ref<Record<string, string>>({});
+function chosen(fid: string): SnoozeChoice {
+  const k = snoozeSelection.value[fid] ?? '7d';
+  return SNOOZE_CHOICES.find((c) => c.key === k) ?? SNOOZE_CHOICES[1];
+}
+
 // B4-followup (iter-25): suppressed-findings management view. Lives
 // below the active list on the same page rather than under Settings so
 // the operator sees dismissals in context ("what did I already hide?").
@@ -88,13 +108,14 @@ async function fetchFindings(): Promise<void> {
  * row leaves the list; on failure we surface a short error banner + roll
  * back the optimistic update via a re-fetch.
  */
-async function onDismiss(id: string, days: number = 7): Promise<void> {
+async function onDismiss(id: string, days: number | null = 7): Promise<void> {
   if (dismissing.value[id]) return;
   dismissing.value = { ...dismissing.value, [id]: true };
   const prev = findings.value;
   findings.value = findings.value.filter((f) => f.id !== id);
   try {
-    await SecurityApi.dismiss(id, days);
+    // iter-26: null days → permanent dismissal (backend accepts undefined).
+    await SecurityApi.dismiss(id, days ?? undefined);
     // iter-25: after dismiss, refresh suppressed so the toggle count
     // updates without waiting for the user to open the section.
     void fetchSuppressed();
@@ -293,14 +314,23 @@ const counts = computed(() => {
                 class="text-sm text-ink-2 no-underline hover:underline"
               >Learn more ↗</a>
             </template>
+            <select
+              class="text-xs bg-surface border border-line rounded px-1 py-0.5 text-ink-2"
+              :value="snoozeSelection[f.id] ?? '7d'"
+              :disabled="!!dismissing[f.id]"
+              data-test="sec-snooze-picker"
+              @change="snoozeSelection[f.id] = ($event.target as HTMLSelectElement).value"
+            >
+              <option v-for="c in SNOOZE_CHOICES" :key="c.key" :value="c.key">{{ c.label }}</option>
+            </select>
             <button
               type="button"
               class="text-sm text-ink-3 hover:text-ink-2 disabled:text-ink-4 disabled:cursor-not-allowed"
               :disabled="!!dismissing[f.id]"
               data-test="sec-dismiss"
-              @click="onDismiss(f.id, 7)"
+              @click="onDismiss(f.id, chosen(f.id).days)"
             >
-              {{ dismissing[f.id] ? 'Dismissing…' : 'Dismiss 7d' }}
+              {{ dismissing[f.id] ? 'Dismissing…' : 'Dismiss' }}
             </button>
           </div>
         </div>
