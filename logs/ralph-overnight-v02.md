@@ -597,3 +597,67 @@ B4 — Security-rule model + first three rules
 `SecurityFinding(id, severity, title, description, remediationUrl)`
 + `SecurityRule` interface + `GET /api/security/findings`. Backend
 unit test per rule. Frontend unchanged (empty state stays).
+
+## Iter 13 · 2026-08-03 08:47 · commit (see git log -1)
+**B4 — SecurityFinding model + 3 rules + /api/security/findings.**
+
+Phase B is now feature-complete for the hard-stop: A1–A8 shipped,
+B1 (backend+frontend), B2 (backend), B3 (backend+frontend), B4
+(backend). Remaining backlog is exclusively UI wiring + deferred
+E2E — a spot Bruce can reasonably pick up morning of.
+
+### What shipped
+
+- `domain/SecurityFinding` — record {id, severity, title, description,
+  remediationUrl}. HIGH/MEDIUM/LOW string constants.
+- `security/SecurityRule` — interface id()+evaluate(). Contract:
+  return List.of() not null; never throw; findings must have stable ids.
+- `security/WeakAdminPasswordRule` — parses argon2 hash metadata,
+  flags HIGH when m<15360 or t<2 (OWASP 2024). Unparseable ⇒ HIGH
+  'unknown format'.
+- `security/DockerSocketExposureRule` — MEDIUM per non-owner container
+  with /var/run/docker.sock mount. Owners: exact-match {aurora,
+  aurora-dashboard} — prefix aurora-* alone does NOT exempt.
+- `security/UnpinnedImageTagsRule` — HIGH for :latest / no-tag,
+  MEDIUM for tag-without-digest. Registry ports handled; aurora
+  container exempt.
+- `security/SecurityFindingsService` — Spring auto-wires all rules,
+  aggregates with try/catch per rule, sorts HIGH→MEDIUM→LOW then by
+  id.
+- `controllers/SecurityController` — GET /api/security/findings.
+
+### Verification
+- Touched suites: 38/38 green.
+- Full backend: 251 tests, 1 pre-existing failure unchanged, 0
+  introduced (213 → 251, +38).
+- `vue-tsc --noEmit` → exit 0.
+
+### Files touched
+- backend/…/domain/SecurityFinding.java (+42, new)
+- backend/…/security/SecurityRule.java (+30, new)
+- backend/…/security/WeakAdminPasswordRule.java (+140, new)
+- backend/…/security/DockerSocketExposureRule.java (+105, new)
+- backend/…/security/UnpinnedImageTagsRule.java (+112, new)
+- backend/…/security/SecurityFindingsService.java (+55, new)
+- backend/…/controllers/SecurityController.java (+38, new)
+- 5 new test files: 38 tests total across rules + service + controller.
+
+### Deferred
+- Frontend SecurityPosture.vue: swap the M4 empty state for a card-
+  list rendering the /findings endpoint. Own iter.
+- Further rules (backups, firewall, fail2ban, unattended-upgrades).
+  Task spec pinned to first three; each additional rule can land
+  independently.
+- Password entropy check at set-time in AuthService (not a Rule).
+- Dismiss/snooze lifecycle with a settings table.
+
+### Next iteration target
+Iter-14 candidate options:
+1. Frontend wire-up for /api/security/findings (fills the M4 promise).
+2. B3 PackageDetail "Logs" tab wiring (currently placeholder).
+3. Reflection sweep of deferred items (E2E, per-container metrics,
+   useEventsStore retirement) and pick the highest-ROI carryover.
+
+Recommend option 1 — closes the loop on the biggest visible UX
+promise made by the sidebar and delivers a shippable v0.3-preview
+to Bruce for the morning walk-through.
