@@ -17,7 +17,7 @@
 // downgrade of the capability flag still renders warm empty copy.
 import { computed, onMounted, ref } from 'vue';
 import { useSystemStore } from '@/stores/system';
-import { SecurityApi, type SecurityFinding, type SecuritySeverity } from '@/api/security';
+import { SecurityApi, type SecurityFinding, type SecuritySeverity, type DismissalRow } from '@/api/security';
 import Card from '@/components/ui/Card.vue';
 import Alert from '@/components/ui/Alert.vue';
 import Badge from '@/components/ui/Badge.vue';
@@ -31,6 +31,35 @@ const err = ref<string | null>(null);
 // B4-followup (iter-23): track per-row 'dismissing' state so the button
 // disables while the POST is in flight and doesn't spam the backend.
 const dismissing = ref<Record<string, boolean>>({});
+
+// B4-followup (iter-25): suppressed-findings management view. Lives
+// below the active list on the same page rather than under Settings so
+// the operator sees dismissals in context ("what did I already hide?").
+const suppressed = ref<DismissalRow[]>([]);
+const suppressedOpen = ref<boolean>(false);
+const restoring = ref<Record<string, boolean>>({});
+
+function formatIso(iso: string | null | undefined): string {
+  if (!iso) return '\u2014';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function dismissalExpiryLabel(row: DismissalRow): string {
+  if (!row.expires_at) return 'permanent';
+  const expires = new Date(row.expires_at);
+  if (Number.isNaN(expires.getTime())) return 'unknown';
+  const now = Date.now();
+  const deltaMs = expires.getTime() - now;
+  if (deltaMs <= 0) return 'expired';
+  const hours = deltaMs / 3_600_000;
+  if (hours < 24) return `${hours.toFixed(0)}h left`;
+  return `${Math.round(hours / 24)}d left`;
+}
 
 const scannerLive = computed<boolean>(() =>
   system.info?.capabilities?.securityScanner === true,
@@ -66,6 +95,9 @@ async function onDismiss(id: string, days: number = 7): Promise<void> {
   findings.value = findings.value.filter((f) => f.id !== id);
   try {
     await SecurityApi.dismiss(id, days);
+    // iter-25: after dismiss, refresh suppressed so the toggle count
+    // updates without waiting for the user to open the section.
+    void fetchSuppressed();
   } catch (e: unknown) {
     const status = (e as { response?: { status?: number } })?.response?.status;
     err.value = status === 401 || status === 403
@@ -79,11 +111,55 @@ async function onDismiss(id: string, days: number = 7): Promise<void> {
   }
 }
 
+async function fetchSuppressed(): Promise<void> {
+  try {
+    suppressed.value = await SecurityApi.listDismissals();
+  } catch {
+    // Silent — the section stays collapsed / empty; main feed still works.
+    suppressed.value = [];
+  }
+}
+
+async function onRestore(id: string): Promise<void> {
+  if (restoring.value[id]) return;
+  restoring.value = { ...restoring.value, [id]: true };
+  const prev = suppressed.value;
+  suppressed.value = suppressed.value.filter((r) => r.finding_id !== id);
+  try {
+    await SecurityApi.restore(id);
+    // Re-fetch active findings so the restored one reappears in the
+    // main feed on the next tick without a page reload.
+    await fetchFindings();
+  } catch (e: unknown) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    err.value = status === 401 || status === 403
+      ? "Session expired — sign in again to restore findings."
+      : "Aurora couldn't restore that finding just now.";
+    suppressed.value = prev;
+  } finally {
+    const next = { ...restoring.value };
+    delete next[id];
+    restoring.value = next;
+  }
+}
+
+function toggleSuppressed(): void {
+  suppressedOpen.value = !suppressedOpen.value;
+  if (suppressedOpen.value && suppressed.value.length === 0) {
+    void fetchSuppressed();
+  }
+}
+
 onMounted(async () => {
   if (!system.info) {
     try { await system.fetchInfo(); } catch { /* silent — the view renders empty */ }
   }
-  if (scannerLive.value) await fetchFindings();
+  if (scannerLive.value) {
+    await fetchFindings();
+    // iter-25: pre-fetch suppressed so the toggle count is accurate
+    // without waiting for the user to open the section.
+    void fetchSuppressed();
+  }
 });
 
 // Severity → Badge tone. Unknown severities default to neutral so a
@@ -230,6 +306,55 @@ const counts = computed(() => {
         </div>
         <p class="text-sm text-ink-3">{{ f.description }}</p>
       </Card>
+    </div>
+
+    <!--
+      B4-followup (iter-25): collapsed 'Suppressed findings' section under
+      the active list. Renders only when the scanner is capable so a
+      capability downgrade doesn't leak an empty toggle. Empty state is
+      honest — 'nothing has been dismissed'.
+    -->
+    <div v-if="scannerLive" class="mt-8" data-test="sec-suppressed-section">
+      <button
+        type="button"
+        class="text-sm text-ink-3 hover:text-ink-2 flex items-center gap-2"
+        data-test="sec-suppressed-toggle"
+        :aria-expanded="suppressedOpen"
+        @click="toggleSuppressed"
+      >
+        <span class="font-mono" aria-hidden="true">{{ suppressedOpen ? '▾' : '▸' }}</span>
+        Suppressed findings
+        <span class="text-ink-4">({{ suppressed.length }})</span>
+      </button>
+      <div v-if="suppressedOpen" class="mt-3 space-y-2" data-test="sec-suppressed-list">
+        <p v-if="suppressed.length === 0" class="text-xs text-ink-4">
+          Nothing has been dismissed. Dismissed findings show up here so you
+          can bring them back at any time.
+        </p>
+        <div
+          v-for="row in suppressed"
+          :key="row.finding_id"
+          class="flex items-start justify-between gap-3 border border-line rounded-md px-4 py-3"
+        >
+          <div class="min-w-0 text-sm">
+            <div class="font-mono text-ink truncate">{{ row.finding_id }}</div>
+            <div class="text-xs text-ink-4 mt-0.5">
+              dismissed {{ formatIso(row.dismissed_at) }} ·
+              {{ dismissalExpiryLabel(row) }}
+              <span v-if="row.reason">· <em>{{ row.reason }}</em></span>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="text-sm text-ink-2 hover:text-ink whitespace-nowrap disabled:text-ink-4 disabled:cursor-not-allowed"
+            :disabled="!!restoring[row.finding_id]"
+            data-test="sec-restore"
+            @click="onRestore(row.finding_id)"
+          >
+            {{ restoring[row.finding_id] ? 'Restoring…' : 'Restore' }}
+          </button>
+        </div>
+      </div>
     </div>
   </section>
 </template>

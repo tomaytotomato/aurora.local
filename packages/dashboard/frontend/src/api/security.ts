@@ -43,8 +43,32 @@ export const SecurityApi = {
     });
   },
 
+  /**
+   * B4-followup (iter-25): list all currently suppressed findings for a
+   * settings-side management view. Rows come straight from the
+   * security_dismissal table — shape is deliberately kept as a plain
+   * object so a future schema change (e.g. per-user snooze) doesn't
+   * force a wire contract rewrite.
+   */
+  async listDismissals(): Promise<DismissalRow[]> {
+    const { data } = await http.get<DismissalRow[]>('/security/dismissals');
+    return data;
+  },
+
   /** Restore a previously dismissed finding. */
   async restore(id: string): Promise<void> {
     await http.delete(`/security/findings/${encodeURIComponent(id)}/dismiss`);
   },
 };
+
+/**
+ * Row shape returned by GET /api/security/dismissals. Matches the
+ * backend LinkedHashMap key order verbatim so date parsing on the FE
+ * doesn't drift from the SQL representation.
+ */
+export interface DismissalRow {
+  finding_id: string;
+  dismissed_at: string;
+  expires_at: string | null;
+  reason: string | null;
+}
