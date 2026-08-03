@@ -1699,3 +1699,49 @@ Iter-34: **Vitest bootstrap + one MetricChart smoke test**. Add
 `npm run test:unit`, add `packages/dashboard/frontend/vitest.config.ts`,
 and ship one snapshot / unit test on the empty-data render path of
 `MetricChart.vue` so future FE iters have a foundation.
+
+## Iter 34 · 2026-08-03 10:40 · commit 8338159
+**Vitest bootstrap + first FE unit test.**
+
+Closes the iter-33 reflection's largest quality gap.
+
+### What shipped
+- `packages/dashboard/frontend/package.json`: `vitest ^2.1.9`,
+  `@vue/test-utils ^2.4.6`, `jsdom ^25.0.1` in devDependencies;
+  `test:unit` script.
+- `package-lock.json` checked in for reproducibility (was absent).
+- `vitest.config.ts`: vue plugin, `@` alias, jsdom env, `basic`
+  reporter, `src/**/*.{test,spec}.ts` include glob.
+- `MetricChart.spec.ts`: 2 smoke tests — empty series → "No samples
+  yet" copy + `data-state='empty'` + uPlot never instantiated;
+  non-empty series → empty-state absent. Includes uPlot ctor mock,
+  CSS side-effect mock, jsdom ResizeObserver shim.
+- `verify-v03-overnight.sh`: new `3b. frontend vitest` step;
+  SKIP_VITEST env for opt-out; gracefully skips if `vitest.config.ts`
+  isn't present. Fifth check plumbed into pass/fail counter.
+- `RALPH_TASK_V02_V03.md` expected-output block updated to the
+  5-check shape.
+
+### Verification
+- Full backend: 348 tests, 0 failures, 0 errors.
+- `vue-tsc --noEmit` → exit 0.
+- **Vitest: 2 tests passed (Test Files 1, Tests 2).**
+- `bash scripts/verify-v03-overnight.sh` → **5/5 checks pass**.
+
+### Files touched
+- `frontend/package.json` (+4)
+- `frontend/package-lock.json` (new)
+- `frontend/vitest.config.ts` (+27, new)
+- `frontend/src/components/MetricChart.spec.ts` (+70, new)
+- `scripts/verify-v03-overnight.sh` (+30)
+- `RALPH_TASK_V02_V03.md` (+3 -1)
+
+### Deferred (accepted)
+- Component tests for SecurityPosture, SettingsView, ContainerLogsView.
+- E2E via Playwright inside the worktree (aurora-e2e infra debt).
+
+### Next iteration target
+Iter-35: Add one more Vitest per remaining view (**Sidebar badge
+counts**, **SecurityPosture empty/error/loading branches**), keeping
+each test tightly scoped. Small; expands the safety net without
+touching component internals.
