@@ -179,3 +179,25 @@
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 9 files / 87 tests (80 → 87, +7). vue-tsc clean. Dockerfile clean.
 
 **Next.** C7 — migrate Card (biggest surface).
+
+### iter-9 (2026-08-03) — C7 shadcn Card
+
+**Item:** C7. Migrate Card primitive to shadcn tokens.
+
+**What changed.**
+- Token swap only:
+  - `bg-[var(--color-surface)]`  → `bg-card`
+  - `text-[var(--color-ink)]`    → `text-card-foreground`
+  - `border-[var(--color-line)]` → `border-border`
+  - `hover:border-[var(--color-ink-4)]` → `hover:border-muted-foreground`
+- Preserved: default-padding p-7 gate, hover transition, opaque-surface behaviour (`text-card-foreground` guards against `.on-photo`'s white cascade over the photoBg canvas).
+- **Kept Aurora's flat single-primitive Card** rather than splitting to shadcn's Card / CardHeader / CardTitle / CardDescription / CardContent / CardFooter. Six caller files use the flat surface with inline layout (eyebrow / h3 / body) — that reads well for a dense homelab admin, and splitting would be a bigger API break than the token migration warrants.
+
+**Latent quirk surfaced.** Card.spec.ts revealed that Vue 3 coerces the missing boolean `padded` prop to `false`, so the "p-7 by default" contract has never actually fired for any caller. Every existing `<Card>` site either overrides padding via `class="p-8"` or accepts zero padding (PackageDetail's two overview cards). Not fixed in this commit — scope is TOKEN migration, and switching to `withDefaults({padded: true})` is a behaviour change that would visually shift PackageDetail. Documented in Card.vue header + Card.spec.ts note, added to scratchpad as "C-followup: Card padding default".
+
+- Barrel-export `Card` from `src/components/ui/index.ts`.
+- New `Card.spec.ts` — 6 tests: default tokens, opt-in p-7 via `padded=true`, `padded=false` suppresses padding, hover transition, hover-off, class merge.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 10 files / 93 tests (87 → 93, +6). vue-tsc clean. Dockerfile clean.
+
+**Next.** C8 — migrate Progress.

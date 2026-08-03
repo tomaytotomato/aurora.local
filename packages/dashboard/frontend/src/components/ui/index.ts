@@ -17,3 +17,5 @@ export { default as Label } from './Label.vue';
 export { default as Checkbox } from './Checkbox.vue';
 
 export { default as Tabs } from './Tabs.vue';
+
+export { default as Card } from './Card.vue';
