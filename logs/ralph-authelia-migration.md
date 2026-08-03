@@ -100,3 +100,32 @@ Tests are hermetic — no Spring context, `@TempDir` per-test, `AdminUserRepo` m
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 386 tests (373 → 386, +13). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
 
 **Next.** D3 — `packages/identity/` secrets bootstrap. Generate the three Authelia secrets (`AUTHELIA_JWT_SECRET`, `AUTHELIA_SESSION_SECRET`, `AUTHELIA_STORAGE_ENCRYPTION_KEY`) via `openssl rand -hex 32` on first `identity`-enable, write to `packages/identity/.env`, emit an audit row when they rotate.
+
+### iter-4 (2026-08-03) — D3 identity secrets bootstrap
+
+**Item:** D3 — `packages/identity/` secrets bootstrap. Generate `AUTHELIA_JWT_SECRET`, `AUTHELIA_SESSION_SECRET`, `AUTHELIA_STORAGE_ENCRYPTION_KEY` (3× `openssl rand -hex 32`) on first identity-enable + audit rows on every generation / rotation.
+
+**Design decisions.**
+- **Managed the file, not the env vars.** Authelia reads the three keys from `packages/identity/.env` via docker-compose interpolation, so Aurora owns the file. Same pattern as the existing DOMAIN-in-packages/core/.env mutation in `OnboardingService.upsertCoreEnvDomain` — read → replace-or-append → write with owner-only perms.
+- **Bootstrap only when identity is enabled.** `state.readState().enabled().contains("identity")`. Sarah who never enables SSO doesn't get useless keys cluttering an .env file she never opens.
+- **`ensureSecrets()` is idempotent.** Only generates keys that are missing or blank. Second call is byte-identical no-op; audit row only fires on the first (or subsequent partial-fill) invocation.
+- **`rotateSecrets(actingUserId)` is unconditional.** Regenerates all three, writes an audit row with the acting user id. Sessions in flight all invalidate; users bounce to Authelia login next request. Real intent required at the call site (D8 endpoint will guard with admin-role).
+- **Comments + non-managed keys preserved on mutation.** The `.env.example` layout (SMTP block, TZ, DOMAIN) survives — only the three `AUTHELIA_*_SECRET=...` lines are rewritten. Pinned by a test.
+- **Fail-closed** at startup. Same pattern as AutheliaService — catch broadly in `onReady()`, log, don't crash the dashboard because we couldn't touch one .env at boot.
+- **Threat guard**: audit diff carries key *names* only, never the hex values themselves. Pinned by a test that reads the generated secret then asserts Mockito's captured diff string doesn't contain it.
+
+**Constants.**
+- `MANAGED_KEYS = ["AUTHELIA_JWT_SECRET", "AUTHELIA_SESSION_SECRET", "AUTHELIA_STORAGE_ENCRYPTION_KEY"]` — order matters for stable audit-log JSON.
+- `SECRET_BYTES = 32` — Authelia's documented minimum (256-bit).
+- Generation: `SecureRandom` → `byte[32]` → hex-encoded → matches `openssl rand -hex 32` output.
+
+**Tests — 14 new** (`services/IdentitySecretsServiceTests`).
+- **`identityEnabled`**: 3 tests (enabled, disabled, `enabled: null`).
+- **`ensureSecrets`**: creates file from `.env.example`, generates all three; preserves comments + non-managed keys; idempotent second call; partial generation (only fills blanks); audit row only when a key was generated.
+- **`rotateSecrets`**: regenerates every key even when present; audit row carries acting user id + `identity.secrets.rotate` action + `rotated_keys` diff; **never leaks secret values into audit diff** (real threat guard).
+- **Secret shape**: 64 lowercase hex chars per call; 100 calls yield 100 distinct values (RNG not wired to a constant seed).
+- **Perms**: `.env` written 0600 on POSIX filesystems; test gracefully skips when running on a non-POSIX host.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 400 tests (386 → 400, +14). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
+
+**Next.** D4 — `packages/identity/authelia/configuration.yml` finalisation: access-control rules driven from the manifest `sso:` block (see D5), session cookie scoped to `.{$DOMAIN}` so it federates across subdomains, redirection URL back to the requesting service.
