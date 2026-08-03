@@ -120,6 +120,127 @@ public class DockerService {
   }
 
   /**
+   * B3 (v0.3): O(1) existence check for a container id/name against the
+   * daemon. Distinct from {@link #findByName(String)} because that one is
+   * scoped to the aurora compose project; log tail needs to work on any
+   * container the operator can see (a rogue {@code docker run nextcloud}
+   * should still be tailable from Aurora if the operator asks). Returns
+   * empty on {@code NotFoundException} so the caller can emit a 404.
+   */
+  public Optional<String> inspectContainer(String idOrName) {
+    if (idOrName == null || idOrName.isBlank()) return Optional.empty();
+    try {
+      var res = docker.inspectContainerCmd(idOrName).exec();
+      return Optional.ofNullable(res.getId());
+    } catch (com.github.dockerjava.api.exception.NotFoundException nfe) {
+      return Optional.empty();
+    } catch (Exception e) {
+      log.debug("inspectContainer {} failed: {}", idOrName, e.getMessage());
+      return Optional.empty();
+    }
+  }
+
+  /**
+   * B3 (v0.3): fetch the last {@code tail} lines from a container's log
+   * stream. Snapshot only — no live follow; that's a v0.4 promotion.
+   *
+   * <p>Frames arrive from docker-java as an unbounded stream of
+   * {@link Frame}s tagged with stdout/stderr. We collect frames until
+   * the callback completes (docker closes the connection once tail
+   * frames have been sent) or {@code timeout} elapses. Payload text is
+   * decoded UTF-8 and split on newlines; empty trailing entries dropped.
+   *
+   * <p>Bounded to protect against pathological line lengths + rogue
+   * containers spewing MBs of ANSI garbage: aborts at
+   * {@link #LOG_BYTES_CAP} bytes and marks the result truncated.
+   *
+   * @param containerId  the container id or name (docker resolves both).
+   * @param tail         number of trailing lines to request from docker.
+   * @param timeout      max wall-clock wait for the tail collection.
+   * @return a {@link LogTail} snapshot; {@link LogTail#lines} is empty when
+   *         docker has no matching container (rather than throwing) so the
+   *         caller can distinguish "no logs" from "no such container" via
+   *         a prior {@link #inspectContainer}.
+   */
+  public LogTail tailLogs(String containerId, int tail, Duration timeout) {
+    List<LogLine> collected = new ArrayList<>();
+    java.util.concurrent.atomic.AtomicLong bytes = new java.util.concurrent.atomic.AtomicLong(0);
+    java.util.concurrent.atomic.AtomicBoolean truncated = new java.util.concurrent.atomic.AtomicBoolean(false);
+    var cb = new ResultCallback.Adapter<Frame>() {
+      @Override public void onNext(Frame f) {
+        if (truncated.get()) return;
+        byte[] payload = f.getPayload();
+        if (payload == null || payload.length == 0) return;
+        long total = bytes.addAndGet(payload.length);
+        if (total > LOG_BYTES_CAP) {
+          truncated.set(true);
+          return;
+        }
+        String stream = f.getStreamType() == StreamType.STDERR ? "stderr" : "stdout";
+        String text = new String(payload, java.nio.charset.StandardCharsets.UTF_8);
+        // Docker prefixes each line with an RFC3339 timestamp when
+        // withTimestamps(true). Split on the first space; if no space
+        // is present treat the whole payload as text with no ts.
+        for (String rawLine : text.split("\n")) {
+          if (rawLine.isEmpty()) continue;
+          int sp = rawLine.indexOf(' ');
+          String ts = null;
+          String line = rawLine;
+          if (sp > 0 && sp < 40) {
+            String maybeTs = rawLine.substring(0, sp);
+            // Cheap RFC3339 shape check: starts with 4 digits + dash.
+            if (maybeTs.length() >= 5
+                && Character.isDigit(maybeTs.charAt(0))
+                && Character.isDigit(maybeTs.charAt(1))
+                && Character.isDigit(maybeTs.charAt(2))
+                && Character.isDigit(maybeTs.charAt(3))
+                && maybeTs.charAt(4) == '-') {
+              ts = maybeTs;
+              line = rawLine.substring(sp + 1);
+            }
+          }
+          collected.add(new LogLine(ts, stream, line));
+        }
+      }
+    };
+    try {
+      docker.logContainerCmd(containerId)
+          .withTail(tail)
+          .withStdOut(true)
+          .withStdErr(true)
+          .withTimestamps(true)
+          .withFollowStream(false)
+          .exec(cb);
+      cb.awaitCompletion(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    } catch (com.github.dockerjava.api.exception.NotFoundException nfe) {
+      // No such container. Return empty rather than propagating so the
+      // controller can emit a 404 without try/catch gymnastics; the
+      // controller pre-checks existence anyway.
+      return new LogTail(List.of(), false);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+    } catch (Exception e) {
+      log.warn("tailLogs {} failed: {}", containerId, e.getMessage());
+    } finally {
+      try { cb.close(); } catch (Exception ignore) { /* best-effort */ }
+    }
+    // Client-side belt-and-braces: cap the final list at 'tail'. Docker's
+    // tail semantics are usually correct but a chatty stderr can slip a
+    // few extra frames in during the closing window.
+    List<LogLine> capped = collected.size() > tail
+        ? new ArrayList<>(collected.subList(collected.size() - tail, collected.size()))
+        : collected;
+    return new LogTail(capped, truncated.get());
+  }
+
+  /** Payload cap for {@link #tailLogs}. 2 MiB — comfortable for 200 lines
+   *  and a hard stop against a runaway log line. */
+  public static final long LOG_BYTES_CAP = 2L * 1024L * 1024L;
+
+  public record LogLine(String ts, String stream, String line) {}
+  public record LogTail(List<LogLine> lines, boolean truncated) {}
+
+  /**
    * Start streaming docker events. Caller is responsible for closing the
    * returned {@link Closeable} to stop the stream.
    */
