@@ -1239,3 +1239,43 @@ then option 2 (small, high-signal — the pill number gets context).
 Iter-24: baseline refresh + summary rewrite for the 314 test count +
 uPlot + dismissals. Then a small polish: System-card sparkline via
 MetricChart(height=48) for `sys.cpu_pct` context on the pill.
+
+## Iter 24 · 2026-08-03 09:38 · commit af7b182
+**System-card CPU sparkline + baseline refresh to 314.**
+
+### What shipped
+
+- **Sparkline** on the DashboardHome System card: 56 px `MetricChart`
+  under the pill row rendering `sys.cpu_pct` over the last 24 h.
+  Loaded in parallel with the main chart via a silent
+  `loadCpuSparkline()` — failure hides the sparkline rather than
+  spoiling the pill context. Latest value shown alongside "CPU
+  last 24h" so a glance answers "steady state or spike?".
+- **Baseline refresh**: executive summary (iter-21→24, 286→314),
+  `verify-v03-overnight.sh` cached string + belt-and-braces floor,
+  `RALPH_TASK_V02_V03.md` expected-output block.
+
+### Verification
+- `vue-tsc --noEmit` → exit 0.
+- Full backend: 314 tests, 0 failures, 0 errors (unchanged; FE-only
+  code change).
+- `bash scripts/verify-v03-overnight.sh` → 4/4 checks pass with the
+  new 314 floor active.
+
+### Files touched
+- `frontend/src/views/DashboardHome.vue` (+50 -3)
+- `logs/ralph-overnight-v02.md` (+8, summary + table rows)
+- `RALPH_TASK_V02_V03.md` (+2 -2)
+- `scripts/verify-v03-overnight.sh` (+2 -2)
+
+### Deferred
+None new. Remaining backlog is opt-in polish: settings-side
+dismissed-findings view; snooze duration picker; range picker
+(1h/6h/24h/7d); audit event on dismiss/restore; live log-tail SSE
+follow (task-spec deferred to v0.4).
+
+### Next iteration target
+Iter-25: **Settings dismissed-findings view**. Backend already exposes
+`GET /api/security/dismissals` (iter-23); FE reads it, renders a small
+"Currently suppressed" list with restore buttons under the SecurityPosture
+findings feed. Contained diff.
