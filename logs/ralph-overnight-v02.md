@@ -4,9 +4,15 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 
 ---
 
-## Executive summary (as of iter-27 · commit 7dec90c)
+## Executive summary (as of iter-40 / final · HEAD 71b3196)
 
-**Bottom line.** Phase A (v0.2 close-out) is closed, Phase B (v0.3 groundwork) is feature-complete for the hard-stop, and every deferred followup pinned in the per-item logs has now shipped through iter-27. Backend + frontend fully green. 52 commits since `f9c4406`. Live aurora on `rename/aurora` is untouched — everything in this worktree is on `feat/v0.2-overnight` and pushed to origin, awaiting your morning review + merge.
+**Bottom line.** Phase A (v0.2 close-out A1–A8) closed. Phase B (v0.3 groundwork B1–B4) feature-complete. Every deferred followup pinned in the per-item logs shipped by iter-33. Iters 34–39 added Vitest infra + four `lib/*` extracted modules with test coverage + humanised the remaining §5 error-copy leaks. **77 commits since baseline `f9c4406`.** Backend + frontend + Vitest + Dockerfile check all green. Live aurora on `rename/aurora` untouched throughout — everything in this worktree is on `feat/v0.2-overnight` and pushed to origin, awaiting your morning review + merge.
+
+**Final test totals:**
+- Backend: **348 tests / 0 failures / 0 errors** (baseline: 127 with 1 pre-existing failure).
+- Frontend Vitest: **4 files / 32 tests** (baseline: no Vitest infra).
+- Frontend `vue-tsc --noEmit`: exit 0 on every FE iter.
+- `docker build --check`: no warnings since iter-6 (A7).
 
 **v0.3 followups shipped after B4:**
 - Per-container CPU + memory metrics (`ContainerStatsSampler`, iter-20).
@@ -15,8 +21,22 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 - Dismiss/snooze security findings (V2 migration + repo + endpoints + FE, iter-23).
 - System-card CPU sparkline (iter-24).
 - Suppressed-findings collapsible section on `/security` with Restore (iter-25).
-- Snooze duration picker (1d/7d/30d/90d/Permanent) on the Dismiss button (iter-26).
-- Audit events on dismiss/restore (iter-27; 'security.dismiss' / 'security.restore' → `audit_event`).
+- Snooze duration picker (1d/7d/30d/90d/Permanent, iter-26).
+- Audit events on dismiss/restore (iter-27).
+- `CurrentUserService` + principal attribution on audits (iter-28).
+- `LaunchService` audit attribution (iter-29).
+- `GET /api/audit/events` + AuditEventRepo.query (iter-30).
+- Settings audit-log viewer (iter-31).
+- Sidebar `/security` badge (iter-32).
+- `document.title` severity prefix (iter-33).
+
+**v0.3 test-infra + polish shipped iters 34–39:**
+- Vitest bootstrap + first FE unit test (iter-34).
+- `lib/severity.ts` extraction + 7 tests (iter-35).
+- `lib/container-events.ts` extraction + 13 tests (iter-36).
+- `lib/http-error-copy.ts` extraction + 10 tests + ContainerLogsView migration (iter-37).
+- 5-view sweep to the shared helper (iter-38).
+- LoginView + PackageDetail humanised (iter-39).
 
 **Phase A — v0.2 close-out (A1–A8, all shipped)**
 - **A1** — `d9c4b6d` — Kill DoneChecklist / PackagesCard drift + honest container count on the System card.
@@ -60,6 +80,12 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 | iter-28 (principal attribution on audits) | 327 | +8 | 0 | 0 |
 | **iter-29 (LaunchService audit attribution)** | **332** | **+5** | **0** | **0** |
 | iter-30 (GET /api/audit/events) | 348 | +16 | 0 | 0 |
+| iter-31–33 (audit viewer + sidebar + title) | 348 | — | 0 | 0 |
+| iter-34 (Vitest bootstrap) | 348 | — | 0 | 0 |
+| iter-35 (severity helpers +7 Vitest) | 348 | — | 0 | 0 |
+| iter-36 (container-events helpers +13 Vitest) | 348 | — | 0 | 0 |
+| iter-37 (http-error-copy helpers +10 Vitest) | 348 | — | 0 | 0 |
+| iter-38–39 (view sweep + humane copy) | **348** | — | **0** | **0** |
 
 Frontend `vue-tsc --noEmit` exit 0 on every iter that touched the FE.
 
@@ -81,6 +107,16 @@ docker run --rm \
   maven:3.9-eclipse-temurin-25-alpine \
   mvn -B -o -Dstyle.color=never test
 # Expected: 348 tests, 0 failures, 0 errors.
+
+# Frontend Vitest (~15s cold, ~4s warm):
+docker run --rm \
+  -v "$PWD/packages/dashboard/frontend":/app -w /app \
+  node:22-alpine sh -c "npm run test:unit"
+# Expected: 4 files / 32 tests passed.
+
+# Or run all five checks in one shot:
+bash scripts/verify-v03-overnight.sh
+# Expected: 5/5 checks pass.
 
 # Frontend (~30s cold):
 docker run --rm \
