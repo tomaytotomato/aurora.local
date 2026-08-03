@@ -15,7 +15,7 @@ export const useAuthStore = defineStore('auth', () => {
       return session.value;
     } catch (e) {
       // 401 is normal — surface as unauthenticated, not as error.
-      session.value = { authenticated: false, username: null, passkeyEnrolled: false, tz: null };
+      session.value = { authenticated: false, username: null, passkeyEnrolled: false, tz: null, role: null };
       return session.value;
     } finally {
       loading.value = false;
@@ -37,7 +37,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout(): Promise<void> {
     await AuthApi.logout();
-    session.value = { authenticated: false, username: null, passkeyEnrolled: false, tz: null };
+    session.value = { authenticated: false, username: null, passkeyEnrolled: false, tz: null, role: null };
   }
 
   return { session, loading, error, fetchSession, login, logout };

@@ -120,23 +120,19 @@ class AutheliaConfigurationInvariantsTests {
 
   @Test
   @SuppressWarnings("unchecked")
-  void argon2id_matches_aurora_hashing_defaults() throws IOException {
+  void hash_algorithm_matches_aurora_side() throws IOException {
     Map<String, Object> auth = (Map<String, Object>) load().get("authentication_backend");
     Map<String, Object> file = (Map<String, Object>) auth.get("file");
     Map<String, Object> pw = (Map<String, Object>) file.get("password");
-    Map<String, Object> argon2 = (Map<String, Object>) pw.get("argon2");
-    // Aurora's WeakAdminPasswordRule hashes with argon2id iterations=3,
-    // memory=65536, parallelism=4, key_length=32, salt_length=16.
-    // Authelia MUST match so hashes generated on one side verify on
-    // the other; drift here would silently break login the next time
-    // AdminUserRepo hashes a password differently to what the on-disk
-    // file expects.
-    assertThat(argon2.get("variant")).isEqualTo("argon2id");
-    assertThat(argon2.get("iterations")).isEqualTo(3);
-    assertThat(argon2.get("memory")).isEqualTo(65536);
-    assertThat(argon2.get("parallelism")).isEqualTo(4);
-    assertThat(argon2.get("key_length")).isEqualTo(32);
-    assertThat(argon2.get("salt_length")).isEqualTo(16);
+    // Aurora's AuthService hashes with BCrypt cost 12 (see the header
+    // comment there — argon2-jvm SIGSEGVs under musl, migration to
+    // a pure-Java argon2 pivot is queued). Authelia MUST match so
+    // projected hashes verify on the Authelia side without a rehash-
+    // on-first-login dance. Drift here would silently break every
+    // login after D2 lands users_database.yml on the live box.
+    assertThat(pw.get("algorithm")).isEqualTo("bcrypt");
+    Map<String, Object> bcrypt = (Map<String, Object>) pw.get("bcrypt");
+    assertThat(bcrypt.get("cost")).isEqualTo(12);
   }
 
   @Test

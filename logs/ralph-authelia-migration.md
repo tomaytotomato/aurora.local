@@ -281,3 +281,45 @@ All tests hermetic — `@TempDir` per-test, `PackagesService` mocked, no Spring 
 **Milestone.** D1–D7 all landed. Aurora backend now has everything it needs to project users into Authelia + gate protected vhosts through Caddy forward-auth. The remaining work is the operator surface (D8 user CRUD API + D9 /users view), the onboarding hook (D10), and the actual per-service migrations (D11 notes pilot + D12 grafana/paperless/forgejo/HA rollout).
 
 **Next.** D8 — `GET/POST/PUT/DELETE /api/users` with admin-role guard tested at the controller level (not just via Spring Security config). Includes password rotation + "invalidate all sessions" for a compromised-credentials response.
+
+### iter-9 (2026-08-03) — D8 user management API + hash-alg alignment
+
+**Item:** D8 — `/api/users` CRUD (admin-role only) + password rotation + Session role plumbing + Aurora↔Authelia hash-algorithm alignment.
+
+**Bug caught in flight.** Aurora hashes admin passwords with **bcrypt cost 12** (see `AuthService`; argon2-jvm SIGSEGVs under musl/Alpine). But D4's `configuration.yml` declared `argon2id` for Authelia's file backend. The projected `users_database.yml` from D2 carried bcrypt hashes; Authelia would have rejected every login the moment a real box booted with real users. Fixed in this iter — Authelia switched to `algorithm: bcrypt` with `cost: 12`, and the D4 invariants test renamed + repointed to bcrypt.
+
+**Backend additions.**
+
+- **`UsersService`** — orchestrator for every mutation. Guards the "must keep at least one admin" invariant (both demote path in `updateRole` and delete path in `delete`). Publishes `UserChangedEvent` on every mutation so AutheliaService re-projects `users_database.yml`. Records an audit row (`users.create`, `users.role-change`, `users.password-rotate`, `users.delete`). Password rotation's audit row deliberately carries a `null` diff — never surface a fresh hash even in the audit log.
+- **`UsersController`** — REST endpoints:
+  - `GET /api/users` — list summaries (admin only).
+  - `GET /api/users/{id}` — single user (admin only).
+  - `POST /api/users` — create with `{username, password, role, tz?}`. 201 on success; 400 for bad input; 409 for duplicate username; 403 for non-admin caller.
+  - `PUT /api/users/{id}` — update role and/or password. 200 on success; 400/404/422 for the usual failure modes.
+  - `DELETE /api/users/{id}` — 204 on success; 422 for last-admin delete.
+- **Admin-role guard**: `requireAdmin()` helper on the controller. Reads role from DB every call (via `CurrentUserService.currentRole()`) so a role change takes effect on the next request without needing a session rotate. Returns 401 for unauthenticated + 403 for authenticated-not-admin — two failure modes an operator would want to distinguish in a support ticket.
+- **`CurrentUserService.currentRole()`** — new method mirroring `currentUserId()`.
+- **`AuthService.roleFor(username)` / `tzFor(username)`** — quick lookups used by `/api/auth/session`.
+- **`AdminUserRepo.updatePasswordHash(id, hash)` + `deleteById(id)`** — filled the CRUD gaps.
+- **`AuthController.Session`** grows a `role` field (backward-compat append) so the frontend can gate the sidebar `/users` link (D9). Login now sets the Spring Security authority from the DB role (`ROLE_ADMIN` / `ROLE_USER` / `ROLE_GUEST`) instead of hardcoding `ROLE_ADMIN`. `/api/auth/session` re-reads role from DB every call.
+
+**Input validation.**
+- Username: `[a-z0-9][a-z0-9._-]*`, 2-32 chars. Narrower than SQLite would accept so usernames can appear in Authelia group strings + logs without escaping.
+- Password: min 12 characters. Matches Aurora's existing WeakAdminPasswordRule shape.
+- Role: parsed via `Role.fromWireName()`; unknown values → 400.
+- Char[] passwords cleared after hashing (already done by AuthService).
+
+**Frontend nudge.**
+- `src/api/auth.ts` Session type grew a `role: string | null` field.
+- `src/stores/auth.ts` two anonymous-Session literals now spell it out. Frontend still doesn't RENDER role anywhere; that's D9.
+
+**Tests — 16 new** (`controllers/UsersControllerTests`):
+- **Admin-role guard**: 401 for unauthenticated read; 403 for user/guest read; admin read succeeds and returns the list; every mutating endpoint blocks non-admin BEFORE reaching the service (verify no repo/events interaction).
+- **Create**: hashes password + persists + emits event + audit row with role in diff; rejects bad username shape (uppercase, etc.); rejects password < 12 chars; rejects unknown role; translates DuplicateKeyException → 409.
+- **Role update**: flips role + emits ROLE_CHANGE event + audit row with from→to; **last-admin demote returns 422** (no repo write, no event); 404 for unknown id.
+- **Delete**: wipes row + emits DELETE event; **last-admin delete returns 422**; 404 for unknown id.
+- **Password rotation**: rotates hash + emits PASSWORD_ROTATE event; audit row's diff is `null` (real threat guard so the hash never leaks even into audit).
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 455 tests (439 → 455, +16). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
+
+**Next.** D9 — frontend `/users` view. Admin-only route, sidebar link gated by role, Table + Dialog + DropdownMenu compositions built from Phase C primitives.

@@ -5,6 +5,8 @@ export interface Session {
   username: string | null;
   passkeyEnrolled: boolean;
   tz: string | null;
+  /** Phase D role. `admin | user | guest` when authenticated; null when anonymous. */
+  role: string | null;
 }
 
 export const AuthApi = {

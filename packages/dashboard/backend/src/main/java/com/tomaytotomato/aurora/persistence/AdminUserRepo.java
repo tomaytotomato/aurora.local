@@ -112,6 +112,17 @@ public class AdminUserRepo {
         role.wireName(), id);
   }
 
+  /** Replace the argon2/bcrypt hash for a given user. */
+  public int updatePasswordHash(long id, String passwordHash) {
+    return jdbc.update("UPDATE admin_user SET password_hash = ? WHERE id = ?",
+        passwordHash, id);
+  }
+
+  /** Delete a specific user by id. Callers must guard the last-admin invariant. */
+  public int deleteById(long id) {
+    return jdbc.update("DELETE FROM admin_user WHERE id = ?", id);
+  }
+
   /**
    * TD5 (2026-08-02): wipe every admin user. Intended for the
    * {@code POST /api/onboarding/reset} E2E-only endpoint so Playwright

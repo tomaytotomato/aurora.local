@@ -51,11 +51,17 @@ public class AuthController {
     HttpSession session = request.getSession(true);
     session.setAttribute(SESSION_USER, user.get().username());
 
+    // Spring Security authority mirrors the DB role. Phase D grew the
+    // role model beyond ROLE_ADMIN; the authority string is the DB
+    // role uppercased with 'ROLE_' prefix so downstream @PreAuthorize
+    // (if we ever adopt it) reads naturally.
+    String authority = "ROLE_" + user.get().role().name();
     var authToken = new UsernamePasswordAuthenticationToken(
-        user.get().username(), null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+        user.get().username(), null, List.of(new SimpleGrantedAuthority(authority)));
     SecurityContextHolder.getContext().setAuthentication(authToken);
 
-    return new Session(true, user.get().username(), false, user.get().tz());
+    return new Session(true, user.get().username(), false, user.get().tz(),
+        user.get().role().wireName());
   }
 
   @PostMapping("/logout")
@@ -77,15 +83,33 @@ public class AuthController {
     if (s == null) return Session.anonymous();
     Object u = s.getAttribute(SESSION_USER);
     if (u == null) return Session.anonymous();
-    return new Session(true, u.toString(), false, null);
+    // Fetch role fresh from DB every time so a role change (Phase D
+    // /api/users PUT flip) takes effect on the next request without
+    // needing a re-login. Falls back to null-role when the DB row
+    // disappears out from under the session (rare, but possible via
+    // /api/onboarding/reset in E2E mode).
+    String username = u.toString();
+    String role = auth.roleFor(username).map(r -> r.wireName()).orElse(null);
+    String tz = auth.tzFor(username).orElse(null);
+    return new Session(true, username, false, tz, role);
   }
 
   public record LoginReq(@NotBlank String username, @NotBlank String password) {}
 
-  /** SPA-facing session shape. Stable contract; add fields, never rename. */
-  public record Session(boolean authenticated, String username, boolean passkeyEnrolled, String tz) {
+  /**
+   * SPA-facing session shape. Stable contract; add fields, never rename.
+   * Phase D grew {@code role} (D8) so the frontend can gate the /users
+   * sidebar link + admin-only views.
+   */
+  public record Session(
+      boolean authenticated,
+      String username,
+      boolean passkeyEnrolled,
+      String tz,
+      String role
+  ) {
     public static Session anonymous() {
-      return new Session(false, null, false, null);
+      return new Session(false, null, false, null, null);
     }
   }
 }

@@ -44,14 +44,16 @@ authentication_backend:
     path: /data/users_database.yml
     watch: true
     password:
-      algorithm: argon2
-      argon2:
-        variant: argon2id
-        iterations: 3
-        memory: 65536
-        parallelism: 4
-        key_length: 32
-        salt_length: 16
+      # Aurora hashes admin passwords with BCrypt cost 12 (see
+      # AuthService in the dashboard backend). Argon2id was in the
+      # original brief but argon2-jvm's JNA-loaded shared object
+      # SIGSEGVs under musl/Alpine; the pure-Java pivot is queued
+      # for a later phase (see AuthService header). Authelia must
+      # match so hashes generated on the Aurora side verify on the
+      # Authelia side without a rehash-on-first-login dance.
+      algorithm: bcrypt
+      bcrypt:
+        cost: 12
 
 # ---- Access control ------------------------------------------
 # Policies:
