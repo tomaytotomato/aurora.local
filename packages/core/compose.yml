@@ -19,6 +19,26 @@ services:
     container_name: caddy
     restart: unless-stopped
     networks: [aurora_net]
+    # 2026-08-03: `--watch` makes Caddy re-read the Caddyfile (and every
+    # snippet imported via `import /etc/caddy/snippets/*.caddy`) on any
+    # change, without needing an external `caddy reload` call. Solves the
+    # "enabled the notes package, snippet was rendered, but Caddy is still
+    # serving stale routes" trap Bruce hit when notes.aurora.local returned
+    # an empty 200 despite everything else being wired.
+    #
+    # Alternative approaches, documented for a follow-up if `--watch` ever
+    # proves too aggressive (it re-parses on ANY file event; heavy edits
+    # can double-reload):
+    #   A. LaunchService (Java backend) shells out `docker exec caddy caddy
+    #      reload` after materialising snippets. Explicit, scoped to real
+    #      enable/disable transitions, but adds a docker.sock hop.
+    #   B. Systemd path unit / inotifywait sidecar that debounces file
+    #      events and triggers a reload only on stable settling. Adds
+    #      moving parts.
+    #   C. (this) Caddy's own `--watch` flag. Zero extra process, but
+    #      Caddy's own re-parse cost on every fsevent.
+    # Ship (C) now, keep A + B as scratchpad followups.
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
     ports:
       - "80:80"
       - "443:443"
