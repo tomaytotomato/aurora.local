@@ -661,3 +661,58 @@ Iter-14 candidate options:
 Recommend option 1 — closes the loop on the biggest visible UX
 promise made by the sidebar and delivers a shippable v0.3-preview
 to Bruce for the morning walk-through.
+
+## Iter 14 · 2026-08-03 08:52 · commit 76315dc
+**B4 (frontend) — SecurityPosture reads /api/security/findings.**
+
+### What shipped
+
+- `services/SystemService`: flipped `capabilities.securityScanner` to
+  true. Sidebar reveals `/security`; SecurityPosture view consumes the
+  live endpoint instead of rendering the "M4 lands next release" copy.
+- `api/security.ts` (new): `SecurityFinding` + widened
+  `SecuritySeverity` string union; `SecurityApi.findings()` helper.
+- `views/SecurityPosture.vue` (rewritten):
+  - Scanner off (fallback) → unchanged empty state, preserved verbatim.
+  - Scanner on + error → §5 error copy (401/403 vs generic), retry
+    button, no axios strings.
+  - Scanner on + zero findings → §4 "Nothing to fix right now." No
+    fabricated score.
+  - Scanner on + findings → per-finding Card with severity Badge +
+    title + description; "Fix it →" (`router-link`) for internal
+    `/…` remediation, "Learn more ↗" (`<a rel="noopener noreferrer">`)
+    for external URLs. Backend pre-sorted; view does not reorder.
+  - Header pill: derived {high, medium, low} counts. Refresh button
+    on demand — no background polling.
+
+### Verification
+- `vue-tsc --noEmit` → exit 0.
+- Full backend: 251 tests, 1 pre-existing failure unchanged, 0
+  introduced (single-line capability flip; no test surface).
+
+### Files touched
+- `backend/…/services/SystemService.java` (+7 -7)
+- `frontend/src/api/security.ts` (+31, new)
+- `frontend/src/views/SecurityPosture.vue` (+180 -80, rewritten)
+
+### Deferred
+- E2E: /security route renders findings, empty-clean state, refresh
+  button. Same aurora-e2e infra debt.
+- Dismiss/snooze per finding — settings table + audit event; B4-followup.
+- Aggregate "posture score" (composite). Deliberately omitted per §4.
+- SidebarNav visibility test coverage (no existing test pins the
+  hidden state).
+
+### Next iteration target
+Iter-15: **carryover reflection + high-value defer sweep**. Options
+are converging as the big-ticket items are all shipped. Realistic
+candidates:
+1. Retire `stores/events.ts` (dead after B1 iter-9; no consumers).
+2. PackageDetail "Logs" tab wiring: compose-service → container-name
+   mapping helper + link into `/containers/:id/logs`.
+3. Per-container CPU + memory metrics sampler (B2 deferred bullet).
+4. Write a v0.3-preview summary at the top of
+   `logs/ralph-overnight-v02.md` for Bruce's morning walk-through.
+
+Pick option 4 first (executive-summary lift) then option 2 (fills the
+PackageDetail Logs promise). Options 1 + 3 are lower priority.
