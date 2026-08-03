@@ -1882,3 +1882,41 @@ diff pattern as iter-37 ContainerLogsView.
 Iter-39: **PackagesList / login error copy audit**. `LoginView.vue`
 still carries its own error switch; the packages store fetch path
 too. One more sweep to make the axios shape truly one-place.
+
+## Iter 39 · 2026-08-03 11:11 · commit 869eaa3
+**LoginView + PackageDetail error copy sweep.**
+
+Closes the last two views leaking raw axios `error.message` into the
+DOM. `LoginView` used to render "Request failed with status code 401"
+verbatim; `PackageDetail` did the same on the overview fetch.
+
+### What shipped
+- `LoginView.vue`: shaped §5 branch (401/403 → password mismatch copy;
+  5xx → generic; plain Error with non-axios message → kept; fallback
+  → sign-in-just-now).
+- `PackageDetail.vue`: overview fetch delegates to `humanCopyForError`.
+- Grep confirmation: no remaining user-facing view leaks a raw axios
+  message. Composable + onboarding sources checked and confirmed
+  either dev-only or intentional wizard cold-start diagnostics.
+
+### Verification
+- Backend 348/0/0.
+- `vue-tsc --noEmit` → exit 0.
+- Vitest: 4 files, 32 tests passed.
+- `bash scripts/verify-v03-overnight.sh` → 5/5.
+
+### Files touched
+- `frontend/src/views/LoginView.vue` (+18 -2)
+- `frontend/src/views/PackageDetail.vue` (+4 -2)
+
+### Deferred (accepted)
+- Onboarding wizard `e.message` paths kept as-is (cold-start
+  diagnostics are honest during setup; humanising them post-M4 is
+  a wizard rewrite iter).
+- Composable `error.value = e.message` paths (dev-only badges).
+
+### Next iteration target
+Iter-40 (final): **executive summary refresh + completion promise**.
+Update the top-of-log summary to reflect all iters 25-39 shipped,
+refresh baselines, and verify the completion gate is fully satisfied
+before emitting `<promise>COMPLETE</promise>`.
