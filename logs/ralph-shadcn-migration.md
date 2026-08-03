@@ -337,3 +337,29 @@
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 12 files / 103 tests (99 → 103, +4). vue-tsc clean. Dockerfile clean.
 
 **Next.** C10.2 — Dialog (replace OnboardingAdmin inline recovery-codes modal + wire the "Dismiss permanently?" confirm from the C-spec).
+
+### iter-15 (2026-08-03) — C10 shadcn Dialog (bonus)
+
+**Item:** C10.2 — introduce Dialog primitive + migrate OnboardingAdmin's inline recovery-codes modal.
+
+**Primitive.** `src/components/ui/Dialog.vue` — self-contained (no reka-ui / headlessui dependency; a Vue popover library isn't worth the install cost for one modal in Aurora). Provides:
+- `v-model:open` two-way binding.
+- Teleport to `<body>` so the overlay always paints on top of the sidebar / topbar.
+- **Document-level ESC listener** while open (not overlay-level). Refactored mid-iter after a `@keydown` on the overlay div silently ignored jsdom's synthetic events in tests — moving to `document.addEventListener('keydown', …, true)` in the watch also matches how real dialogs handle ESC (works regardless of what has focus).
+- **Backdrop click to close** — opt-out via `:dismissable="false"`.
+- **Focus trap** — first focusable inside the panel receives focus on mount; Tab / Shift+Tab cycle within the panel.
+- **Body scroll lock** while open; restored on close or unmount.
+- **ARIA:** `role="dialog"` + `aria-modal="true"` + `aria-labelledby` / `aria-describedby` auto-wired to the title / description named slots via generated IDs.
+- Named slots: `default`, `title`, `description`, `footer` (right-aligned button row).
+- Entry animation: `animate-in fade-in-0 zoom-in-95 duration-150`.
+
+**Second Vue-boolean-coerce trap surfaced.** Same latent bug pattern as Card iter-9: `dismissable?: boolean` with a `props.dismissable !== false` gate silently misfires because Vue 3 coerces the missing boolean prop to `false`, making `false !== false = false` and dropping the emit. **Fixed here with `withDefaults`** — added to Dialog only; the pre-existing Card quirk is still tracked as a Phase-C followup for its own commit (behavior change on PackageDetail rendering).
+
+**Migration.** `OnboardingAdmin.vue` recovery modal replaced. Old inline `<div v-if="showRecovery" role="dialog" …>` collapsed to `<Dialog v-model:open="showRecovery" data-test="recovery-dialog">` with `#title`, `#description`, and `#footer` slots. Behaviour improvements over the old inline: real focus trap, ESC to close, body scroll lock, and the "Got it" button gets focus on open.
+
+- Barrel-exports `Dialog` from `src/components/ui/index.ts`.
+- `Dialog.spec.ts` — 9 tests: ARIA wiring, closed state, scroll lock lifecycle, focus-on-open, ESC close + emit, backdrop click close, dismissable=false blocks ESC + click, Tab cycles last→first, Shift+Tab cycles first→last.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 13 files / 112 tests (103 → 112, +9). vue-tsc clean. Dockerfile clean.
+
+**Next.** C10.3 — Select (replace remaining raw `<select>` elements in views: OnboardingDns mode selector, any theme picker).

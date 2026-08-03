@@ -6,7 +6,7 @@ import { OnboardingApi } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
-import { Alert, AlertDescription } from '@/components/ui';
+import { Alert, AlertDescription, Dialog } from '@/components/ui';
 import Checkbox from '@/components/ui/Checkbox.vue';
 import { generatePassword, copyToClipboard } from '@/lib/utils';
 
@@ -223,26 +223,18 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
     <!-- Password recovery modal (shared by both branches). Sarah-safe copy:
          we promise an in-app path even before the recovery panel ships,
-         so we don't leak a CLI escape hatch here. -->
-    <div
-      v-if="showRecovery"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="recovery-title"
-      class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
-      @click.self="showRecovery = false"
-    >
-      <div class="max-w-md w-full bg-card border border-border rounded-lg p-6 shadow-lg">
-        <h2 id="recovery-title" class="text-lg mb-2">Password recovery</h2>
-        <p class="text-sm text-foreground mb-4">
-          Password recovery is coming to the dashboard shortly. In the
-          meantime, if you've lost the admin password, ask whoever set this
-          box up to reset it for you.
-        </p>
-        <div class="flex justify-end">
-          <Button variant="primary" @click="showRecovery = false">Got it</Button>
-        </div>
-      </div>
-    </div>
+         so we don't leak a CLI escape hatch here. Ships as the shadcn
+         Dialog primitive (focus trap + ESC + scroll lock). -->
+    <Dialog v-model:open="showRecovery" data-test="recovery-dialog">
+      <template #title>Password recovery</template>
+      <template #description>
+        Password recovery is coming to the dashboard shortly. In the
+        meantime, if you've lost the admin password, ask whoever set this
+        box up to reset it for you.
+      </template>
+      <template #footer>
+        <Button variant="primary" @click="showRecovery = false">Got it</Button>
+      </template>
+    </Dialog>
   </div>
 </template>

@@ -23,3 +23,5 @@ export { default as Card } from './Card.vue';
 export { default as Progress } from './Progress.vue';
 
 export { default as Skeleton } from './Skeleton.vue';
+
+export { default as Dialog } from './Dialog.vue';
