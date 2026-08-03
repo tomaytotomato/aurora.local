@@ -68,7 +68,10 @@ onMounted(async () => {
   try {
     await packages.fetchOne(name.value);
   } catch (e) {
-    err.value = e instanceof Error ? e.message : 'Failed to load package';
+    err.value = humanCopyForError(e, {
+      subject: 'this package',
+      action: 'load',
+    });
   }
 });
 </script>

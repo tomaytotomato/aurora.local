@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
@@ -23,7 +24,24 @@ async function submit(): Promise<void> {
     await auth.login(username.value, password.value);
     router.push('/');
   } catch (e) {
-    err.value = e instanceof Error ? e.message : 'Login failed';
+    // iter-39: humane copy per §5 contract — no axios strings, no
+    // e.message leaked into the DOM (that path used to expose
+    // 'Request failed with status code 401' verbatim).
+    const status = httpStatusFromError(e);
+    if (status === 401 || status === 403) {
+      err.value = "That username and password didn't match. Try again.";
+    } else if (status !== undefined && status >= 500) {
+      err.value = humanCopyForStatus(status, {
+        subject: 'you',
+        action: 'sign in',
+      });
+    } else if (e instanceof Error && e.message && !e.message.toLowerCase().includes('status')) {
+      // Keep a plain-language error message if the caller went out of
+      // its way to throw a nice string (e.g. offline detection).
+      err.value = e.message;
+    } else {
+      err.value = "Aurora couldn't sign you in just now.";
+    }
   } finally {
     busy.value = false;
   }
