@@ -36,6 +36,7 @@ const routes: RouteRecordRaw[] = [
       // B3 (v0.3): container log tail. Snapshot only.
       { path: 'containers/:id/logs', component: () => import('@/views/ContainerLogsView.vue') },
       { path: 'security', component: () => import('@/views/SecurityPosture.vue') },
+      { path: 'users', component: () => import('@/views/UsersView.vue'), meta: { requiresAdmin: true } },
       { path: 'settings', component: () => import('@/views/SettingsView.vue') },
     ],
   },
@@ -88,6 +89,15 @@ router.beforeEach(async (to) => {
 
   const auth = useAuthStore();
   if (!auth.session) await auth.fetchSession();
-  if (auth.session?.authenticated) return true;
-  return { path: '/login', query: { from: to.fullPath } };
+  if (!auth.session?.authenticated) {
+    return { path: '/login', query: { from: to.fullPath } };
+  }
+  // Phase D iter-10 (D9): admin-only routes bounce non-admin sessions
+  // back to the dashboard home. Belt-and-braces — the sidebar link is
+  // already role-gated, but a direct URL paste to /users from a USER
+  // account would otherwise render an empty view and 403 on data load.
+  if (to.meta.requiresAdmin && auth.session?.role !== 'admin') {
+    return { path: '/' };
+  }
+  return true;
 });

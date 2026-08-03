@@ -323,3 +323,44 @@ All tests hermetic — `@TempDir` per-test, `PackagesService` mocked, no Spring 
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 455 tests (439 → 455, +16). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
 
 **Next.** D9 — frontend `/users` view. Admin-only route, sidebar link gated by role, Table + Dialog + DropdownMenu compositions built from Phase C primitives.
+
+### iter-10 (2026-08-03) — D9 frontend /users view
+
+**Reflection checkpoint.** D1-D8 complete, 9 iters. 455 backend tests (357 baseline → +98). No product-judgement forks; two latent bugs (D2 hash mismatch, D3 startup fail-closed) caught by tests during construction. Approach unchanged: one-item-per-commit + fail-closed services + hermetic tests + `@TempDir` per-test are working. Remaining scope: D9 UI (this iter), D10 wizard step, D11 notes pilot, D12 rollout, D13-16 polish.
+
+**Item:** D9 — admin-only `/users` view + role-gated sidebar link + admin-only router guard.
+
+**Frontend architecture.**
+- **`src/api/users.ts`** — thin API client: `list / create / update / remove`. Mutations pass `toast: false` so the form's inline error copy is the single source of truth (the axios interceptor's global 5xx toast would double-announce alongside the Dialog's Alert). List retains the global toast (background load, no Dialog to render inline).
+- **`src/stores/users.ts`** — Pinia store carrying `users` list + `loading` + `error`. Mutations optimistically refetch after each write; cheap for a homelab user set (units, not thousands).
+- **`src/views/UsersView.vue`** — the full CRUD view. Every interactive primitive comes from Phase C:
+  - Table for the list (Users / Role / TZ / Created + row-menu cell).
+  - Dialog × 4: create form, edit role, rotate password, confirm delete.
+  - DropdownMenu with a kebab trigger for per-row actions (Change role / Rotate password / Delete). Delete item marked `destructive`.
+  - Select for the role picker (both create + edit).
+  - Input + Label for form fields.
+  - Badge for the role pill (admin → warn amber, user/guest → neutral).
+  - Toast on every successful mutation.
+  - Alert (destructive) for inline error copy in each Dialog.
+- **Router** grew a `requiresAdmin` route meta + guard. Non-admin sessions that paste `/users` into the address bar bounce back to `/`.
+- **Sidebar** grew a `requiresRole` NavItem field. `/users` link only renders for admin sessions — a USER's tab order doesn't even include it.
+- **Belt-and-braces access guard on the view itself**: `onMounted` calls `requireAdminOrRedirect()` which re-fetches the session and pushes back to `/` if the caller isn't admin. Guards against a stale session that lost admin between navigation and mount.
+
+**Copy** (Phase D-appropriate for a homelab admin):
+- "Aurora is the source of truth for who can sign into any service on this box. Roles propagate to Authelia automatically."
+- Password rotate warning: "Write it down before you close this dialog — it can't be recovered."
+- Delete warning: "Their audit rows stay in the log. Aurora refuses to delete the last admin."
+
+**Vitest — 8 new** (`src/api/users.spec.ts`).
+- `list()` hits `GET /users`.
+- `create()` hits `POST /users` with the correct body shape.
+- `update()` hits `PUT /users/{id}`.
+- `remove()` hits `DELETE /users/{id}`.
+- Mutations 500 → no global toast (opted out).
+- `list()` 500 → global toast fires (correct behaviour — background load has no inline surface).
+
+Not yet exercised (deferred to D15 tests iter): full mount of `UsersView.vue` with mounted Dialog interaction. The primitive-level tests from Phase C already cover Dialog / DropdownMenu / Table / Select behaviour; view-level Vitest can wait.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 455 unchanged. Vitest 20 files / 177 tests (169 → 177, +8). vue-tsc clean. Dockerfile clean.
+
+**Next.** D10 — onboarding wizard "Single sign-on for services" step. Auto-generates the three Authelia secrets, opts identity into the enabled[] list, explains what happens next.

@@ -2,6 +2,7 @@
 import { RouterLink, useRoute } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 import { useSystemStore } from '@/stores/system';
+import { useAuthStore } from '@/stores/auth';
 import { SecurityApi } from '@/api/security';
 import {
   countBySeverity,
@@ -15,12 +16,15 @@ import {
 
 const route = useRoute();
 const system = useSystemStore();
+const auth = useAuthStore();
 
 interface NavItem {
   to: string;
   label: string;
   icon: string; // svg path 'd'
   requiresCapability?: keyof (import('@/api/system').SystemCapabilities);
+  /** Phase D iter-10: sidebar links can gate on the session role. */
+  requiresRole?: 'admin' | 'user' | 'guest';
   /** iter-32: optional badge count computed at render time. */
   badgeKey?: 'security';
 }
@@ -32,14 +36,23 @@ const nav: NavItem[] = [
   { to: '/', label: 'Overview', icon: 'M3 12 L12 3 L21 12 M5 10 V21 H19 V10' },
   { to: '/packages', label: 'Packages', icon: 'M3 7 L12 3 L21 7 L12 11 Z M3 7 V17 L12 21 M21 7 V17 L12 21' },
   { to: '/security', label: 'Security', icon: 'M12 3 L20 6 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V6 Z', requiresCapability: 'securityScanner', badgeKey: 'security' },
+  // Phase D iter-10 (D9): Users management — admin-only. Hidden from
+  // regular USER + GUEST sessions so it's not even in the tab order.
+  { to: '/users', label: 'Users', icon: 'M12 12 A4 4 0 1 1 12 4 A4 4 0 0 1 12 12 M4 21 V19 A5 5 0 0 1 9 14 H15 A5 5 0 0 1 20 19 V21', requiresRole: 'admin' },
   { to: '/settings', label: 'Settings', icon: 'M12 8 A4 4 0 1 1 12 16 A4 4 0 1 1 12 8 M12 2 V4 M12 20 V22 M4 12 H2 M22 12 H20 M5 5 L6.5 6.5 M17.5 17.5 L19 19 M5 19 L6.5 17.5 M17.5 6.5 L19 5' },
 ];
 
 const visibleNav = computed<NavItem[]>(() =>
   nav.filter((item) => {
-    if (!item.requiresCapability) return true;
-    // Fetch may still be pending on first mount — hide by default.
-    return system.info?.capabilities?.[item.requiresCapability] === true;
+    if (item.requiresCapability &&
+        system.info?.capabilities?.[item.requiresCapability] !== true) {
+      // Fetch may still be pending on first mount — hide by default.
+      return false;
+    }
+    if (item.requiresRole && auth.session?.role !== item.requiresRole) {
+      return false;
+    }
+    return true;
   }),
 );
 
