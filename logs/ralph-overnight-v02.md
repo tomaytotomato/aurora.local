@@ -1745,3 +1745,37 @@ Iter-35: Add one more Vitest per remaining view (**Sidebar badge
 counts**, **SecurityPosture empty/error/loading branches**), keeping
 each test tightly scoped. Small; expands the safety net without
 touching component internals.
+
+## Iter 35 · 2026-08-03 10:47 · commit a1e868d
+**Extract severity helpers into `lib/severity.ts` + 7 new Vitest tests.**
+
+### What shipped
+- `lib/severity.ts` (new): `SeverityCounts` type with `other` bucket,
+  `countBySeverity` / `totalCount` / `highestSeverityTone` /
+  `severityGlyph` / `documentTitleWithFindings`. Empty and
+  'other-only' counts collapse to `info` tone so unknown
+  severities never hijack the badge.
+- `lib/severity.spec.ts` (new, +7 tests): full precedence coverage
+  including edge cases.
+- `Sidebar.vue` refactored to delegate to the module — net-negative
+  lines (`+8 -25`).
+
+### Verification
+- Full backend: 348/0/0.
+- `vue-tsc --noEmit` → exit 0.
+- **Vitest: 2 files, 9 tests passed** (+7).
+- `bash scripts/verify-v03-overnight.sh` → 5/5.
+
+### Files touched
+- `frontend/src/lib/severity.ts` (+72, new)
+- `frontend/src/lib/severity.spec.ts` (+95, new)
+- `frontend/src/components/layout/Sidebar.vue` (+8 -25)
+
+### Deferred
+- Sidebar mount test (Pinia + router overhead).
+- Extract more view logic into composables for the same testing pattern.
+
+### Next iteration target
+Iter-36: Extract `useContainerEvents` dedupe key logic into a testable
+helper and pin it in Vitest. Same net-negative pattern — the composable
+gets thinner while the safety net grows.
