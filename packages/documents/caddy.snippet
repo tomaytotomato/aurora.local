@@ -1,0 +1,17 @@
+# aurora.local / packages/documents / caddy.snippet
+
+http://paperless.{$DOMAIN} {
+	reverse_proxy paperless:8000
+}
+https://paperless.{$DOMAIN} {
+	tls internal
+	reverse_proxy paperless:8000
+}
+
+http://pdf.{$DOMAIN} {
+	reverse_proxy stirling-pdf:8080
+}
+https://pdf.{$DOMAIN} {
+	tls internal
+	reverse_proxy stirling-pdf:8080
+}

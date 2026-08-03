@@ -1,0 +1,58 @@
+# E2E-only overrides. Composed on top of packages/dashboard/compose.yml.
+# Isolates the E2E aurora instance from the live one:
+#   - separate compose project name (aurora-e2e) via CLI: docker compose -p aurora-e2e
+#   - separate container name
+#   - own bridge network (not the external aurora_net)
+#   - published host port 8091 (via AURORA_HOST_PORT=8091 exported by
+#     reset-aurora-e2e.sh so the base compose.yml's ports block resolves
+#     to 8091 — not appended to, which is what compose does with array
+#     merge and which collides with the live aurora on :8090).
+#   - state and repo bind-mounts pointed at a scratch dir
+
+networks:
+  aurora_net:
+    external: false
+    name: aurora-e2e_net
+    driver: bridge
+
+services:
+  aurora:
+    container_name: aurora-e2e
+    # TD5 (2026-08-02): expose POST /api/onboarding/reset in this
+    # instance only. Backend reads env AURORA_E2E and binds it into
+    # aurora.e2e-mode; the endpoint returns 404 in prod (no env set).
+    environment:
+      AURORA_E2E: "1"
+    # No ports override — the base compose.yml already reads
+    # ${AURORA_HOST_PORT:-8090}:8090 and reset-aurora-e2e.sh exports
+    # AURORA_HOST_PORT=8091 before invoking compose. Overriding the
+    # ports array here would *append*, not replace, and re-bind :8090.
+    # Repo + state mounts are supplied via env by reset-aurora-e2e.sh:
+    #   AURORA_REPO_PATH_HOST=/tmp/aurora-e2e-state/repo
+    # No caddy in front of this instance — tests hit :8091 directly.
+
+  # iter-3 BL6: AdGuard sidecar for adguard-password-check.spec.ts.
+  # Runs the real AdGuardHome image so the backend probe (probeAdguard
+  # in StatusProbeService) exercises a live target instead of skipping.
+  # First-run state — no password set, /control/status returns
+  # {"configured": false, ...}, which is exactly what the spec needs.
+  #
+  # Ports intentionally not published. The test container reaches it via
+  # the aurora-e2e_net bridge on port 80 (AdGuard's default web port
+  # unless configured); the aurora container probes it by name
+  # `adguard` on that network.
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: aurora-e2e-adguard
+    restart: unless-stopped
+    networks: [aurora_net]
+    # AdGuard's initial-setup screen listens on :3000 by default. Bind
+    # that as the probe target on the shared bridge network. We don't
+    # need to publish it — the aurora backend reaches it via docker
+    # DNS as `adguard:3000`.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/ >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s

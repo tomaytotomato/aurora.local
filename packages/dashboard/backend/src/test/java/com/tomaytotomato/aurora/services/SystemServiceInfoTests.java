@@ -1,0 +1,273 @@
+package com.tomaytotomato.aurora.services;
+
+import com.tomaytotomato.aurora.config.AuroraProperties;
+import com.tomaytotomato.aurora.domain.RepoState;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Iter-dash-1 tests for {@link SystemService#info()} and
+ * {@link SystemService#stateSnapshot()}.
+ *
+ * <p>Bug 1 (be1523c08f0f.undefined) is closed by sourcing hostname + domain
+ * from {@code .state.yml} via {@link StateFileService}. These tests pin
+ * that contract so future regressions surface as a red unit test rather
+ * than a red dashboard header.
+ */
+class SystemServiceInfoTests {
+
+  private static AuroraProperties props() {
+    return new AuroraProperties(
+        "/repo",
+        "/host/proc",
+        List.of(),
+        new AuroraProperties.Docker("unix:///var/run/docker.sock"));
+  }
+
+  private static DockerService dockerMock() {
+    DockerService docker = Mockito.mock(DockerService.class);
+    Mockito.when(docker.version()).thenReturn(java.util.Optional.of("29.6.2"));
+    Mockito.when(docker.listProjectContainers()).thenReturn(List.of());
+    return docker;
+  }
+
+  @Test
+  void info_readsHostnameAndDomainFromState() {
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of("core"), List.of()));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Map<String, Object> info = svc.info();
+
+    assertEquals("aurora", info.get("hostname"), "hostname must come from .state.yml, never os.hostname()");
+    assertEquals("aurora.local", info.get("domain"), "domain must come from .state.yml");
+    // No InetAddress leakage — a container short-id (12 hex) would fail this.
+    String h = String.valueOf(info.get("hostname"));
+    assertTrue(!h.matches("^[0-9a-f]{12}$"),
+        "hostname must not be a docker container short-id, got: " + h);
+  }
+
+  @Test
+  void info_returnsNullForMissingStateRatherThanEmptyString() {
+    // Contract: frontend renders "—" for missing values. It relies on the
+    // backend emitting null, not "" or "undefined".
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(null, null, null, null, List.of(), List.of()));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Map<String, Object> info = svc.info();
+
+    assertNull(info.get("hostname"), "missing hostname must be null, not undefined/empty");
+    assertNull(info.get("domain"), "missing domain must be null, not undefined/empty");
+    // Structural keys the frontend depends on must exist even when values null.
+    assertTrue(info.containsKey("uptimeSeconds"));
+    assertTrue(info.containsKey("memTotalBytes"));
+    assertTrue(info.containsKey("memUsedBytes"));
+    assertTrue(info.containsKey("diskTotalBytes"));
+    assertTrue(info.containsKey("diskUsedBytes"));
+    assertTrue(info.containsKey("cpuCount"));
+    assertTrue(info.containsKey("containerCount"));
+    assertTrue(info.containsKey("dockerVersion"));
+    assertTrue(info.containsKey("capabilities"));
+  }
+
+  @Test
+  void info_capabilitiesFlagsMetricsTrueAsOfIter22() {
+    // UX_SPEC_DASHBOARD.md §4.5 + §6: the metrics fetch is gated on this
+    // capability flag so DashboardHome doesn't 404 when the backend has
+    // no timeseries endpoint. iter-1 kept it false; iter-10 shipped
+    // MetricsSamplerService + MetricsRepo + /api/metrics/last24h; iter-22
+    // flipped this flag true so the DashboardHome Metrics card renders
+    // a real uPlot chart of the last 24 h. The gate now means: 'you may
+    // fetch metrics', not 'metrics aren't available'.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of("core"), List.of()));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Map<String, Object> info = svc.info();
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> caps = (Map<String, Object>) info.get("capabilities");
+    assertNotNull(caps, "capabilities block must exist");
+    assertEquals(true, caps.get("metrics"),
+        "capabilities.metrics must be true now that MetricsSamplerService + /api/metrics/last24h ship");
+  }
+
+  @Test
+  void stateSnapshot_shapesForDashboardHome() {
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", "2026-08-01T22:10:20Z",
+            List.of("core", "media", "storage", "privacy", "notes"),
+            List.of("cpu")));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Map<String, Object> state = svc.stateSnapshot();
+
+    assertEquals(1, state.get("bootstrapVersion"));
+    assertEquals("aurora", state.get("hostname"));
+    assertEquals("aurora.local", state.get("domain"));
+    assertEquals("2026-08-01T22:10:20Z", state.get("installedAt"));
+    @SuppressWarnings("unchecked")
+    List<String> enabled = (List<String>) state.get("enabled");
+    assertEquals(5, enabled.size());
+    assertTrue(enabled.contains("core"));
+  }
+
+  @Test
+  void stateSnapshot_neverReturnsNullForListFields() {
+    // Prevents a null-list from turning into `null` in JSON, which the
+    // frontend would render as "0 enabled" and fail the count semantics.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(null, null, null, null, null, null));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Map<String, Object> state = svc.stateSnapshot();
+
+    assertNotNull(state.get("enabled"), "enabled must never be null in the DTO");
+    assertNotNull(state.get("profiles"), "profiles must never be null in the DTO");
+  }
+
+  // ---------------------------------------------------------------------
+  // iter-3 TD2 — env() must not leak the container hostname.
+  // ---------------------------------------------------------------------
+
+  @Test
+  void env_readsHostnameAndDomainFromStateFile() {
+    // Same YAML parser as info() — no more grep-based duplicate.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of("core"), List.of()));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Map<String, Object> env = svc.env();
+
+    assertEquals("aurora", env.get("hostname"));
+    assertEquals("aurora.local", env.get("domain"));
+  }
+
+  @Test
+  void env_returnsNullHostnameRatherThanContainerId() {
+    // Contract: pre-onboarding welcome shows "unset" for hostname when
+    // .state.yml has no value — never the container short-id like
+    // `be1523c08f0f`. Regression fix for D4 / iter-3 TD2. The old
+    // env() fell back to InetAddress.getLocalHost().getHostName() which
+    // returned the container ID inside docker.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(null, null, null, null, List.of(), List.of()));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Map<String, Object> env = svc.env();
+
+    assertNull(env.get("hostname"),
+        "missing state.hostname must be null so the wizard renders 'unset', "
+            + "not a docker container short-id");
+    assertNull(env.get("domain"), "missing state.domain must be null");
+    // Resource facts still populate so the welcome screen renders.
+    assertNotNull(env.get("cpu"));
+    assertNotNull(env.get("memory"));
+    assertNotNull(env.get("disks"));
+  }
+
+  @Test
+  void env_neverReturnsAContainerShortIdShapedHostname() {
+    // Belt-and-braces: even if a downstream mistake reintroduces the
+    // hostname() fallback, this test rejects any 12-hex-char value.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of(), List.of()));
+
+    SystemService svc = new SystemService(props(), dockerMock(), stateFiles);
+    Object h = svc.env().get("hostname");
+    if (h != null) {
+      assertTrue(!String.valueOf(h).matches("^[0-9a-f]{12}$"),
+          "env() hostname must never be a docker container short-id, got: " + h);
+    }
+  }
+
+  // --- A6 container count (2026-08-02) ---------------------------------
+
+  private static com.github.dockerjava.api.model.Container ct(String state) {
+    var c = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(c.getState()).thenReturn(state);
+    return c;
+  }
+
+  @Test
+  void containerCount_countsOnlyRunning_notExitedOrCreated() {
+    // A1 broadened DockerService.listProjectContainers() to include
+    // aurora + aurora-* projects. A6 pins the semantic: header says
+    // "Containers N" and users read that as "currently running", not
+    // "aurora has ever known about". Exited containers linger in
+    // `docker ps -a` output until the operator prunes; they must not
+    // inflate the pill.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of(), List.of()));
+
+    DockerService docker = Mockito.mock(DockerService.class);
+    Mockito.when(docker.version()).thenReturn(java.util.Optional.of("29.6.2"));
+    var running1 = ct("running");
+    var running2 = ct("running");
+    var running3 = ct("running");
+    var exited = ct("exited");
+    var dead = ct("dead");
+    var created = ct("created");
+    Mockito.when(docker.listProjectContainers()).thenReturn(
+        java.util.List.of(running1, running2, running3, exited, dead, created));
+
+    SystemService svc = new SystemService(props(), docker, stateFiles);
+    Object count = svc.info().get("containerCount");
+
+    assertEquals(3, count,
+        "containerCount must count running only; exited/dead/created must not inflate");
+  }
+
+  @Test
+  void containerCount_isZeroNotNullWhenAllAuroraContainersAreDown() {
+    // Contract: null means "docker unreachable" (frontend renders —).
+    // Zero means "aurora is up but nothing else is running" (frontend
+    // renders 0). Distinct states — don't collapse them.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of(), List.of()));
+
+    DockerService docker = Mockito.mock(DockerService.class);
+    Mockito.when(docker.version()).thenReturn(java.util.Optional.of("29.6.2"));
+    // Non-null empty list — docker reachable, nothing to count.
+    Mockito.when(docker.listProjectContainers()).thenReturn(java.util.List.of());
+
+    SystemService svc = new SystemService(props(), docker, stateFiles);
+    assertEquals(0, svc.info().get("containerCount"));
+  }
+
+  @Test
+  void containerCount_isNullWhenDockerUnreachable() {
+    // Contract: docker throwing must not crash /api/system/info; return
+    // null and let the frontend show —.
+    StateFileService stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of(), List.of()));
+
+    DockerService docker = Mockito.mock(DockerService.class);
+    Mockito.when(docker.version()).thenReturn(java.util.Optional.of("29.6.2"));
+    Mockito.when(docker.listProjectContainers())
+        .thenThrow(new RuntimeException("docker daemon unreachable"));
+
+    SystemService svc = new SystemService(props(), docker, stateFiles);
+    assertNull(svc.info().get("containerCount"));
+  }
+}

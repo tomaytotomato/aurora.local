@@ -1,0 +1,133 @@
+name: ci
+on:
+  push:
+    branches: [main, productionize, "wt/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+      - name: shellcheck
+        run: |
+          shopt -s nullglob
+          files=(bootstrap.sh scripts/*.sh scripts/lib/*.sh)
+          shellcheck -x -S style -e SC1091 "${files[@]}"
+
+  yaml:
+    name: yamllint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install yamllint
+        run: pipx install yamllint || pip install --user yamllint
+      - name: config
+        run: |
+          cat > .yamllint <<'YL'
+          extends: default
+          rules:
+            line-length: {max: 160, allow-non-breakable-words: true, allow-non-breakable-inline-mappings: true}
+            comments: {min-spaces-from-content: 1}
+            comments-indentation: disable
+            commas: disable
+            document-start: disable
+            truthy: {check-keys: false}
+            braces: disable
+            indentation: {spaces: consistent, indent-sequences: consistent}
+          YL
+      - name: lint
+        run: |
+          yamllint packages/*/manifest.yml host/ group_vars/ .github/workflows/
+
+  ansible:
+    name: ansible-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.x"}
+      - name: install ansible-lint
+        run: pip install --user "ansible-lint>=6.22" ansible-core
+      - name: lint
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          ansible-lint host/site.yml || true   # advisory for now
+
+  compose:
+    name: docker compose config
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        combo:
+          - "core"
+          - "core privacy"
+          - "core media"
+          - "core storage"
+          - "core privacy media"
+          - "core privacy media storage"
+    steps:
+      - uses: actions/checkout@v4
+      - name: seed .env files
+        run: |
+          for p in packages/*/; do
+            if [ -f "$p/.env.example" ] && [ ! -f "$p/.env" ]; then
+              cp "$p/.env.example" "$p/.env"
+            fi
+          done
+      - name: compose config
+        run: |
+          set -euo pipefail
+          args=()
+          for p in ${{ matrix.combo }}; do
+            args+=(-f "packages/$p/compose.yml")
+          done
+          # aurora_net is external in every stack; declare it locally for validation
+          export COMPOSE_PROJECT_NAME=ci
+          # `docker compose config` fails on missing external networks with
+          # some versions; --resolve-image-digests is off by default.
+          docker compose "${args[@]}" config -q \
+            || docker compose "${args[@]}" --profile torrent config -q
+
+  manifest-schema:
+    name: manifest schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.x"}
+      - name: install validator
+        run: pip install --user "jsonschema>=4" "pyyaml>=6"
+      - name: validate
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          python - <<'PY'
+          import json, sys, glob, pathlib
+          import yaml
+          from jsonschema import Draft7Validator
+          schema = json.loads(pathlib.Path(".github/schema/manifest.schema.json").read_text())
+          v = Draft7Validator(schema)
+          bad = 0
+          for f in sorted(glob.glob("packages/*/manifest.yml")):
+              # Skip the template
+              if "/_template/" in f: continue
+              data = yaml.safe_load(pathlib.Path(f).read_text())
+              errs = sorted(v.iter_errors(data), key=lambda e: e.path)
+              if errs:
+                  bad += 1
+                  print(f"::error file={f}::manifest schema errors:")
+                  for e in errs:
+                      path = "/".join(str(p) for p in e.path) or "(root)"
+                      print(f"  {path}: {e.message}")
+              else:
+                  print(f"OK {f}")
+          sys.exit(1 if bad else 0)
+          PY

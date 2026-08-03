@@ -1,0 +1,21 @@
+---
+# Reboot automatically after applying updates that require it.
+unattended_upgrades_reboot: false
+
+# Time-of-day for the auto-reboot (HH:MM, 24h). Ignored unless reboot=true.
+unattended_upgrades_reboot_time: "03:00"
+
+# If set, email upgrade summaries here. Requires a working local MTA.
+unattended_upgrades_mail: ""
+
+# Automatically remove unused kernels/dependencies.
+unattended_upgrades_autoremove: true
+
+# Only mail on error (vs. every run).
+unattended_upgrades_mail_on_error: true
+
+# apt periodic knobs (days).
+unattended_upgrades_update_lists_days: 1
+unattended_upgrades_download_days: 1
+unattended_upgrades_install_days: 1
+unattended_upgrades_autoclean_days: 7

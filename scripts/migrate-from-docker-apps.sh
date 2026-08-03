@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# home.local / scripts/migrate-from-docker-apps.sh
+# aurora.local / scripts/migrate-from-docker-apps.sh
 #
 # One-shot migration from the pre-refactor ~/docker-apps/ layout to
-# ~/home.local/. Idempotent-ish: safe to re-run, will skip anything
+# ~/aurora.local/. Idempotent-ish: safe to re-run, will skip anything
 # already migrated.
 #
 # What it does:
@@ -11,13 +11,13 @@
 #   3. Copies ~/docker-apps/.env into packages/core/.env
 #   4. Brings up the new stack via scripts/up.sh
 #
-# Run from ~/home.local:
+# Run from ~/aurora.local:
 #   ./scripts/migrate-from-docker-apps.sh
 
 set -euo pipefail
 
 OLD="${OLD:-$HOME/docker-apps}"
-NEW="${NEW:-$HOME/home.local}"
+NEW="${NEW:-$HOME/aurora.local}"
 
 cd "$NEW"
 
@@ -76,9 +76,9 @@ fi
 if [[ -f "$OLD/.env" && ! -f "$NEW/packages/core/.env" ]]; then
   echo "==> copying $OLD/.env -> packages/core/.env"
   cp "$OLD/.env" "$NEW/packages/core/.env"
-  # Ensure HOME_DOMAIN is set so Caddy vhosts resolve.
-  grep -q '^HOME_DOMAIN=' "$NEW/packages/core/.env" || \
-    echo 'HOME_DOMAIN=home.local' >> "$NEW/packages/core/.env"
+  # Ensure DOMAIN is set so Caddy vhosts resolve.
+  grep -q '^DOMAIN=' "$NEW/packages/core/.env" || \
+    echo 'DOMAIN=aurora.local' >> "$NEW/packages/core/.env"
 fi
 
 # Propagate SAMBA_PASS from old .env into packages/storage/.env if present.

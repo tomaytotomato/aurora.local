@@ -1,0 +1,17 @@
+name: core
+title: Core
+description: |
+  Caddy + Homepage.
+category: core
+depends_on: []
+recommends: []
+profiles: {}
+ports: []
+requires:
+  min_ram_mb: 256
+  host_roles: []
+required_env: []
+probe:
+  kind: self
+  container: aurora
+post_install_notes: ""

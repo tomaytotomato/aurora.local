@@ -1,0 +1,54 @@
+name: aurora-automation
+title: Home automation (Home Assistant + MQTT + Zigbee2MQTT)
+description: |
+  Home Assistant for automations, Mosquitto as the MQTT broker, and
+  Zigbee2MQTT (opt-in via 'zigbee' profile) to bridge a Zigbee USB
+  coordinator (CC2531, Sonoff ZBDongle-P/E, etc.) onto MQTT.
+
+  Home Assistant runs with network_mode: host — this is standard
+  practice and required for many local-discovery integrations (mDNS,
+  SSDP, HomeKit, Chromecast). It is therefore NOT attached to aurora_net.
+
+category: home-automation
+
+depends_on:
+  - core
+recommends: []
+
+profiles:
+  zigbee:
+    description: Enable Zigbee2MQTT (requires a Zigbee USB coordinator).
+    requires_packages: []
+
+ports:
+  - {port: 8123, proto: tcp, description: Home Assistant UI (host network)}
+  - {port: 1883, proto: tcp, description: Mosquitto MQTT}
+  - {port: 8883, proto: tcp, description: Mosquitto MQTT-TLS}
+  - {port: 8084, proto: tcp, description: Zigbee2MQTT web UI, profile: zigbee}
+
+requires:
+  min_ram_mb: 1024
+  min_disk_gb: 4
+  host_roles: []
+  # A8 (iter-7): home-assistant + zigbee2mqtt + mosquitto + friends.
+  # Home Assistant init pass eats ~30s alone; 90s is a comfortable
+  # warm-relaunch budget.
+  start_budget_seconds: 90
+
+required_env:
+  - TZ
+
+warnings:
+  - id: automation_low_ram
+    if: { ram_below_mb: 1024 }
+    message: 'Home Assistant + Mosquitto (and Zigbee2MQTT under the zigbee profile) want at least 1 GB RAM headroom. Below that, automations get sluggish.'
+
+post_install_notes: |
+  1. Home Assistant onboarding wizard: http://<lan-ip>:8123
+  2. MQTT broker has no default credentials; create them with:
+       docker exec -it mosquitto mosquitto_passwd -c /mosquitto/config/passwd <user>
+     then edit packages/home-automation/mosquitto/config/mosquitto.conf
+     to set `allow_anonymous false` and `password_file /mosquitto/config/passwd`.
+  3. For Zigbee: plug in the USB coordinator, set ZIGBEE_ADAPTER in
+     .env (e.g. /dev/serial/by-id/usb-...), then bring the stack up
+     with the 'zigbee' profile (see scripts/up.sh --zigbee).

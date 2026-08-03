@@ -1,0 +1,88 @@
+---
+# Skip entirely if RAM already exceeds threshold AND caller didn't
+# force an explicit size.
+- name: Compute effective RAM in GB
+  ansible.builtin.set_fact:
+    _ram_gb: "{{ (ansible_memtotal_mb | int / 1024) | round(0, 'ceil') | int }}"
+
+- name: Decide whether swap file is needed
+  ansible.builtin.set_fact:
+    _swap_wanted: >-
+      {{
+        (swap_file_size_gb != 'auto' and (swap_file_size_gb | int) > 0)
+        or (_ram_gb | int) < (swap_min_ram_gb_threshold | int)
+      }}
+
+- name: Skip swap creation (enough RAM, no explicit size)
+  ansible.builtin.debug:
+    msg: >-
+      Host has {{ _ram_gb }}GB RAM (>= {{ swap_min_ram_gb_threshold }}GB)
+      and swap_file_size_gb is 'auto'; skipping swap file.
+  when: not (_swap_wanted | bool)
+
+- name: Resolve final swap size (GB)
+  ansible.builtin.set_fact:
+    _swap_size_gb: >-
+      {{
+        (swap_file_size_gb | int)
+        if (swap_file_size_gb != 'auto' and (swap_file_size_gb | int) > 0)
+        else [[2, _ram_gb | int] | max, swap_file_auto_max_gb | int] | min
+      }}
+  when: _swap_wanted | bool
+
+- name: Stat existing swap file
+  ansible.builtin.stat:
+    path: "{{ swap_file_path }}"
+  register: _swap_stat
+  when: _swap_wanted | bool
+
+- name: Allocate swap file with fallocate
+  ansible.builtin.command:
+    cmd: "fallocate -l {{ _swap_size_gb }}G {{ swap_file_path }}"
+    creates: "{{ swap_file_path }}"
+  when:
+    - _swap_wanted | bool
+    - not _swap_stat.stat.exists
+
+- name: Restrict swap file permissions
+  ansible.builtin.file:
+    path: "{{ swap_file_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: _swap_wanted | bool
+
+- name: Format swap file
+  ansible.builtin.command:
+    cmd: "mkswap {{ swap_file_path }}"
+  register: _mkswap
+  changed_when: "'Setting up swapspace' in _mkswap.stdout or 'no label' in _mkswap.stderr | default('')"
+  failed_when:
+    - _mkswap.rc != 0
+    - "'already' not in (_mkswap.stderr | default(''))"
+  when:
+    - _swap_wanted | bool
+    - not _swap_stat.stat.exists
+
+- name: Enable swap file (runtime)
+  ansible.builtin.command:
+    cmd: "swapon {{ swap_file_path }}"
+  register: _swapon
+  changed_when: _swapon.rc == 0
+  failed_when:
+    - _swapon.rc != 0
+    - "'already' not in (_swapon.stderr | default(''))"
+  when:
+    - _swap_wanted | bool
+    - not _swap_stat.stat.exists
+
+- name: Persist swap in /etc/fstab
+  ansible.posix.mount:
+    name: none
+    src: "{{ swap_file_path }}"
+    fstype: swap
+    opts: sw
+    passno: "0"
+    dump: "0"
+    state: present
+  when: _swap_wanted | bool

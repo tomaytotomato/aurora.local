@@ -1,0 +1,24 @@
+# aurora.local / packages/backup / caddy vhost fragment
+#
+# Fronts the Kopia UI with an outer basic-auth layer on top of Kopia's
+# own auth. Wire this into packages/core/caddy/Caddyfile via the
+# installer worker's `import` mechanism.
+#
+# Generate the outer hash with:
+#   docker run --rm caddy:2-alpine caddy hash-password
+# then set BACKUP_BASIC_AUTH_USER / BACKUP_BASIC_AUTH_HASH in the
+# caddy env.
+
+http://backup.{$DOMAIN} {
+	basic_auth {
+		{$BACKUP_BASIC_AUTH_USER} {$BACKUP_BASIC_AUTH_HASH}
+	}
+	reverse_proxy kopia:51515
+}
+https://backup.{$DOMAIN} {
+	tls internal
+	basic_auth {
+		{$BACKUP_BASIC_AUTH_USER} {$BACKUP_BASIC_AUTH_HASH}
+	}
+	reverse_proxy kopia:51515
+}

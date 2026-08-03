@@ -1,16 +1,20 @@
-# home.local / Caddyfile
+# aurora.local / Caddyfile
 #
-# One vhost per service on ${HOME_DOMAIN} (default home.local).
+# One vhost per service on ${DOMAIN} (default aurora.local).
 # Each site serves BOTH http:// and https:// so devices without the
 # Caddy root cert installed can still reach dashboards without warnings.
 # HTTPS uses Caddy's internal CA; install the root once per device to
 # get green padlocks:
 #   docker exec -it caddy cat /data/caddy/pki/authorities/local/root.crt
 #
-# DNS: AdGuard (packages/privacy) is expected to answer *.{$HOME_DOMAIN}
+# DNS: AdGuard (packages/privacy) is expected to answer *.{$DOMAIN}
 # with the LAN IP of this box.
 
 {
+	# auto_https disable_redirects: keep http:// listening on :80 without
+	# forcing 301 → https. Browsers with a cached HSTS from a previous
+	# aurora.local install would otherwise be locked out until they
+	# manually cleared HSTS.
 	auto_https disable_redirects
 	log {
 		output file /var/log/caddy/access.log {
@@ -21,80 +25,101 @@
 	}
 }
 
-# ---- Core ------------------------------------------------------------
-# Homepage is also the fallback for raw IP / aurora.local so bookmarks
-# keep working while AdGuard DNS is being brought online.
-http://home.{$HOME_DOMAIN}, http://{$HOME_DOMAIN}, http://aurora.local, http://192.168.0.110 {
-	reverse_proxy homepage:3000
+# Reusable snippet: strip any HSTS the upstream might set, so nothing
+# Caddy proxies can lock a browser into https-only. Bruce's Firefox on
+# macOS was hitting exactly this after an earlier home.local install.
+(no_hsts) {
+	header -Strict-Transport-Security
 }
-https://home.{$HOME_DOMAIN}, https://{$HOME_DOMAIN}, https://aurora.local {
+
+# ---- Aurora dashboard (apex) ----------------------------------------
+# Aurora IS the landing page: served at the bare domain, plus raw LAN IP
+# fallback. Homepage retired in v0.1.
+# /caddy-health is a fast-path Caddy answers itself (no upstream trip)
+# so the docker healthcheck stays honest during aurora restarts.
+http://{$DOMAIN}, http://aurora.local, http://192.168.0.110 {
+	import no_hsts
+	handle /caddy-health {
+		respond "caddy ok" 200 {
+			close
+		}
+	}
+	reverse_proxy aurora:8090
+}
+https://{$DOMAIN}, https://aurora.local {
 	tls internal
-	reverse_proxy homepage:3000
+	import no_hsts
+	handle /caddy-health {
+		respond "caddy ok" 200 {
+			close
+		}
+	}
+	reverse_proxy aurora:8090
 }
 
 # ---- Privacy & security ---------------------------------------------
-http://adguard.{$HOME_DOMAIN} {
+http://adguard.{$DOMAIN} {
 	reverse_proxy adguard:3000
 }
-https://adguard.{$HOME_DOMAIN} {
+https://adguard.{$DOMAIN} {
 	tls internal
 	reverse_proxy adguard:3000
 }
 
 # ---- Media automation -----------------------------------------------
-http://sonarr.{$HOME_DOMAIN} {
+http://sonarr.{$DOMAIN} {
 	reverse_proxy sonarr:8989
 }
-https://sonarr.{$HOME_DOMAIN} {
+https://sonarr.{$DOMAIN} {
 	tls internal
 	reverse_proxy sonarr:8989
 }
 
-http://radarr.{$HOME_DOMAIN} {
+http://radarr.{$DOMAIN} {
 	reverse_proxy radarr:7878
 }
-https://radarr.{$HOME_DOMAIN} {
+https://radarr.{$DOMAIN} {
 	tls internal
 	reverse_proxy radarr:7878
 }
 
-http://prowlarr.{$HOME_DOMAIN} {
+http://prowlarr.{$DOMAIN} {
 	reverse_proxy prowlarr:9696
 }
-https://prowlarr.{$HOME_DOMAIN} {
+https://prowlarr.{$DOMAIN} {
 	tls internal
 	reverse_proxy prowlarr:9696
 }
 
-http://bazarr.{$HOME_DOMAIN} {
+http://bazarr.{$DOMAIN} {
 	reverse_proxy bazarr:6767
 }
-https://bazarr.{$HOME_DOMAIN} {
+https://bazarr.{$DOMAIN} {
 	tls internal
 	reverse_proxy bazarr:6767
 }
 
-http://jellyseerr.{$HOME_DOMAIN} {
-	reverse_proxy jellyseerr:5055
+http://seerr.{$DOMAIN} {
+	reverse_proxy seerr:5055
 }
-https://jellyseerr.{$HOME_DOMAIN} {
+https://seerr.{$DOMAIN} {
 	tls internal
-	reverse_proxy jellyseerr:5055
+	reverse_proxy seerr:5055
 }
 
-http://flaresolverr.{$HOME_DOMAIN} {
+http://flaresolverr.{$DOMAIN} {
 	reverse_proxy flaresolverr:8191
 }
-https://flaresolverr.{$HOME_DOMAIN} {
+https://flaresolverr.{$DOMAIN} {
 	tls internal
 	reverse_proxy flaresolverr:8191
 }
 
 # ---- Debrid + torrent -----------------------------------------------
-http://rdt.{$HOME_DOMAIN} {
+http://rdt.{$DOMAIN} {
 	reverse_proxy rdtclient:6500
 }
-https://rdt.{$HOME_DOMAIN} {
+https://rdt.{$DOMAIN} {
 	tls internal
 	reverse_proxy rdtclient:6500
 }
@@ -102,10 +127,10 @@ https://rdt.{$HOME_DOMAIN} {
 # qBittorrent + Gluetun vhosts — only reachable when the 'torrent'
 # compose profile is enabled (scripts/up.sh --torrent).
 # Leaving them commented so re-enabling is a one-line uncomment.
-# http://qbit.{$HOME_DOMAIN} {
+# http://qbit.{$DOMAIN} {
 # 	reverse_proxy gluetun:8080
 # }
-# https://qbit.{$HOME_DOMAIN} {
+# https://qbit.{$DOMAIN} {
 # 	tls internal
 # 	reverse_proxy gluetun:8080
 # }
@@ -114,3 +139,9 @@ https://rdt.{$HOME_DOMAIN} {
 # minidlna runs with network_mode: host for UPnP multicast, so it's not
 # reachable from the caddy bridge network without UFW carve-outs. Access
 # its (minimal) status UI directly at http://<lan-ip>:8200/.
+
+# ---- Per-package snippets -------------------------------------------
+# Every enabled package's caddy.snippet is materialised at
+# /etc/caddy/snippets/<pkg>.caddy by scripts/up.sh (via lib/render.sh).
+# Files are picked up automatically; disabled packages get pruned.
+import /etc/caddy/snippets/*.caddy

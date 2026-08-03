@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# home.local / scripts/seed-adguard.sh
+# aurora.local / scripts/seed-adguard.sh
 #
 # Idempotent seeder for AdGuard Home. Ensures:
 #   1. The rewrites in packages/privacy/adguard/rewrites.yaml are
@@ -70,6 +70,7 @@ if [[ -n "${HOMEPAGE_VAR_ADGUARD_USER:-}" && -n "${HOMEPAGE_VAR_ADGUARD_PASS:-}"
     echo "  user '$HOMEPAGE_VAR_ADGUARD_USER' already present"
   else
     command -v htpasswd >/dev/null || die "htpasswd missing — apt install apache2-utils"
+    # shellcheck disable=SC2016  # single-quoted sed pattern is intentional
     HASH=$(htpasswd -bnBC 10 "" "$HOMEPAGE_VAR_ADGUARD_PASS" | tr -d ':\n' | sed 's/^\$2y/\$2a/')
 
     sudo python3 - "$CONF" "$HOMEPAGE_VAR_ADGUARD_USER" "$HASH" <<'PY'

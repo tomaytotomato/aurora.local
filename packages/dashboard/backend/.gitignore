@@ -1,0 +1,7 @@
+target/
+*.class
+.idea/
+*.iml
+.vscode/
+# Only the properties file is committed; the jar is fetched on first run.
+.mvn/wrapper/maven-wrapper.jar

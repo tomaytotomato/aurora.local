@@ -1,0 +1,15 @@
+# packages/ai — Homepage services fragment.
+
+- AI:
+    - Open-WebUI:
+        icon: open-webui.png
+        href: https://ai.{{HOMEPAGE_VAR_DOMAIN}}/
+        description: Local LLM chat
+        server: my-docker
+        container: open-webui
+    - Ollama:
+        icon: ollama.png
+        href: http://{{HOMEPAGE_VAR_LAN_IP}}:11434/
+        description: Local LLM API
+        server: my-docker
+        container: ollama-cpu

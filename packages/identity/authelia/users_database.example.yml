@@ -1,0 +1,20 @@
+###############################################################
+# Authelia users database — EXAMPLE                            #
+#                                                              #
+# 1. Copy this file to data/identity/authelia/users_database.yml
+# 2. Generate a real argon2id hash:                            #
+#      docker run --rm authelia/authelia:latest \              #
+#        authelia crypto hash generate argon2 --password 'pw'  #
+# 3. Paste the $argon2id$... string as `password:` below.      #
+# 4. Restart authelia:  docker restart authelia                #
+###############################################################
+
+users:
+  admin:
+    displayname: 'Admin'
+    # REPLACE with a real hash from `authelia crypto hash generate argon2`.
+    password: '$argon2id$v=19$m=65536,t=3,p=4$REPLACE_ME_WITH_REAL_HASH'
+    email: admin@aurora.local
+    groups:
+      - admins
+      - dev

@@ -1,0 +1,79 @@
+# aurora.local / packages/dashboard
+#
+# Aurora — the admin plane for an aurora.local box.
+# Single container, Spring Boot 4 + embedded Vue SPA on :8090,
+# fronted by Caddy at admin.$DOMAIN.
+
+name: aurora-dashboard
+
+networks:
+  aurora_net:
+    external: true
+
+volumes:
+  aurora_data: {}
+
+services:
+  aurora:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aurora-dashboard:${AURORA_VERSION:-0.1.0}
+    pull_policy: never
+    container_name: aurora
+    restart: unless-stopped
+    networks: [aurora_net]
+
+    # Publish for browser reach until Caddy fronts it. Bound to all
+    # interfaces so the LAN can hit http://<host-lan-ip>:8090 during
+    # the wizard walk-through. Caddy on :80/:443 remains the intended
+    # production entry point.
+    ports:
+      - "${AURORA_HOST_PORT:-8090}:8090"
+
+    # Runs as the invoking user + docker group so it can read/write
+    # ~/aurora.local and talk to docker.sock. DOCKER_GID exported by
+    # scripts/up.sh.
+    user: "${AURORA_UID:-1000}:${DOCKER_GID:-999}"
+
+    environment:
+      TZ: ${TZ:-UTC}
+      AURORA_DB_PATH: /data/aurora.db
+      # Same-absolute-path contract: aurora sees the repo at the exact
+      # host path so relative bind mounts in downstream compose files
+      # (e.g. packages/core/compose.yml's ./caddy/Caddyfile) resolve
+      # identically host-side when we shell out to docker compose via
+      # the host socket. Bootstrap.sh sets AURORA_REPO_PATH_HOST at
+      # install time; falls back to $HOME/aurora.local for dev.
+      AURORA_REPO_PATH: ${AURORA_REPO_PATH_HOST:-${HOME}/aurora.local}
+      AURORA_HOST_PROC: /host/proc
+      DOCKER_HOST: unix:///var/run/docker.sock
+      SERVER_PORT: 8090
+      # Sessions / bootstrap — overridden by packages/dashboard/.env
+      AURORA_SESSION_SECRET: ${AURORA_SESSION_SECRET:?set in packages/dashboard/.env}
+
+    volumes:
+      # Whole repo bind-mounted rw — aurora reads manifests + writes .env / .state.yml.
+      # Mounted at the *host* path (not /repo) so any downstream `docker compose`
+      # invocation from inside aurora resolves relative bind mounts against a
+      # path the host daemon can also see. See AURORA_REPO_PATH above.
+      - ${AURORA_REPO_PATH_HOST:-${HOME}/aurora.local}:${AURORA_REPO_PATH_HOST:-${HOME}/aurora.local}:rw
+      # Docker socket for docker-java (list containers, events, stats).
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      # Host /proc for cheap metrics (mem, load, uptime).
+      - /proc:/host/proc:ro
+      # Host distro identity for the onboarding welcome screen.
+      - /etc/os-release:/host/etc/os-release:ro
+      # Host root, read-only. Enables statvfs on real block-device mounts
+      # so the onboarding welcome + posture engine can report disk sizes.
+      # Read-only + aurora runs as UID 1000, so file perms still apply.
+      - /:/host_root:ro
+      # Aurora's own state (SQLite DB, sessions).
+      - aurora_data:/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8090/api/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3

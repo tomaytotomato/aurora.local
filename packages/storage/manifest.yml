@@ -1,0 +1,36 @@
+name: storage
+title: LAN file sharing (SMB + DLNA)
+description: |
+  Samba exports the media root over SMB for computers/phones.
+  MiniDLNA advertises the same content over UPnP/DLNA for smart TVs
+  and consoles that don't speak SMB.
+
+category: storage
+
+depends_on:
+  - core
+recommends: []
+profiles: {}
+
+ports:
+  - {port: 139,  proto: tcp, description: Samba NetBIOS}
+  - {port: 445,  proto: tcp, description: Samba SMB}
+  - {port: 8200, proto: tcp, description: MiniDLNA HTTP/UPnP}
+  - {port: 1900, proto: udp, description: MiniDLNA SSDP}
+
+requires:
+  min_ram_mb: 256
+  min_disk_gb: 1
+  host_roles: []
+
+required_env: []
+
+probe:
+  kind: smb
+  container: samba
+  port: 445
+  external_url: smb://{lan_ip}/
+
+post_install_notes: |
+  Samba shares are read-only by default and served as guest. Edit
+  packages/storage/.env to add authenticated users or read-write shares.

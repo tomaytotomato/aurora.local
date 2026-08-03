@@ -1,0 +1,28 @@
+# aurora.local / packages/home-automation / caddy.snippet
+#
+# Home Assistant runs on the host's network namespace (network_mode:
+# host). Caddy (bridge) reaches it via the docker host-gateway alias.
+# The core Caddy service must define:
+#   extra_hosts:
+#     - "host.docker.internal:host-gateway"
+# (this is already the docker default on modern Docker Desktop; on
+# Linux it needs the explicit extra_hosts entry — see core/compose.yml).
+
+http://ha.{$DOMAIN} {
+	reverse_proxy host.docker.internal:8123
+}
+https://ha.{$DOMAIN} {
+	tls internal
+	reverse_proxy host.docker.internal:8123
+}
+
+# ---- Zigbee2MQTT (profile: zigbee) ----------------------------------
+# Only reachable when COMPOSE_PROFILES includes 'zigbee'. Uncomment
+# these vhosts if you've enabled the profile.
+# http://z2m.{$DOMAIN} {
+# 	reverse_proxy zigbee2mqtt:8080
+# }
+# https://z2m.{$DOMAIN} {
+# 	tls internal
+# 	reverse_proxy zigbee2mqtt:8080
+# }

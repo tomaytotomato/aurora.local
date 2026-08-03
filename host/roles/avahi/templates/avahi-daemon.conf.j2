@@ -1,0 +1,20 @@
+# managed by aurora.local ansible / avahi role
+[server]
+host-name={{ avahi_host_name }}
+domain-name={{ avahi_domain_name }}
+use-ipv4=yes
+use-ipv6=yes
+ratelimit-interval-usec=1000000
+ratelimit-burst=1000
+
+[wide-area]
+enable-wide-area=yes
+
+[publish]
+publish-hinfo={{ 'yes' if avahi_publish_hinfo else 'no' }}
+publish-workstation={{ 'yes' if avahi_publish_workstation else 'no' }}
+publish-addresses={{ 'yes' if avahi_publish_addresses else 'no' }}
+
+[reflector]
+
+[rlimits]

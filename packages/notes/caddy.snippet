@@ -1,0 +1,9 @@
+# aurora.local / packages/notes / caddy.snippet
+
+http://notes.{$DOMAIN} {
+	reverse_proxy silverbullet:3000
+}
+https://notes.{$DOMAIN} {
+	tls internal
+	reverse_proxy silverbullet:3000
+}

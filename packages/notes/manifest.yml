@@ -1,0 +1,46 @@
+name: notes
+title: Notes (SilverBullet)
+description: |
+  SilverBullet is a single-user, markdown-native, extensible
+  notes/PKM system with a live command palette, a plug ecosystem,
+  and an offline-capable PWA. Everything is a plain .md file on
+  disk, so your notes survive the tool.
+
+category: productivity
+
+depends_on:
+  - core
+recommends: []
+profiles: {}
+
+ports:
+  # SilverBullet's default upstream port is 3000, which collides
+  # with AdGuard's first-run wizard in packages/privacy. Remap.
+  - {port: 3030, proto: tcp, description: SilverBullet web UI}
+
+requires:
+  min_ram_mb: 256
+  min_disk_gb: 1
+  host_roles: []
+
+required_env:
+  - SB_USER
+  - SB_PASSWORD
+
+# The compose service is named `silverbullet` (see compose.yml), not
+# `notes`. Without an explicit probe.container, StatusProbeService
+# defaults to the package name and never finds the running container,
+# so the DoneChecklist reports Not-started while PackagesCard
+# (label-scan-based) correctly reports Running. Manifest → wire fix.
+probe:
+  kind: docker
+  container: silverbullet
+  external_url: "http://notes.{domain}/"
+
+post_install_notes: |
+  1. First-run: https://notes.$DOMAIN/ — log in with
+     SB_USER / SB_PASSWORD from .env.
+  2. Notes live as .md files under ../../data/notes/silverbullet
+     (or wherever you point the bind mount).
+  3. There is no first-class mobile app; the PWA installs to
+     iOS/Android home screens and works offline.

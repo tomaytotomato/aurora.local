@@ -1,0 +1,25 @@
+# packages/ai — Caddy vhost
+# Import from packages/core/caddy/Caddyfile.
+
+http://ai.{$DOMAIN} {
+	reverse_proxy open-webui:8080
+}
+
+https://ai.{$DOMAIN} {
+	tls internal
+	# Open-WebUI uses websockets for streaming responses.
+	reverse_proxy open-webui:8080 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
+
+# Optional direct-to-ollama vhost (raw API).
+http://ollama.{$DOMAIN} {
+	reverse_proxy ollama:11434
+}
+https://ollama.{$DOMAIN} {
+	tls internal
+	reverse_proxy ollama:11434
+}

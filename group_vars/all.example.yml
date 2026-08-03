@@ -4,7 +4,7 @@
 # don't leak.
 
 # ---- identity ----
-home_domain: home.local            # Caddy vhosts hang under this
+domain: aurora.local            # Caddy vhosts hang under this
 home_timezone: Europe/London
 home_user: bruce
 home_uid: 1000
@@ -13,11 +13,23 @@ home_gid: 1000
 # ---- storage layout ----
 # Where the repo lives on disk. bind-mounts in packages/*/compose.yml
 # resolve relative to this via ${HOME_LOCAL_ROOT}.
-home_local_root: /home/{{ home_user }}/home.local
+home_local_root: /home/{{ home_user }}/aurora.local
 
 # Where bulk media lives. Kept outside the repo so a fresh clone
 # doesn't imply moving TBs around.
 media_root: /home/{{ home_user }}/media
+
+# External disks to mount on boot. Consumed by the storage-mount role.
+# Leave empty to skip. Prefer UUID over LABEL for stability.
+#   external_mounts:
+#     - uuid: "1234-abcd-5678-ef00"
+#       mountpoint: /mnt/media
+#       fstype: ext4
+#       options: "defaults,nofail,x-systemd.device-timeout=10"
+#     - label: BACKUP
+#       mountpoint: /mnt/backup
+#       fstype: xfs
+external_mounts: []
 
 # ---- package toggles ----
 # Consumed by scripts/up.sh; ansible only cares about host-level roles.
@@ -26,6 +38,19 @@ packages_enabled:
   - privacy     # adguard + gluetun
   - media       # arr stack + rdtclient + qbittorrent
   - storage     # samba + minidlna
+
+# ---- swap ----
+# 'auto' picks max(2, RAM_GB) capped at swap_file_auto_max_gb.
+# Set an integer (GB) to force a specific size.
+swap_file_path: /swapfile
+swap_file_size_gb: auto
+swap_min_ram_gb_threshold: 4       # only create swap if RAM < this
+swap_file_auto_max_gb: 8
+
+# ---- unattended-upgrades ----
+unattended_upgrades_reboot: false
+unattended_upgrades_reboot_time: "03:00"
+unattended_upgrades_mail: ""       # e.g. "you@example.com" (needs local MTA)
 
 # ---- security ----
 ssh_allow_password_auth: false
@@ -38,5 +63,8 @@ fail2ban_max_retry: 5
 
 # ---- network ----
 # AdGuard runs as LAN DNS. Set this to the address of the box on your
-# LAN so *.{{ home_domain }} rewrites resolve to it.
+# LAN so *.{{ domain }} rewrites resolve to it.
 lan_ip: 192.168.0.110
+
+# mDNS host name published by avahi (usually leave as inventory_hostname).
+# avahi_host_name: aurora

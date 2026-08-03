@@ -1,16 +1,16 @@
-# home.local / packages/core
+# aurora.local / packages/core
 #
 # Always on. Caddy is the single entry point on :80/:443 and fans out
-# to every other package on subdomains under $HOME_DOMAIN. Homepage is
-# the dashboard aggregating status from every enabled package.
+# to every other package on subdomains under $DOMAIN. Aurora itself
+# (packages/dashboard) is the landing page at the apex $DOMAIN.
 #
-# Depends on the external network `home_net` (see scripts/up.sh which
+# Depends on the external network `aurora_net` (see scripts/up.sh which
 # creates it once).
 
-name: home-core
+name: aurora-core
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -18,34 +18,31 @@ services:
     image: caddy:2-alpine
     container_name: caddy
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+    healthcheck:
+      # Fast Caddy-answered path; keeps the healthcheck green even when
+      # the aurora upstream is briefly restarting. See caddy/Caddyfile.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/caddy-health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     environment:
-      - HOME_DOMAIN=${HOME_DOMAIN:-home.local}
+      - DOMAIN=${DOMAIN:-aurora.local}
     extra_hosts:
       # So Caddy can reach services running in host netns (e.g. minidlna).
       - "host.docker.internal:host-gateway"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../data/caddy/snippets:/etc/caddy/snippets:ro
       - ../../data/caddy/data:/data
       - ../../data/caddy/config:/config
       - ../../data/caddy/logs:/var/log/caddy
 
-  homepage:
-    image: ghcr.io/gethomepage/homepage:latest
-    container_name: homepage
-    restart: unless-stopped
-    networks: [home_net]
-    user: "1000:975"   # host uid + docker gid so /var/run/docker.sock is readable
-    env_file:
-      - .env
-    environment:
-      - TZ=${TZ:-Europe/London}
-      - HOMEPAGE_ALLOWED_HOSTS=home.${HOME_DOMAIN:-home.local},${HOME_DOMAIN:-home.local},aurora.local,192.168.0.110,localhost
-    volumes:
-      - ./homepage/config:/app/config
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /:/host:ro
+  # Homepage retired in v0.1 — Aurora is the single landing page.
+  # If you want the tile-grid dashboard back, restore this block and
+  # re-add the $DOMAIN vhost in packages/core/caddy/Caddyfile.

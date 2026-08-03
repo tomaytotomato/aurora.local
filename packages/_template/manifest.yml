@@ -1,0 +1,25 @@
+name: TEMPLATE
+title: Human-readable title shown in the picker
+description: |
+  One paragraph. Explain what this stack does and what the user should
+  know before enabling it.
+
+category: dev            # core|privacy|media|storage|backup|monitoring|productivity|dev|ai|identity|home-automation
+
+depends_on:
+  - core
+recommends: []
+profiles: {}
+
+ports:
+  - {port: 12345, proto: tcp, description: Some service}
+
+requires:
+  min_ram_mb: 512
+  min_disk_gb: 2
+  host_roles: []
+
+required_env: []
+
+post_install_notes: |
+  Anything the user should do on first boot.

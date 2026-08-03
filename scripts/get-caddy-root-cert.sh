@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# home.local / scripts/get-caddy-root-cert.sh
+# aurora.local / scripts/get-caddy-root-cert.sh
 #
 # Extract Caddy's internal CA root cert to a file so LAN devices
-# can trust *.home.local certificates without warnings.
+# can trust *.aurora.local certificates without warnings.
 #
 # On the box:
 #   ./scripts/get-caddy-root-cert.sh

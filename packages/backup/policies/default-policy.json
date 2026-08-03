@@ -1,0 +1,53 @@
+{
+  "_comment": "aurora.local / packages/backup / default-policy.json — starting point for the Kopia global policy. Import via: kopia policy set --global --from-file /app/config/policies/default-policy.json  (mount this file in first). NOT auto-applied; treat as a template.",
+
+  "retention": {
+    "keepLatest": 10,
+    "keepHourly": 24,
+    "keepDaily": 14,
+    "keepWeekly": 8,
+    "keepMonthly": 12,
+    "keepAnnual": 3
+  },
+
+  "files": {
+    "ignore": [
+      "**/media/movies/**",
+      "**/media/tv/**",
+      "**/media/music/**",
+      "**/media/downloads/**",
+      "**/media/complete/**",
+
+      "**/data/*/cache/**",
+      "**/data/*/logs/**",
+      "**/data/gluetun/servers.json",
+
+      "**/node_modules/**",
+      "**/.git/objects/**",
+      "**/target/**",
+      "**/dist/**",
+      "**/build/**",
+
+      "**/.cache/**",
+      "**/.local/share/Trash/**",
+      "**/.npm/**",
+      "**/.nvm/**",
+      "**/.gradle/caches/**",
+      "**/.m2/repository/**",
+
+      "**/*.iso",
+      "**/*.img",
+      "**/*.qcow2",
+      "**/*.vdi",
+      "**/*.vmdk"
+    ]
+  },
+
+  "compression": {
+    "compressorName": "zstd"
+  },
+
+  "scheduling": {
+    "intervalSeconds": 86400
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "run": "p2-closure",
+  "ranAt": "2026-08-01T14:11:43Z",
+  "againstBaseUrl": "http://localhost:8091",
+  "stats": {
+    "expected": 40,
+    "unexpected": 18,
+    "skipped": 4,
+    "flaky": 0,
+    "total": 62,
+    "durationSeconds": 430
+  },
+  "deltaVsIter3": {
+    "expected": 0,
+    "unexpected": 0,
+    "skipped": 0
+  },
+  "regressions": [],
+  "notes": "Full-suite run identical to iter-3 baseline. Pre-existing wizard-happy-path selector defects and one no-cli-instructions /onboarding/admin cold-hydration flake still red; none introduced by P2 closure. Raw per-test artefacts under results/p2-closure-artifacts/."
+}

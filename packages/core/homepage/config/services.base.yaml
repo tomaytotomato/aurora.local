@@ -1,21 +1,25 @@
 ---
-# home.local / homepage / services.yaml
+# BASE homepage services file (checked in).
 #
-# Groups mirror packages/ 1:1 so orientation is self-documenting.
+# scripts/lib/render.sh writes services.yaml = this file +
+# every enabled package's packages/<name>/homepage.yml fragment.
+# Edit this file for base groups (Core, External, etc.); package
+# groups belong in the package's own homepage.yml.
+
 # API keys pulled from packages/core/.env via {{HOMEPAGE_VAR_*}} tokens.
 # https://gethomepage.dev/configs/services/
 
 - Core:
     - Caddy:
         icon: mdi-shield-check-#22d3ee
-        href: https://home.home.local/
+        href: https://aurora.local/
         description: Reverse proxy — TLS + vhost fanout
         container: caddy
         server: my-docker
 
     - Homepage:
         icon: homepage.png
-        href: https://home.home.local/
+        href: https://aurora.local/
         description: This dashboard
         container: homepage
         server: my-docker
@@ -23,7 +27,7 @@
 - Privacy & Security:
     - AdGuard Home:
         icon: adguard-home.png
-        href: https://adguard.home.local/
+        href: https://adguard.aurora.local/
         description: LAN DNS + ad/tracker filtering
         container: adguard
         server: my-docker
@@ -41,7 +45,7 @@
 - Media:
     - Sonarr:
         icon: sonarr.png
-        href: https://sonarr.home.local/
+        href: https://sonarr.aurora.local/
         description: TV automation
         container: sonarr
         server: my-docker
@@ -52,7 +56,7 @@
 
     - Radarr:
         icon: radarr.png
-        href: https://radarr.home.local/
+        href: https://radarr.aurora.local/
         description: Movie automation
         container: radarr
         server: my-docker
@@ -63,7 +67,7 @@
 
     - Prowlarr:
         icon: prowlarr.png
-        href: https://prowlarr.home.local/
+        href: https://prowlarr.aurora.local/
         description: Indexer aggregator
         container: prowlarr
         server: my-docker
@@ -74,7 +78,7 @@
 
     - Bazarr:
         icon: bazarr.png
-        href: https://bazarr.home.local/
+        href: https://bazarr.aurora.local/
         description: Subtitle automation
         container: bazarr
         server: my-docker
@@ -83,16 +87,16 @@
           url: http://bazarr:6767
           key: "{{HOMEPAGE_VAR_BAZARR_KEY}}"
 
-    - Jellyseerr:
-        icon: jellyseerr.png
-        href: https://jellyseerr.home.local/
+    - Seerr:
+        icon: mdi-eye-outline-#a78bfa
+        href: https://seerr.aurora.local/
         description: Request UI (Plex/Jellyfin-compatible)
-        container: jellyseerr
+        container: seerr
         server: my-docker
 
     - RDTClient:
         icon: rdt-client.png
-        href: https://rdt.home.local/
+        href: https://rdt.aurora.local/
         description: Real-Debrid bridge (qBittorrent API shim)
         container: rdtclient
         server: my-docker
@@ -104,7 +108,7 @@
 
     - Flaresolverr:
         icon: mdi-fire-#f97316
-        href: https://flaresolverr.home.local/
+        href: https://flaresolverr.aurora.local/
         description: Cloudflare challenge solver (for Prowlarr)
         container: flaresolverr
         server: my-docker
@@ -112,7 +116,7 @@
 - Storage:
     - Samba:
         icon: mdi-folder-network-#f472b6
-        href: smb://home.local/
+        href: smb://aurora.local/
         description: LAN file shares (SMB)
         container: samba
         server: my-docker
@@ -126,7 +130,7 @@
 
     - Disk usage:
         icon: mdi-harddisk-#f472b6
-        href: https://home.home.local/
+        href: https://aurora.local/
         description: See resource strip above
 
 - External:
@@ -145,7 +149,7 @@
         href: https://web.stremio.com/
         description: Streaming client (browser/TV/phone)
 
-    - GitHub — home.local:
+    - GitHub — aurora.local:
         icon: github.png
-        href: https://github.com/tomaytotomato/home.local
+        href: https://github.com/tomaytotomato/aurora.local
         description: Source of truth

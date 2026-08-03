@@ -1,0 +1,38 @@
+# aurora.local / packages/monitoring / homepage services fragment
+#
+# Merged into packages/core/homepage/config/services.yaml by the
+# installer worker (or copied manually). Format matches Homepage's
+# native services groups.
+
+- Monitoring:
+    - Grafana:
+        icon: grafana.png
+        href: https://grafana.{{HOMEPAGE_VAR_DOMAIN}}/
+        description: Dashboards & metrics
+        widget:
+          type: grafana
+          url: http://grafana:3000
+          username: "{{HOMEPAGE_VAR_GRAFANA_USER}}"
+          password: "{{HOMEPAGE_VAR_GRAFANA_PASS}}"
+
+    - Prometheus:
+        icon: prometheus.png
+        href: https://prometheus.{{HOMEPAGE_VAR_DOMAIN}}/
+        description: Time-series database
+        widget:
+          type: prometheus
+          url: http://prometheus:9090
+
+    - Uptime-Kuma:
+        icon: uptime-kuma.png
+        href: https://uptime.{{HOMEPAGE_VAR_DOMAIN}}/
+        description: Blackbox HTTP checks
+        widget:
+          type: uptimekuma
+          url: http://uptime-kuma:3001
+          slug: home
+
+    - cAdvisor:
+        icon: mdi-docker
+        href: http://{{HOMEPAGE_VAR_LAN_IP}}:8082/
+        description: Container metrics

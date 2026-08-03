@@ -1,9 +1,9 @@
-# home.local / packages/privacy
+# aurora.local / packages/privacy
 #
 # - AdGuard Home is the LAN's DNS server + ad/tracker blocker.
 #   Point your router's DHCP DNS at this box after first boot.
 #   First-run wizard at http://<box-ip>:3000 sets admin creds;
-#   afterwards the UI moves to https://adguard.home.local/.
+#   afterwards the UI moves to https://adguard.aurora.local/.
 #
 # - Gluetun is a VPN sidecar. It exposes its network namespace to any
 #   compose service that sets `network_mode: "service:gluetun"`.
@@ -11,10 +11,10 @@
 #   the matching secret (wireguard key, openvpn creds, whatever).
 #   qBittorrent in packages/media routes through it.
 
-name: home-privacy
+name: aurora-privacy
 
 networks:
-  home_net:
+  aurora_net:
     external: true
 
 services:
@@ -22,7 +22,7 @@ services:
     image: adguard/adguardhome:latest
     container_name: adguard
     restart: unless-stopped
-    networks: [home_net]
+    networks: [aurora_net]
     ports:
       # DNS is bound to the LAN IP only so systemd-resolved can keep
       # its loopback stub on 127.0.0.53. LAN clients point at $LAN_IP.
@@ -42,7 +42,7 @@ services:
     # Currently qbittorrent is gluetun's only consumer, so both are
     # gated together. If gluetun gains other consumers, split them.
     profiles: ["torrent"]
-    networks: [home_net]
+    networks: [aurora_net]
     cap_add: [NET_ADMIN]
     devices:
       - /dev/net/tun:/dev/net/tun

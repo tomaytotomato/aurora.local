@@ -1,0 +1,53 @@
+name: monitoring
+title: Monitoring (Prometheus + Grafana + Uptime-Kuma)
+description: |
+  Prometheus scrapes node_exporter (host) and cAdvisor (containers),
+  Grafana visualises with an auto-provisioned Prometheus datasource,
+  and Uptime-Kuma provides blackbox HTTP health checks. Comes with a
+  ready-to-go dashboards folder — drop JSON dashboards into
+  grafana/provisioning/dashboards/ and they load on start.
+
+category: monitoring
+
+depends_on:
+  - core
+recommends: []
+profiles: {}
+
+ports:
+  - {port: 9090, proto: tcp, description: Prometheus UI/API}
+  - {port: 3001, proto: tcp, description: Grafana}
+  - {port: 9100, proto: tcp, description: node_exporter metrics}
+  - {port: 8082, proto: tcp, description: cAdvisor UI/metrics}
+  - {port: 3002, proto: tcp, description: Uptime-Kuma}
+
+requires:
+  min_ram_mb: 1024
+  min_disk_gb: 5
+  host_roles: []
+  # A8 (iter-7): 9-container observability stack (prometheus, grafana,
+  # loki, promtail, alertmanager, node-exporter, cadvisor, blackbox,
+  # dashboards seed). Prometheus WAL replay + grafana provisioning
+  # dominate first-run cold-start; 240s covers a warm relaunch and the
+  # image-pull first launch on a cold cache without flipping the row to
+  # "Couldn't start".
+  start_budget_seconds: 240
+
+required_env:
+  - GRAFANA_ADMIN_PASSWORD
+
+warnings:
+  - id: monitoring_low_ram
+    if: { ram_below_mb: 2048 }
+    message: 'Prometheus TSDB + Grafana + cAdvisor together want at least 2 GB RAM. Below that, scrape gaps and OOMs are likely.'
+  - id: monitoring_low_disk
+    if: { free_disk_gb_below: 10 }
+    message: 'Prometheus retains metrics on disk (default 15d). Less than 10 GB free means retention will be short.'
+
+post_install_notes: |
+  Grafana:    https://grafana.$DOMAIN/    (admin / GRAFANA_ADMIN_PASSWORD)
+  Prometheus: https://prometheus.$DOMAIN/ (basic-auth gated in caddy.snippet)
+  Uptime:     https://uptime.$DOMAIN/     (set admin creds on first visit)
+
+  Add scrape targets by editing prometheus/prometheus.yml then:
+    docker exec prometheus killall -HUP prometheus

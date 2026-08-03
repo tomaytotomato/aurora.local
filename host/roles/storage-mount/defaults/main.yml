@@ -1,0 +1,20 @@
+---
+# List of external mounts. Each item:
+#   uuid:       filesystem UUID (preferred)  \  one of these
+#   label:      filesystem LABEL             /  must be set
+#   mountpoint: absolute path
+#   fstype:     ext4 (default)
+#   options:    defaults,nofail,x-systemd.device-timeout=10 (default)
+#   owner:      home_user (default)
+#   group:      home_user (default)
+#   mode:       "0755" (default)
+#
+# Example:
+#   external_mounts:
+#     - {uuid: "1234-abcd", mountpoint: /mnt/media}
+#     - {label: BACKUP, mountpoint: /mnt/backup, fstype: xfs}
+external_mounts: []
+
+storage_mount_default_fstype: ext4
+storage_mount_default_options: "defaults,nofail,x-systemd.device-timeout=10"
+storage_mount_default_mode: "0755"

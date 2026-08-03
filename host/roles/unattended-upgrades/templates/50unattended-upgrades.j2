@@ -1,0 +1,32 @@
+// managed by aurora.local ansible / unattended-upgrades role
+//
+// Origins pattern is left broad enough to cover Debian, Ubuntu and
+// their -security channels. Adjust per-distro if you want to pin
+// tighter (e.g. security-only).
+
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Debian,codename=${distro_codename},label=Debian";
+    "origin=Debian,codename=${distro_codename},label=Debian-Security";
+    "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+    "origin=Ubuntu,archive=${distro_codename}-security";
+    "origin=Ubuntu,archive=${distro_codename}-updates";
+    "origin=UbuntuESMApps,archive=${distro_codename}-apps-security";
+    "origin=UbuntuESM,archive=${distro_codename}-infra-security";
+};
+
+Unattended-Upgrade::Package-Blacklist {
+};
+
+Unattended-Upgrade::DevRelease "auto";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "{{ 'true' if unattended_upgrades_autoremove else 'false' }}";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "{{ 'true' if unattended_upgrades_autoremove else 'false' }}";
+Unattended-Upgrade::Remove-Unused-Dependencies "{{ 'true' if unattended_upgrades_autoremove else 'false' }}";
+
+Unattended-Upgrade::Automatic-Reboot "{{ 'true' if unattended_upgrades_reboot else 'false' }}";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "{{ 'true' if unattended_upgrades_reboot else 'false' }}";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ unattended_upgrades_reboot_time }}";
+
+{% if unattended_upgrades_mail | length > 0 %}
+Unattended-Upgrade::Mail "{{ unattended_upgrades_mail }}";
+Unattended-Upgrade::MailReport "{{ 'only-on-error' if unattended_upgrades_mail_on_error else 'on-change' }}";
+{% endif %}

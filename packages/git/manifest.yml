@@ -1,0 +1,36 @@
+name: git
+title: Git hosting (Forgejo + runner)
+description: |
+  Self-hosted Git via Forgejo (community fork of Gitea) plus a
+  forgejo-runner for CI/CD. Web UI on :3080, SSH on :2222 to avoid
+  clashing with the host's sshd.
+
+category: dev
+
+depends_on:
+  - core
+recommends: []
+profiles: {}
+
+ports:
+  - {port: 3080, proto: tcp, description: Forgejo web UI}
+  - {port: 2222, proto: tcp, description: Forgejo SSH (git clone/push)}
+
+requires:
+  min_ram_mb: 512
+  min_disk_gb: 5
+  host_roles: []
+
+required_env:
+  - FORGEJO_ADMIN_USER
+  - FORGEJO_ADMIN_EMAIL
+  - FORGEJO_ADMIN_PASSWORD
+
+post_install_notes: |
+  1. First-run wizard: http://git.$DOMAIN/ (or http://<lan-ip>:3080).
+     The admin user from .env is auto-created on container start.
+  2. To enable CI: in Forgejo UI go to Site Administration > Actions >
+     Runners > "Create new Runner", copy the registration token, put it
+     in packages/git/.env as FORGEJO_RUNNER_TOKEN, then:
+       docker compose -p aurora ... up -d --force-recreate forgejo-runner
+  3. Clone URL: ssh://git@<hostname>:2222/<user>/<repo>.git

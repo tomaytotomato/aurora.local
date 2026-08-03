@@ -1,0 +1,58 @@
+# aurora.local / packages/backup
+#
+# Kopia is a repository-based deduplicating backup tool with a decent
+# web UI. Runs in "server" mode; you connect to it via the browser and
+# drive snapshots from there, or shell in and use the `kopia` CLI.
+#
+# Two bind mounts to be aware of:
+#   /data       -> host / (read-only). Kopia never writes here.
+#   /repository -> data/backup/repository. Local filesystem repo by
+#                  default. To back up to B2/S3 instead, leave this
+#                  unused and reconfigure the repo from inside the UI
+#                  (or via `kopia repository create s3 ...`).
+
+name: aurora-backup
+
+networks:
+  aurora_net:
+    external: true
+
+services:
+  kopia:
+    image: kopia/kopia:latest
+    container_name: kopia
+    hostname: kopia
+    restart: unless-stopped
+    networks: [aurora_net]
+    # Kopia's server mode. Bind to 0.0.0.0 inside the container; Caddy
+    # (or a LAN port) does the exposure. Basic auth is set via
+    # KOPIA_UI_USER/PASSWORD env vars.
+    command:
+      - server
+      - start
+      - --insecure
+      - --address=0.0.0.0:51515
+      - --server-username=${KOPIA_UI_USER:-admin}
+      - --server-password=${KOPIA_UI_PASSWORD:-changeme}
+      - --without-password
+      - --ui
+    environment:
+      - TZ=${TZ:-Europe/London}
+      # Consumed by kopia CLI on first `repository create` / `connect`.
+      - KOPIA_PASSWORD=${KOPIA_PASSWORD:-}
+      # Optional remote repo hints — see .env.example.
+      - KOPIA_REPOSITORY=${KOPIA_REPOSITORY:-}
+    volumes:
+      # Persistent kopia server + client config.
+      - ../../data/backup/kopia:/app/config
+      - ../../data/backup/cache:/app/cache
+      - ../../data/backup/logs:/app/logs
+      # Local filesystem repository (default). If you switch to B2/S3
+      # you can leave this mounted; it just won't be used.
+      - ../../data/backup/repository:/repository
+      # Everything Kopia is allowed to snapshot from. Read-only for
+      # safety — Kopia is a backup tool, it should never mutate host
+      # files. Exclude patterns live in policies/default-policy.json.
+      - /:/data:ro
+    ports:
+      - "51515:51515"

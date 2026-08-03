@@ -1,0 +1,23 @@
+# aurora.local / packages/home-automation / homepage.yml
+#
+# Fragment merged into packages/core/homepage/config/services.yaml by
+# the installer. Groups are keyed; entries append.
+
+- Home Automation:
+    - Home Assistant:
+        href: https://ha.{{HOMEPAGE_VAR_DOMAIN}}/
+        description: Automations, dashboards, integrations
+        icon: home-assistant.png
+        server: my-docker
+        # HA runs on host networking; no docker widget by container name.
+
+    - Zigbee2MQTT:
+        href: https://z2m.{{HOMEPAGE_VAR_DOMAIN}}/
+        description: Zigbee coordinator + device bridge
+        icon: zigbee2mqtt.png
+        container: zigbee2mqtt
+
+    - Mosquitto:
+        description: MQTT broker (1883 / 8883)
+        icon: mosquitto.png
+        container: mosquitto

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.vite/
+*.log
+.DS_Store
+
+# We use npm inside the container; pnpm files come from local dev tooling only.
+pnpm-lock.yaml
+pnpm-workspace.yaml

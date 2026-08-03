@@ -1,0 +1,65 @@
+name: ai
+title: Local AI (Ollama + Open-WebUI)
+description: |
+  Local LLM inference via Ollama with Open-WebUI as the chat front-end.
+  Runs on CPU by default; opt-in NVIDIA GPU passthrough via the 'gpu'
+  compose profile (requires the gpu-nvidia host role, TBD).
+
+category: ai
+
+depends_on:
+  - core
+recommends: []
+
+profiles:
+  cpu:
+    description: CPU-only Ollama (default; auto-enabled unless --gpu is set).
+    requires_packages: []
+  gpu:
+    description: NVIDIA GPU passthrough for Ollama (needs NVIDIA Container Toolkit).
+    requires_packages: []
+
+ports:
+  - {port: 11434, proto: tcp, description: Ollama API}
+  - {port: 3011,  proto: tcp, description: Open-WebUI}
+
+requires:
+  min_ram_mb: 8192
+  min_disk_gb: 30
+  # GPU: --gpu profile assumes NVIDIA Container Toolkit is installed on
+  # the host (apt: nvidia-container-toolkit; then `systemctl restart
+  # docker`). No dedicated Ansible role yet.
+  host_roles: []
+  # A8 (iter-7): ollama + openwebui + friends. First-run image pull is
+  # ~4GB (ollama), model pulls are separate but user-triggered. 240s
+  # covers docker compose up -d after the ollama image is cached; the
+  # frontend row flips "Couldn't start" past this so users don't wait
+  # forever on a genuinely wedged pull. Cold-cache first launch is
+  # covered by the pull step's own dedicated poller (see StatusProbe).
+  start_budget_seconds: 240
+
+required_env:
+  - WEBUI_SECRET_KEY
+
+warnings:
+  - id: ollama_no_gpu
+    if: { no_gpu: true }
+    message: 'Ollama runs CPU-only without a GPU. Anything above a 7B model will be painfully slow on this box. Consider phi3:mini or llama3:8b.'
+  - id: ollama_low_ram
+    if: { ram_below_mb: 8192 }
+    message: 'Ollama needs at least 8 GB RAM for even the smallest models. This box has less.'
+
+post_install_notes: |
+  1. Open-WebUI:  https://ai.$DOMAIN/  (first user to sign up is admin)
+  2. Ollama API:  http://<lan-ip>:11434/     (also reachable as ollama:11434
+     from other containers on aurora_net)
+  3. Pull a model:
+       docker exec -it ollama ollama pull llama3.2
+       docker exec -it ollama ollama pull qwen2.5-coder:7b
+  4. Rough RAM/VRAM guidance:
+       3B  models : ~4 GB
+       7B  models : ~8 GB
+       13B models : ~16 GB
+       70B models : ~48 GB (GPU/quantised only)
+  5. GPU: use `./scripts/up.sh --gpu core ai` (requires NVIDIA Container
+     Toolkit on the host).

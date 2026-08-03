@@ -1,0 +1,264 @@
+@import "tailwindcss";
+
+/*
+  Aurora design tokens.
+  Warm monochrome + one accent (amber). Editorial, not corporate.
+  See docs/DASHBOARD_BRIEF.md and skills/minimalist-ui.
+*/
+
+@theme {
+  /* Canvas — warm off-white, not pure. */
+  --color-canvas: #FAF9F6;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F5F4EF;
+
+  /* Ink — off-black, generous contrast without harshness. */
+  --color-ink: #1a1a1a;
+  --color-ink-2: #3d3d3a;
+  --color-ink-3: #6b6b66;
+  --color-ink-4: #9c9c96;
+
+  /* Structural — 1px borders live here. */
+  --color-line: #E5E4E0;
+  --color-line-2: #EFEEE9;
+
+  /* One accent. Amber. Used for primary CTA and one-off marks. */
+  --color-accent: #B45309;
+  --color-accent-hover: #92400E;
+
+  /* Foreground colours that must invert cleanly on top of --color-ink or
+     --color-accent surfaces. Used by Button/Checkbox so the primary CTA
+     is readable in both themes (iter-3 dark-mode contrast fix). */
+  --color-on-ink: #FFFFFF;
+  --color-on-accent: #FFFFFF;
+  /* Hover shade for filled primary buttons; darker than --color-ink in
+     light mode, LIGHTER in dark mode so the button doesn't disappear. */
+  --color-ink-hover: #333333;
+
+  /* Status — muted, semantic, editorial. */
+  --color-ok-bg: #EDF3EC;
+  --color-ok-fg: #346538;
+  --color-warn-bg: #FBF3DB;
+  --color-warn-fg: #956400;
+  --color-err-bg: #FDEBEC;
+  --color-err-fg: #9F2F2D;
+  --color-info-bg: #E1F3FE;
+  --color-info-fg: #1F6C9F;
+
+  /* Type — Inter (sans, requested by brief), Newsreader (editorial serif), JetBrains Mono. */
+  --font-sans: 'Inter', 'Geist Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: 'Newsreader', 'Instrument Serif', Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace;
+
+  /* Radius — crisp, not pill. */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Layout */
+  --content-max: 72rem;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  /* iter-3 V2: dark mode. Warm-monochrome inversion of the light theme,
+     tuned so the aurora photo background still reads richly. Applied by
+     setting data-theme="dark" on the <html> element (see composables/
+     useTheme.ts and TopBar toggle). Status colours stay editorial. */
+  [data-theme="dark"] {
+    color-scheme: dark;
+
+    --color-canvas: #0e0d0b;
+    --color-surface: #16140f;
+    --color-surface-2: #1e1c16;
+
+    --color-ink: #f5f4ef;
+    --color-ink-2: #d5d3ca;
+    --color-ink-3: #a3a099;
+    --color-ink-4: #706c65;
+
+    --color-line: #2c2a22;
+    --color-line-2: #24221b;
+
+    --color-accent: #d97706;
+    --color-accent-hover: #f59e0b;
+
+    /* Dark-mode fg-on-ink + fg-on-accent (iter-3 contrast fix):
+       - primary button bg=#f5f4ef (near-white), so text must be near-black
+       - accent bg=#d97706 amber; white on amber only hits ~2.9:1 in dark,
+         canvas-dark on amber gives ~5:1, comfortably WCAG AA. */
+    --color-on-ink: #14120f;
+    --color-on-accent: #14120f;
+    /* Primary button hover in dark: LIGHTER than --color-ink so the CTA
+       reads as "lifting toward the eye" instead of collapsing to bg. */
+    --color-ink-hover: #ffffff;
+
+    --color-ok-bg: #143020;
+    --color-ok-fg: #86efac;
+    --color-warn-bg: #33260a;
+    --color-warn-fg: #fde68a;
+    --color-err-bg: #341215;
+    --color-err-fg: #fca5a5;
+    --color-info-bg: #0f2637;
+    --color-info-fg: #93c5fd;
+  }
+
+  html, body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: 'ss01', 'cv11';
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    color: var(--color-ink);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-serif);
+    color: var(--color-ink);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    font-weight: 500;
+  }
+
+  h1 { font-size: 2.25rem; }
+  h2 { font-size: 1.5rem; }
+  h3 { font-size: 1.125rem; letter-spacing: -0.01em; }
+
+  code, kbd, samp, pre {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+  }
+
+  kbd {
+    display: inline-block;
+    padding: 0.1em 0.4em;
+    border: 1px solid var(--color-line);
+    background: var(--color-surface-2);
+    border-radius: 4px;
+    font-size: 0.75em;
+    line-height: 1;
+    color: var(--color-ink-2);
+  }
+
+  a {
+    color: var(--color-ink);
+    text-decoration: underline;
+    text-decoration-color: var(--color-line);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    transition: text-decoration-color 160ms ease;
+  }
+
+  a:hover { text-decoration-color: var(--color-ink-3); }
+
+  button { font-family: inherit; }
+
+  /* Focus rings — thin, warm. */
+  :focus-visible {
+    outline: 1.5px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  input, textarea, select {
+    font-family: inherit;
+    color: var(--color-ink);
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--color-line);
+  }
+}
+
+@layer components {
+  /* Editorial rule — the little uppercase eyebrow. */
+  .eyebrow {
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+    font-weight: 500;
+  }
+
+  /* iter-3 light-mode fix: outside-card content on the aurora photo
+     background needs light text regardless of theme (the photo is dark in
+     both themes). Scoped tightly to DIRECT children so the cascade doesn't
+     bleed into opaque nested surfaces (Cards, ChecklistItem li, banners).
+     Every opaque surface component (Card, ChecklistItem, DoneChecklist
+     banner, Alert) explicitly declares its own `text-ink` so nested
+     content shows correctly. */
+  .on-photo {
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .on-photo > h1,
+  .on-photo > h2,
+  .on-photo > h3,
+  .on-photo > h4,
+  .on-photo > div > h1,
+  .on-photo > div > h2,
+  .on-photo > div > h3,
+  .on-photo > div > h4 {
+    color: rgba(255, 255, 255, 0.96);
+  }
+  .on-photo > .eyebrow,
+  .on-photo > div > .eyebrow {
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  /* Content column.
+     iter-3 padding audit: bumped padding-inline 2rem → 2.5rem so pages
+     don't feel flush against the sidebar on narrower displays where
+     margin-inline: auto has no room to breathe. */
+  .content {
+    max-width: var(--content-max);
+    margin-inline: auto;
+    padding-inline: 2.5rem;
+  }
+
+  /* iter-3 padding audit: opt-in `.page` wrapper standardises the
+     vertical rhythm every top-level view uses. `<section>` on
+     DashboardHome/PackagesList/SettingsView/etc. can grow this class to
+     stop each view from hand-rolling `mb-10` on the header and
+     `space-y-*` on the body inconsistently. Not adopted everywhere yet
+     to keep this iteration minimal; use for new pages. */
+  .page {
+    padding-block: 1.5rem;
+  }
+}
+
+@layer utilities {
+  .text-ink { color: var(--color-ink); }
+  .text-ink-2 { color: var(--color-ink-2); }
+  .text-ink-3 { color: var(--color-ink-3); }
+  .text-ink-4 { color: var(--color-ink-4); }
+  .text-on-ink { color: var(--color-on-ink); }
+  .text-on-accent { color: var(--color-on-accent); }
+  .bg-canvas { background-color: var(--color-canvas); }
+  .bg-surface { background-color: var(--color-surface); }
+  .bg-surface-2 { background-color: var(--color-surface-2); }
+  .border-line { border-color: var(--color-line); }
+  .border-line-2 { border-color: var(--color-line-2); }
+  .text-accent { color: var(--color-accent); }
+
+  /* Fade-up entry, per skill. Very subtle. */
+  .anim-enter {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: enter 480ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes enter {
+    to { opacity: 1; transform: none; }
+  }
+}

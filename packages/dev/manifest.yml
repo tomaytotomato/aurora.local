@@ -1,0 +1,51 @@
+name: dev
+title: Dev sandbox (code-server + Postgres + Redis)
+description: |
+  Browser-based VS Code (code-server) plus a Postgres 16 and Redis 7
+  instance for general dev/prototyping. code-server has ~/aurora.local
+  bind-mounted at /workspace/aurora.local so you can edit this repo from
+  any browser. Postgres/Redis are reachable from other packages on
+  aurora_net at postgres:5432 and redis:6379.
+
+category: dev
+
+depends_on:
+  - core
+recommends: []
+profiles: {}
+
+ports:
+  - {port: 8443,  proto: tcp, description: code-server (VS Code in browser)}
+  - {port: 15432, proto: tcp, description: Postgres (remapped from 5432)}
+  - {port: 16379, proto: tcp, description: Redis (remapped from 6379)}
+
+requires:
+  min_ram_mb: 1024
+  min_disk_gb: 5
+  host_roles: []
+  # A8 (iter-7): code-server + supporting services. Extension warm-up
+  # dominates first boot; 60s covers warm relaunch.
+  start_budget_seconds: 60
+
+required_env:
+  - CODE_SERVER_PASSWORD
+  - POSTGRES_USER
+  - POSTGRES_PASSWORD
+  - POSTGRES_DB
+  - REDIS_PASSWORD
+
+warnings:
+  - id: dev_low_cpu
+    if: { cpu_threads_lt: 4 }
+    message: 'code-server builds and Postgres/Redis under load prefer 4+ CPU threads. Compile-heavy work will be slow on this box.'
+
+post_install_notes: |
+  1. code-server: https://code.$DOMAIN/ — password from .env.
+  2. Postgres: from host: psql -h localhost -p 15432 -U $POSTGRES_USER
+     from another container on aurora_net: postgres:5432
+  3. Redis: from host: redis-cli -h localhost -p 16379 -a $REDIS_PASSWORD
+     from another container on aurora_net: redis:6379
+  4. code-server runs as UID 1000 (coder). Files created inside
+     /workspace/aurora.local will be owned by 1000:1000 on the host, which
+     matches the default home_uid/home_gid. If your host user isn't 1000,
+     override PUID/PGID in .env.

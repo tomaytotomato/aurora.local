@@ -1,0 +1,38 @@
+import { defineConfig } from '@playwright/test';
+
+/**
+ * Aurora dashboard E2E — runs against the isolated aurora-e2e compose
+ * project on :8091. Never point this at the live :8090 instance.
+ */
+export default defineConfig({
+  testDir: './tests',
+  timeout: 30_000,
+  expect: { timeout: 5_000 },
+  fullyParallel: false, // tests share one aurora backend + SQLite; serial is safer
+  retries: 1,
+  workers: 1,
+  globalSetup: require.resolve('./global-setup.ts'),
+  globalTeardown: require.resolve('./global-teardown.ts'),
+  reporter: [
+    ['list'],
+    ['html', { open: 'never' }],
+    ['json', { outputFile: 'results/baseline.json' }],
+  ],
+  use: {
+    baseURL: process.env.AURORA_E2E_BASE_URL ?? 'http://localhost:8091',
+    headless: true,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    // iter-3 BL5: default storage state is the authed fixture seeded by
+    // global-setup.ts. Specs that need the pre-auth (fresh-box) state
+    // override with `test.use({ storageState: { cookies: [], origins: [] } })`.
+    storageState: 'fixtures/authed-state.json',
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { browserName: 'chromium' },
+    },
+  ],
+});
