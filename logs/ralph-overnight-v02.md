@@ -1626,3 +1626,76 @@ Iter-33: **surface the pill's severity into the page `<title>`** so
 a browser tab preview shows the open count when the user is on
 another tab. Small; document-level side effect via `useHead` /
 manual `document.title` write in the `App.vue` layer.
+
+## Iter 33 · 2026-08-03 10:33 · commit a8a743d + reflection
+**document.title prefix with security-findings count + Ralph reflection.**
+
+### Reflection (Ralph reflectEvery=8 fourth checkpoint)
+
+**1. What's been accomplished?**
+Since iter-25 reflection (iters 26-33): snooze duration picker
+(iter-26); audit events on dismiss/restore (iter-27); CurrentUserService
++ principal attribution (iter-28); LaunchService audit attribution
+(iter-29); GET /api/audit/events + repo query surface (iter-30);
+Settings audit-log viewer (iter-31); sidebar Security badge (iter-32);
+document.title severity prefix (iter-33). **65 commits since baseline**.
+Full backend 348/0/0. Every deferred bullet from iter-25 has now
+shipped.
+
+**2. What's working well?**
+- The `verify-v03-overnight.sh` gate remains the single trusted
+  quality gate. I've run it after every code commit for 25+ iters
+  without exception. Never regressed.
+- Cross-cutting features (audit trail: sample, endpoint, viewer,
+  attribution, sidebar surface, tab title) shipped in seven
+  contained iters that each stay under ~300 lines of net delta.
+  Small enough to review individually, large enough to be useful.
+- Every commit body carries verification numbers + deferred items +
+  refs to prior commits, so the log rebuilds even without the
+  narrative file.
+
+**3. What's not working?**
+- No Vitest / FE component tests. Every FE change relies on `vue-tsc`
+  + template review. Still the largest quality gap.
+- E2E infra still blocked outside the worktree \u2014 accepted.
+- Live aurora rebuild still Bruce's responsibility \u2014 accepted per
+  safety rail.
+
+**4. Should the approach be adjusted?**
+Seven iters left (34-40). Every remaining backlog item is small
+polish. Given the FE test gap, iter-34 candidate: bootstrap Vitest
++ one MetricChart snapshot test so a foundation exists even if we
+never fill it in tonight.
+
+**5. Product-judgement forks?**
+Still none across the whole loop. Every decision documented per
+commit body.
+
+### What shipped (iter-33)
+
+- `Sidebar.vue`: `updateDocumentTitle()` runs on `securityCounts`
+  change via `watch(..., { deep: true })`. Format
+  `{glyph} N issues \u00b7 Aurora` where glyph is `!` (high) /
+  `\u25c9` (medium) / `\u2022` (low). `Aurora` alone when nothing
+  is open or scanner off.
+- `onScopeDispose` resets title on route out of AppShell so
+  login / onboarding never inherits stale posture context.
+
+### Verification
+- `vue-tsc --noEmit` \u2192 exit 0.
+- Backend 348/0/0 unchanged.
+- `bash scripts/verify-v03-overnight.sh` \u2192 4/4.
+
+### Files touched
+- `frontend/src/components/layout/Sidebar.vue` (+28 -2)
+
+### Deferred (accepted)
+- Vitest bootstrap (candidate for iter-34).
+- Live SSE badge tail.
+
+### Next iteration target
+Iter-34: **Vitest bootstrap + one MetricChart smoke test**. Add
+`vitest` + `@vue/test-utils` + `jsdom` to devDependencies, wire
+`npm run test:unit`, add `packages/dashboard/frontend/vitest.config.ts`,
+and ship one snapshot / unit test on the empty-data render path of
+`MetricChart.vue` so future FE iters have a foundation.
