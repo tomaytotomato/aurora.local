@@ -68,8 +68,20 @@ import java.util.stream.Stream;
  * {@code /var/run/dbus/system_bus_socket} bind-mounted read-write into
  * the aurora container so {@code /usr/bin/avahi-publish} (already in
  * the Alpine {@code avahi-tools} package) can reach the host's
- * avahi-daemon over D-Bus. When the mount is missing, reconcile marks
- * every alias {@code failed} instead of retrying in a tight loop.
+ * avahi-daemon over D-Bus. Also requires {@code /etc/machine-id} +
+ * {@code /var/lib/dbus/machine-id} bind-mounted (libdbus SASL EXTERNAL
+ * needs a stable identity) and {@code security_opt: apparmor=unconfined}
+ * on the aurora service — Docker's default AppArmor profile explicitly
+ * denies {@code dbus_method_call} to {@code org.freedesktop.DBus}, which
+ * blocks the initial Hello handshake. See {@code packages/dashboard/
+ * compose.yml} for the wiring. When any of these prerequisites are
+ * missing, reconcile marks every alias {@code failed} instead of
+ * retrying in a tight loop.
+ *
+ * <p><b>Follow-up</b>: ship a purpose-built AppArmor profile that
+ * unlocks only D-Bus method calls to org.freedesktop.Avahi and the
+ * docker.sock methods aurora already uses, keeping everything else
+ * confined. Tracked in scratchpad.
  */
 @Service
 public class MdnsAliasService {

@@ -36,6 +36,19 @@ services:
     # scripts/up.sh.
     user: "${AURORA_UID:-1000}:${DOCKER_GID:-999}"
 
+    # AppArmor: opt aurora out of the default docker profile so it can talk
+    # to the host's D-Bus system socket (mounted below). The default
+    # profile explicitly denies dbus_method_call to org.freedesktop.DBus,
+    # which blocks avahi-publish's initial Hello and every alias register
+    # attempt. We already mount docker.sock + repo-root + host-/proc rw,
+    # so aurora's security posture already assumes a trusted operator on
+    # their own box — unconfined AppArmor doesn't hand it new capabilities
+    # it didn't already have via those mounts. Follow-up: ship a purpose
+    # AppArmor profile that unlocks only D-Bus + docker.sock and keeps
+    # everything else confined. See MdnsAliasService header.
+    security_opt:
+      - apparmor=unconfined
+
     environment:
       TZ: ${TZ:-UTC}
       AURORA_DB_PATH: /data/aurora.db
@@ -75,6 +88,15 @@ services:
       # Missing on hosts without avahi — MdnsAliasService detects that and
       # marks aliases failed rather than crash-looping.
       - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:rw
+      # /etc/machine-id + /var/lib/dbus/machine-id — required by libdbus SASL
+      # EXTERNAL authentication. Without one of these, avahi-publish fails
+      # with a misleading 'Access denied' at connection time, even though
+      # the D-Bus policy would otherwise accept the caller. Mounting the
+      # host's makes the container's D-Bus identity the same as the host
+      # (which is semantically correct — we're publishing on the host's
+      # behalf).
+      - /etc/machine-id:/etc/machine-id:ro
+      - /var/lib/dbus/machine-id:/var/lib/dbus/machine-id:ro
       # Aurora's own state (SQLite DB, sessions).
       - aurora_data:/data
 
