@@ -1444,3 +1444,41 @@ Iter-28: baseline refresh across all three drift-prone surfaces
 (executive summary + task-file expected-output block + verify-v03
 cached string already done partially). Then either principal-based
 audit attribution or a small Vitest bootstrap.
+
+## Iter 28 · 2026-08-03 10:02 · commit 66c5d80
+**CurrentUserService + principal attribution on security audits + baseline refresh.**
+
+### What shipped
+- `services/CurrentUserService` (new): resolves the SecurityContext
+  principal via `SecurityContextHolder` → `AdminUserRepo.findByUsername`
+  → `admin_user.id`. Handles unauthenticated / anonymous marker /
+  missing admin row → empty Optional.
+- `SecurityController` ctor grows a 4th arg (`CurrentUserService`);
+  `dismiss()` + `restore()` pass the resolved id into `audit.record`.
+- +8 tests: `CurrentUserServiceTests` (6) + 2 SecurityController
+  attribution tests.
+- Baselines refreshed to 327 (executive summary, RALPH_TASK
+  expected-output block, `verify-v03-overnight.sh` floor).
+
+### Verification
+- Touched suite: 8/8 new tests green.
+- Full backend: **327 tests, 0 failures, 0 errors** (319 → 327, +8).
+- `vue-tsc --noEmit` → exit 0.
+- `bash scripts/verify-v03-overnight.sh` → 4/4 with new floor.
+
+### Files touched
+- `backend/…/services/CurrentUserService.java` (+52, new)
+- `backend/…/controllers/SecurityController.java` (+12 -6)
+- `backend/…/test/…/services/CurrentUserServiceTests.java` (+90, new)
+- `backend/…/test/…/controllers/SecurityControllerTests.java` (+50)
+- baseline docs + verify-v03 (~6 lines total)
+
+### Deferred (accepted)
+- Same attribution wired into OnboardingService audit calls.
+- GET /api/audit/events read endpoint + FE viewer.
+- Vitest for FE component tests.
+
+### Next iteration target
+Iter-29: propagate `CurrentUserService` into `OnboardingService.audit.record`
+calls so onboarding.* actions carry the acting admin id (currently null
+even after login). Similar shape to iter-28; ~30 lines.
