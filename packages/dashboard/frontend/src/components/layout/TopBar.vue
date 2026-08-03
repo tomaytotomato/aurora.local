@@ -47,7 +47,13 @@ onMounted(() => {
 });
 
 async function signOut(): Promise<void> {
-  await auth.logout();
+  const next = await auth.logout();
+  if (next) {
+    // Phase D iter-14 (D13): Authelia logout bounces the browser to
+    // the `rd` param after clearing the shared session cookie.
+    window.location.href = next;
+    return;
+  }
   router.push('/login');
 }
 </script>

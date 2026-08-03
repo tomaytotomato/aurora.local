@@ -35,9 +35,20 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function logout(): Promise<void> {
-    await AuthApi.logout();
+  /**
+   * Phase D iter-14 (D13). Log out of Aurora and, when SSO is on,
+   * return the Authelia logout URL so callers can bounce through it
+   * to clear the shared .{DOMAIN} session cookie.
+   *
+   * <p>Callers are expected to call `window.location.href = next` if
+   * a next URL is returned. Handing the redirect to the caller (not
+   * doing it here) keeps this store test-friendly — mocking
+   * {@code window.location} inside a store is fiddly.
+   */
+  async function logout(): Promise<string | null> {
+    const { next } = await AuthApi.logout();
     session.value = { authenticated: false, username: null, passkeyEnrolled: false, tz: null, role: null };
+    return next ?? null;
   }
 
   return { session, loading, error, fetchSession, login, logout };

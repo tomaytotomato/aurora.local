@@ -1,7 +1,9 @@
 package com.tomaytotomato.aurora.controllers;
 
 import com.tomaytotomato.aurora.domain.AdminUser;
+import com.tomaytotomato.aurora.domain.RepoState;
 import com.tomaytotomato.aurora.services.AuthService;
+import com.tomaytotomato.aurora.services.StateFileService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -34,9 +36,11 @@ public class AuthController {
   private static final String SESSION_USER = "aurora.user";
 
   private final AuthService auth;
+  private final StateFileService stateFiles;
 
-  public AuthController(AuthService auth) {
+  public AuthController(AuthService auth, StateFileService stateFiles) {
     this.auth = auth;
+    this.stateFiles = stateFiles;
   }
 
   @PostMapping("/login")
@@ -65,12 +69,44 @@ public class AuthController {
   }
 
   @PostMapping("/logout")
-  public ResponseEntity<Void> logout(HttpServletRequest request) {
+  public LogoutResponse logout(HttpServletRequest request) {
     HttpSession session = request.getSession(false);
     if (session != null) session.invalidate();
     SecurityContextHolder.clearContext();
-    return ResponseEntity.noContent().build();
+
+    // Phase D iter-14 (D13): if the identity package is enabled we
+    // return the Authelia logout URL so the SPA can bounce through it
+    // after killing the Aurora session. Otherwise there's a shared
+    // .{DOMAIN} `authelia_session` cookie sitting in the browser that
+    // outlives the Aurora sign-out — a shared-computer next-user could
+    // walk into notes.aurora.local without a login prompt.
+    //
+    // When identity is off we return next=null and the SPA does its
+    // usual local redirect to /login.
+    String next = ssoLogoutUrl().orElse(null);
+    return new LogoutResponse(next);
   }
+
+  /**
+   * Compute {@code https://auth.{DOMAIN}/logout?rd=https://{DOMAIN}/login}
+   * when the identity package is enabled AND we have a domain. Empty
+   * otherwise. Package-private for tests.
+   */
+  java.util.Optional<String> ssoLogoutUrl() {
+    RepoState state = stateFiles.readState();
+    if (state.enabled() == null || !state.enabled().contains("identity")) {
+      return java.util.Optional.empty();
+    }
+    String domain = state.domain();
+    if (domain == null || domain.isBlank()) return java.util.Optional.empty();
+    String redirect = "https://" + domain + "/login";
+    String url = "https://auth." + domain + "/logout?rd="
+        + java.net.URLEncoder.encode(redirect, java.nio.charset.StandardCharsets.UTF_8);
+    return java.util.Optional.of(url);
+  }
+
+  /** SPA-visible logout payload. Backward-compat: next may be null. */
+  public record LogoutResponse(String next) {}
 
   /**
    * Public. Always returns 200 with a Session; when nobody's logged in,

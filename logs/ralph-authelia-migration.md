@@ -481,3 +481,39 @@ All three deferrals tracked in scratchpad — worth doing but require live-box +
 **Bruce's live-test contract (post-merge).** Rebuild aurora + each service. Enable SSO. Visit `https://grafana.aurora.local/` → sign into Aurora → land in Grafana as a fresh Editor account (auto-provisioned). Visit `https://paperless.aurora.local/` → same story with a Paperless account. Visit `https://git.aurora.local/` → same for Forgejo. Visit `https://ha.aurora.local/` → HA login page inside Authelia (expected). Emergency check: disable Authelia container, hit `https://grafana.aurora.local/` directly → Grafana falls back to `GRAFANA_ADMIN_PASSWORD` (proves the whitelist restricted the header trust to Caddy).
 
 **Next.** D13 — Aurora sign-out killing the Authelia session so a shared-computer user can't hit `notes.aurora.local` after their Aurora session lapses.
+
+### iter-14 (2026-08-03) — D13 session boundary polish
+
+**Item:** D13 — Aurora sign-out kills the Authelia session; per-service sign-out redirects to Authelia logout.
+
+**The problem.** Aurora's `POST /api/auth/logout` invalidated the HttpSession, but the `authelia_session` cookie set on `.{DOMAIN}` outlived it. On a shared computer, the next user could hit `notes.aurora.local` without a login prompt because Authelia still trusted the browser. Same story per service: Grafana's Sign Out cleared its own session but Authelia's session bounced the user right back in via `auth_proxy`.
+
+**Backend change (`AuthController.logout`).**
+- Response is now `{ next: string | null }` instead of 204 no-content.
+- When identity is enabled AND `.state.yml` has a domain: `next = "https://auth.{DOMAIN}/logout?rd={url-encoded https://{DOMAIN}/login}"`.
+- When identity is disabled OR domain is missing: `next = null` (SPA does its usual local /login redirect).
+- URL encoding uses `URLEncoder.encode(..., UTF_8)` so the `rd` param is a valid query value.
+- HttpSession invalidation + SecurityContext clear unchanged — the SPA-visible behaviour on the Aurora side is identical.
+
+**Frontend threads the URL.**
+- `AuthApi.logout()` returns `LogoutResponse`.
+- `useAuthStore.logout()` returns `Promise<string | null>` (the next URL). Callers control the redirect so the store stays test-friendly — mocking `window.location` inside a store gets fiddly.
+- `TopBar.vue` + `SettingsView.vue` `signOut()`: if `next` is set, `window.location.href = next`; else `router.push('/login')`.
+
+**Per-service logout redirects.**
+- **Grafana** (D12 already trusts Remote-User): added `GF_AUTH_SIGNOUT_REDIRECT_URL=https://auth.{DOMAIN}/logout`. Without this, hitting Grafana's Sign Out cleared its own cookie but auth_proxy would auto-sign the user back in on the next request.
+- **Forgejo**: added `FORGEJO__service__LOGOUT_COOKIE_URL=https://auth.{DOMAIN}/logout`. Same reasoning.
+- **Paperless** already got `PAPERLESS_LOGOUT_REDIRECT_URL` in D12.
+- **Home-Automation**: HA's own logout is fine — it clears its own cookie and users land on HA's login page, which is still Authelia-gated at the edge. If they want to bounce back to Aurora explicitly they can navigate there; over-engineering the HA logout flow isn't worth the fight with its login-provider config.
+
+**Tests — 6 new** (`controllers/AuthControllerLogoutTests`).
+- Identity disabled → `next: null` in JSON body.
+- Identity enabled + domain present → `next` is the Authelia URL with url-encoded `rd`.
+- `ssoLogoutUrl()` returns empty when: identity not in enabled list; enabled list is null; domain is null/blank.
+- URL construction encodes non-ASCII / colons in domain correctly (test uses `home.example.com` to prove real-world encoding).
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 473 tests (467 → 473, +6). Vitest 177 unchanged. vue-tsc clean. Dockerfile clean.
+
+**Live-test contract (Bruce, post-merge).** Log into Aurora → click TopBar sign-out → land on Aurora `/login` AFTER a brief bounce through `https://auth.aurora.local/logout`. Verify: browser dev-tools → Application → Cookies → `.aurora.local` — the `authelia_session` cookie is gone. Test: sign in again, visit notes.aurora.local (works — Authelia trusts new session), sign out from notes' inline user menu → land back on Authelia's logout confirmation → notes.aurora.local now requires a fresh login.
+
+**Next.** D14 — audit rows for every user CRUD, role change, propagation event. Most of this already lands via D8 (`users.create/role-change/password-rotate/delete`), D2 (Authelia projector), D3 (identity secrets), D10 (onboarding.sso.enable/skip), D11 (sso.env.neutralise). D14 verifies coverage + gates the audit rows behind an integration test.

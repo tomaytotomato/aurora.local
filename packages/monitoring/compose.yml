@@ -74,6 +74,11 @@ services:
       - GF_AUTH_PROXY_HEADERS=Email:Remote-Email Name:Remote-Name Groups:Remote-Groups
       - GF_AUTH_PROXY_AUTO_SIGN_UP=true
       - GF_AUTH_PROXY_WHITELIST=caddy
+      # Phase D iter-14 (D13). When a Grafana user hits Sign Out, kick
+      # them through Authelia's logout so the shared .{DOMAIN} session
+      # cookie is cleared — otherwise the next visit auto-signs them
+      # right back in via auth_proxy.
+      - GF_AUTH_SIGNOUT_REDIRECT_URL=https://auth.${DOMAIN:-aurora.local}/logout
     volumes:
       - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ../../data/monitoring/grafana:/var/lib/grafana
