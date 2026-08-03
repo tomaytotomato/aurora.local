@@ -1779,3 +1779,40 @@ touching component internals.
 Iter-36: Extract `useContainerEvents` dedupe key logic into a testable
 helper and pin it in Vitest. Same net-negative pattern — the composable
 gets thinner while the safety net grows.
+
+## Iter 36 · 2026-08-03 10:53 · commit 1708cb4
+**Extract container-events helpers into `lib/container-events.ts` + 13 new Vitest tests.**
+
+### What shipped
+- `lib/container-events.ts` (new): `MAX_EVENTS=200`, `pushDeduped`
+  (tail-based dedupe, reference-equal on dup), `replaceCapped`
+  (slice-tail), `pruneFailureWindow` (SSE fallback ladder helper).
+- `lib/container-events.spec.ts` (+13 tests): full coverage of dedupe
+  branches (empty, populated, same-tail collision with reference-
+  equality assertion, non-tail no-dedupe, front-evict at cap,
+  contract-parity with backend BUFFER_MAX), replaceCapped copy /
+  slice / custom-cap paths, pruneFailureWindow window semantics.
+- `useContainerEvents.ts` refactor: pushEvent/replaceEvents/
+  recordFailureAndMaybeFallback delegate to the module. Net-negative
+  in composable line count.
+
+### Verification
+- Full backend: 348/0/0.
+- `vue-tsc --noEmit` → exit 0.
+- **Vitest: 3 files, 22 tests passed** (+13).
+- `bash scripts/verify-v03-overnight.sh` → 5/5.
+
+### Files touched
+- `frontend/src/lib/container-events.ts` (+82, new)
+- `frontend/src/lib/container-events.spec.ts` (+115, new)
+- `frontend/src/composables/useContainerEvents.ts` (+20 -30)
+
+### Deferred (accepted)
+- SecurityPosture component-mount test (Pinia + router overhead).
+- ContainerLogsView error-mapping test — could extract the axios-
+  status → copy switch into a lib helper, same pattern.
+
+### Next iteration target
+Iter-37: extract ContainerLogsView's status→copy switch into
+lib/error-copy.ts (or similar) + Vitest tests. Same net-negative
+pattern.
