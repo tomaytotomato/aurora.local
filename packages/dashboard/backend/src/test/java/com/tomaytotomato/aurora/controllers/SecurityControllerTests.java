@@ -4,6 +4,7 @@ import com.tomaytotomato.aurora.domain.SecurityFinding;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.persistence.SecurityDismissalRepo;
 import com.tomaytotomato.aurora.security.SecurityFindingsService;
+import com.tomaytotomato.aurora.services.CurrentUserService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -35,12 +36,32 @@ class SecurityControllerTests {
 
   private static MockMvc mvc(SecurityFindingsService svc, SecurityDismissalRepo repo) {
     return MockMvcBuilders.standaloneSetup(
-        new SecurityController(svc, repo, Mockito.mock(AuditEventRepo.class))
+        new SecurityController(svc, repo,
+            Mockito.mock(AuditEventRepo.class), unauthenticatedUser())
     ).build();
   }
 
   private static MockMvc mvc(SecurityFindingsService svc, SecurityDismissalRepo repo, AuditEventRepo audit) {
-    return MockMvcBuilders.standaloneSetup(new SecurityController(svc, repo, audit)).build();
+    return MockMvcBuilders.standaloneSetup(
+        new SecurityController(svc, repo, audit, unauthenticatedUser())
+    ).build();
+  }
+
+  private static MockMvc mvc(SecurityFindingsService svc, SecurityDismissalRepo repo,
+                              AuditEventRepo audit, CurrentUserService currentUser) {
+    return MockMvcBuilders.standaloneSetup(new SecurityController(svc, repo, audit, currentUser)).build();
+  }
+
+  private static CurrentUserService unauthenticatedUser() {
+    CurrentUserService u = Mockito.mock(CurrentUserService.class);
+    Mockito.when(u.currentUserId()).thenReturn(java.util.Optional.empty());
+    return u;
+  }
+
+  private static CurrentUserService userWithId(long id) {
+    CurrentUserService u = Mockito.mock(CurrentUserService.class);
+    Mockito.when(u.currentUserId()).thenReturn(java.util.Optional.of(id));
+    return u;
   }
 
   @Test
@@ -298,5 +319,34 @@ class SecurityControllerTests {
     org.junit.jupiter.api.Assertions.assertEquals("a\\nb", SecurityController.jsonEscape("a\nb"));
     org.junit.jupiter.api.Assertions.assertEquals("a\\u0001b", SecurityController.jsonEscape("a\u0001b"));
     org.junit.jupiter.api.Assertions.assertEquals("", SecurityController.jsonEscape(null));
+  }
+
+  // -- principal attribution (iter-28) ---------------------------------
+
+  @Test
+  void dismiss_audit_uses_authenticated_user_id_when_present() throws Exception {
+    SecurityFindingsService svc = Mockito.mock(SecurityFindingsService.class);
+    SecurityDismissalRepo repo = Mockito.mock(SecurityDismissalRepo.class);
+    AuditEventRepo audit = Mockito.mock(AuditEventRepo.class);
+    mvc(svc, repo, audit, userWithId(42L)).perform(post("/api/security/findings/id-x/dismiss")
+            .contentType(MediaType.APPLICATION_JSON).content("{}"))
+        .andExpect(status().isOk());
+    Mockito.verify(audit).record(
+        eq(42L),
+        eq("security.dismiss"),
+        eq("finding:id-x"),
+        any());
+  }
+
+  @Test
+  void restore_audit_uses_authenticated_user_id_when_present() throws Exception {
+    SecurityFindingsService svc = Mockito.mock(SecurityFindingsService.class);
+    SecurityDismissalRepo repo = Mockito.mock(SecurityDismissalRepo.class);
+    AuditEventRepo audit = Mockito.mock(AuditEventRepo.class);
+    when(repo.restore("id-x")).thenReturn(true);
+    mvc(svc, repo, audit, userWithId(7L)).perform(delete("/api/security/findings/id-x/dismiss"))
+        .andExpect(status().isOk());
+    Mockito.verify(audit).record(eq(7L),
+        eq("security.restore"), eq("finding:id-x"), eq(null));
   }
 }

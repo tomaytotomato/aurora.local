@@ -4,9 +4,9 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 
 ---
 
-## Executive summary (as of iter-24 · commit HEAD)
+## Executive summary (as of iter-27 · commit 7dec90c)
 
-**Bottom line.** Phase A (v0.2 close-out) is closed, Phase B (v0.3 groundwork) is feature-complete for the hard-stop, plus every one of the deferred followups pinned in the per-item logs has now shipped as of iter-24. Backend + frontend fully green. 46+ commits since `f9c4406`. Live aurora on `rename/aurora` is untouched — everything in this worktree is on `feat/v0.2-overnight` and pushed to origin, awaiting your morning review + merge.
+**Bottom line.** Phase A (v0.2 close-out) is closed, Phase B (v0.3 groundwork) is feature-complete for the hard-stop, and every deferred followup pinned in the per-item logs has now shipped through iter-27. Backend + frontend fully green. 52 commits since `f9c4406`. Live aurora on `rename/aurora` is untouched — everything in this worktree is on `feat/v0.2-overnight` and pushed to origin, awaiting your morning review + merge.
 
 **v0.3 followups shipped after B4:**
 - Per-container CPU + memory metrics (`ContainerStatsSampler`, iter-20).
@@ -14,6 +14,9 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 - Live uPlot chart on DashboardHome Metrics card (iter-22).
 - Dismiss/snooze security findings (V2 migration + repo + endpoints + FE, iter-23).
 - System-card CPU sparkline (iter-24).
+- Suppressed-findings collapsible section on `/security` with Restore (iter-25).
+- Snooze duration picker (1d/7d/30d/90d/Permanent) on the Dismiss button (iter-26).
+- Audit events on dismiss/restore (iter-27; 'security.dismiss' / 'security.restore' → `audit_event`).
 
 **Phase A — v0.2 close-out (A1–A8, all shipped)**
 - **A1** — `d9c4b6d` — Kill DoneChecklist / PackagesCard drift + honest container count on the System card.
@@ -51,6 +54,10 @@ Baseline commit: `f9c4406` on `rename/aurora`. Isolated worktree at `/home/bruce
 | iter-22 (uPlot chart on Metrics card) | 286 | — | 0 | 0 |
 | **iter-23 (dismiss/snooze findings)** | **314** | **+28** | **0** | **0** |
 | iter-24 (System-card CPU sparkline) | 314 | — | 0 | 0 |
+| iter-25 (suppressed-findings mgmt) | 314 | — | 0 | 0 |
+| iter-26 (snooze duration picker) | 314 | — | 0 | 0 |
+| **iter-27 (audit events on dismiss/restore)** | **319** | **+5** | **0** | **0** |
+| iter-28 (principal attribution on audits) | 327 | +8 | 0 | 0 |
 
 Frontend `vue-tsc --noEmit` exit 0 on every iter that touched the FE.
 
@@ -71,7 +78,7 @@ docker run --rm \
   -w /app \
   maven:3.9-eclipse-temurin-25-alpine \
   mvn -B -o -Dstyle.color=never test
-# Expected: 314 tests, 0 failures, 0 errors.
+# Expected: 327 tests, 0 failures, 0 errors.
 
 # Frontend (~30s cold):
 docker run --rm \

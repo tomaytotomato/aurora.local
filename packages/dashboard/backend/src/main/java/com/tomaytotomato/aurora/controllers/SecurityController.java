@@ -4,6 +4,7 @@ import com.tomaytotomato.aurora.domain.SecurityFinding;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.persistence.SecurityDismissalRepo;
 import com.tomaytotomato.aurora.security.SecurityFindingsService;
+import com.tomaytotomato.aurora.services.CurrentUserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -62,13 +63,16 @@ public class SecurityController {
   private final SecurityFindingsService findings;
   private final SecurityDismissalRepo dismissals;
   private final AuditEventRepo audit;
+  private final CurrentUserService currentUser;
 
   public SecurityController(SecurityFindingsService findings,
                             SecurityDismissalRepo dismissals,
-                            AuditEventRepo audit) {
+                            AuditEventRepo audit,
+                            CurrentUserService currentUser) {
     this.findings = findings;
     this.dismissals = dismissals;
     this.audit = audit;
+    this.currentUser = currentUser;
   }
 
   @GetMapping("/findings")
@@ -122,7 +126,8 @@ public class SecurityController {
     String diff = "{\"expires_at\":" + (expiresAt == null ? "null" : "\"" + expiresAt + "\"")
         + (reason == null ? "" : ",\"reason\":\"" + jsonEscape(reason) + "\"")
         + "}";
-    audit.record(null, "security.dismiss", "finding:" + id, diff);
+    audit.record(currentUser.currentUserId().orElse(null),
+        "security.dismiss", "finding:" + id, diff);
     Map<String, Object> resp = new LinkedHashMap<>();
     resp.put("id", id);
     resp.put("expires_at", expiresAt == null ? null : expiresAt.toString());
@@ -143,7 +148,8 @@ public class SecurityController {
     if (restored) {
       // iter-27: only audit successful restores so a wave of DELETE
       // requests against ghost ids doesn't spam the audit table.
-      audit.record(null, "security.restore", "finding:" + id, null);
+      audit.record(currentUser.currentUserId().orElse(null),
+          "security.restore", "finding:" + id, null);
     }
     Map<String, Object> resp = new LinkedHashMap<>();
     resp.put("id", id);
