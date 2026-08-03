@@ -66,3 +66,37 @@ Phase D inherits every Phase C primitive (Skeleton, Dialog, Select, Table, Toast
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 373 tests (357 → 373, +16). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
 
 **Next.** D2 — `AutheliaService` that projects `AdminUserRepo.findAll()` into `packages/identity/authelia/users_database.yml`, atomic write, hooked into CRUD.
+
+### iter-3 (2026-08-03) — D2 AutheliaService projector
+
+**Item:** D2 — `AutheliaService` projects Aurora users → `data/identity/authelia/users_database.yml`, atomic write, event-hooked reconcile.
+
+**Design decisions.**
+- **On-disk projection over Authelia API**. Authelia's file-based auth backend uses `watch: true` (see `packages/identity/authelia/configuration.yml`), so a rename-in-place triggers automatic in-container reload. Aurora just owns the file — no HTTP round-trips, no Authelia internal-API knowledge, same pattern as MdnsAliasService owning its avahi-publish subprocess fleet.
+- **Cascading group membership** for the Role → Authelia groups mapping:
+  - `ADMIN` → `[admins, users, guests]`
+  - `USER` → `[users, guests]`
+  - `GUEST` → `[guests]`
+  - Lets Authelia ACL rules use `subject: group:users` to mean "user or admin" without repeating the list. Consumed in D4's `configuration.yml` finalisation.
+- **Atomic write** via `Files.createTempFile()` in the same directory + `Files.move(tmp, target, ATOMIC_MOVE + REPLACE_EXISTING)`. Authelia's file watcher fires on inotify; a partial write would 500 login attempts for the beat between truncate and last flush. Tmp file is cleaned up on failure.
+- **Idempotent rendering**: byte-for-byte identical output for the same user set. Pinned by a test — if a future change accidentally introduces a timestamp inside the yaml, we'd flap Authelia's watcher every reconcile.
+- **Reconcile cadence**: on `ApplicationReadyEvent` + on every `UserChangedEvent` (see below) + every 5 minutes as a drift guard (someone hand-edits `users_database.yml` → gets fixed on next tick).
+
+**New event: `UserChangedEvent`.**
+- Payload-free record — projector re-reads the full users list each fire so a race between two mutations resolves cleanly and the yaml always matches the DB at projection time.
+- Reason slot constants: `create / update / role-change / password-rotate / delete / startup / reconcile` — log-scrutable and grep-friendly.
+- D8 controllers will publish it after every user CRUD. D2 just defines the event + the listener; there are no publishers yet.
+
+**Defensive reconcile — critical fix mid-iter.** Initial version caught `IOException` only. When `AuroraApplicationTests.contextLoads()` ran, the boot-time `ApplicationReadyEvent` fired the reconcile BEFORE `spring.sql.init` had populated the schema (Spring Boot 4 timing quirk we already know about from D1). `users.findAll()` threw a `DataAccessException`, escaped `reconcile()`, aborted the context. Fixed by catching broadly (`Exception`) with an explicit doc comment explaining why — Aurora must not crash at startup because Authelia's projector hit a transient DB hiccup. Pattern matches how `MdnsAliasService` handles missing prerequisites.
+
+**Tests — 13 new** (`services/AutheliaServiceTests`):
+- **Groups mapping**: 3 tests covering the ADMIN/USER/GUEST cascade.
+- **`renderYaml` pure function**: parseable via SnakeYAML round-trip; displayname is title-cased first char; email defaults to `<username>@aurora.local`; banner comment ("REGENERATED automatically") present so operators know not to hand-edit; empty user set still produces valid YAML (Authelia tolerates empty `users:` → fail-closed).
+- **`atomicWrite`**: no `.tmp` left behind on success; replaces existing target atomically.
+- **End-to-end `reconcile`**: writes to the repo-relative path (`{repo}/data/identity/authelia/users_database.yml`); creates parent directories on first run; updates `lastWriteAt` + clears `lastError`; idempotent second run produces byte-identical output; write failure sets `lastError` sentinel + returns `-1` without throwing.
+
+Tests are hermetic — no Spring context, `@TempDir` per-test, `AdminUserRepo` mocked. Every temp-file/rename path is exercised for real, so Authelia's watcher behaviour on the live box will match what the test observed.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 386 tests (373 → 386, +13). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
+
+**Next.** D3 — `packages/identity/` secrets bootstrap. Generate the three Authelia secrets (`AUTHELIA_JWT_SECRET`, `AUTHELIA_SESSION_SECRET`, `AUTHELIA_STORAGE_ENCRYPTION_KEY`) via `openssl rand -hex 32` on first `identity`-enable, write to `packages/identity/.env`, emit an audit row when they rotate.
