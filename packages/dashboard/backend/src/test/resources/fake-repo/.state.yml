@@ -1,0 +1,17 @@
+# Fake-repo state fixture for PackagesServiceTests.
+#
+# The pre-existing PackagesServiceTests.parsesFakeRepoManifests asserted
+# 'fake-repo state has media enabled' but the file was gitignored globally
+# (see .gitignore top-level '.state.yml' rule) so the fixture never made
+# it into the test resources on a fresh checkout. iter-17 pins a
+# .gitignore exception so this file survives into CI + local runs.
+#
+# Kept minimal: only the fields the PackagesService cares about (enabled
+# array). hostname/domain/installed_at are intentionally null-shaped so
+# any test that grew to rely on them would fail loudly rather than pick
+# up a stale value.
+bootstrap_version: 1
+enabled:
+  - core
+  - media
+profiles: []

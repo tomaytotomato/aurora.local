@@ -20,6 +20,10 @@ packages/*/*/data/
 # ---- installer state ----
 # Written by bootstrap.sh; records which packages are enabled on this host.
 .state.yml
+# Fixture exception: the fake-repo test resources ship a canned
+# .state.yml so PackagesServiceTests exercises the enabled[] wire
+# end-to-end. Not a real installation state; safe to check in.
+!packages/dashboard/backend/src/test/resources/fake-repo/.state.yml
 
 # ---- ansible ----
 *.retry
