@@ -1018,3 +1018,59 @@ Iter-20 candidates:
    `useServiceStatusStream` if it drifts.
 
 Recommend option 1 for highest signal — closes B2's biggest gap.
+
+## Iter 20 · 2026-08-03 09:12 · commit 0fc5b1a
+**B2-followup — ContainerStatsSampler (per-container CPU% + memory).**
+
+Closes B2 iter-10's biggest deferred bullet.
+
+### What shipped
+
+- `services/ContainerStatsSampler.java` (new):
+  - @Scheduled fixedRate=60s, initialDelay=15s. Slower than
+    MetricsSamplerService (30s) because per-container stats collection
+    is expensive.
+  - Fixed 4-thread daemon pool for fan-out. Per-container timeout 4s;
+    batch ceiling 30s. @PreDestroy shuts pool down.
+  - Filters to `state == 'running'`; skips exited/created/restarting.
+  - CPU% via the docker-CLI formula
+    `(cpuDelta/sysDelta) * onlineCpus * 100` — range `[0, N*100]`;
+    matches what `docker stats` prints. Null on first-tick /
+    clock-stall / counter-wrap / missing fields.
+  - mem_used_bytes from `memory_stats.usage`.
+  - Keys: `container.<name>.cpu_pct` +
+    `container.<name>.mem_used_bytes`.
+  - `safeKey` sanitises names to `[a-zA-Z0-9_.-]`.
+  - Deliberately does NOT prune — MetricsSamplerService owns retention
+    to avoid two prune loops racing.
+- 20 new tests: computeCpuPct formula (5 shape cases), null/malformed
+  branches (5), memBytes / firstName / safeKey / runningContainers
+  filter, collect emits + skips missing / partial, sample writes batch
+  + never prunes, no-op on empty running list.
+
+### Verification
+- Touched suite: 20/20 green.
+- Full backend: **277 tests, 0 failures, 0 errors** (257 → 277, +20).
+- `vue-tsc --noEmit` → exit 0.
+- `bash scripts/verify-v03-overnight.sh` → 4/4 checks pass.
+
+### Files touched
+- `backend/…/services/ContainerStatsSampler.java` (+240, new)
+- `backend/…/test/…/services/ContainerStatsSamplerTests.java` (+350, new)
+
+### Deferred
+- Network + block IO stats. Follow-up after uPlot chart lands.
+- Per-container memory % vs limit — needs cgroup limit sniff.
+- Metrics key discovery endpoint (`/api/metrics/keys?prefix=container.`).
+  Deferred until FE chart asks for it.
+
+### Next iteration target
+Iter-21 candidates:
+1. Metrics key discovery endpoint — enables an FE dropdown of
+   containers/host metrics without hardcoding names.
+2. Update executive summary + test-count table for the 277 baseline.
+3. Frontend uPlot chart POC on Metrics card. Real work; probably
+   2+ iters (uPlot bindings + config + query wire + empty state).
+
+Recommend option 2 (summary refresh, cheap) then option 1
+(discovery endpoint prepares the ground for the chart).
