@@ -15,6 +15,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { ContainersApi, type ContainerLogLine } from '@/api/containers';
+import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Alert from '@/components/ui/Alert.vue';
@@ -45,18 +46,15 @@ async function load(): Promise<void> {
     lines.value = res.lines;
     truncated.value = res.truncated;
   } catch (e: unknown) {
-    const status = (e as { response?: { status?: number } })?.response?.status;
-    // Human copy per §5 error-state contract — no axios strings.
-    let message: string;
-    if (status === 400) {
-      message = "Aurora couldn't understand the container name in the URL.";
-    } else if (status === 404) {
-      message = 'That container is not on this box any more.';
-    } else if (status === 401 || status === 403) {
-      message = "You need to sign in again to view container logs.";
-    } else {
-      message = "Aurora couldn't read the container's log stream.";
-    }
+    const status = httpStatusFromError(e);
+    // Human copy per §5 error-state contract — delegates to the
+    // shared lib helper so every view speaks the same shape.
+    const message = humanCopyForStatus(status, {
+      subject: 'the container\u2019s log stream',
+      action: 'read',
+      badRequest: "Aurora couldn't understand the container name in the URL.",
+      notFound: 'That container is not on this box any more.',
+    });
     err.value = { status, message };
     lines.value = [];
     truncated.value = false;
