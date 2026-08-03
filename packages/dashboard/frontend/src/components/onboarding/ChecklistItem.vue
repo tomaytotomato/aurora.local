@@ -73,17 +73,17 @@ const pillClass = computed(() => {
   // light mode; readable in dark.
   switch (props.service.state) {
     case 'running':
-      return 'bg-[var(--color-ok-bg)] text-[var(--color-ok-fg)] border-[var(--color-ok-fg)]/25';
+      return 'bg-success/10 text-success border-success/25';
     case 'needs-config':
-      return 'bg-[var(--color-warn-bg)] text-[var(--color-warn-fg)] border-[var(--color-warn-fg)]/25';
+      return 'bg-warning/10 text-warning border-warning/25';
     case 'failed':
-      return 'bg-[var(--color-err-bg)] text-[var(--color-err-fg)] border-[var(--color-err-fg)]/25';
+      return 'bg-destructive/10 text-destructive border-destructive/25';
     case 'not-started':
-      return 'bg-[var(--color-surface-2)] text-[var(--color-ink-2)] border-[var(--color-line)]';
+      return 'bg-muted text-foreground border-border';
     case 'starting':
-      return 'bg-[var(--color-info-bg)] text-[var(--color-info-fg)] border-[var(--color-info-fg)]/25';
+      return 'bg-info/10 text-info border-info/25';
     default:
-      return 'bg-[var(--color-surface-2)] text-[var(--color-ink-2)] border-[var(--color-line)]';
+      return 'bg-muted text-foreground border-border';
   }
 });
 
@@ -117,7 +117,7 @@ function onPrimary() {
     :data-package="service.package"
     :data-row="service.package"
     :data-tone="tone"
-    class="border border-border rounded-lg p-4 bg-[var(--color-surface)] text-foreground"
+    class="border border-border rounded-lg p-4 bg-card text-foreground"
     :class="isCollapsed ? 'py-2' : ''"
   >
     <div class="flex items-start justify-between gap-4">

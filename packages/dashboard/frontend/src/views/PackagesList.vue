@@ -49,7 +49,7 @@ const filtered = computed(() => {
         {{ f }}
         <span
           v-if="activeFilter === f"
-          class="absolute inset-x-0 -bottom-px h-px bg-[var(--color-ink)]"
+          class="absolute inset-x-0 -bottom-px h-px bg-foreground"
         />
       </button>
     </div>

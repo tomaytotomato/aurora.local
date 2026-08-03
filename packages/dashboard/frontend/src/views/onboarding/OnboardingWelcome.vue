@@ -117,7 +117,7 @@ const diskRowsExtra = computed(() => Math.max(0, diskRows.value.length - 4));
     <div v-else-if="!env" class="text-sm text-muted-foreground mb-8">Reading system info…</div>
 
     <div v-else class="border border-border rounded-lg mb-6">
-      <dl class="divide-y divide-[var(--color-line-2)]">
+      <dl class="divide-y divide-border">
         <div class="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
           <dt class="text-muted-foreground">Hostname</dt>
           <dd class="col-span-2 font-mono text-foreground">{{ env.hostname ?? '—' }}</dd>

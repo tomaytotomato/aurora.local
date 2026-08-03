@@ -166,7 +166,7 @@ async function proceed(): Promise<void> {
           {{ cat.label }}
           <span
             v-if="activeCategory === cat.value"
-            class="absolute inset-x-0 -bottom-px h-px bg-[var(--color-ink)]"
+            class="absolute inset-x-0 -bottom-px h-px bg-foreground"
           />
         </button>
       </div>
@@ -179,8 +179,8 @@ async function proceed(): Promise<void> {
         type="button"
         class="text-left p-4 rounded-lg border transition-all duration-150 flex items-start gap-3"
         :class="isSelected(pkg.name)
-          ? 'border-[var(--color-ink)] bg-card'
-          : 'border-[var(--color-line)] bg-card hover:border-[var(--color-ink-4)]'"
+          ? 'border-foreground bg-card'
+          : 'border-border bg-card hover:border-muted-foreground'"
         :disabled="pkg.name === 'core'"
         @click="toggle(pkg.name)"
       >

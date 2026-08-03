@@ -295,7 +295,7 @@ async function onStart(pkg: string): Promise<void> {
     <div
       v-if="showBringingUp"
       data-banner="bringing-up"
-      class="border border-border rounded-lg p-3 mb-3 bg-[var(--color-surface-2)] text-sm text-foreground"
+      class="border border-border rounded-lg p-3 mb-3 bg-muted text-sm text-foreground"
     >
       Aurora is still bringing these online. Nothing for you to type.
     </div>

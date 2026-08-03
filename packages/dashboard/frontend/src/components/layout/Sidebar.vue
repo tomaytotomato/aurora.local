@@ -115,8 +115,8 @@ watch(() => route.path, (path, prev) => {
           <!-- iter-3 theme-flip: bg uses --color-ink (dark in light mode,
                near-white in dark mode); stroke + dot use the inverting
                --color-on-ink token so the A-glyph always contrasts. -->
-          <rect width="32" height="32" rx="6" fill="var(--color-ink)"/>
-          <path d="M8 22 L16 8 L24 22" stroke="var(--color-on-ink)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect width="32" height="32" rx="6" fill="var(--color-foreground)"/>
+          <path d="M8 22 L16 8 L24 22" stroke="var(--color-primary-foreground)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="16" cy="22" r="1.5" fill="var(--color-accent)"/>
         </svg>
         <span class="font-serif text-lg leading-none text-foreground">Aurora</span>
@@ -147,9 +147,9 @@ watch(() => route.path, (path, prev) => {
           v-if="item.badgeKey === 'security' && totalSecurity() > 0"
           class="inline-flex items-center justify-center min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[0.6875rem] font-medium tabular-nums"
           :class="{
-            'bg-[var(--color-err-bg)] text-[var(--color-err-fg)]': highestSeverityToneRow() === 'err',
-            'bg-[var(--color-warn-bg)] text-[var(--color-warn-fg)]': highestSeverityToneRow() === 'warn',
-            'bg-[var(--color-info-bg)] text-[var(--color-info-fg)]': highestSeverityToneRow() === 'info',
+            'bg-destructive/10 text-destructive': highestSeverityToneRow() === 'err',
+            'bg-warning/10 text-warning': highestSeverityToneRow() === 'warn',
+            'bg-info/10 text-info': highestSeverityToneRow() === 'info',
           }"
           data-test="sidebar-security-badge"
           :aria-label="totalSecurity() + ' open security findings'"

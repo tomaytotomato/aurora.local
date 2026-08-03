@@ -180,8 +180,8 @@
   }
 
   html, body {
-    background: var(--color-canvas);
-    color: var(--color-ink);
+    background: var(--color-background);
+    color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: 'ss01', 'cv11';
     font-size: 15px;
@@ -192,12 +192,12 @@
 
   ::selection {
     background: color-mix(in srgb, var(--color-accent) 22%, transparent);
-    color: var(--color-ink);
+    color: var(--color-foreground);
   }
 
   h1, h2, h3, h4 {
     font-family: var(--font-serif);
-    color: var(--color-ink);
+    color: var(--color-foreground);
     letter-spacing: -0.02em;
     line-height: 1.15;
     font-weight: 500;
@@ -215,24 +215,24 @@
   kbd {
     display: inline-block;
     padding: 0.1em 0.4em;
-    border: 1px solid var(--color-line);
-    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    background: var(--color-muted);
     border-radius: 4px;
     font-size: 0.75em;
     line-height: 1;
-    color: var(--color-ink-2);
+    color: var(--color-foreground);
   }
 
   a {
-    color: var(--color-ink);
+    color: var(--color-foreground);
     text-decoration: underline;
-    text-decoration-color: var(--color-line);
+    text-decoration-color: var(--color-border);
     text-underline-offset: 3px;
     text-decoration-thickness: 1px;
     transition: text-decoration-color 160ms ease;
   }
 
-  a:hover { text-decoration-color: var(--color-ink-3); }
+  a:hover { text-decoration-color: var(--color-muted-foreground); }
 
   button { font-family: inherit; }
 
@@ -245,12 +245,12 @@
 
   input, textarea, select {
     font-family: inherit;
-    color: var(--color-ink);
+    color: var(--color-foreground);
   }
 
   hr {
     border: 0;
-    border-top: 1px solid var(--color-line);
+    border-top: 1px solid var(--color-border);
   }
 }
 
@@ -260,7 +260,7 @@
     font-size: 0.6875rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--color-ink-3);
+    color: var(--color-muted-foreground);
     font-weight: 500;
   }
 
@@ -311,17 +311,17 @@
 }
 
 @layer utilities {
-  .text-ink { color: var(--color-ink); }
-  .text-ink-2 { color: var(--color-ink-2); }
-  .text-ink-3 { color: var(--color-ink-3); }
-  .text-ink-4 { color: var(--color-ink-4); }
-  .text-on-ink { color: var(--color-on-ink); }
+  .text-ink { color: var(--color-foreground); }
+  .text-ink-2 { color: var(--color-foreground); }
+  .text-ink-3 { color: var(--color-muted-foreground); }
+  .text-ink-4 { color: var(--color-muted-foreground); }
+  .text-on-ink { color: var(--color-primary-foreground); }
   .text-on-accent { color: var(--color-on-accent); }
-  .bg-canvas { background-color: var(--color-canvas); }
-  .bg-surface { background-color: var(--color-surface); }
-  .bg-surface-2 { background-color: var(--color-surface-2); }
-  .border-line { border-color: var(--color-line); }
-  .border-line-2 { border-color: var(--color-line-2); }
+  .bg-canvas { background-color: var(--color-background); }
+  .bg-surface { background-color: var(--color-card); }
+  .bg-surface-2 { background-color: var(--color-muted); }
+  .border-line { border-color: var(--color-border); }
+  .border-line-2 { border-color: var(--color-border); }
   .text-accent { color: var(--color-accent); }
 
   /* Fade-up entry, per skill. Very subtle. */

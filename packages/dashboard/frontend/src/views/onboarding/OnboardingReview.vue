@@ -164,17 +164,17 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       v-if="installErr"
       data-tone="err"
       role="alert"
-      class="mb-6 flex items-start justify-between gap-4 px-4 py-3 rounded border border-[var(--color-err-fg)]/25 bg-[var(--color-err-bg)] text-[var(--color-err-fg)] text-sm"
+      class="mb-6 flex items-start justify-between gap-4 px-4 py-3 rounded border border-destructive/25 bg-destructive/10 text-destructive text-sm"
     >
       <div class="flex-1">{{ installErr }}</div>
       <button
         type="button"
-        class="shrink-0 text-sm px-3 py-1 rounded border border-[var(--color-err-fg)]/35 hover:bg-[var(--color-err-fg)]/10"
+        class="shrink-0 text-sm px-3 py-1 rounded border border-destructive/35 hover:bg-destructive/10"
         @click="retry"
       >Retry</button>
     </div>
 
-    <div class="border border-border rounded-lg divide-y divide-[var(--color-line-2)] mb-6">
+    <div class="border border-border rounded-lg divide-y divide-border mb-6">
       <div class="grid grid-cols-3 gap-4 px-5 py-4">
         <div class="text-muted-foreground text-sm">Domain</div>
         <div class="col-span-2 font-mono text-sm">{{ store.domain ?? '—' }}</div>
@@ -235,7 +235,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       <AlertDescription>{{ w }}</AlertDescription>
     </Alert>
 
-    <div v-if="installing || logLines.length" class="border border-border rounded-lg p-4 mb-8 bg-[var(--color-ink)] text-[var(--color-canvas)] font-mono text-xs max-h-64 overflow-auto" role="log" aria-live="polite">
+    <div v-if="installing || logLines.length" class="border border-border rounded-lg p-4 mb-8 bg-foreground text-background font-mono text-xs max-h-64 overflow-auto" role="log" aria-live="polite">
       <div v-for="(l, i) in logLines" :key="i">{{ l }}</div>
       <div v-if="installing" class="text-muted-foreground/60">…</div>
     </div>

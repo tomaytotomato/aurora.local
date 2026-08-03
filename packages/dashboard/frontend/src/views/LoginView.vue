@@ -89,8 +89,8 @@ function passkey(): void {
     <div class="w-full max-w-sm anim-enter login-card p-8 rounded-lg">
       <div class="flex items-center gap-2.5 mb-10">
         <svg viewBox="0 0 32 32" class="w-7 h-7">
-          <rect width="32" height="32" rx="6" fill="var(--color-ink)"/>
-          <path d="M8 22 L16 8 L24 22" stroke="var(--color-on-ink)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect width="32" height="32" rx="6" fill="var(--color-foreground)"/>
+          <path d="M8 22 L16 8 L24 22" stroke="var(--color-primary-foreground)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="16" cy="22" r="1.5" fill="var(--color-accent)"/>
         </svg>
         <span class="font-serif text-xl leading-none text-foreground">Aurora</span>
@@ -142,9 +142,9 @@ function passkey(): void {
    tokens. Opaque surface re-establishes the ink text-color context inside
    the .on-photo scope so form labels/inputs stay readable in both themes. */
 .login-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  color: var(--color-ink);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground);
   box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.35);
 }
 </style>

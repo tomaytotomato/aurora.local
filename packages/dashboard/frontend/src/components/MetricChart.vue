@@ -74,16 +74,16 @@ function buildOptions(width: number): uPlot.Options {
       { label: 'time' },
       {
         label: props.label,
-        stroke: 'var(--color-ink-2, currentColor)',
+        stroke: 'var(--color-foreground, currentColor)',
         width: 1.5,
         points: { show: false },
         value: (_self, rawValue) => formatValue(rawValue),
       },
     ],
     axes: [
-      { stroke: 'var(--color-ink-3, currentColor)' },
+      { stroke: 'var(--color-muted-foreground, currentColor)' },
       {
-        stroke: 'var(--color-ink-3, currentColor)',
+        stroke: 'var(--color-muted-foreground, currentColor)',
         values: (_self, ticks) => ticks.map((t) => formatValue(t)),
       },
     ],

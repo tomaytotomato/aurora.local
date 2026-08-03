@@ -263,3 +263,26 @@
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 11 files / 99 tests. vue-tsc clean. Dockerfile clean.
 
 **Next.** C9b — sweep inline `var(--color-*)` refs (bare `color:` / `background:` / arbitrary values) across the same caller set + `src/assets/main.css` base styles, then delete the legacy token declarations from the @theme block.
+
+### iter-12 (2026-08-03) — C9b inline var(--color-*) sweep
+
+**Item:** C9b — sweep inline `var(--color-*)` refs (arbitrary Tailwind values + raw `var()` in `style=""` / `<style>` / TS strings + main.css base/components layers).
+
+**Sweep script.** `packages/dashboard/scripts/c9b-inline-sweep.sh`. Three `sed -E` passes per file:
+1. **Arbitrary-value tint utilities** — `bg-[var(--color-ok-bg)]` → `bg-success/10`, `bg-[var(--color-err-bg)]` → `bg-destructive/10`, `text-[var(--color-warn-fg)]` → `text-warning`, `border-[var(--color-info-fg)]` → `border-info` (+ their /25 /35 /40 opacity companions inherited via the shorthand).
+2. **Monochrome arbitrary-value utilities** — `bg-[var(--color-ink)]` → `bg-foreground`, `bg-[var(--color-canvas)]` → `bg-background`, `bg-[var(--color-surface-2)]` → `bg-muted`, `bg-[var(--color-line-2)]` → `bg-secondary`, `text-[var(--color-ink-3)]` → `text-muted-foreground`, etc.
+3. **Raw `var(--color-<legacy>)` refs** in style attributes / `<style>` blocks / TS string literals — same shadcn re-routing (`--color-ink` → `--color-foreground`, `--color-line-2` → `--color-border`, `--color-ok-fg` → `--color-success`, etc.). Kept intact: `--color-accent`, `--color-accent-hover`, `--color-on-accent` (brand amber; shadcn's `accent` slot is intentionally unmapped for Aurora).
+
+**Files touched.** 16 (11 views + 5 components) + `src/assets/main.css` `@layer base` + `@layer components`. Total substitutions: ~140.
+
+**Manual fix — MetricChart.** The `var(--color-ink-2, currentColor)` fallback pattern isn't matched by the bare `var(--color-ink-2)` regex (comma inside the parens). Migrated three MetricChart line-stroke refs by hand: `ink-2` → `foreground`, `ink-3` → `muted-foreground`.
+
+**Manual fix — Tabs/Card/Progress migration comments.** The token-migration doc comments in the three primitives (e.g. `bg-[var(--color-surface)] → bg-card`) got both sides of the arrow swapped by the sed pass. Restored the LHS (old token) so the comments still tell the migration story. Sed-first, review-after is a cheap way to catch this class of self-inflicted damage.
+
+**Residual audit.** Post-sweep grep of `var(--color-<legacy>)` across `src/` returns 0 hits outside of:
+- `src/assets/main.css` `@layer utilities` block (the hand-rolled `.text-ink { color: var(--color-foreground); }` shim — now dead code; deleted in C9c along with the legacy @theme declarations).
+- `src/components/ui/buttonVariants.ts` intentional brand-amber refs (`--color-accent` / `--color-on-accent`).
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 11 files / 99 tests. vue-tsc clean. Dockerfile clean.
+
+**Next.** C9c — delete the legacy `--color-canvas/-surface/-ink/-line/-ok/-warn/-err/-info/-on-ink/-ink-hover` declarations from `main.css` `@theme` (both light + dark) + delete the entire `@layer utilities` legacy shim block (`.text-ink`, `.bg-canvas`, etc.). Keep brand-amber tokens (`--color-accent`, `--color-accent-hover`, `--color-on-accent`).

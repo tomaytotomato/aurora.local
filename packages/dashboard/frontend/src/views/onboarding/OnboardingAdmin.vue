@@ -189,9 +189,9 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
               {{ copyFailed ? 'Copy failed' : copied ? 'Copied' : 'Copy' }}
             </button>
           </div>
-          <div class="mt-2 h-0.5 bg-[var(--color-line-2)] rounded-full overflow-hidden">
+          <div class="mt-2 h-0.5 bg-secondary rounded-full overflow-hidden">
             <div
-              class="h-full bg-[var(--color-ink)] transition-all duration-300"
+              class="h-full bg-foreground transition-all duration-300"
               :style="{ width: `${strengthPct}%` }"
             />
           </div>
@@ -200,7 +200,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
             anywhere until you continue. <strong>If you refresh before clicking
             Continue, this password is gone.</strong>
           </p>
-          <p v-if="copyFailed" class="mt-1 text-xs text-[var(--color-err,#c33)]">
+          <p v-if="copyFailed" class="mt-1 text-xs text-destructive">
             Couldn't copy automatically &mdash; select the password and copy manually (Ctrl+C).
           </p>
         </div>

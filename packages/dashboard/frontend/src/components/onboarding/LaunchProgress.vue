@@ -205,8 +205,8 @@ function retry(): void {
           class="text-lg"
           :class="{
             'text-[var(--color-accent)] animate-pulse': state === 'running',
-            'text-[var(--color-ok-fg)]': state === 'success',
-            'text-[var(--color-err-fg)]': state === 'failed',
+            'text-success': state === 'success',
+            'text-destructive': state === 'failed',
           }"
         >{{ headerGlyph }}</span>
         <div>
@@ -234,7 +234,7 @@ function retry(): void {
       v-if="state === 'failed'"
       data-tone="err"
       role="alert"
-      class="mb-4 px-4 py-3 rounded border border-[var(--color-err-fg)]/25 bg-[var(--color-err-bg)] text-[var(--color-err-fg)] text-sm"
+      class="mb-4 px-4 py-3 rounded border border-destructive/25 bg-destructive/10 text-destructive text-sm"
       data-testid="launch-failure-reason"
     >
       {{ failureReason || 'Something went wrong bringing up your services. The log below has the details.' }}
@@ -254,8 +254,8 @@ function retry(): void {
           :class="{
             'border-border text-muted-foreground bg-card': perPkg[p] === 'not-started',
             'border-[var(--color-accent)] text-[var(--color-accent)] bg-card': perPkg[p] === 'starting',
-            'border-[var(--color-ok-fg)]/40 text-[var(--color-ok-fg)] bg-[var(--color-ok-bg)]': perPkg[p] === 'running',
-            'border-[var(--color-err-fg)]/40 text-[var(--color-err-fg)] bg-[var(--color-err-bg)]': perPkg[p] === 'failed',
+            'border-success/40 text-success bg-success/10': perPkg[p] === 'running',
+            'border-destructive/40 text-destructive bg-destructive/10': perPkg[p] === 'failed',
           }"
         >{{ pillLabel(perPkg[p]) }}</span>
       </li>
@@ -266,7 +266,7 @@ function retry(): void {
         Live log ({{ logLines.length }} line{{ logLines.length === 1 ? '' : 's' }})
       </summary>
       <div
-        class="mt-2 bg-[var(--color-ink)] text-[var(--color-canvas)] font-mono text-xs px-3 py-2 rounded max-h-64 overflow-auto"
+        class="mt-2 bg-foreground text-background font-mono text-xs px-3 py-2 rounded max-h-64 overflow-auto"
         data-testid="launch-log"
         role="log"
         aria-live="polite"
@@ -277,7 +277,7 @@ function retry(): void {
 
     <div
       v-if="false"
-      class="mt-3 text-sm text-[var(--color-err-fg)]"
+      class="mt-3 text-sm text-destructive"
     ></div>
   </div>
 </template>
