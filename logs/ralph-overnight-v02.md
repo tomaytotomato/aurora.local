@@ -801,3 +801,56 @@ candidates:
 
 Pick option 4 first (executive-summary lift) then option 2 (fills the
 PackageDetail Logs promise). Options 1 + 3 are lower priority.
+
+## Iter 16 · 2026-08-03 08:57 · commit 59f5118
+**B3-followup — PackageDetail Logs tab lists this package's containers.**
+
+Closes the "Log tail lands with M3" placeholder that overshot; M3
+already delivered B1 + B2 + B3.
+
+### What shipped
+
+- Backend `GET /api/containers?package=<name>` filter:
+  - `package=<pkg>` → matches label
+    `com.docker.compose.project == aurora-<pkg>`.
+  - `package=core` → historical shared `aurora` project (matches
+    packages/core/compose.yml top-level `name: aurora`).
+  - Name regex `^[a-z][a-z0-9-]{0,31}$`; malformed / empty → 400
+    before docker.
+- `frontend/api/containers.ts`: `ContainerInfo` type + `list(pkg?)`.
+- `views/PackageDetail.vue` Logs tab rewritten:
+  - Lazy load on tab activation; refetch on package name change.
+  - §5 error copy + retry; §4 empty state with honest reason.
+  - Populated: mono name, running Badge, image ref, `View logs →`
+    router-link into `/containers/:id/logs`.
+
+### Verification
+- Touched suite: 6/6 green (ContainersControllerFilterTests).
+- Full backend: 257 tests, 1 pre-existing failure unchanged, 0
+  introduced (251 → 257, +6).
+- `vue-tsc --noEmit` → exit 0.
+
+### Files touched
+- `backend/…/controllers/ContainersController.java` (+40 -12)
+- `backend/…/test/…/ContainersControllerFilterTests.java` (+140, new)
+- `frontend/src/api/containers.ts` (+22, ContainerInfo + list())
+- `frontend/src/views/PackageDetail.vue` (+80 -3, imports + state + template)
+
+### Deferred
+- E2E: PackageDetail Logs → click → tail view. aurora-e2e infra debt.
+- Per-service actions (docker exec, restart) — separate MUTATIONS
+  story outside B3.
+
+### Next iteration target
+Iter-17 candidates:
+1. Retire `stores/events.ts` — dead after B1 iter-9.
+2. E2E scaffolding: pin the aurora-e2e project so morning verify sweep
+   doesn't need `VERIFY_E2E=1` gymnastics.
+3. Backend performance sweep on `MetricsRepo.bucketed24h` for large N
+   (real-world 24h = ~2880 samples per key).
+4. Investigate the pre-existing `PackagesServiceTests.parsesFakeRepoManifests`
+   failure.
+
+Recommend option 4 (pre-existing failure) — it's been carried across
+14 iters unchanged; if fixable, closes a genuine gap. Fall back to
+option 1 (small cleanup) if 4 needs bigger surgery than one iter.
