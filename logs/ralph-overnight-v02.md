@@ -1850,3 +1850,35 @@ pattern.
 Iter-38: migrate the remaining views one-by-one in a single sweep
 commit so the axios-status switch lives in exactly one place. Same
 diff pattern as iter-37 ContainerLogsView.
+
+## Iter 38 · 2026-08-03 11:05 · commit 8c588a6
+**Migrate remaining views to shared http-error-copy helper.**
+
+### What shipped
+- 5 views migrated: `DashboardHome`, `PackageDetail`,
+  `SecurityPosture` (3 handlers), `SettingsView`, `DoneChecklist`.
+- Net **–5 lines** across the sweep (33 removed, 28 added) — every
+  consumer went through the helper.
+- Grep for `response?: { status?: number }` now returns only the
+  helper module itself; every view is clean.
+
+### Verification
+- Full backend: 348/0/0.
+- `vue-tsc --noEmit` → exit 0.
+- Vitest: 4 files, 32 tests passed (unchanged — helper coverage
+  landed iter-37; this iter migrates callers).
+- `bash scripts/verify-v03-overnight.sh` → 5/5.
+
+### Files touched
+- 5 view/component files (see commit body).
+
+### Deferred (accepted)
+- Move the shape check to axios interceptor level. Would centralise
+  further; not worth the extra runtime coupling today.
+- Split ContainerLogsView / SecurityPosture button-in-flight state
+  into small composables — same test-surface pattern.
+
+### Next iteration target
+Iter-39: **PackagesList / login error copy audit**. `LoginView.vue`
+still carries its own error switch; the packages store fetch path
+too. One more sweep to make the axios shape truly one-place.
