@@ -978,3 +978,43 @@ walk-through; nothing new is deferred.
 Iter-19: retire `stores/events.ts` (dead after B1 iter-9; no
 consumers). Verified in iter-9 that no other view references
 the store. Should be a small, safe removal + one commit.
+
+## Iter 19 · 2026-08-03 09:05 · commit a70abcc
+**Retire dead stores/events.ts + api/events.ts (post-B1 cleanup).**
+
+### What shipped
+
+- Deleted `frontend/src/stores/events.ts` (44 lines).
+- Deleted `frontend/src/api/events.ts` (44 lines).
+
+Both were the frontend half of the raw docker-events bridge that B1
+iter-9 (commit `ae49d01`) already replaced with the filtered
+`/api/containers/events/stream` composable. Grep confirmed only self-
+references remained. Backend `EventsController` + `/api/events`
+kept alive on the auth surface for future consumers.
+
+### Verification
+- `vue-tsc --noEmit` → exit 0 (no imports broken).
+- Backend: 257/0/0 unchanged (no backend surface touched).
+- `bash scripts/verify-v03-overnight.sh` → 4/4 checks pass.
+
+### Files touched
+- `frontend/src/stores/events.ts` (-44, deleted)
+- `frontend/src/api/events.ts` (-44, deleted)
+
+### Deferred
+None from this iter. The queue for iters 20–40 is opt-in polish:
+- Per-container CPU + memory metrics (B2 followup)
+- uPlot chart wiring on Metrics card (B2 followup)
+- Dismiss/snooze security findings (B4 followup)
+- Live log-tail SSE follow (B3 followup)
+
+### Next iteration target
+Iter-20 candidates:
+1. Per-container docker-java stats sampler (real work; blocks uPlot).
+2. Dismiss/snooze security findings — needs a new SQLite table.
+3. Small polish sweep: adjust `useContainerEvents` dedupe key to
+   also cover mid-stream dupes (not only tail), same for
+   `useServiceStatusStream` if it drifts.
+
+Recommend option 1 for highest signal — closes B2's biggest gap.
