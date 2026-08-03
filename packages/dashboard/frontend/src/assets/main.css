@@ -4,46 +4,27 @@
   Aurora design tokens.
   Warm monochrome + one accent (amber). Editorial, not corporate.
   See docs/DASHBOARD_BRIEF.md and skills/minimalist-ui.
+
+  Post-C9c (Phase C shadcn-vue migration): every legacy --color-canvas /
+  --color-surface / --color-ink / --color-line / --color-ok / --color-warn /
+  --color-err / --color-info / --color-on-ink / --color-ink-hover token
+  and the hand-rolled `.text-ink` / `.bg-canvas` / `.border-line` @layer
+  utilities shim have been removed. Callers now flow through shadcn's
+  semantic tokens (--color-background / -foreground / -card / -muted /
+  -border / -destructive / -success / -warning / -info) plus one
+  Aurora-specific brand pair (--color-accent / --color-on-accent) that
+  shadcn's `accent` slot is intentionally NOT mapped onto — shadcn treats
+  `accent` as a subtle hover surface, Aurora treats it as the amber CTA.
 */
 
 @theme {
-  /* Canvas — warm off-white, not pure. */
-  --color-canvas: #FAF9F6;
-  --color-surface: #FFFFFF;
-  --color-surface-2: #F5F4EF;
-
-  /* Ink — off-black, generous contrast without harshness. */
-  --color-ink: #1a1a1a;
-  --color-ink-2: #3d3d3a;
-  --color-ink-3: #6b6b66;
-  --color-ink-4: #9c9c96;
-
-  /* Structural — 1px borders live here. */
-  --color-line: #E5E4E0;
-  --color-line-2: #EFEEE9;
-
-  /* One accent. Amber. Used for primary CTA and one-off marks. */
+  /* ─────────────────────────── Brand amber ───────────────────────────
+     One accent, used for the primary CTA and one-off marks (Aurora
+     glyph, "required" tag, focus outline). Not part of the shadcn
+     semantic set on purpose — see the C0 iter-2 rationale below. */
   --color-accent: #B45309;
   --color-accent-hover: #92400E;
-
-  /* Foreground colours that must invert cleanly on top of --color-ink or
-     --color-accent surfaces. Used by Button/Checkbox so the primary CTA
-     is readable in both themes (iter-3 dark-mode contrast fix). */
-  --color-on-ink: #FFFFFF;
   --color-on-accent: #FFFFFF;
-  /* Hover shade for filled primary buttons; darker than --color-ink in
-     light mode, LIGHTER in dark mode so the button doesn't disappear. */
-  --color-ink-hover: #333333;
-
-  /* Status — muted, semantic, editorial. */
-  --color-ok-bg: #EDF3EC;
-  --color-ok-fg: #346538;
-  --color-warn-bg: #FBF3DB;
-  --color-warn-fg: #956400;
-  --color-err-bg: #FDEBEC;
-  --color-err-fg: #9F2F2D;
-  --color-info-bg: #E1F3FE;
-  --color-info-fg: #1F6C9F;
 
   /* Type — Inter (sans, requested by brief), Newsreader (editorial serif), JetBrains Mono. */
   --font-sans: 'Inter', 'Geist Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -61,15 +42,15 @@
 
   /* ─────────────────────────── shadcn-vue tokens (C0) ─────────────────────────
      Added iter-2 to bootstrap the shadcn-vue migration (Phase C).
-     Values are our warm-monochrome palette expressed through shadcn's
-     semantic naming so components installed via `npx shadcn-vue add …`
-     render on-brand out of the box. Old --color-canvas/-surface/-ink tokens
-     stay side-by-side until C9 deletes them.
+     Values are Aurora's warm-monochrome palette expressed through
+     shadcn's semantic naming so components installed via
+     `npx shadcn-vue add …` render on-brand out of the box.
 
      Intentionally NOT mapped: --color-accent / --color-accent-foreground.
-     Our existing --color-accent is the amber brand accent; shadcn expects
-     `accent` to be a subtle hover surface. Only affects DropdownMenu/Select
-     hover states in the C10 bonus phase — deferred with a note in the log. */
+     Our existing --color-accent (declared above) is the amber brand
+     accent; shadcn expects `accent` to be a subtle hover surface. Only
+     affects DropdownMenu / Select hover states in the C10 bonus phase
+     — deferred with a note in the migration log. */
   --color-background: #FAF9F6;
   --color-foreground: #1a1a1a;
   --color-card: #FFFFFF;
@@ -89,9 +70,9 @@
   --color-ring: #B45309;
 
   /* Semantic status tones (C1 iter-3) — shadcn-shaped for warning/info/
-     success. Values match our existing --color-warn-fg/-info-fg/-ok-fg
-     (strong foreground). Alert/Badge/other status surfaces layer these
-     via bg-<name>/8 (color-mix tint) + border-<name>/40 + text-<name>. */
+     success. Values match the strong-foreground editorial palette Aurora
+     shipped with. Alert/Badge/other status surfaces layer these via
+     bg-<name>/8 (color-mix tint) + border-<name>/40 + text-<name>. */
   --color-warning: #956400;
   --color-warning-foreground: #FFFFFF;
   --color-info: #1F6C9F;
@@ -116,42 +97,14 @@
   [data-theme="dark"] {
     color-scheme: dark;
 
-    --color-canvas: #0e0d0b;
-    --color-surface: #16140f;
-    --color-surface-2: #1e1c16;
-
-    --color-ink: #f5f4ef;
-    --color-ink-2: #d5d3ca;
-    --color-ink-3: #a3a099;
-    --color-ink-4: #706c65;
-
-    --color-line: #2c2a22;
-    --color-line-2: #24221b;
-
+    /* Brand amber — dark override (contrast bump on the darker canvas). */
     --color-accent: #d97706;
     --color-accent-hover: #f59e0b;
-
-    /* Dark-mode fg-on-ink + fg-on-accent (iter-3 contrast fix):
-       - primary button bg=#f5f4ef (near-white), so text must be near-black
-       - accent bg=#d97706 amber; white on amber only hits ~2.9:1 in dark,
-         canvas-dark on amber gives ~5:1, comfortably WCAG AA. */
-    --color-on-ink: #14120f;
     --color-on-accent: #14120f;
-    /* Primary button hover in dark: LIGHTER than --color-ink so the CTA
-       reads as "lifting toward the eye" instead of collapsing to bg. */
-    --color-ink-hover: #ffffff;
-
-    --color-ok-bg: #143020;
-    --color-ok-fg: #86efac;
-    --color-warn-bg: #33260a;
-    --color-warn-fg: #fde68a;
-    --color-err-bg: #341215;
-    --color-err-fg: #fca5a5;
-    --color-info-bg: #0f2637;
-    --color-info-fg: #93c5fd;
 
     /* shadcn-vue tokens — dark override (C0 iter-2). Warm-monochrome
-       inversion matches the existing dark theme values above. */
+       inversion tuned so the aurora photo background still reads
+       richly under either theme. */
     --color-background: #0e0d0b;
     --color-foreground: #f5f4ef;
     --color-card: #16140f;
@@ -269,7 +222,7 @@
      both themes). Scoped tightly to DIRECT children so the cascade doesn't
      bleed into opaque nested surfaces (Cards, ChecklistItem li, banners).
      Every opaque surface component (Card, ChecklistItem, DoneChecklist
-     banner, Alert) explicitly declares its own `text-ink` so nested
+     banner, Alert) explicitly declares its own text-foreground so nested
      content shows correctly. */
   .on-photo {
     color: rgba(255, 255, 255, 0.92);
@@ -311,19 +264,6 @@
 }
 
 @layer utilities {
-  .text-ink { color: var(--color-foreground); }
-  .text-ink-2 { color: var(--color-foreground); }
-  .text-ink-3 { color: var(--color-muted-foreground); }
-  .text-ink-4 { color: var(--color-muted-foreground); }
-  .text-on-ink { color: var(--color-primary-foreground); }
-  .text-on-accent { color: var(--color-on-accent); }
-  .bg-canvas { background-color: var(--color-background); }
-  .bg-surface { background-color: var(--color-card); }
-  .bg-surface-2 { background-color: var(--color-muted); }
-  .border-line { border-color: var(--color-border); }
-  .border-line-2 { border-color: var(--color-border); }
-  .text-accent { color: var(--color-accent); }
-
   /* Fade-up entry, per skill. Very subtle. */
   .anim-enter {
     opacity: 0;

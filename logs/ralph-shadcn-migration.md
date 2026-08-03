@@ -286,3 +286,37 @@
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 11 files / 99 tests. vue-tsc clean. Dockerfile clean.
 
 **Next.** C9c — delete the legacy `--color-canvas/-surface/-ink/-line/-ok/-warn/-err/-info/-on-ink/-ink-hover` declarations from `main.css` `@theme` (both light + dark) + delete the entire `@layer utilities` legacy shim block (`.text-ink`, `.bg-canvas`, etc.). Keep brand-amber tokens (`--color-accent`, `--color-accent-hover`, `--color-on-accent`).
+
+### iter-13 (2026-08-03) — C9c delete legacy tokens + utilities shim
+
+**Item:** C9c — delete legacy `--color-*` declarations from `main.css` `@theme` + `[data-theme="dark"]`, delete the entire hand-rolled `@layer utilities` shim block.
+
+**Deleted from `@theme` (light) + `[data-theme="dark"]` (dark override):**
+- `--color-canvas`, `--color-surface`, `--color-surface-2`
+- `--color-ink`, `--color-ink-2`, `--color-ink-3`, `--color-ink-4`
+- `--color-line`, `--color-line-2`
+- `--color-on-ink`, `--color-ink-hover`
+- `--color-ok-bg`, `--color-ok-fg`
+- `--color-warn-bg`, `--color-warn-fg`
+- `--color-err-bg`, `--color-err-fg`
+- `--color-info-bg`, `--color-info-fg`
+
+**Kept in `@theme`:**
+- Brand amber: `--color-accent`, `--color-accent-hover`, `--color-on-accent` (shadcn's `accent` slot is intentionally unmapped for Aurora — see the retained C0 comment).
+- Every shadcn semantic token: `--color-background/-foreground/-card/-card-foreground/-popover/-popover-foreground/-primary/-primary-foreground/-secondary/-secondary-foreground/-muted/-muted-foreground/-destructive/-destructive-foreground/-border/-input/-ring`.
+- Semantic status tones: `--color-warning/-info/-success` + `-foreground` companions.
+- Type stack (`--font-sans/-serif/-mono`), radius scale (`--radius-sm/-md/-lg/-xl`), layout (`--content-max`).
+
+**Deleted from `@layer utilities`:**
+- Hand-rolled shim classes `.text-ink`, `.text-ink-2`, `.text-ink-3`, `.text-ink-4`, `.text-on-ink`, `.text-on-accent`, `.bg-canvas`, `.bg-surface`, `.bg-surface-2`, `.border-line`, `.border-line-2`, `.text-accent`.
+- Kept: `.anim-enter` + `@keyframes enter` (no legacy token dependency).
+
+**Header comment refreshed** to record the post-C9c state and preserve the Aurora-specific "shadcn `accent` slot intentionally unmapped" reasoning.
+
+**Residual audit.** Grep for any deleted-token ref outside `.vue` migration doc comments returns 0 hits. The 10 remaining hits in Tabs.vue / Card.vue / Progress.vue are token-migration doc comments (`bg-[var(--color-surface)] → bg-card`) documenting what happened — they don't produce class references and Tailwind ignores them.
+
+**File shape.** `src/assets/main.css` shrank from 341 lines → 244 lines (-97 lines). Semantics unchanged for every shadcn caller; every legacy-token caller has already been migrated in C9a + C9b.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 11 files / 99 tests. vue-tsc clean. Dockerfile clean.
+
+**Milestone.** **C1–C9 complete.** Every hand-rolled Aurora `--color-*` token that shadcn has an equivalent for has been retired; every caller flows through shadcn semantic tokens; only brand-amber survives (deliberately). Next iter starts C10 bonus primitives.
