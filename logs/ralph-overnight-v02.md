@@ -401,3 +401,49 @@ Iter-9: B1 frontend wiring. New composable
 (A5 precedent). Rewrite `RecentChangesList.vue` against it, drop
 fabricated integer, add empty-state copy per UX_SPEC. Component
 test coverage.
+
+## Iter 9 · 2026-08-03 08:20 · commit (see git log -1)
+**B1 (frontend) — Recent changes card now reads /api/containers/events/stream.**
+
+### What shipped
+
+- `api/containers.ts` (new): `ContainerEventItem` type mirroring the
+  backend `ContainerEvent.toMap()` shape; `ContainersApi.recentEvents()`
+  poll helper; `openContainerEventsStream(onEvent, onError)` factory.
+- `composables/useContainerEvents.ts` (new): SSE + poll-fallback ladder
+  isomorphic to `useServiceStatusStream` (A5/TD1 precedent). Tab-hidden
+  pause, dedupe against tail (ts+container+action), MAX_EVENTS=200
+  matching backend `BUFFER_MAX`. Returns `{events, error, source}` refs.
+- `views/DashboardHome.vue`: swap `useEventsStore` for the composable in
+  the "Recent changes" card. Template loses the docker/job/system
+  discriminated-union branches; only container events flow now. New
+  `data-test="recent-changes-list"` handle for a future E2E. Removed
+  `events.connect()` (no other consumers of the store today).
+
+### Verification
+- `vue-tsc --noEmit` → exit 0.
+- Backend: 168 tests, 1 pre-existing failure unchanged, 0 introduced
+  (frontend-only diff).
+
+### Files touched
+- `frontend/src/api/containers.ts` (+72, new)
+- `frontend/src/composables/useContainerEvents.ts` (+178, new)
+- `frontend/src/views/DashboardHome.vue` (+19 -12, imports + render)
+
+### Deferred
+- E2E `dashboard-home-recent-changes.spec.ts` — EventSource opens on
+  mount + list renders when events arrive. Same aurora-e2e infra debt
+  as A4/A5/A8.
+- Retirement of `stores/events.ts` — left intact for future job-event
+  consumers; no downstream views break because the store is unused
+  after this iter.
+- Full-history drawer: composable already carries all 200 entries;
+  card renders 5. UI for the deep list waits on a design pass.
+
+### Next iteration target
+B2 — Metrics sampler skeleton. `MetricsSamplerService` @Scheduled 30s
+sampling CPU%, mem, disk-per-mount, per-container CPU+mem. Persist to
+`metric_sample(id, ts, key, value)` SQLite table; ring-buffer prune
+older than 25h on write. New `GET /api/metrics/last24h?key=…` returns
+downsampled 5-min buckets. Backend-only; Metrics card empty state
+stays "Metrics land next release" until a follow-up wires uPlot.
