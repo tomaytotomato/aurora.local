@@ -311,3 +311,93 @@ Reflection first (per Ralph reflectEvery=8), then B1 —
 a 200-entry rolling buffer, exposes `GET /api/containers/events/stream`
 via `SseEmitter`, and drives `RecentChangesList.vue`. Uses the same
 SSE pattern as `StatusController.stream()` from A5.
+
+## Iter 8 · 2026-08-03 08:16 · commit (see git log -1)
+**Reflection checkpoint + B1 backend — DockerEventService + /api/containers/events{,/stream}.**
+
+### Reflection (per Ralph reflectEvery=8)
+
+**1. What's been accomplished?**
+Phase A closed (A1–A8), all shipped as `aurora: <short>` commits with
+per-iter log entries. Every commit landed backend-green (156→168 tests,
+1 pre-existing failure unchanged from iter-0) and vue-tsc clean.
+
+**2. What's working well?**
+- One-item-per-iter pacing survives even for surface-heavy items like
+  A4 (TD5 reset endpoint, full 8-layer stack) and A8 (start_budget
+  wire, manifests + record helper + service constructor).
+- The docker-run maven pattern from `scripts/verify-iter3.sh` is
+  fast enough (~10s for touched tests, ~20s full suite) that running
+  full backend every commit is cheap and honest.
+- The "iter-N log entry after the commit" habit keeps morning review
+  proportional to the actual size of the change, and the "Deferred"
+  section per entry catches the tech-debt drift that always tries
+  to creep in.
+
+**3. What's not working?**
+- E2E infra still isn't runnable from this worktree (A4, A8 both had
+  to defer E2E addition to Bruce's morning `verify-iter3.sh
+  VERIFY_E2E=1` sweep). The `beforeEach reset` and `services-start-media`
+  additions to specs are queued as code but the aurora-e2e docker
+  compose project has to boot on `:8091` to actually run them.
+  Not a Ralph problem — an infra problem.
+- Pre-existing `PackagesServiceTests.parsesFakeRepoManifests` failure
+  has been present since iter-0. Not caused by this branch, not
+  worth blocking on — but should get a follow-up in v0.3.
+
+**4. Should the approach be adjusted?**
+No. Continuing with one B-item per iter, backend-first to keep the
+review pipeline unblocked. Frontend wiring for B1 lands as its own
+iter (component tests + empty state) rather than being bundled here.
+
+**5. Product-judgement forks?**
+None so far. All A-items had unambiguous acceptance criteria.
+For B1 I made three judgement calls documented in the commit body:
+- Filter set (lifecycle only; drop exec_*) — could arguably keep
+  exec_start for "someone ran a manual command" visibility. Not for
+  RecentChanges; a separate audit surface should own that.
+- Reconnect fixed 5s backoff, not exponential — homelab scale, one
+  docker daemon, hung loop is acceptable.
+- Auth: /events/stream stays authenticated. Container names leak
+  compose service info.
+None warrant a `DECISION_NEEDED.md` bump — they're standard
+engineering calls in scope for the item.
+
+### What shipped (B1 backend)
+
+- `services/DockerEventService.java` (new). @PostConstruct subscribes
+  to docker events via existing `DockerService.streamEvents()`.
+  Filters to lifecycle + normalised health_status. 200-entry rolling
+  buffer (ArrayDeque). Fanout via CopyOnWriteArrayList<SseEmitter>.
+  5s fixed-backoff reconnect on error via a dedicated single-thread
+  scheduler. `@PreDestroy` closes stream + emitters cleanly.
+- `controllers/ContainersController.java` — extended with
+  `GET /api/containers/events` (poll fallback, snapshot) and
+  `GET /api/containers/events/stream` (SSE; replays buffer on
+  subscribe then streams live `container-event` events).
+- `ContainerEvent` record: `{tsMs, container, action, image}`;
+  `toMap()` returns stable-order JSON with image omitted when null.
+
+### Verification
+- Touched suite: `DockerEventServiceTests` 12/12 green.
+- Full backend: 168 tests, 1 pre-existing failure unchanged,
+  0 introduced (+12 vs iter-7).
+- `vue-tsc --noEmit` → exit 0.
+
+### Files touched
+- `backend/…/services/DockerEventService.java` (+253, new)
+- `backend/…/controllers/ContainersController.java` (+42 -1)
+- `backend/…/test/…/DockerEventServiceTests.java` (+224, new)
+
+### Deferred (own iter)
+- Frontend RecentChangesList.vue rewrite: read the new stream + poll
+  fallback, render `container action at HH:MM`, honest empty state,
+  component tests.
+- No B1 E2E — same aurora-e2e infra debt as A4/A8.
+
+### Next iteration target
+Iter-9: B1 frontend wiring. New composable
+`useContainerEventsStream.ts` mirroring `useServiceStatusStream.ts`
+(A5 precedent). Rewrite `RecentChangesList.vue` against it, drop
+fabricated integer, add empty-state copy per UX_SPEC. Component
+test coverage.
