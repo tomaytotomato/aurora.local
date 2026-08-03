@@ -81,6 +81,34 @@ onMounted(async () => {
   }
 });
 
+// iter-33: document.title prefix with severity glyph + count. Renders
+// in the browser tab preview so an operator working elsewhere sees
+// 'Aurora • 3 issues' before switching tabs. Kept minimal — the glyph
+// carries the severity so screen-only text works too. Removes the
+// prefix when nothing is open.
+function updateDocumentTitle(): void {
+  const total = totalSecurity();
+  if (total <= 0) {
+    document.title = 'Aurora';
+    return;
+  }
+  const tone = highestSeverityTone();
+  // Symbol picks emphasise severity without depending on colour.
+  const glyph = tone === 'err' ? '!' : tone === 'warn' ? '◉' : '•';
+  const noun = total === 1 ? 'issue' : 'issues';
+  document.title = `${glyph} ${total} ${noun} · Aurora`;
+}
+
+// Update whenever the counts change.
+watch(securityCounts, () => { updateDocumentTitle(); }, { deep: true });
+
+import { onScopeDispose } from 'vue';
+onScopeDispose(() => {
+  // Restore the plain title when the sidebar tears down (route change
+  // out of AppShell, e.g. into onboarding or /login).
+  document.title = 'Aurora';
+});
+
 // Refresh when the user leaves /security so a dismissed finding
 // updates the badge on the way out.
 import { watch } from 'vue';
