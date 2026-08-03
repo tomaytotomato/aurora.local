@@ -170,6 +170,60 @@ public class IdentitySecretsService {
     return rotated;
   }
 
+  /**
+   * Phase D iter-12 (D11). Blank the listed env keys in a package's
+   * {@code .env} so a service can run internal-auth-less behind
+   * Authelia's forward-auth gate. Idempotent — keys already empty are
+   * skipped (no rewrite, no audit row).
+   *
+   * <p>Preserves comments + any other keys verbatim (same .env file
+   * mutation pattern as {@link #ensureSecrets()}). Only rewrites the
+   * file when at least one key was actually changed — a returning
+   * SSO-on wizard doesn't churn the audit log.
+   *
+   * <p>Silently no-op when the package has no {@code .env} on disk
+   * (e.g. a package that ships with no runtime secrets to worry about).
+   *
+   * @return the set of keys we actually blanked (possibly empty).
+   */
+  public synchronized Set<String> neutraliseServiceEnv(String packageName,
+                                                       List<String> keysToClear,
+                                                       Long actingUserId) throws IOException {
+    if (packageName == null || packageName.isBlank() || keysToClear == null || keysToClear.isEmpty()) {
+      return Set.of();
+    }
+    Path envPath = Path.of(props.repoPath(), "packages", packageName, ".env");
+    if (!Files.isRegularFile(envPath)) return Set.of();
+
+    List<String> lines = new ArrayList<>(Files.readAllLines(envPath, StandardCharsets.UTF_8));
+    var cleared = new LinkedHashSet<String>();
+    for (String key : keysToClear) {
+      String existing = readValue(lines, key);
+      if (existing == null || existing.isEmpty()) continue; // already blank
+      upsertLine(lines, key, "");
+      cleared.add(key);
+    }
+    if (cleared.isEmpty()) return Set.of();
+
+    Path parent = envPath.getParent();
+    if (parent != null) Files.createDirectories(parent);
+    String body = String.join("\n", lines) + "\n";
+    Files.writeString(envPath, body, StandardCharsets.UTF_8,
+        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+    try {
+      Files.setPosixFilePermissions(envPath,
+          Set.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                 java.nio.file.attribute.PosixFilePermission.OWNER_WRITE));
+    } catch (UnsupportedOperationException | IOException ignore) { /* non-posix fs */ }
+
+    audit.record(actingUserId, "sso.env.neutralise",
+        "packages/" + packageName + "/.env",
+        "{\"cleared_keys\":" + jsonKeyArray(cleared) + "}");
+    log.info("sso: neutralised {} key{} in packages/{}/.env (→ authelia-only auth)",
+        cleared.size(), cleared.size() == 1 ? "" : "s", packageName);
+    return cleared;
+  }
+
   /** True when the identity package appears in {@code .state.yml}'s enabled[]. */
   public boolean identityEnabled() {
     var repo = state.readState();

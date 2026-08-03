@@ -48,11 +48,32 @@ sso:
   protect: true
   min_role: user
   trusted_headers: false
+  # SilverBullet has no trusted-header auth mode — setting SB_USER
+  # would show a second login page after Authelia already granted
+  # access. Blanking SB_USER + SB_PASSWORD makes SilverBullet run
+  # auth-less internally; Authelia forward-auth is the only wall.
+  # Aurora writes empty values into packages/notes/.env when SSO is
+  # enabled via the wizard (D10) or /api/onboarding/sso.
+  disable_env: [SB_USER, SB_PASSWORD]
 
 post_install_notes: |
-  1. First-run: https://notes.$DOMAIN/ — log in with
-     SB_USER / SB_PASSWORD from .env.
-  2. Notes live as .md files under ../../data/notes/silverbullet
+  ## SSO enabled (recommended)
+
+  If Aurora manages Authelia SSO (see the onboarding "Single sign-on"
+  step, or POST /api/onboarding/sso), SB_USER + SB_PASSWORD in
+  packages/notes/.env are automatically blanked. SilverBullet then
+  runs auth-less internally — Authelia forward-auth at Caddy is the
+  only wall.
+
+  1. Sign into Aurora at https://$DOMAIN/
+  2. Click Notes on the dashboard — no second login page.
+  3. Notes live as .md files under ../../data/notes/silverbullet
      (or wherever you point the bind mount).
-  3. There is no first-class mobile app; the PWA installs to
+  4. There is no first-class mobile app; the PWA installs to
      iOS/Android home screens and works offline.
+
+  ## SSO disabled (standalone)
+
+  1. Set SB_USER + SB_PASSWORD in packages/notes/.env.
+  2. First-run: https://notes.$DOMAIN/ — log in with those creds.
+  3. Storage as above.

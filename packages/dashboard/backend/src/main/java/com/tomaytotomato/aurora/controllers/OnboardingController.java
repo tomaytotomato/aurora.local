@@ -58,6 +58,7 @@ public class OnboardingController {
   private final StateFileService stateFiles;
   private final IdentitySecretsService identitySecrets;
   private final AuditEventRepo audit;
+  private final PackagesService packagesService;
 
   /**
    * TD5: when true, exposes {@code POST /api/onboarding/reset}. Bound from
@@ -70,13 +71,15 @@ public class OnboardingController {
 
   public OnboardingController(OnboardingService onboarding, SystemService system,
                               LaunchService launcher, StateFileService stateFiles,
-                              IdentitySecretsService identitySecrets, AuditEventRepo audit) {
+                              IdentitySecretsService identitySecrets, AuditEventRepo audit,
+                              PackagesService packagesService) {
     this.onboarding = onboarding;
     this.system = system;
     this.launcher = launcher;
     this.stateFiles = stateFiles;
     this.identitySecrets = identitySecrets;
     this.audit = audit;
+    this.packagesService = packagesService;
   }
 
   // --- canonical shape ------------------------------------------------
@@ -333,6 +336,25 @@ public class OnboardingController {
       } catch (java.io.IOException e) {
         throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
             "failed to write identity secrets: " + e.getMessage());
+      }
+
+      // Fan out across every enabled package with sso.protect=true and
+      // blank each declared disable_env key. Turns off internal auth
+      // for services that would otherwise show a second login page
+      // after Authelia already granted access (e.g. SilverBullet's
+      // SB_USER). Failures are logged but don't abort the endpoint —
+      // Authelia gate still works; the second-login UX regression is
+      // recoverable manually.
+      for (com.tomaytotomato.aurora.domain.Package pkg : packagesService.list()) {
+        if (!pkg.enabled()) continue;
+        var sso = pkg.sso();
+        if (sso == null || !sso.protect() || sso.disableEnv().isEmpty()) continue;
+        try {
+          identitySecrets.neutraliseServiceEnv(pkg.name(), sso.disableEnv(), null);
+        } catch (java.io.IOException e) {
+          // Log + carry on. Same fail-closed posture as the identity
+          // secrets path.
+        }
       }
     }
 

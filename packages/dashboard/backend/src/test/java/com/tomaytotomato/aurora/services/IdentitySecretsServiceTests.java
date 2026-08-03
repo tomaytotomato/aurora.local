@@ -263,7 +263,95 @@ class IdentitySecretsServiceTests {
     assertThat(seen).hasSize(100);
   }
 
-  // ─── file permissions ──────────────────────────────────────────────────
+  // ─── neutraliseServiceEnv ─────────────────────────────────────
+
+  @Test
+  void neutraliseServiceEnv_blanks_the_listed_keys_and_preserves_others() throws IOException {
+    Path notesDir = repoRoot.resolve("packages/notes");
+    Files.createDirectories(notesDir);
+    Path env = notesDir.resolve(".env");
+    Files.writeString(env, String.join("\n",
+        "# comment survives",
+        "TZ=Europe/London",
+        "SB_USER=admin",
+        "SB_PASSWORD=hunter2",
+        "SB_FOLDER=/space"
+    ), StandardCharsets.UTF_8);
+
+    Set<String> cleared = svc.neutraliseServiceEnv("notes",
+        List.of("SB_USER", "SB_PASSWORD"), 7L);
+
+    assertThat(cleared).containsExactly("SB_USER", "SB_PASSWORD");
+    String body = Files.readString(env, StandardCharsets.UTF_8);
+    // Blanked (empty value after =).
+    assertThat(body).contains("SB_USER=\n").doesNotContain("SB_USER=admin");
+    assertThat(body).contains("SB_PASSWORD=\n").doesNotContain("SB_PASSWORD=hunter2");
+    // Comments + non-listed keys survive verbatim.
+    assertThat(body).contains("# comment survives");
+    assertThat(body).contains("TZ=Europe/London");
+    assertThat(body).contains("SB_FOLDER=/space");
+  }
+
+  @Test
+  void neutraliseServiceEnv_audit_row_lists_cleared_keys() throws IOException {
+    Path notesDir = repoRoot.resolve("packages/notes");
+    Files.createDirectories(notesDir);
+    Files.writeString(notesDir.resolve(".env"),
+        "SB_USER=admin\nSB_PASSWORD=x\n", StandardCharsets.UTF_8);
+
+    svc.neutraliseServiceEnv("notes", List.of("SB_USER", "SB_PASSWORD"), 42L);
+
+    var actor = ArgumentCaptor.forClass(Long.class);
+    var action = ArgumentCaptor.forClass(String.class);
+    var target = ArgumentCaptor.forClass(String.class);
+    var diff = ArgumentCaptor.forClass(String.class);
+    Mockito.verify(audit).record(actor.capture(), action.capture(),
+        target.capture(), diff.capture());
+
+    assertThat(actor.getValue()).isEqualTo(42L);
+    assertThat(action.getValue()).isEqualTo("sso.env.neutralise");
+    assertThat(target.getValue()).isEqualTo("packages/notes/.env");
+    assertThat(diff.getValue()).contains("SB_USER").contains("SB_PASSWORD");
+  }
+
+  @Test
+  void neutraliseServiceEnv_is_idempotent_when_keys_already_empty() throws IOException {
+    Path notesDir = repoRoot.resolve("packages/notes");
+    Files.createDirectories(notesDir);
+    Path env = notesDir.resolve(".env");
+    Files.writeString(env, "SB_USER=\nSB_PASSWORD=\n", StandardCharsets.UTF_8);
+
+    Set<String> cleared = svc.neutraliseServiceEnv("notes",
+        List.of("SB_USER", "SB_PASSWORD"), null);
+
+    assertThat(cleared).isEmpty();
+    // No audit row when nothing changed.
+    Mockito.verify(audit, Mockito.never()).record(
+        Mockito.any(), Mockito.eq("sso.env.neutralise"),
+        Mockito.any(), Mockito.any());
+  }
+
+  @Test
+  void neutraliseServiceEnv_no_op_when_package_env_missing() throws IOException {
+    // Package without an .env on disk — method silently no-ops rather
+    // than fail-shut the whole /api/onboarding/sso endpoint.
+    Set<String> cleared = svc.neutraliseServiceEnv("does-not-exist",
+        List.of("ANYTHING"), null);
+    assertThat(cleared).isEmpty();
+  }
+
+  @Test
+  void neutraliseServiceEnv_no_op_when_keysToClear_is_empty_or_null() throws IOException {
+    Path notesDir = repoRoot.resolve("packages/notes");
+    Files.createDirectories(notesDir);
+    Files.writeString(notesDir.resolve(".env"),
+        "SB_USER=admin\n", StandardCharsets.UTF_8);
+
+    assertThat(svc.neutraliseServiceEnv("notes", List.of(), null)).isEmpty();
+    assertThat(svc.neutraliseServiceEnv("notes", null, null)).isEmpty();
+  }
+
+  // ─── file permissions ───────────────────────────────────────────
 
   @Test
   void ensureSecrets_writes_env_with_owner_only_perms_on_posix() throws IOException {

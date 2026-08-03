@@ -47,7 +47,8 @@ class OnboardingControllerResetTests {
         mock(LaunchService.class),
         mock(StateFileService.class),
         mock(com.tomaytotomato.aurora.services.IdentitySecretsService.class),
-        mock(com.tomaytotomato.aurora.persistence.AuditEventRepo.class));
+        mock(com.tomaytotomato.aurora.persistence.AuditEventRepo.class),
+            mock(com.tomaytotomato.aurora.services.PackagesService.class));
     ReflectionTestUtils.setField(c, "e2eMode", e2eMode);
     return MockMvcBuilders.standaloneSetup(c).build();
   }

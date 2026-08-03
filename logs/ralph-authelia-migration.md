@@ -400,3 +400,51 @@ Not yet exercised (deferred to D15 tests iter): full mount of `UsersView.vue` wi
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 459 tests (455 → 459, +4). Vitest 20 files / 177 tests unchanged. vue-tsc clean. Dockerfile clean.
 
 **Next.** D11 — migrate `packages/notes` (SilverBullet) as the pilot. Verifies the end-to-end path: log into Aurora → click Notes → no second login. Since notes' sso block was filled in D5 (`protect=true, min_role=user, trusted_headers=false`), the CaddySnippetService from D6 already knows what to emit. This iter checks Bruce needs to test live once Phase D merges.
+
+### iter-12 (2026-08-03) — D11 notes pilot migration
+
+**Item:** D11 — migrate `packages/notes` (SilverBullet) as the SSO pilot. Log into Aurora → click Notes → no second login page.
+
+**The missing piece.** D5's manifest sso: block was `trusted_headers: false`, meaning SilverBullet doesn't read `Remote-User`. Without extra work Bruce would still see SilverBullet's own basic-auth page after Authelia gate. Solution: **blank `SB_USER` + `SB_PASSWORD`** so SilverBullet runs auth-less internally, with Authelia's forward-auth at Caddy as the only wall.
+
+**New manifest field: `sso.disable_env`.**
+
+```yaml
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: false
+  disable_env: [SB_USER, SB_PASSWORD]   # ← new
+```
+
+`SsoBlock.fromManifest()` reads a list of env-var names to blank when SSO is enabled. **Silently filters names that don't match POSIX shape (`[A-Za-z_][A-Za-z0-9_]*`)** so a future consumer that execs the value can't be tricked into `$(id)` shenanigans. Empty list is the safe default — trusted-header services (Grafana / Paperless / Forgejo) don't need this because they read `Remote-*` headers.
+
+**Runtime plumbing.**
+- `IdentitySecretsService.neutraliseServiceEnv(pkg, keys, actor)` — reads `packages/<pkg>/.env`, blanks each listed key (skips already-empty), rewrites with 0600, records an `sso.env.neutralise` audit row. Preserves comments + non-listed keys verbatim. Idempotent: nothing to change → no rewrite, no audit noise.
+- `POST /api/onboarding/sso {enable:true}` grew a fanout: after `ensureSecrets()`, iterate every enabled package with `sso.protect: true` + non-empty `disable_env` and call `neutraliseServiceEnv`. Failures logged, don't abort the endpoint — Authelia gate still works; a second-login regression is manually recoverable.
+- Constructor of `OnboardingController` grew `PackagesService` dependency. Three pre-existing test files (`OnboardingControllerPatchTests`, `OnboardingControllerResetTests`, `OnboardingControllerSsoTests`) extended with matching mocks.
+
+**Documentation updates.**
+- `packages/notes/manifest.yml` — filled in `disable_env: [SB_USER, SB_PASSWORD]` + rewrote `post_install_notes` to cover both SSO-on and standalone modes.
+- `packages/notes/.env.example` — long-form comment explaining "Option A: SSO enabled (recommended) — Aurora blanks these" vs "Option B: standalone — fill these in".
+- `packages/notes/README.md` — new "First-run" section split into "with Aurora SSO (recommended)" + "standalone (no Aurora SSO)".
+
+**Tests — 8 new** (3 in `SsoBlockTests`, 5 in `IdentitySecretsServiceTests`, all hermetic with `@TempDir`).
+
+- **SsoBlock**:
+  - `disable_env` reads a list of valid POSIX names.
+  - Missing → empty list default (safe posture).
+  - Filters out names with spaces / `$(...)` / leading digits / dashes.
+
+- **IdentitySecretsService.neutraliseServiceEnv**:
+  - Blanks listed keys + preserves comments + non-listed keys verbatim.
+  - Audit row lists cleared keys with the acting user id.
+  - Idempotent when keys already empty — no audit noise.
+  - No-op on missing package `.env` (fail-soft, not fail-shut).
+  - No-op on empty / null `keysToClear`.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 467 tests (459 → 467, +8). Vitest 177 unchanged. vue-tsc clean. Dockerfile clean.
+
+**Bruce's live-test contract (post-merge).** Rebuild aurora + notes containers. Tick the SSO step in a fresh onboarding OR `POST /api/onboarding/sso {"enable": true}` on an existing box. Check `packages/notes/.env` has empty `SB_USER=` and `SB_PASSWORD=` lines. Visit `https://notes.aurora.local/` in a browser that isn't already Authelia-authenticated: land on Authelia login → sign in with the Aurora admin → hit SilverBullet directly (no second login page). Log an audit event grep: `sso.env.neutralise` row should show `{"cleared_keys":["SB_USER","SB_PASSWORD"]}` for `packages/notes/.env`.
+
+**Next.** D12 — Grafana / Paperless / Forgejo / Home-Automation rollout with trusted-header auth where supported.

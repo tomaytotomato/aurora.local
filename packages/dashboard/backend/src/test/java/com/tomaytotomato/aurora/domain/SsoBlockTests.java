@@ -42,6 +42,41 @@ class SsoBlockTests {
     assertThat(SsoBlock.DISABLED.isDisabled()).isTrue();
     assertThat(SsoBlock.DISABLED.minRole()).isEqualTo(Role.USER);
     assertThat(SsoBlock.DISABLED.trustedHeaders()).isFalse();
+    assertThat(SsoBlock.DISABLED.disableEnv()).isEmpty();
+  }
+
+  @Test
+  void disable_env_reads_a_list_of_valid_posix_names() {
+    SsoBlock b = SsoBlock.fromManifest(Map.of(
+        "protect", true,
+        "disable_env", java.util.List.of("SB_USER", "SB_PASSWORD")
+    ));
+    assertThat(b.disableEnv()).containsExactly("SB_USER", "SB_PASSWORD");
+  }
+
+  @Test
+  void disable_env_missing_defaults_to_empty() {
+    SsoBlock b = SsoBlock.fromManifest(Map.of("protect", true));
+    assertThat(b.disableEnv()).isEmpty();
+  }
+
+  @Test
+  void disable_env_filters_out_names_that_look_like_shell_metacharacters() {
+    // POSIX env var shape only: [A-Za-z_][A-Za-z0-9_]*. Anything with
+    // spaces, quotes, semicolons, backticks, or leading digits gets
+    // silently dropped so a future consumer that execs this value
+    // can't be tricked into running arbitrary commands.
+    SsoBlock b = SsoBlock.fromManifest(Map.of(
+        "disable_env", java.util.List.of(
+            "OK_KEY",
+            "bad key",
+            "$(id)",
+            "9_STARTS_WITH_DIGIT",
+            "HAS-DASH",
+            "ALSO_OK"
+        )
+    ));
+    assertThat(b.disableEnv()).containsExactly("OK_KEY", "ALSO_OK");
   }
 
   @Test

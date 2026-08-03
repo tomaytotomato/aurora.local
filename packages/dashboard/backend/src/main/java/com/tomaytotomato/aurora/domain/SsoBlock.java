@@ -1,5 +1,6 @@
 package com.tomaytotomato.aurora.domain;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -37,16 +38,24 @@ import java.util.Optional;
  *       and auto-provisions the account from them. When {@code false},
  *       the service still has its own login page; Authelia just gates
  *       the front door (SilverBullet).</li>
+ *   <li>{@code disableEnv} — env-var names in the package's {@code .env}
+ *       to blank when SSO is enabled. Neutralises internal auth for
+ *       services that would otherwise show a second login page after
+ *       Authelia already granted access (SilverBullet's {@code SB_USER},
+ *       any service with basic-auth env config). Kept empty for
+ *       trusted-header services because they read the {@code Remote-*}
+ *       headers and don't need internal auth silenced.</li>
  * </ul>
  */
 public record SsoBlock(
     boolean protect,
     Role minRole,
-    boolean trustedHeaders
+    boolean trustedHeaders,
+    List<String> disableEnv
 ) {
 
   /** The absent-block default: SSO stays off. */
-  public static final SsoBlock DISABLED = new SsoBlock(false, Role.USER, false);
+  public static final SsoBlock DISABLED = new SsoBlock(false, Role.USER, false, List.of());
 
   /** Sentinel to detect "block was in the yaml but empty". */
   public boolean isDisabled() {
@@ -80,7 +89,20 @@ public record SsoBlock(
         .flatMap(Role::fromWireName)
         .orElse(Role.USER);
     boolean trustedHeaders = coerceBool(map.get("trusted_headers"), false);
-    return new SsoBlock(protect, minRole, trustedHeaders);
+    List<String> disableEnv = List.of();
+    Object rawDisable = map.get("disable_env");
+    if (rawDisable instanceof List<?> list) {
+      var out = new java.util.ArrayList<String>();
+      for (Object o : list) {
+        if (o == null) continue;
+        String key = o.toString().trim();
+        // Match POSIX env var shape so we can't smuggle in shell
+        // metacharacters that a future consumer might exec.
+        if (key.matches("[A-Za-z_][A-Za-z0-9_]*")) out.add(key);
+      }
+      disableEnv = List.copyOf(out);
+    }
+    return new SsoBlock(protect, minRole, trustedHeaders, disableEnv);
   }
 
   private static boolean coerceBool(Object v, boolean fallback) {
