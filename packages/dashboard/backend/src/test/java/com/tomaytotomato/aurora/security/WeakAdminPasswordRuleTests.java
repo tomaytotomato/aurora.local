@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WeakAdminPasswordRuleTests {
 
   private static AdminUser admin(String hash) {
-    return new AdminUser(1, "bruce", hash, "UTC", "2026-08-01T00:00:00Z");
+    return new AdminUser(1, "bruce", hash, "UTC", "2026-08-01T00:00:00Z", com.tomaytotomato.aurora.domain.Role.ADMIN);
   }
 
   private static WeakAdminPasswordRule ruleWith(String hash) {
