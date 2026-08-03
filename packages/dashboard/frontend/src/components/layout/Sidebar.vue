@@ -3,6 +3,15 @@ import { RouterLink, useRoute } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 import { useSystemStore } from '@/stores/system';
 import { SecurityApi } from '@/api/security';
+import {
+  countBySeverity,
+  totalCount,
+  highestSeverityTone,
+  documentTitleWithFindings,
+  EMPTY_COUNTS,
+  type SeverityCounts,
+  type SeverityTone,
+} from '@/lib/severity';
 
 const route = useRoute();
 const system = useSystemStore();
@@ -43,34 +52,19 @@ const isActive = (to: string): boolean => {
 // Refreshes on mount + whenever the route lands on /security so a
 // dismiss / restore action updates the badge on return. Silent on
 // failure — the badge just stays hidden.
-const securityCounts = ref<{ high: number; medium: number; low: number }>({ high: 0, medium: 0, low: 0 });
+const securityCounts = ref<SeverityCounts>({ ...EMPTY_COUNTS });
 
 async function refreshSecurityCounts(): Promise<void> {
   try {
     const list = await SecurityApi.findings();
-    const c = { high: 0, medium: 0, low: 0 };
-    for (const f of list) {
-      if (f.severity === 'high') c.high++;
-      else if (f.severity === 'medium') c.medium++;
-      else if (f.severity === 'low') c.low++;
-    }
-    securityCounts.value = c;
+    securityCounts.value = countBySeverity(list);
   } catch {
-    securityCounts.value = { high: 0, medium: 0, low: 0 };
+    securityCounts.value = { ...EMPTY_COUNTS };
   }
 }
 
-function totalSecurity(): number {
-  const c = securityCounts.value;
-  return c.high + c.medium + c.low;
-}
-
-function highestSeverityTone(): 'err' | 'warn' | 'info' {
-  const c = securityCounts.value;
-  if (c.high > 0) return 'err';
-  if (c.medium > 0) return 'warn';
-  return 'info';
-}
+function totalSecurity(): number { return totalCount(securityCounts.value); }
+function highestSeverityToneRow(): SeverityTone { return highestSeverityTone(securityCounts.value); }
 
 onMounted(async () => {
   if (!system.info) {
@@ -87,16 +81,7 @@ onMounted(async () => {
 // carries the severity so screen-only text works too. Removes the
 // prefix when nothing is open.
 function updateDocumentTitle(): void {
-  const total = totalSecurity();
-  if (total <= 0) {
-    document.title = 'Aurora';
-    return;
-  }
-  const tone = highestSeverityTone();
-  // Symbol picks emphasise severity without depending on colour.
-  const glyph = tone === 'err' ? '!' : tone === 'warn' ? '◉' : '•';
-  const noun = total === 1 ? 'issue' : 'issues';
-  document.title = `${glyph} ${total} ${noun} · Aurora`;
+  document.title = documentTitleWithFindings(securityCounts.value);
 }
 
 // Update whenever the counts change.
@@ -162,9 +147,9 @@ watch(() => route.path, (path, prev) => {
           v-if="item.badgeKey === 'security' && totalSecurity() > 0"
           class="inline-flex items-center justify-center min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[0.6875rem] font-medium tabular-nums"
           :class="{
-            'bg-[var(--color-err-bg)] text-[var(--color-err-fg)]': highestSeverityTone() === 'err',
-            'bg-[var(--color-warn-bg)] text-[var(--color-warn-fg)]': highestSeverityTone() === 'warn',
-            'bg-[var(--color-info-bg)] text-[var(--color-info-fg)]': highestSeverityTone() === 'info',
+            'bg-[var(--color-err-bg)] text-[var(--color-err-fg)]': highestSeverityToneRow() === 'err',
+            'bg-[var(--color-warn-bg)] text-[var(--color-warn-fg)]': highestSeverityToneRow() === 'warn',
+            'bg-[var(--color-info-bg)] text-[var(--color-info-fg)]': highestSeverityToneRow() === 'info',
           }"
           data-test="sidebar-security-badge"
           :aria-label="totalSecurity() + ' open security findings'"
