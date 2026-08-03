@@ -514,3 +514,33 @@ Caught mid-iter: the adapter builder didn't attach `config` to the rejected Axio
 **C10 complete.** All six bonus primitives shipped (Skeleton, Dialog, Select, Table, Toast + axios bridge, DropdownMenu). Phase C is done.
 
 **Next.** Final completion iter — refresh executive summary + verify command, mark C10 complete on the checklist, run the monitor-rerunnable command one more time, sign off with `<promise>COMPLETE</promise>`.
+
+---
+
+## Executive summary — Phase C shadcn-vue migration COMPLETE (iter-21, 2026-08-03)
+
+**Baseline → HEAD.** `feat/c-shadcn` branched from `main @ f9c4406` (post-PR-merge). 21 iters, 20 aurora commits (iter-21 is completion signoff; no code change), currently at `d4bd750`.
+
+**All 10 checklist items shipped.**
+- **C0** shadcn-vue init — dual-run tokens + `cn()` preserved.
+- **C1–C8** — every primitive under `src/components/ui/` (Alert, Button, Badge, Input, Label, Checkbox, Tabs, Card, Progress) migrated onto shadcn semantic tokens with Aurora public APIs preserved so no caller sweep was needed at the primitive level.
+- **C9** (three sub-commits) — swept 380 utility-class + 140 inline-`var()` uses across every caller, then deleted the legacy `--color-canvas/-surface/-ink/-line/-ok/-warn/-err/-info/-on-ink/-ink-hover` declarations from the `@theme` block along with the hand-rolled `@layer utilities` shim. `main.css` shrank 341 → 244 lines; brand-amber (`--color-accent`) preserved.
+- **C10** (seven sub-primitives) — Skeleton, Dialog, Select, Table, Toast + axios bridge, DropdownMenu. All ship with real caller migrations, not just spec text: PackageDetail overview/logs skeletons, OnboardingAdmin recovery Dialog + copy-password toasts, three raw `<select>` → shadcn Select, SettingsView audit `<ul>` → semantic `<Table>`, TopBar user cluster → DropdownMenu, and the axios interceptor now raises destructive toasts on 5xx / network drops.
+
+**Test growth.** Vitest baseline (iter-1) 4 files / 32 tests → HEAD 18 files / **165 tests** passing (+133). Each new primitive shipped with its own spec pinning shadcn token contract + interaction behaviour + a11y semantics. Backend Java tests unchanged at **348 tests / 0 failures / 0 errors** (Phase C scope was frontend-only).
+
+**Bugs caught in tests.**
+- `dismissAll()` mutation-during-iteration (Toast composable, iter-18) — snapshot ids first.
+- Same Vue-boolean-coerce trap hit Card (`padded?: boolean`, iter-9) and Dialog (`dismissable?: boolean`, iter-15). Fixed in Dialog with `withDefaults`; the Card behavior change (visual shift on PackageDetail) tracked as its own followup commit in the scratchpad.
+- tailwind-merge collapsed `bg-card` + `bg-[url(...)]` into one bg-utility bucket (Select iter-16) — refactored the chevron into an overlaid SVG.
+- Axios interceptor test adapter needed `config` threaded through the error constructor (iter-19) so the interceptor could read the caller's `toast: false` override.
+
+**Final verify.** `env -i HOME=$HOME PATH=... bash -lc 'cd /home/bruce/aurora-c-wt && bash scripts/verify-v03-overnight.sh'` → **5/5 green** in a fresh shell. Backend 348/0/0, vue-tsc clean, vitest 18 files / 165 tests, docker build --check clean.
+
+**Handover.** Bruce owns the docker rebuild + merge into `rename/aurora`. `feat/c-shadcn` is pushed to `origin`; branch is ready for PR. Post-merge, the aurora container will need a rebuild (`cd /home/bruce/aurora.local/packages/dashboard && docker compose build && docker compose up -d`) to pick up the new frontend bundle. The `PHASE_C_HANDOVER.md` in the main worktree remains the pickup document for the next round.
+
+**Deferred follow-ups (in scratchpad, not blockers):**
+- Card `padded` boolean-coerce fix — pure `withDefaults({padded: true})` change; visual shift on PackageDetail's two bare `<Card>` overview cells (they'll gain `p-7`).
+- Aurora `--color-muted-foreground-2` semi-token if the subtitle/hint hierarchy reads flat post-rebuild (the C9a sweep collapsed ink-3 + ink-4 into a single `muted-foreground` grade).
+
+Phase C is done. Ready to sign off with `<promise>COMPLETE</promise>`.
