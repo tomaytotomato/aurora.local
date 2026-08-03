@@ -554,3 +554,46 @@ B3 frontend: new route `/containers/{id}/logs`, view component
 rendering `<pre>` mono, refresh button, wiring the "row click" on
 RecentChangesList. Small typecheck-only iter (existing composable
 pattern applies).
+
+## Iter 12 · 2026-08-03 08:38 · commit b7bd583
+**B3 (frontend) — /containers/:id/logs view + drill-in from Recent changes.**
+
+### What shipped
+
+- `api/containers.ts`: `ContainerLogLine` + `ContainerLogsResponse`
+  types matching backend records; `ContainersApi.logs(id, tail=200)`
+  helper (encodeURIComponent'd path).
+- `views/ContainerLogsView.vue` (new): `<pre>`-mono block with per-line
+  `ts` prefix + stdout/stderr Badge (not colour-only, a11y). Tail
+  selector 100/200/500/1000/2000. Refresh button. §5 error-state copy
+  for 400/404/401/403/5xx (no axios strings). §4 empty-state ("No log
+  lines yet."). Truncated banner when backend hits 2 MiB cap.
+- `router/index.ts`: new `/containers/:id/logs` route under AppShell
+  (auth guard + chrome apply).
+- `views/DashboardHome.vue`: RecentChanges list's `<span>` container
+  name → `router-link` into the tail view. Data-test hook added.
+
+### Verification
+- `vue-tsc --noEmit` → exit 0.
+- Backend unchanged from iter-11 (213 tests, 1 pre-existing failure,
+  0 introduced).
+
+### Files touched
+- `frontend/src/api/containers.ts` (+36 -1)
+- `frontend/src/views/ContainerLogsView.vue` (+156, new)
+- `frontend/src/router/index.ts` (+2)
+- `frontend/src/views/DashboardHome.vue` (+8 -1)
+
+### Deferred
+- E2E: click a Recent-changes row + assert view renders + Refresh
+  works. Same aurora-e2e infra debt.
+- PackageDetail "Logs" tab → wire multi-container packages into
+  ContainerLogsView. Needs a compose-service → container-name mapping
+  helper that doesn't exist yet.
+
+### Next iteration target
+B4 — Security-rule model + first three rules
+(WeakAdminPasswordRule, DockerSocketExposureRule, UnpinnedImageTagsRule).
+`SecurityFinding(id, severity, title, description, remediationUrl)`
++ `SecurityRule` interface + `GET /api/security/findings`. Backend
+unit test per rule. Frontend unchanged (empty state stays).
