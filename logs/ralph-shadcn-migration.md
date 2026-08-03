@@ -201,3 +201,23 @@
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 10 files / 93 tests (87 → 93, +6). vue-tsc clean. Dockerfile clean.
 
 **Next.** C8 — migrate Progress.
+
+### iter-10 (2026-08-03) — C8 shadcn Progress
+
+**Item:** C8. Migrate Progress primitive to shadcn tokens.
+
+**What changed.**
+- Token swap:
+  - track  `bg-[var(--color-line-2)]` → `bg-secondary`
+  - fill   `bg-[var(--color-ink)]`    → `bg-primary`
+- ARIA a11y bump: added `role="progressbar"` + `aria-valuemin/max/now`. Old primitive was two unlabeled divs — assistive tech had no way to announce onboarding progress.
+- Added `data-testid="progress-fill"` on the inner fill div so tests can address it without brittle child-of-child selectors (learned the hard way — `div > div` in vue-test-utils' querySelector context matched the outer root, not the inner).
+- Public API unchanged: `<Progress :value>`. The one caller (OnboardingShell) keeps working with its `.rail-progress` class prop.
+- Barrel-export `Progress` from `src/components/ui/index.ts`.
+- New `Progress.spec.ts` — 6 tests: track tokens, fill tokens + width binding, ARIA semantics, negative clamping, over-100 clamping, class merge.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 11 files / 99 tests (93 → 99, +6). vue-tsc clean. Dockerfile clean.
+
+**Milestone.** C1–C8 done. Every legacy `--color-*` reference in `src/components/ui/*.vue` is now a shadcn semantic token. The only remaining Phase C work is C9 (audit + delete stale `.legacy.vue` files if any + gate on unused `--color-*` tokens) and C10 (bonus primitives).
+
+**Next.** C9 — audit `src/components/ui/` for any surviving `.legacy.vue` files (Alert.legacy was already deleted in C2 iter-4), grep-scan the whole `src/` for `--color-canvas/-surface/-ink/-line/-ok/-warn/-err/-info` refs, and either migrate or gate deletion. Old tokens themselves stay in main.css until callers stop needing them.

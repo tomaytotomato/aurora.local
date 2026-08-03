@@ -19,3 +19,5 @@ export { default as Checkbox } from './Checkbox.vue';
 export { default as Tabs } from './Tabs.vue';
 
 export { default as Card } from './Card.vue';
+
+export { default as Progress } from './Progress.vue';
