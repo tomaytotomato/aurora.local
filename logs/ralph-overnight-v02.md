@@ -1396,3 +1396,44 @@ Iter-27: **audit events on dismiss/restore** (backend). Reuse
 Emit `security.dismiss` + `security.restore` records with the
 finding id + expiry so an operator can grep the audit log for
 who suppressed what and when.
+
+## Iter 27 · 2026-08-03 09:56 · commit 7dec90c
+**Audit events on security dismiss/restore.**
+
+Closes the iter-23 deferred 'audit event on dismiss/restore' bullet.
+
+### What shipped
+- `SecurityController` gets a 3-arg constructor taking
+  `AuditEventRepo`.
+- `dismiss()` emits `action=security.dismiss`,
+  `target=finding:<id>`, `diff_json={expires_at, reason?}`. Reason
+  JSON-escaped via new `jsonEscape` helper (backslash/quote/newline/
+  CR/tab/<0x20 → `\uXXXX`).
+- `restore()` emits `action=security.restore` **only** when the
+  DELETE removed a row (idempotent no-op audits filtered).
+- 5 new tests (dismiss audit shape, permanent expiry shape,
+  restore-audit-only-on-success, malformed id skips audit,
+  jsonEscape coverage).
+
+### Verification
+- Full backend: **319 tests, 0 failures, 0 errors** (314 → 319, +5).
+- `vue-tsc --noEmit` → exit 0.
+- `bash scripts/verify-v03-overnight.sh` → 4/4 checks pass with the
+  new 319 floor.
+
+### Files touched
+- `backend/…/controllers/SecurityController.java` (+55 -6)
+- `backend/…/test/…/controllers/SecurityControllerTests.java` (+90)
+- `scripts/verify-v03-overnight.sh` (+2 -2)
+
+### Deferred (accepted)
+- Settings-side audit log viewer (requires GET /audit/events).
+- Named user attribution — audit slot exists; principal wire-through
+  is a separate iter.
+- Vitest for FE component tests.
+
+### Next iteration target
+Iter-28: baseline refresh across all three drift-prone surfaces
+(executive summary + task-file expected-output block + verify-v03
+cached string already done partially). Then either principal-based
+audit attribution or a small Vitest bootstrap.
