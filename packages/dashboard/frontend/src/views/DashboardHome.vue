@@ -304,7 +304,13 @@ const recentEvents = computed(() =>
           >
             <span class="text-ink-4">{{ new Date(e.ts).toLocaleTimeString() }}</span>
             <span class="text-ink-2">{{ e.action }}</span>
-            <span class="text-ink">{{ e.container }}</span>
+            <!-- B3 (iter-12): row-click drill into log tail. router-link
+                 stays inline so keyboard tab order + focus ring behave. -->
+            <router-link
+              :to="`/containers/${encodeURIComponent(e.container)}/logs`"
+              class="text-ink no-underline hover:underline"
+              data-test="recent-changes-log-link"
+            >{{ e.container }}</router-link>
           </li>
         </ul>
       </Card>

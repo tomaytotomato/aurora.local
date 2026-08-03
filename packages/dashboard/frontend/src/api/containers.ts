@@ -28,10 +28,39 @@ export interface ContainerEventItem {
   image?: string;
 }
 
+export interface ContainerLogLine {
+  /** RFC3339 timestamp docker prefixed the line with; may be absent. */
+  ts?: string;
+  /** {@code 'stdout'} or {@code 'stderr'} depending on the frame. */
+  stream: 'stdout' | 'stderr';
+  /** Log text; already whitespace-normalised (no trailing newline). */
+  line: string;
+}
+
+export interface ContainerLogsResponse {
+  container_id: string;
+  tail: number;
+  /** True when the byte-cap on the backend collector was hit. */
+  truncated: boolean;
+  lines: ContainerLogLine[];
+}
+
 export const ContainersApi = {
   /** Poll fallback / initial snapshot. Oldest first. */
   async recentEvents(): Promise<ContainerEventItem[]> {
     const { data } = await http.get<ContainerEventItem[]>('/containers/events');
+    return data;
+  },
+
+  /**
+   * B3 (v0.3): snapshot tail of a container's logs. Default 200 lines.
+   * Backend caps to [1, 2000] and clamps at a 2 MiB byte budget.
+   */
+  async logs(id: string, tail: number = 200): Promise<ContainerLogsResponse> {
+    const { data } = await http.get<ContainerLogsResponse>(
+      `/containers/${encodeURIComponent(id)}/logs`,
+      { params: { tail } },
+    );
     return data;
   },
 };
