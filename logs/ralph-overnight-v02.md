@@ -1816,3 +1816,37 @@ gets thinner while the safety net grows.
 Iter-37: extract ContainerLogsView's status→copy switch into
 lib/error-copy.ts (or similar) + Vitest tests. Same net-negative
 pattern.
+
+## Iter 37 · 2026-08-03 10:59 · commit 717f624
+**Extract http-error-copy helper + 10 new Vitest tests + refactor ContainerLogsView.**
+
+### What shipped
+- `lib/http-error-copy.ts` (new): `ErrorCopyContext` + three helpers
+  (`httpStatusFromError`, `humanCopyForStatus`, `humanCopyForError`)
+  matching the §5 copy contract every view was inlining.
+- `lib/http-error-copy.spec.ts` (+10 tests): status extraction across
+  shaped/unshaped/edge inputs; 401+403 session copy; 400/404 default
+  + override branches; generic fallback (500/502/undefined/0); §5
+  sanity (no axios/sudo/bash strings).
+- `ContainerLogsView.vue` refactored to delegate (17 lines → 6).
+
+### Verification
+- Backend 348/0/0.
+- `vue-tsc --noEmit` → exit 0.
+- **Vitest: 4 files, 32 tests passed** (+10).
+- `bash scripts/verify-v03-overnight.sh` → 5/5.
+
+### Files touched
+- `frontend/src/lib/http-error-copy.ts` (+65, new)
+- `frontend/src/lib/http-error-copy.spec.ts` (+95, new)
+- `frontend/src/views/ContainerLogsView.vue` (+8 -12)
+
+### Deferred
+- Migrate the remaining 5 views (DashboardHome, PackageDetail,
+  SecurityPosture, SettingsView, DoneChecklist) to the same helper.
+  Small sweep; each ~10 lines. Follow-up iter.
+
+### Next iteration target
+Iter-38: migrate the remaining views one-by-one in a single sweep
+commit so the axios-status switch lives in exactly one place. Same
+diff pattern as iter-37 ContainerLogsView.
