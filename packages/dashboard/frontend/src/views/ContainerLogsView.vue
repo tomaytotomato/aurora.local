@@ -18,7 +18,7 @@ import { ContainersApi, type ContainerLogLine } from '@/api/containers';
 import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/Alert.vue';
+import Alert from '@/components/ui/AlertLegacy.vue';
 import Badge from '@/components/ui/Badge.vue';
 
 interface RouteError {

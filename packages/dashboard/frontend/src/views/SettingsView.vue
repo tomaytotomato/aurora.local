@@ -5,7 +5,7 @@ import { AuditApi, type AuditEvent } from '@/api/audit';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
-import Alert from '@/components/ui/Alert.vue';
+import Alert from '@/components/ui/AlertLegacy.vue';
 import { useRouter } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 

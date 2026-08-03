@@ -7,7 +7,7 @@ import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
-import Alert from '@/components/ui/Alert.vue';
+import Alert from '@/components/ui/AlertLegacy.vue';
 import AuroraBackground from '@/components/AuroraBackground.vue';
 
 const router = useRouter();

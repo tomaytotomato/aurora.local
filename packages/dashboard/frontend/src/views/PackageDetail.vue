@@ -7,7 +7,7 @@ import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Tabs from '@/components/ui/Tabs.vue';
-import Alert from '@/components/ui/Alert.vue';
+import Alert from '@/components/ui/AlertLegacy.vue';
 
 const route = useRoute();
 const packages = usePackagesStore();

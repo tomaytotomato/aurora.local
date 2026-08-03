@@ -6,7 +6,7 @@ import { usePackagesStore } from '@/stores/packages';
 import { OnboardingApi } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Checkbox from '@/components/ui/Checkbox.vue';
-import Alert from '@/components/ui/Alert.vue';
+import Alert from '@/components/ui/AlertLegacy.vue';
 import type { PackageCategory } from '@/api/packages';
 
 const store = useOnboardingStore();

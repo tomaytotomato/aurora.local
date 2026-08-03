@@ -88,6 +88,17 @@
   --color-input: #E5E4E0;
   --color-ring: #B45309;
 
+  /* Semantic status tones (C1 iter-3) — shadcn-shaped for warning/info/
+     success. Values match our existing --color-warn-fg/-info-fg/-ok-fg
+     (strong foreground). Alert/Badge/other status surfaces layer these
+     via bg-<name>/8 (color-mix tint) + border-<name>/40 + text-<name>. */
+  --color-warning: #956400;
+  --color-warning-foreground: #FFFFFF;
+  --color-info: #1F6C9F;
+  --color-info-foreground: #FFFFFF;
+  --color-success: #346538;
+  --color-success-foreground: #FFFFFF;
+
   /* shadcn also references --radius (base) and --radius-* variants. We
      already declare --radius: 6px above; shadcn components compute
      smaller variants via calc(). */
@@ -158,6 +169,14 @@
     --color-border: #2c2a22;
     --color-input: #2c2a22;
     --color-ring: #d97706;
+
+    /* Semantic status tones — dark override (C1 iter-3). */
+    --color-warning: #fde68a;
+    --color-warning-foreground: #14120f;
+    --color-info: #93c5fd;
+    --color-info-foreground: #14120f;
+    --color-success: #86efac;
+    --color-success-foreground: #14120f;
   }
 
   html, body {
