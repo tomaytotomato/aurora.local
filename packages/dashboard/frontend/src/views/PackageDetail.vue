@@ -79,14 +79,14 @@ onMounted(async () => {
 <template>
   <section>
     <div class="mb-8">
-      <router-link to="/packages" class="text-xs text-ink-3 no-underline">← All packages</router-link>
+      <router-link to="/packages" class="text-xs text-muted-foreground no-underline">← All packages</router-link>
       <div class="flex items-baseline gap-3 mt-4">
         <h1>{{ name }}</h1>
         <Badge v-if="detail" :tone="detail.enabled ? 'ok' : 'neutral'">
           {{ detail.enabled ? (detail.running ? 'running' : 'stopped') : 'disabled' }}
         </Badge>
       </div>
-      <p v-if="detail" class="text-ink-3 mt-2">{{ detail.description }}</p>
+      <p v-if="detail" class="text-muted-foreground mt-2">{{ detail.description }}</p>
     </div>
 
     <Alert v-if="err" variant="destructive" class="mb-6">
@@ -103,19 +103,19 @@ onMounted(async () => {
       ]"
     >
       <div v-if="activeTab === 'overview'">
-        <div v-if="!detail" class="text-sm text-ink-4">Loading…</div>
+        <div v-if="!detail" class="text-sm text-muted-foreground">Loading…</div>
         <div v-else class="grid grid-cols-2 gap-4">
           <Card>
             <div class="eyebrow mb-1">Runtime</div>
             <h3 class="mb-3">Status</h3>
-            <div class="text-3xl font-mono text-ink">{{ detail.running ? 'running' : 'stopped' }}</div>
+            <div class="text-3xl font-mono text-foreground">{{ detail.running ? 'running' : 'stopped' }}</div>
           </Card>
           <Card>
             <div class="eyebrow mb-1">Network</div>
             <h3 class="mb-3">vhosts</h3>
-            <ul class="text-sm font-mono text-ink-2 space-y-0.5">
+            <ul class="text-sm font-mono text-foreground space-y-0.5">
               <li v-for="v in (detail.vhosts ?? [])" :key="v">{{ v }}</li>
-              <li v-if="!(detail.vhosts ?? []).length" class="text-ink-4">none</li>
+              <li v-if="!(detail.vhosts ?? []).length" class="text-muted-foreground">none</li>
             </ul>
           </Card>
         </div>
@@ -139,14 +139,14 @@ onMounted(async () => {
           </Alert>
           <button
             type="button"
-            class="text-sm text-ink-2 underline"
+            class="text-sm text-foreground underline"
             @click="loadContainers"
           >Try again</button>
         </div>
         <div
           v-else-if="!containersLoaded && (containersLoading || !detail)"
           data-state="empty"
-          class="text-sm text-ink-4"
+          class="text-sm text-muted-foreground"
         >Loading…</div>
         <Card
           v-else-if="containers.length === 0"
@@ -154,8 +154,8 @@ onMounted(async () => {
           class="p-8 text-center"
           data-test="package-logs-empty"
         >
-          <p class="text-sm text-ink-2 mb-1">No containers for this package.</p>
-          <p class="text-xs text-ink-4">
+          <p class="text-sm text-foreground mb-1">No containers for this package.</p>
+          <p class="text-xs text-muted-foreground">
             Aurora only sees containers labelled with the compose project
             <span class="font-mono">aurora-{{ name }}</span>. Start the
             package first, then come back here.
@@ -165,18 +165,18 @@ onMounted(async () => {
           <li
             v-for="c in containers"
             :key="c.id"
-            class="flex items-center justify-between gap-3 border border-line rounded-md px-4 py-3"
+            class="flex items-center justify-between gap-3 border border-border rounded-md px-4 py-3"
           >
             <div class="min-w-0">
               <div class="flex items-center gap-2">
                 <span class="font-mono text-sm truncate">{{ cleanName(c.names) }}</span>
                 <Badge :tone="c.state === 'running' ? 'ok' : 'neutral'">{{ c.state }}</Badge>
               </div>
-              <div class="text-xs text-ink-4 mt-0.5 truncate">{{ c.image }}</div>
+              <div class="text-xs text-muted-foreground mt-0.5 truncate">{{ c.image }}</div>
             </div>
             <router-link
               :to="`/containers/${encodeURIComponent(cleanName(c.names))}/logs`"
-              class="text-sm text-ink-2 no-underline hover:underline whitespace-nowrap"
+              class="text-sm text-foreground no-underline hover:underline whitespace-nowrap"
               data-test="package-logs-link"
             >View logs →</router-link>
           </li>
@@ -184,11 +184,11 @@ onMounted(async () => {
       </div>
 
       <div v-else>
-        <div v-if="detail" class="text-sm text-ink-3">
+        <div v-if="detail" class="text-sm text-muted-foreground">
           <div class="mb-2"><span class="eyebrow">Dependencies:</span></div>
           <div class="flex gap-2 flex-wrap">
-            <span v-for="d in (detail.dependsOn ?? [])" :key="d" class="font-mono text-xs px-2 py-1 rounded border border-line">{{ d }}</span>
-            <span v-if="!(detail.dependsOn ?? []).length" class="text-ink-4">none</span>
+            <span v-for="d in (detail.dependsOn ?? [])" :key="d" class="font-mono text-xs px-2 py-1 rounded border border-border">{{ d }}</span>
+            <span v-if="!(detail.dependsOn ?? []).length" class="text-muted-foreground">none</span>
           </div>
         </div>
       </div>

@@ -19,7 +19,7 @@ const photoBg = computed<boolean>(() => Boolean(route.meta?.photoBg));
 
   <div
     class="min-h-screen grid grid-cols-[240px_1fr]"
-    :class="photoBg ? 'relative z-10' : 'bg-canvas'"
+    :class="photoBg ? 'relative z-10' : 'bg-background'"
   >
     <Sidebar />
     <div class="flex flex-col min-h-screen">
@@ -35,10 +35,10 @@ const photoBg = computed<boolean>(() => Boolean(route.meta?.photoBg));
       </main>
       <footer
         class="content py-6 text-xs border-t mt-8"
-        :class="photoBg ? 'text-white/70 border-white/15' : 'text-ink-4 border-line/60'"
+        :class="photoBg ? 'text-white/70 border-white/15' : 'text-muted-foreground border-border/60'"
       >
         Aurora — admin plane for aurora.local. The tile grid is
-        <a href="/" :class="photoBg ? 'text-white/85' : 'text-ink-3'">Homepage</a>; this is the fuse box.
+        <a href="/" :class="photoBg ? 'text-white/85' : 'text-muted-foreground'">Homepage</a>; this is the fuse box.
       </footer>
     </div>
   </div>

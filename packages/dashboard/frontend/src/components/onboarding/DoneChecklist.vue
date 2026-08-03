@@ -295,7 +295,7 @@ async function onStart(pkg: string): Promise<void> {
     <div
       v-if="showBringingUp"
       data-banner="bringing-up"
-      class="border border-line rounded-lg p-3 mb-3 bg-[var(--color-surface-2)] text-sm text-ink-2"
+      class="border border-border rounded-lg p-3 mb-3 bg-[var(--color-surface-2)] text-sm text-foreground"
     >
       Aurora is still bringing these online. Nothing for you to type.
     </div>
@@ -310,6 +310,6 @@ async function onStart(pkg: string): Promise<void> {
         @start="onStart"
       />
     </ul>
-    <p v-if="reconnecting" class="text-xs text-ink-3">Reconnecting…</p>
+    <p v-if="reconnecting" class="text-xs text-muted-foreground">Reconnecting…</p>
   </div>
 </template>

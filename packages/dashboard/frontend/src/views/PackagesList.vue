@@ -30,20 +30,20 @@ const filtered = computed(() => {
     <div class="mb-8">
       <div class="eyebrow mb-2">Catalogue</div>
       <h1 class="mb-3">Packages</h1>
-      <p class="text-ink-3 max-w-2xl">
+      <p class="text-muted-foreground max-w-2xl">
         Every package is a small compose stack. Enabling a package brings it under the
-        <code class="font-mono text-ink-2">aurora</code> compose project and adds its
+        <code class="font-mono text-foreground">aurora</code> compose project and adds its
         vhost to Caddy.
       </p>
     </div>
 
-    <div class="flex items-center gap-1 border-b border-line mb-6">
+    <div class="flex items-center gap-1 border-b border-border mb-6">
       <button
         v-for="f in (['all','enabled','available'] as const)"
         :key="f"
         type="button"
         class="px-4 py-2 text-sm capitalize relative"
-        :class="activeFilter === f ? 'text-ink' : 'text-ink-3 hover:text-ink-2'"
+        :class="activeFilter === f ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
         @click="activeFilter = f"
       >
         {{ f }}
@@ -54,11 +54,11 @@ const filtered = computed(() => {
       </button>
     </div>
 
-    <div v-if="packages.loading && !packages.list.length" class="text-sm text-ink-4">
+    <div v-if="packages.loading && !packages.list.length" class="text-sm text-muted-foreground">
       Loading catalogue…
     </div>
 
-    <div v-else-if="!filtered.length" class="text-sm text-ink-4 py-16 text-center">
+    <div v-else-if="!filtered.length" class="text-sm text-muted-foreground py-16 text-center">
       No packages in this view.
     </div>
 
@@ -73,13 +73,13 @@ const filtered = computed(() => {
           <div class="flex items-start justify-between mb-3">
             <div>
               <div class="eyebrow mb-1">{{ pkg.category }}</div>
-              <h3 class="text-ink">{{ pkg.name }}</h3>
+              <h3 class="text-foreground">{{ pkg.name }}</h3>
             </div>
             <Badge :tone="pkg.enabled ? (pkg.running ? 'ok' : 'neutral') : 'neutral'">
               {{ pkg.enabled ? (pkg.running ? 'running' : 'stopped') : 'off' }}
             </Badge>
           </div>
-          <p class="text-sm text-ink-3 line-clamp-3">{{ pkg.description }}</p>
+          <p class="text-sm text-muted-foreground line-clamp-3">{{ pkg.description }}</p>
         </Card>
       </router-link>
     </div>

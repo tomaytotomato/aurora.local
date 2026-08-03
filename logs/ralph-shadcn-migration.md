@@ -221,3 +221,45 @@
 **Milestone.** C1–C8 done. Every legacy `--color-*` reference in `src/components/ui/*.vue` is now a shadcn semantic token. The only remaining Phase C work is C9 (audit + delete stale `.legacy.vue` files if any + gate on unused `--color-*` tokens) and C10 (bonus primitives).
 
 **Next.** C9 — audit `src/components/ui/` for any surviving `.legacy.vue` files (Alert.legacy was already deleted in C2 iter-4), grep-scan the whole `src/` for `--color-canvas/-surface/-ink/-line/-ok/-warn/-err/-info` refs, and either migrate or gate deletion. Old tokens themselves stay in main.css until callers stop needing them.
+
+### iter-11 (2026-08-03) — C9a caller utility sweep
+
+**Item:** C9. Delete `.legacy.vue` + old `--color-*` tokens — split into three sub-commits. **This is C9a: sweep Tailwind utility classes across every caller.**
+
+**Audit findings.**
+- No `.legacy.vue` files remain in `src/components/ui/` — Alert.legacy was already deleted in C2 iter-4.
+- Pre-sweep caller inventory (grep-scan of `src/views/` + `src/components/`, excluding `src/components/ui/` since those primitives were migrated in C1..C8):
+  - 25 files with legacy utility classes
+  - 380 total utility hits — top of the list: `text-ink-3` (87), `text-ink-4` (63), `border-line` (61), `text-ink-2` (54), `text-ink` (43), `bg-surface` (21), `hover:text-ink` (17), `bg-surface-2` (16).
+- Explicit `var(--color-*)` references and main.css base styles left untouched — those land in C9b.
+
+**Sweep script.** `packages/dashboard/scripts/c9a-utility-sweep.sh` runs a single `sed -E` pipeline per file with the substitutions below. Longest-suffix rules run before bare ones so `text-ink-4` doesn't become `text-foreground-4`; word boundaries (`\b`) prevent accidental matches inside longer identifiers.
+
+    text-ink-4       → text-muted-foreground
+    text-ink-3       → text-muted-foreground
+    text-ink-2       → text-foreground
+    hover:text-ink-2 → hover:text-foreground
+    hover:text-ink   → hover:text-foreground
+    text-ink         → text-foreground
+    hover:border-ink-4 → hover:border-muted-foreground
+    border-ink-2     → border-muted-foreground
+    border-line-2    → border-border
+    border-line      → border-border
+    divide-line      → divide-border
+    hover:bg-surface-2 → hover:bg-muted
+    hover:bg-surface → hover:bg-card
+    bg-surface-2     → bg-muted
+    bg-surface       → bg-card
+    bg-canvas        → bg-background
+    text-accent      → text-[var(--color-accent)]   (brand amber preserved via arbitrary value)
+    border-accent    → border-[var(--color-accent)] (same)
+
+**UX drift note.** Aurora had four ink levels (ink / ink-2 / ink-3 / ink-4). Shadcn has two (foreground / muted-foreground). Merged mapping: ink & ink-2 → foreground; ink-3 & ink-4 → muted-foreground. One gradient step collapses — visible in DashboardHome subtitles and empty-state hints where ink-3 was mid-gray and ink-4 was very light. Verdict: acceptable for shadcn compliance; if the collapse reads too flat post-rebuild, add a `--color-muted-foreground-2` semi-token and reroute ink-4.
+
+**Files touched.** 25 (11 views + 6 onboarding views + 8 layout/onboarding components). Total 288 substitutions (equal add + delete because every changed line is a token swap, no new lines).
+
+**Residual audit.** Post-sweep grep for the same legacy utility set returns 0 hits in `src/views/` and `src/components/`. `src/components/ui/` UI primitives + spec files still show 0 legacy utilities (they were migrated in C1..C8). `src/assets/main.css` still declares the legacy tokens — deletion lives in C9b once the inline `var(--color-*)` refs across views also migrate.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 11 files / 99 tests. vue-tsc clean. Dockerfile clean.
+
+**Next.** C9b — sweep inline `var(--color-*)` refs (bare `color:` / `background:` / arbitrary values) across the same caller set + `src/assets/main.css` base styles, then delete the legacy token declarations from the @theme block.

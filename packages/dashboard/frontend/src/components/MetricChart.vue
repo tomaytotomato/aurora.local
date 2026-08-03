@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
   <div class="w-full" :style="{ minHeight: `${height}px` }">
     <div
       v-if="series.ts.length === 0"
-      class="text-xs text-ink-4 py-6 text-center"
+      class="text-xs text-muted-foreground py-6 text-center"
       data-state="empty"
     >
       No samples yet — data will appear as Aurora records them.

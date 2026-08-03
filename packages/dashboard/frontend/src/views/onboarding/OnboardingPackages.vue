@@ -135,7 +135,7 @@ async function proceed(): Promise<void> {
   <div>
     <div class="eyebrow mb-3">Step 4 of 9</div>
     <h1 class="mb-4">Pick your packages.</h1>
-    <p class="text-ink-2 mb-6">
+    <p class="text-foreground mb-6">
       Each package is a small compose stack with sensible defaults. You can add or
       remove any of them later — nothing is permanent.
     </p>
@@ -154,13 +154,13 @@ async function proceed(): Promise<void> {
     </Alert>
 
     <div class="mb-6">
-      <div class="flex items-center gap-1 border-b border-line overflow-x-auto">
+      <div class="flex items-center gap-1 border-b border-border overflow-x-auto">
         <button
           v-for="cat in categories"
           :key="cat.value"
           type="button"
           class="px-3 py-2 text-xs capitalize whitespace-nowrap relative transition-colors"
-          :class="activeCategory === cat.value ? 'text-ink' : 'text-ink-3 hover:text-ink-2'"
+          :class="activeCategory === cat.value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
           @click="activeCategory = cat.value"
         >
           {{ cat.label }}
@@ -179,18 +179,18 @@ async function proceed(): Promise<void> {
         type="button"
         class="text-left p-4 rounded-lg border transition-all duration-150 flex items-start gap-3"
         :class="isSelected(pkg.name)
-          ? 'border-[var(--color-ink)] bg-surface'
-          : 'border-[var(--color-line)] bg-surface hover:border-[var(--color-ink-4)]'"
+          ? 'border-[var(--color-ink)] bg-card'
+          : 'border-[var(--color-line)] bg-card hover:border-[var(--color-ink-4)]'"
         :disabled="pkg.name === 'core'"
         @click="toggle(pkg.name)"
       >
         <Checkbox :model-value="isSelected(pkg.name)" class="mt-0.5" :disabled="pkg.name === 'core'" />
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-ink">{{ pkg.name }}</span>
+            <span class="text-sm font-medium text-foreground">{{ pkg.name }}</span>
             <span v-if="pkg.name === 'core'" class="eyebrow" style="color: var(--color-accent)">required</span>
           </div>
-          <p class="text-xs text-ink-3 mt-1 line-clamp-2">{{ pkg.description }}</p>
+          <p class="text-xs text-muted-foreground mt-1 line-clamp-2">{{ pkg.description }}</p>
         </div>
       </button>
     </div>
@@ -200,7 +200,7 @@ async function proceed(): Promise<void> {
     <div v-if="previewWarnings.length > 0" class="mb-8">
       <div class="flex items-center gap-2 mb-2">
         <div class="eyebrow">Resource warnings</div>
-        <div v-if="previewChecking" class="text-xs text-ink-4">checking…</div>
+        <div v-if="previewChecking" class="text-xs text-muted-foreground">checking…</div>
       </div>
       <Alert
         v-for="(w, i) in previewWarnings"
@@ -211,7 +211,7 @@ async function proceed(): Promise<void> {
         <AlertDescription>{{ w }}</AlertDescription>
       </Alert>
     </div>
-    <div v-else-if="previewChecking" class="mb-8 text-xs text-ink-4">
+    <div v-else-if="previewChecking" class="mb-8 text-xs text-muted-foreground">
       checking selection…
     </div>
 

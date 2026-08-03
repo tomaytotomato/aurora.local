@@ -109,19 +109,19 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
     <!-- Branch A: admin already exists. Show what we know, offer no form. -->
     <template v-if="alreadyCreated">
-      <p class="text-ink-2 mb-8">
+      <p class="text-foreground mb-8">
         An admin account is already set up on this box. You can keep going with
         the rest of the wizard.
       </p>
 
-      <div class="border border-line rounded-lg p-6 mb-8 bg-surface-2/40">
+      <div class="border border-border rounded-lg p-6 mb-8 bg-muted/40">
         <div class="eyebrow mb-2">Existing admin</div>
-        <div class="font-mono text-sm text-ink">{{ savedUsername ?? 'admin' }}</div>
-        <p class="mt-3 text-xs text-ink-3">
+        <div class="font-mono text-sm text-foreground">{{ savedUsername ?? 'admin' }}</div>
+        <p class="mt-3 text-xs text-muted-foreground">
           Aurora doesn't store your password anywhere it can hand back. If
           you've lost it, use the
           <button type="button"
-                  class="text-ink underline underline-offset-2"
+                  class="text-foreground underline underline-offset-2"
                   @click="showRecovery = true">password recovery</button>
           option to reset it.
         </p>
@@ -143,11 +143,11 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
     <!-- Branch B: bootstrap mode. Real create form. -->
     <template v-else>
-      <p class="text-ink-2 mb-8">
+      <p class="text-foreground mb-8">
         One user. One password. No email recovery, no SMS. If you lose the
         password, use the
         <button type="button"
-                class="text-ink underline underline-offset-2"
+                class="text-foreground underline underline-offset-2"
                 @click="showRecovery = true">password recovery</button>
         option on this screen to reset it.
       </p>
@@ -167,7 +167,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
             <Label for="pw" class="mb-0">Password</Label>
             <button
               type="button"
-              class="text-xs text-ink-3 hover:text-ink"
+              class="text-xs text-muted-foreground hover:text-foreground"
               @click="regenerate"
             >
               Generate new
@@ -183,7 +183,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
             />
             <button
               type="button"
-              class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line bg-surface"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border bg-card"
               @click="copy"
             >
               {{ copyFailed ? 'Copy failed' : copied ? 'Copied' : 'Copy' }}
@@ -195,7 +195,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
               :style="{ width: `${strengthPct}%` }"
             />
           </div>
-          <p class="mt-2 text-xs text-ink-4">
+          <p class="mt-2 text-xs text-muted-foreground">
             {{ password.length }} characters &middot; generated locally, never sent
             anywhere until you continue. <strong>If you refresh before clicking
             Continue, this password is gone.</strong>
@@ -207,7 +207,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
         <label class="flex items-start gap-3 cursor-pointer">
           <Checkbox v-model="savedAcknowledged" class="mt-0.5" />
-          <span class="text-sm text-ink-2">
+          <span class="text-sm text-foreground">
             I've saved this password in a password manager or somewhere I can find it later.
           </span>
         </label>
@@ -232,9 +232,9 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
       @click.self="showRecovery = false"
     >
-      <div class="max-w-md w-full bg-surface border border-line rounded-lg p-6 shadow-lg">
+      <div class="max-w-md w-full bg-card border border-border rounded-lg p-6 shadow-lg">
         <h2 id="recovery-title" class="text-lg mb-2">Password recovery</h2>
-        <p class="text-sm text-ink-2 mb-4">
+        <p class="text-sm text-foreground mb-4">
           Password recovery is coming to the dashboard shortly. In the
           meantime, if you've lost the admin password, ask whoever set this
           box up to reset it for you.

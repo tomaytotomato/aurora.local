@@ -93,11 +93,11 @@ function passkey(): void {
           <path d="M8 22 L16 8 L24 22" stroke="var(--color-on-ink)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="16" cy="22" r="1.5" fill="var(--color-accent)"/>
         </svg>
-        <span class="font-serif text-xl leading-none text-ink">Aurora</span>
+        <span class="font-serif text-xl leading-none text-foreground">Aurora</span>
       </div>
 
-      <h1 class="mb-2 text-ink">Sign in</h1>
-      <p class="text-ink-3 text-sm mb-8">
+      <h1 class="mb-2 text-foreground">Sign in</h1>
+      <p class="text-muted-foreground text-sm mb-8">
         The admin panel for this box.
       </p>
 
@@ -127,11 +127,11 @@ function passkey(): void {
 
       <p
         v-if="showOnboardingCta"
-        class="mt-10 text-xs text-ink-4"
+        class="mt-10 text-xs text-muted-foreground"
         data-test="onboarding-cta"
       >
         First time here?
-        <router-link to="/onboarding" class="text-ink-3">Start onboarding</router-link>.
+        <router-link to="/onboarding" class="text-muted-foreground">Start onboarding</router-link>.
       </p>
     </div>
   </div>

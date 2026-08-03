@@ -108,8 +108,8 @@ watch(() => route.path, (path, prev) => {
 </script>
 
 <template>
-  <aside class="border-r border-line/60 bg-surface flex flex-col">
-    <div class="px-6 py-5 border-b border-line/60">
+  <aside class="border-r border-border/60 bg-card flex flex-col">
+    <div class="px-6 py-5 border-b border-border/60">
       <RouterLink to="/" class="flex items-center gap-2.5 no-underline">
         <svg viewBox="0 0 32 32" class="w-6 h-6" aria-hidden="true">
           <!-- iter-3 theme-flip: bg uses --color-ink (dark in light mode,
@@ -119,7 +119,7 @@ watch(() => route.path, (path, prev) => {
           <path d="M8 22 L16 8 L24 22" stroke="var(--color-on-ink)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="16" cy="22" r="1.5" fill="var(--color-accent)"/>
         </svg>
-        <span class="font-serif text-lg leading-none text-ink">Aurora</span>
+        <span class="font-serif text-lg leading-none text-foreground">Aurora</span>
       </RouterLink>
       <div class="mt-1 eyebrow">admin plane</div>
     </div>
@@ -131,8 +131,8 @@ watch(() => route.path, (path, prev) => {
         :to="item.to"
         class="flex items-center gap-3 px-3 py-2 rounded-md text-sm no-underline transition-colors duration-150"
         :class="isActive(item.to)
-          ? 'bg-surface-2 text-ink'
-          : 'text-ink-3 hover:text-ink hover:bg-surface-2/60'"
+          ? 'bg-muted text-foreground'
+          : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'"
       >
         <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5">
           <path :d="item.icon" stroke-linecap="round" stroke-linejoin="round" />
@@ -157,11 +157,11 @@ watch(() => route.path, (path, prev) => {
       </RouterLink>
     </nav>
 
-    <div class="px-6 py-5 border-t border-line/60">
+    <div class="px-6 py-5 border-t border-border/60">
       <div class="eyebrow mb-2">Documentation</div>
-      <a href="/docs/DASHBOARD_BRIEF.md" class="text-xs text-ink-3">Brief</a>
-      <span class="mx-2 text-ink-4">·</span>
-      <a href="/docs/PACKAGE_CONTRACT.md" class="text-xs text-ink-3">Packages</a>
+      <a href="/docs/DASHBOARD_BRIEF.md" class="text-xs text-muted-foreground">Brief</a>
+      <span class="mx-2 text-muted-foreground">·</span>
+      <a href="/docs/PACKAGE_CONTRACT.md" class="text-xs text-muted-foreground">Packages</a>
     </div>
   </aside>
 </template>

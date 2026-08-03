@@ -73,8 +73,8 @@ onMounted(() => { void loadAudit(); });
       <Card class="p-8">
         <div class="eyebrow mb-2">Admin</div>
         <h3 class="mb-2">Account</h3>
-        <div class="text-sm text-ink-3 mb-4">
-          Signed in as <span class="font-mono text-ink">{{ auth.session?.username ?? '—' }}</span>.
+        <div class="text-sm text-muted-foreground mb-4">
+          Signed in as <span class="font-mono text-foreground">{{ auth.session?.username ?? '—' }}</span>.
         </div>
         <Button variant="secondary" size="sm" @click="signOut">Sign out</Button>
       </Card>
@@ -91,11 +91,11 @@ onMounted(() => { void loadAudit(); });
         <div class="eyebrow mb-2">System</div>
         <h3 class="mb-4">Metadata</h3>
         <dl class="text-sm space-y-2">
-          <div class="flex justify-between"><dt class="text-ink-3">Hostname</dt><dd class="font-mono">{{ info.hostname }}</dd></div>
-          <div class="flex justify-between"><dt class="text-ink-3">Domain</dt><dd class="font-mono">{{ info.domain }}</dd></div>
-          <div class="flex justify-between"><dt class="text-ink-3">LAN IP</dt><dd class="font-mono">{{ info.lanIp }}</dd></div>
-          <div class="flex justify-between"><dt class="text-ink-3">Kernel</dt><dd class="font-mono">{{ info.kernel }}</dd></div>
-          <div class="flex justify-between"><dt class="text-ink-3">Docker</dt><dd class="font-mono">{{ info.dockerVersion }}</dd></div>
+          <div class="flex justify-between"><dt class="text-muted-foreground">Hostname</dt><dd class="font-mono">{{ info.hostname }}</dd></div>
+          <div class="flex justify-between"><dt class="text-muted-foreground">Domain</dt><dd class="font-mono">{{ info.domain }}</dd></div>
+          <div class="flex justify-between"><dt class="text-muted-foreground">LAN IP</dt><dd class="font-mono">{{ info.lanIp }}</dd></div>
+          <div class="flex justify-between"><dt class="text-muted-foreground">Kernel</dt><dd class="font-mono">{{ info.kernel }}</dd></div>
+          <div class="flex justify-between"><dt class="text-muted-foreground">Docker</dt><dd class="font-mono">{{ info.dockerVersion }}</dd></div>
         </dl>
       </Card>
 
@@ -108,7 +108,7 @@ onMounted(() => { void loadAudit(); });
           <div>
             <div class="eyebrow mb-2">Audit</div>
             <h3>Recent activity</h3>
-            <p class="text-xs text-ink-4 mt-1">Newest first, last 100 events.</p>
+            <p class="text-xs text-muted-foreground mt-1">Newest first, last 100 events.</p>
           </div>
           <div class="flex items-center gap-2">
             <label for="audit-filter" class="sr-only">Filter by action prefix</label>
@@ -116,7 +116,7 @@ onMounted(() => { void loadAudit(); });
               id="audit-filter"
               v-model="auditFilter"
               placeholder="e.g. security."
-              class="text-xs rounded border border-line bg-surface text-ink px-2 py-1 w-40"
+              class="text-xs rounded border border-border bg-card text-foreground px-2 py-1 w-40"
               data-test="audit-filter"
               @keydown.enter="loadAudit"
             />
@@ -133,7 +133,7 @@ onMounted(() => { void loadAudit(); });
 
         <div
           v-else-if="!auditLoading && auditEvents.length === 0"
-          class="text-xs text-ink-4 py-4"
+          class="text-xs text-muted-foreground py-4"
           data-state="empty"
           data-test="audit-empty"
         >
@@ -147,10 +147,10 @@ onMounted(() => { void loadAudit(); });
             :key="e.id"
             class="grid grid-cols-[auto_auto_1fr] gap-3 items-baseline text-xs font-mono"
           >
-            <span class="text-ink-4 whitespace-nowrap">{{ formatAuditTs(e.ts) }}</span>
-            <span class="text-ink-2">{{ e.action }}</span>
-            <span class="text-ink-3 truncate">
-              <span v-if="e.user_id !== null" class="text-ink-4">user #{{ e.user_id }} · </span>
+            <span class="text-muted-foreground whitespace-nowrap">{{ formatAuditTs(e.ts) }}</span>
+            <span class="text-foreground">{{ e.action }}</span>
+            <span class="text-muted-foreground truncate">
+              <span v-if="e.user_id !== null" class="text-muted-foreground">user #{{ e.user_id }} · </span>
               {{ e.target ?? '' }}
             </span>
           </li>

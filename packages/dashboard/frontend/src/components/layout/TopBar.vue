@@ -52,10 +52,10 @@ async function signOut(): Promise<void> {
 </script>
 
 <template>
-  <header class="border-b border-line/60 bg-canvas">
+  <header class="border-b border-border/60 bg-background">
     <div class="content h-14 grid grid-cols-3 items-center">
       <div
-        class="font-mono text-xs text-ink-3 justify-self-start"
+        class="font-mono text-xs text-muted-foreground justify-self-start"
         data-test="topbar-identity"
         data-region="identity"
       >
@@ -77,7 +77,7 @@ async function signOut(): Promise<void> {
       </div>
 
       <div
-        class="flex items-center gap-2 justify-self-end text-xs text-ink-3"
+        class="flex items-center gap-2 justify-self-end text-xs text-muted-foreground"
         data-region="user"
       >
         <!--
@@ -88,7 +88,7 @@ async function signOut(): Promise<void> {
         -->
         <button
           type="button"
-          class="p-1.5 rounded-md hover:text-ink hover:bg-surface-2/60 transition-colors"
+          class="p-1.5 rounded-md hover:text-foreground hover:bg-muted/60 transition-colors"
           :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
           :aria-pressed="theme === 'dark'"
           data-test="theme-toggle"
@@ -105,7 +105,7 @@ async function signOut(): Promise<void> {
         </button>
         <span
           v-if="auth.session?.username || auth.session?.authenticated"
-          class="text-ink-4"
+          class="text-muted-foreground"
           aria-hidden="true"
         >·</span>
         <!--
@@ -116,13 +116,13 @@ async function signOut(): Promise<void> {
         <span v-if="auth.session?.username">{{ auth.session.username }}</span>
         <span
           v-if="auth.session?.username && auth.session?.authenticated"
-          class="text-ink-4"
+          class="text-muted-foreground"
           aria-hidden="true"
         >·</span>
         <button
           v-if="auth.session?.authenticated"
           type="button"
-          class="hover:text-ink"
+          class="hover:text-foreground"
           @click="signOut"
         >
           Sign out

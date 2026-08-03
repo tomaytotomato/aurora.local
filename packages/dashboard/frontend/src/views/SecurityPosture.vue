@@ -219,7 +219,7 @@ const counts = computed(() => {
       <div>
         <div class="eyebrow mb-2">Security</div>
         <h1 class="mb-3">Security posture</h1>
-        <p class="text-ink-3 max-w-2xl">
+        <p class="text-muted-foreground max-w-2xl">
           Aurora runs a fixed set of opinionated checks against your host,
           containers, and secrets. Every finding has a fix — no silent nags.
         </p>
@@ -246,13 +246,13 @@ const counts = computed(() => {
       downgrade still renders the honest empty state.
     -->
     <Card v-if="!scannerLive" data-state="empty" class="p-10 text-center" data-test="security-empty">
-      <svg viewBox="0 0 24 24" class="w-8 h-8 text-ink-4 mx-auto mb-4"
+      <svg viewBox="0 0 24 24" class="w-8 h-8 text-muted-foreground mx-auto mb-4"
            fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" stroke-linecap="round" stroke-linejoin="round" />
         <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
       <h3 class="mb-2">Watching for common misconfigurations</h3>
-      <p class="text-sm text-ink-3 max-w-xl mx-auto mb-6">
+      <p class="text-sm text-muted-foreground max-w-xl mx-auto mb-6">
         The security scanner lands with milestone <span class="font-mono">M4</span>.
         Nothing on this page is a real audit yet — no score, no findings.
       </p>
@@ -275,12 +275,12 @@ const counts = computed(() => {
       class="p-10 text-center"
       data-test="sec-empty-clean"
     >
-      <svg viewBox="0 0 24 24" class="w-8 h-8 text-ink-4 mx-auto mb-4"
+      <svg viewBox="0 0 24 24" class="w-8 h-8 text-muted-foreground mx-auto mb-4"
            fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
       <h3 class="mb-2">Nothing to fix right now</h3>
-      <p class="text-sm text-ink-3 max-w-xl mx-auto">
+      <p class="text-sm text-muted-foreground max-w-xl mx-auto">
         Every check Aurora runs came back clean. This page updates when
         you refresh; nothing is polled in the background.
       </p>
@@ -305,18 +305,18 @@ const counts = computed(() => {
               <router-link
                 v-if="isInternalHref(f.remediationUrl)"
                 :to="f.remediationUrl"
-                class="text-sm text-ink-2 no-underline hover:underline"
+                class="text-sm text-foreground no-underline hover:underline"
               >Fix it →</router-link>
               <a
                 v-else
                 :href="f.remediationUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="text-sm text-ink-2 no-underline hover:underline"
+                class="text-sm text-foreground no-underline hover:underline"
               >Learn more ↗</a>
             </template>
             <select
-              class="text-xs bg-surface border border-line rounded px-1 py-0.5 text-ink-2"
+              class="text-xs bg-card border border-border rounded px-1 py-0.5 text-foreground"
               :value="snoozeSelection[f.id] ?? '7d'"
               :disabled="!!dismissing[f.id]"
               data-test="sec-snooze-picker"
@@ -326,7 +326,7 @@ const counts = computed(() => {
             </select>
             <button
               type="button"
-              class="text-sm text-ink-3 hover:text-ink-2 disabled:text-ink-4 disabled:cursor-not-allowed"
+              class="text-sm text-muted-foreground hover:text-foreground disabled:text-muted-foreground disabled:cursor-not-allowed"
               :disabled="!!dismissing[f.id]"
               data-test="sec-dismiss"
               @click="onDismiss(f.id, chosen(f.id).days)"
@@ -335,7 +335,7 @@ const counts = computed(() => {
             </button>
           </div>
         </div>
-        <p class="text-sm text-ink-3">{{ f.description }}</p>
+        <p class="text-sm text-muted-foreground">{{ f.description }}</p>
       </Card>
     </div>
 
@@ -348,28 +348,28 @@ const counts = computed(() => {
     <div v-if="scannerLive" class="mt-8" data-test="sec-suppressed-section">
       <button
         type="button"
-        class="text-sm text-ink-3 hover:text-ink-2 flex items-center gap-2"
+        class="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2"
         data-test="sec-suppressed-toggle"
         :aria-expanded="suppressedOpen"
         @click="toggleSuppressed"
       >
         <span class="font-mono" aria-hidden="true">{{ suppressedOpen ? '▾' : '▸' }}</span>
         Suppressed findings
-        <span class="text-ink-4">({{ suppressed.length }})</span>
+        <span class="text-muted-foreground">({{ suppressed.length }})</span>
       </button>
       <div v-if="suppressedOpen" class="mt-3 space-y-2" data-test="sec-suppressed-list">
-        <p v-if="suppressed.length === 0" class="text-xs text-ink-4">
+        <p v-if="suppressed.length === 0" class="text-xs text-muted-foreground">
           Nothing has been dismissed. Dismissed findings show up here so you
           can bring them back at any time.
         </p>
         <div
           v-for="row in suppressed"
           :key="row.finding_id"
-          class="flex items-start justify-between gap-3 border border-line rounded-md px-4 py-3"
+          class="flex items-start justify-between gap-3 border border-border rounded-md px-4 py-3"
         >
           <div class="min-w-0 text-sm">
-            <div class="font-mono text-ink truncate">{{ row.finding_id }}</div>
-            <div class="text-xs text-ink-4 mt-0.5">
+            <div class="font-mono text-foreground truncate">{{ row.finding_id }}</div>
+            <div class="text-xs text-muted-foreground mt-0.5">
               dismissed {{ formatIso(row.dismissed_at) }} ·
               {{ dismissalExpiryLabel(row) }}
               <span v-if="row.reason">· <em>{{ row.reason }}</em></span>
@@ -377,7 +377,7 @@ const counts = computed(() => {
           </div>
           <button
             type="button"
-            class="text-sm text-ink-2 hover:text-ink whitespace-nowrap disabled:text-ink-4 disabled:cursor-not-allowed"
+            class="text-sm text-foreground hover:text-foreground whitespace-nowrap disabled:text-muted-foreground disabled:cursor-not-allowed"
             :disabled="!!restoring[row.finding_id]"
             data-test="sec-restore"
             @click="onRestore(row.finding_id)"

@@ -117,7 +117,7 @@ function onPrimary() {
     :data-package="service.package"
     :data-row="service.package"
     :data-tone="tone"
-    class="border border-line rounded-lg p-4 bg-[var(--color-surface)] text-ink"
+    class="border border-border rounded-lg p-4 bg-[var(--color-surface)] text-foreground"
     :class="isCollapsed ? 'py-2' : ''"
   >
     <div class="flex items-start justify-between gap-4">
@@ -130,10 +130,10 @@ function onPrimary() {
         >{{ pillText }}</span>
         <span class="font-medium capitalize">{{ service.package }}</span>
       </div>
-      <p v-if="!isCollapsed && service.reason" class="text-sm text-ink-2 mt-1">
+      <p v-if="!isCollapsed && service.reason" class="text-sm text-foreground mt-1">
         {{ service.reason }}
       </p>
-      <p v-if="!isCollapsed && service.detail" class="text-xs text-ink-3 mt-1">
+      <p v-if="!isCollapsed && service.detail" class="text-xs text-muted-foreground mt-1">
         {{ service.detail }}
       </p>
     </div>
@@ -141,7 +141,7 @@ function onPrimary() {
       <button
         v-if="hasChildren"
         type="button"
-        class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line"
+        class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border"
         :aria-expanded="showChildren"
         data-test="row-children-toggle"
         @click="showChildren = !showChildren"
@@ -149,7 +149,7 @@ function onPrimary() {
       <button
         v-if="isStorageRunning"
         type="button"
-        class="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded border border-line"
+        class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border"
         :aria-expanded="showMountPanel"
         data-test="storage-mount-toggle"
         @click="showMountPanel = !showMountPanel"
@@ -161,12 +161,12 @@ function onPrimary() {
           target="_blank"
           rel="noopener"
           role="button"
-          class="inline-flex items-center h-9 px-3 text-sm rounded-md border border-line bg-surface hover:bg-surface-2 no-underline text-ink"
+          class="inline-flex items-center h-9 px-3 text-sm rounded-md border border-border bg-card hover:bg-muted no-underline text-foreground"
         >{{ ctaLabel }}</a>
         <button
           v-else
           type="button"
-          class="inline-flex items-center h-9 px-3 text-sm rounded-md border border-line bg-surface text-ink"
+          class="inline-flex items-center h-9 px-3 text-sm rounded-md border border-border bg-card text-foreground"
           disabled
         >{{ ctaLabel }}</button>
       </template>
@@ -176,7 +176,7 @@ function onPrimary() {
         :disabled="ctaDisabled"
         :aria-busy="ctaDisabled || undefined"
         data-test="row-cta"
-        class="inline-flex items-center gap-2 h-9 px-3 text-sm rounded-md border border-line bg-surface hover:bg-surface-2 text-ink disabled:opacity-40 disabled:cursor-not-allowed"
+        class="inline-flex items-center gap-2 h-9 px-3 text-sm rounded-md border border-border bg-card hover:bg-muted text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
         @click="onPrimary"
       >
         <!-- iter-3 Start-button UX: spinner + aria-busy when the row is
@@ -193,13 +193,13 @@ function onPrimary() {
       <button
         v-if="canOverride"
         type="button"
-        class="text-xs text-ink-3 hover:text-ink"
+        class="text-xs text-muted-foreground hover:text-foreground"
         @click="emit('markDone', service.package)"
       >I did this</button>
       <button
         v-if="canOverride"
         type="button"
-        class="text-xs text-ink-3 hover:text-ink"
+        class="text-xs text-muted-foreground hover:text-foreground"
         @click="emit('skip', service.package)"
       >Skip</button>
     </div>
@@ -221,7 +221,7 @@ function onPrimary() {
          and Copy/CTA logic re-use the parent code path unchanged. -->
     <ul
       v-if="hasChildren && showChildren"
-      class="mt-3 ml-4 pl-4 border-l border-line/60 space-y-2"
+      class="mt-3 ml-4 pl-4 border-l border-border/60 space-y-2"
       data-test="row-children"
     >
       <ChecklistItem

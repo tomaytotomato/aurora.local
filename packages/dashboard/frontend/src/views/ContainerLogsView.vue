@@ -81,27 +81,27 @@ function formatTs(ts: string | undefined): string {
 <template>
   <section>
     <div class="mb-6">
-      <router-link to="/" class="text-xs text-ink-3 no-underline">← Dashboard</router-link>
+      <router-link to="/" class="text-xs text-muted-foreground no-underline">← Dashboard</router-link>
       <div class="flex items-baseline justify-between gap-3 mt-4">
         <h1 data-test="logs-container-id">{{ containerId }}</h1>
         <div class="flex items-center gap-2 text-sm">
-          <label for="tail" class="text-ink-3">Show</label>
+          <label for="tail" class="text-muted-foreground">Show</label>
           <select
             id="tail"
             v-model.number="tail"
-            class="rounded border border-line bg-surface text-ink px-2 py-1 text-sm"
+            class="rounded border border-border bg-card text-foreground px-2 py-1 text-sm"
             data-test="logs-tail-select"
           >
             <option v-for="n in TAIL_OPTIONS" :key="n" :value="n">{{ n }}</option>
           </select>
-          <span class="text-ink-4">lines</span>
+          <span class="text-muted-foreground">lines</span>
           <Button variant="secondary" size="sm" :disabled="loading" @click="load"
                   data-test="logs-refresh">
             {{ loading ? 'Refreshing…' : 'Refresh' }}
           </Button>
         </div>
       </div>
-      <p class="text-xs text-ink-4 mt-2">
+      <p class="text-xs text-muted-foreground mt-2">
         Snapshot from the container's log stream. Live tail lands in a
         later release.
       </p>
@@ -125,8 +125,8 @@ function formatTs(ts: string | undefined): string {
         class="p-8 text-center"
         data-state="empty"
       >
-        <p class="text-sm text-ink-2 mb-1">No log lines yet.</p>
-        <p class="text-xs text-ink-4">
+        <p class="text-sm text-foreground mb-1">No log lines yet.</p>
+        <p class="text-xs text-muted-foreground">
           This container hasn't written to stdout or stderr in the last
           {{ tail }} lines.
         </p>
@@ -137,7 +137,7 @@ function formatTs(ts: string | undefined): string {
         class="p-8 text-center"
         data-state="empty"
       >
-        <p class="text-sm text-ink-2">Loading…</p>
+        <p class="text-sm text-foreground">Loading…</p>
       </div>
 
       <pre
@@ -145,7 +145,7 @@ function formatTs(ts: string | undefined): string {
         class="p-4 overflow-x-auto text-xs font-mono leading-relaxed max-h-[70vh]"
         data-test="logs-pre"
       >
-<template v-for="(l, i) in lines" :key="i"><span class="text-ink-4 select-none">{{ formatTs(l.ts) }}</span> <Badge :tone="l.stream === 'stderr' ? 'warn' : 'neutral'" class="align-middle">{{ l.stream }}</Badge> <span :class="l.stream === 'stderr' ? 'text-ink' : 'text-ink-2'">{{ l.line }}</span>
+<template v-for="(l, i) in lines" :key="i"><span class="text-muted-foreground select-none">{{ formatTs(l.ts) }}</span> <Badge :tone="l.stream === 'stderr' ? 'warn' : 'neutral'" class="align-middle">{{ l.stream }}</Badge> <span :class="l.stream === 'stderr' ? 'text-foreground' : 'text-foreground'">{{ l.line }}</span>
 </template>
       </pre>
     </Card>
