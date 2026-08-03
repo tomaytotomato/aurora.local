@@ -52,6 +52,28 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_ANALYTICS_REPORTING_ENABLED=false
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      # ---- Phase D SSO (D12) -------------------------------------------
+      # Trust Caddy's Remote-User / Remote-Email / Remote-Name headers
+      # so an Aurora sign-in propagates into Grafana without a second
+      # login page. Auto-provisioning creates a Grafana user on first
+      # visit; Editor role by default so a household member can view +
+      # tweak dashboards without touching alerts.
+      #
+      # Whitelisted proxy: the `caddy` container hostname on aurora_net.
+      # A request that hits Grafana directly (bypassing Caddy) doesn't
+      # match the whitelist, so Grafana falls back to normal basic-auth
+      # with GRAFANA_ADMIN_USER/PASSWORD. That's the emergency-access
+      # path when Authelia is down.
+      #
+      # Safe when SSO is disabled: Caddy simply doesn't set Remote-User,
+      # Grafana sees no header, falls back to its own login. No harmful
+      # interaction.
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=Remote-User
+      - GF_AUTH_PROXY_HEADER_PROPERTY=username
+      - GF_AUTH_PROXY_HEADERS=Email:Remote-Email Name:Remote-Name Groups:Remote-Groups
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_AUTH_PROXY_WHITELIST=caddy
     volumes:
       - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ../../data/monitoring/grafana:/var/lib/grafana

@@ -3,6 +3,24 @@
 Self-hosted git via **Forgejo** (community fork of Gitea) plus a
 **forgejo-runner** for CI.
 
+## Auth
+
+Forgejo honors `Remote-User` / `Remote-Email` / `Remote-Name`
+headers when Aurora manages SSO (see `sso:` in `manifest.yml`).
+Signing into Aurora auto-provisions a matching Forgejo account on
+first visit; repos are still per-user, so SSO removes the second
+login page without touching Forgejo's ownership model. Public
+repos remain public per Forgejo's own ACL.
+
+The seeded `FORGEJO_ADMIN_USER` / `FORGEJO_ADMIN_PASSWORD` stay as
+the emergency-access super-admin when Authelia is down. Git
+clients that push via HTTPS still auth against Forgejo's own
+credentials or personal access tokens — the reverse-proxy header
+path applies to browser sessions only.
+
+When SSO is disabled, sign in with the seeded admin from `.env`
+— no change from pre-Phase-D behaviour.
+
 ## First-run
 
 1. Copy `.env.example` to `.env`. Set `FORGEJO_ADMIN_USER`,

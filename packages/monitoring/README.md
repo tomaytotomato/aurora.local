@@ -2,6 +2,20 @@
 
 Prometheus + Grafana + node_exporter + cAdvisor + Uptime-Kuma.
 
+## Auth
+
+Grafana honors `Remote-User` / `Remote-Email` / `Remote-Name` /
+`Remote-Groups` headers when Aurora manages SSO (see `sso: protect`
+in `manifest.yml`). Signing into Aurora auto-provisions a matching
+Grafana account on first visit — no second login page.
+
+When SSO is disabled, `GRAFANA_ADMIN_USER` + `GRAFANA_ADMIN_PASSWORD`
+remain the sign-in credentials. They also stay in place as the
+emergency-access super-user when Authelia is down.
+
+Prometheus + Uptime-Kuma get edge-gated by Authelia when SSO is on —
+no auto-provisioning, just "authenticated Aurora user or nothing".
+
 ## First-run
 
 1. `cp .env.example .env` and set `GRAFANA_ADMIN_PASSWORD`.

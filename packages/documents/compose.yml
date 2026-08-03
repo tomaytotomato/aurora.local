@@ -46,6 +46,22 @@ services:
       - PAPERLESS_URL=${PAPERLESS_URL:-}
       - PAPERLESS_ADMIN_USER=${PAPERLESS_ADMIN_USER}
       - PAPERLESS_ADMIN_PASSWORD=${PAPERLESS_ADMIN_PASSWORD}
+      # ---- Phase D SSO (D12) -------------------------------------------
+      # Trust the Remote-User header Caddy attaches on Authelia's
+      # behalf. Paperless auto-provisions a matching account on first
+      # visit; the seeded PAPERLESS_ADMIN_USER stays as the emergency-
+      # access super-user when Authelia is down.
+      #
+      # HTTP_REMOTE_USER is the WSGI-mangled name of the Remote-User
+      # request header (gunicorn prefixes HTTP_ to every request header
+      # per PEP 3333). Paperless-ngx documentation calls this out
+      # explicitly — do not change to Remote-User here.
+      #
+      # Safe when SSO is disabled: no header → no auto-login →
+      # Paperless's own login page renders as usual.
+      - PAPERLESS_ENABLE_HTTP_REMOTE_USER=true
+      - PAPERLESS_HTTP_REMOTE_USER_HEADER_NAME=HTTP_REMOTE_USER
+      - PAPERLESS_LOGOUT_REDIRECT_URL=https://auth.${DOMAIN:-aurora.local}/logout
     volumes:
       - ../../data/documents/paperless/data:/usr/src/paperless/data
       - ../../data/documents/paperless/media:/usr/src/paperless/media

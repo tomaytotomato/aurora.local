@@ -448,3 +448,36 @@ sso:
 **Bruce's live-test contract (post-merge).** Rebuild aurora + notes containers. Tick the SSO step in a fresh onboarding OR `POST /api/onboarding/sso {"enable": true}` on an existing box. Check `packages/notes/.env` has empty `SB_USER=` and `SB_PASSWORD=` lines. Visit `https://notes.aurora.local/` in a browser that isn't already Authelia-authenticated: land on Authelia login → sign in with the Aurora admin → hit SilverBullet directly (no second login page). Log an audit event grep: `sso.env.neutralise` row should show `{"cleared_keys":["SB_USER","SB_PASSWORD"]}` for `packages/notes/.env`.
 
 **Next.** D12 — Grafana / Paperless / Forgejo / Home-Automation rollout with trusted-header auth where supported.
+
+### iter-13 (2026-08-03) — D12 Grafana / Paperless / Forgejo / HA rollout
+
+**Item:** D12 — migrate Grafana + Paperless + Forgejo + Home-Automation. Trusted-header auth where the service supports it; edge-gate where it doesn't.
+
+**Docs-heavy iter.** The Phase D machinery from D2-D11 already handles everything for these services — sso: block already declared in D5, CaddySnippetService already emits `import authelia`, Authelia projector already knows their groups. This iter is compose-env additions + operator-facing docs.
+
+**Per-service.**
+
+- **Grafana** (`packages/monitoring/compose.yml`) — added `GF_AUTH_PROXY_ENABLED=true`, `GF_AUTH_PROXY_HEADER_NAME=Remote-User`, `GF_AUTH_PROXY_HEADER_PROPERTY=username`, `GF_AUTH_PROXY_HEADERS=Email:Remote-Email Name:Remote-Name Groups:Remote-Groups`, `GF_AUTH_PROXY_AUTO_SIGN_UP=true`, `GF_AUTH_PROXY_WHITELIST=caddy`. Whitelist restricted to the `caddy` container hostname on aurora_net — a request that hits Grafana directly (bypassing Caddy) falls back to normal `GRAFANA_ADMIN_USER`/`PASSWORD` basic-auth. Safe when SSO is off: Caddy doesn't set Remote-User, Grafana sees no header, its own login page renders as before.
+
+- **Paperless-ngx** (`packages/documents/compose.yml`) — added `PAPERLESS_ENABLE_HTTP_REMOTE_USER=true` + `PAPERLESS_HTTP_REMOTE_USER_HEADER_NAME=HTTP_REMOTE_USER`. **Careful:** `HTTP_REMOTE_USER` is the WSGI-mangled name of the `Remote-User` request header (gunicorn prefixes `HTTP_` to every header per PEP 3333). Paperless docs call this out explicitly — do not change to `Remote-User`. Also added `PAPERLESS_LOGOUT_REDIRECT_URL=https://auth.{DOMAIN}/logout` so a Paperless sign-out kicks the user back to Authelia.
+
+- **Forgejo** (`packages/git/compose.yml`) — added `FORGEJO__service__ENABLE_REVERSE_PROXY_AUTHENTICATION=true`, `ENABLE_REVERSE_PROXY_AUTO_REGISTRATION=true`, `ENABLE_REVERSE_PROXY_EMAIL=true`, `ENABLE_REVERSE_PROXY_FULL_NAME=true`, and the header-name settings (`REVERSE_PROXY_AUTHENTICATION_USER=Remote-User` etc.). `REVERSE_PROXY_TRUSTED_PROXIES=172.16.0.0/12` covers docker's user-defined bridge network range — permissive because aurora_net is internal-only and Forgejo falls back to its own login when the header is absent. Git push over HTTPS still auths against Forgejo's own credentials / PATs (the reverse-proxy header path is browser-session-only). Public repos remain public per Forgejo's ACL.
+
+- **Home-Automation** — no compose changes. HA's `trusted_networks` provider fights Caddy's aurora_net container IP; the trusted-header integration path is fiddly and easy to misconfigure. `sso.trusted_headers: false` in D5 was the right call. With SSO on, Authelia edge-gates `ha.{DOMAIN}` — an unauthenticated LAN device can't reach HA's login page, but past Authelia you still type HA credentials. Second factor lives inside HA. Zigbee2MQTT has no auth at all so Authelia is its only wall.
+
+**README updates.** Every package's README grew an "Auth" section explaining the SSO-on / SSO-off tradeoff. Emergency-access story pinned in each (the seeded ADMIN_USER / ADMIN_PASSWORD stays as the fallback when Authelia is down).
+
+**Safe when SSO is disabled.** Every compose env addition here is a no-op without `Remote-User` in the request. Caddy only injects it when the vhost imports `authelia` (which only happens when SSO is enabled — see D6). Result: turning SSO on/off doesn't require touching any of these packages' env vars.
+
+**Not covered in D12 (intentional).**
+- Grafana admin role from Authelia group membership. That's `GF_AUTH_PROXY_HEADER_PROPERTY_role`... which needs a mapping from `Remote-Groups: admins,users,guests` → Grafana's Admin/Editor/Viewer roles. Deferred to a follow-up because it changes existing users' permissions on the live box and needs Bruce's judgement.
+- Forgejo's team-membership sync from Authelia groups. Same reason.
+- Paperless's group-based permissions. Same reason.
+
+All three deferrals tracked in scratchpad — worth doing but require live-box + Bruce's per-service preferences.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 467 tests unchanged. Vitest 177 unchanged. vue-tsc clean. Dockerfile clean.
+
+**Bruce's live-test contract (post-merge).** Rebuild aurora + each service. Enable SSO. Visit `https://grafana.aurora.local/` → sign into Aurora → land in Grafana as a fresh Editor account (auto-provisioned). Visit `https://paperless.aurora.local/` → same story with a Paperless account. Visit `https://git.aurora.local/` → same for Forgejo. Visit `https://ha.aurora.local/` → HA login page inside Authelia (expected). Emergency check: disable Authelia container, hit `https://grafana.aurora.local/` directly → Grafana falls back to `GRAFANA_ADMIN_PASSWORD` (proves the whitelist restricted the header trust to Caddy).
+
+**Next.** D13 — Aurora sign-out killing the Authelia session so a shared-computer user can't hit `notes.aurora.local` after their Aurora session lapses.
