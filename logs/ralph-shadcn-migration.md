@@ -453,3 +453,37 @@ The success toast is the important one — the old UX flipped a button label fro
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 16 files / 142 tests (128 → 142, +14). vue-tsc clean. Dockerfile clean.
 
 **Next.** C10.6 — wire the axios interceptor in `src/api/client.ts` to route non-401 background failures (network drops, 5xx from polling endpoints) into destructive toasts. That's the "silent axios failures" gap the C-spec called out. Deferred to its own commit because it's a behavior change on every currently-silent request.
+
+### iter-19 (2026-08-03) — C10 axios interceptor → Toast bridge (bonus)
+
+**Item:** C10.6 — wire the axios interceptor so silent 5xx / network failures reach the user via the toast infrastructure from iter-18.
+
+**What changed.**
+- Extended `AxiosRequestConfig` (module augmentation) with an optional `toast?: false | { title?: string; description?: string }` field so callers can opt out or override the global copy per-request.
+- Rewrote the response-error interceptor in `src/api/client.ts`:
+  1. **401 short-circuit unchanged** — redirects to `/login` outside of onboarding routes, never toasts.
+  2. **5xx (500–599)** → destructive toast, default copy: **title** "Server error", **description** "Aurora hit a server error. This is usually transient — try again in a moment."
+  3. **Status 0** (network drop / CORS / timeout) → destructive toast, default copy: **title** "Network trouble", **description** "Aurora couldn't reach the server. Check your connection or try again."
+  4. **4xx (400 / 404 / 409, etc.)** — never toasted. Callers handle these inline (form validation, missing resource messaging).
+  5. **Per-request opt-out** — `http.get('/x', { toast: false })` silences the auto-raise. Useful for form submits + long-poll endpoints where the caller already surfaces its own error state.
+  6. **Per-request override** — `http.get('/x', { toast: { title: 'Restart failed', description: '…' } })` swaps in domain-specific copy.
+- Added a **5-second dedupe window** keyed by description. SSE / long-poll endpoints that flap during a network hiccup shouldn't spam ten identical destructive toasts. Exported `_resetToastDedupe()` for tests + rare manual reset points.
+
+**Tests.** `src/api/client.spec.ts` — 11 tests using a hand-rolled axios adapter (no `axios-mock-adapter` dep pulled in; kept package.json lean).
+- 500 → destructive 'Server error' toast.
+- 503 → same.
+- network error (status 0) → 'Network trouble' toast.
+- timeout (status 0) → 'Network trouble' toast.
+- 400 / 404 / 409 → no toast.
+- 401 → no toast (login redirect owns it).
+- `toast: false` opts out.
+- `toast: { title, description }` overrides copy.
+- Rapid identical failures deduped inside the 5-second window; new failure past the window emits again.
+
+Caught mid-iter: the adapter builder didn't attach `config` to the rejected AxiosError, so the interceptor couldn't read the caller's `toast` override — 2 tests failed. Fixed by threading `config` through both the response builder and the error constructor (`new AxiosError(msg, code, config)`).
+
+**Callers unchanged for now.** No sweep required — this iter's payoff is that any *future* silent failure surfaces automatically; existing form flows already own their error copy. If specific SSE endpoints prove chatty in real use, tag them with `toast: false` at the call site.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 17 files / 153 tests (142 → 153, +11). vue-tsc clean. Dockerfile clean.
+
+**Next.** C10.7 — DropdownMenu, the last remaining bonus primitive on the checklist. Aurora doesn't currently render a full contextual menu anywhere; would land alongside the theme-toggle expansion or the TopBar user menu (currently a bare "Sign out" button). Small utility; probably one clean iter.
