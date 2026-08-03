@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useSystemStore } from '@/stores/system';
 import { usePackagesStore } from '@/stores/packages';
-import { useEventsStore } from '@/stores/events';
+import { useContainerEvents } from '@/composables/useContainerEvents';
 import { ServicesApi } from '@/api/services';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
@@ -37,7 +37,12 @@ const photoBg = computed<boolean>(() => Boolean(route.meta?.photoBg));
 
 const system = useSystemStore();
 const packages = usePackagesStore();
-const events = useEventsStore();
+// B1 (iter-9): swap the raw /api/events docker bridge for the filtered
+// /api/containers/events/stream endpoint. The composable owns SSE +
+// poll fallback + tab-visibility pause. The old events store is left in
+// place for future job/system-event consumers; no callers besides this
+// view use it today.
+const containerEvents = useContainerEvents();
 
 // Per-card error banners drive the §5 error-state contract without ever
 // exposing an axios error.message to the DOM.
@@ -68,7 +73,6 @@ async function fetchPackages(): Promise<void> {
 }
 
 onMounted(async () => {
-  events.connect();
   await Promise.allSettled([fetchSystem(), fetchPackages()]);
   // iter-1: no metrics fetch. Gated on capabilities.metrics; empty state
   // in the Metrics strip renders unconditionally until the flag flips true.
@@ -177,7 +181,12 @@ const enabledSorted = computed(() =>
 );
 
 // ---- recent events / containers card -------------------------------
-const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
+// B1 (iter-9): source of truth is now the filtered container-events
+// stream. Newest first, capped at 5 for the card; deeper history lives
+// behind a follow-up drill-down that hasn't shipped yet.
+const recentEvents = computed(() =>
+  [...containerEvents.events.value].reverse().slice(0, 5),
+);
 </script>
 
 <template>
@@ -287,19 +296,15 @@ const recentEvents = computed(() => [...events.buffer].reverse().slice(0, 5));
           <p class="text-sm text-ink-2">Nothing has changed recently.</p>
           <p class="text-ink-4 text-xs">Container starts and stops will show up here.</p>
         </div>
-        <ul v-else class="space-y-2 text-xs font-mono">
+        <ul v-else class="space-y-2 text-xs font-mono" data-test="recent-changes-list">
           <li
             v-for="e in recentEvents"
-            :key="e.ts + (e.kind === 'docker' ? e.container : '')"
+            :key="e.ts + '|' + e.container + '|' + e.action"
             class="flex items-center gap-2"
           >
             <span class="text-ink-4">{{ new Date(e.ts).toLocaleTimeString() }}</span>
-            <span v-if="e.kind === 'docker'">
-              <span class="text-ink-2">{{ e.action }}</span>
-              <span class="text-ink ml-1">{{ e.container }}</span>
-            </span>
-            <span v-else-if="e.kind === 'job'" class="text-ink-2">job {{ e.jobId }} · {{ e.phase }}</span>
-            <span v-else class="text-ink-2">{{ e.event }}</span>
+            <span class="text-ink-2">{{ e.action }}</span>
+            <span class="text-ink">{{ e.container }}</span>
           </li>
         </ul>
       </Card>
