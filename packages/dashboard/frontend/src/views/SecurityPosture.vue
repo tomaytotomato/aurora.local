@@ -18,6 +18,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useSystemStore } from '@/stores/system';
 import { SecurityApi, type SecurityFinding, type SecuritySeverity, type DismissalRow } from '@/api/security';
+import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Alert from '@/components/ui/Alert.vue';
 import Badge from '@/components/ui/Badge.vue';
@@ -91,12 +92,10 @@ async function fetchFindings(): Promise<void> {
   try {
     findings.value = await SecurityApi.findings();
   } catch (e: unknown) {
-    const status = (e as { response?: { status?: number } })?.response?.status;
-    if (status === 401 || status === 403) {
-      err.value = "You need to sign in again to see the security scan.";
-    } else {
-      err.value = "Aurora couldn't run the security scan just now.";
-    }
+    err.value = humanCopyForError(e, {
+      subject: 'the security scan',
+      action: 'run',
+    });
     findings.value = [];
   } finally {
     loading.value = false;
@@ -120,10 +119,10 @@ async function onDismiss(id: string, days: number | null = 7): Promise<void> {
     // updates without waiting for the user to open the section.
     void fetchSuppressed();
   } catch (e: unknown) {
-    const status = (e as { response?: { status?: number } })?.response?.status;
-    err.value = status === 401 || status === 403
-      ? "Session expired — sign in again to dismiss findings."
-      : "Aurora couldn't dismiss that finding just now.";
+    err.value = humanCopyForError(e, {
+      subject: 'that finding',
+      action: 'dismiss',
+    });
     findings.value = prev;
   } finally {
     const next = { ...dismissing.value };
@@ -152,10 +151,10 @@ async function onRestore(id: string): Promise<void> {
     // main feed on the next tick without a page reload.
     await fetchFindings();
   } catch (e: unknown) {
-    const status = (e as { response?: { status?: number } })?.response?.status;
-    err.value = status === 401 || status === 403
-      ? "Session expired — sign in again to restore findings."
-      : "Aurora couldn't restore that finding just now.";
+    err.value = humanCopyForError(e, {
+      subject: 'that finding',
+      action: 'restore',
+    });
     suppressed.value = prev;
   } finally {
     const next = { ...restoring.value };

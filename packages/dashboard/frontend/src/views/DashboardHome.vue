@@ -6,6 +6,7 @@ import { usePackagesStore } from '@/stores/packages';
 import { useContainerEvents } from '@/composables/useContainerEvents';
 import { ServicesApi } from '@/api/services';
 import { MetricsApi, type MetricBucket } from '@/api/metrics';
+import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Badge from '@/components/ui/Badge.vue';
@@ -242,10 +243,7 @@ async function loadMetric(): Promise<void> {
       values: rows.map((r: MetricBucket) => r.avg),
     };
   } catch (e: unknown) {
-    const status = (e as { response?: { status?: number } })?.response?.status;
-    metricErr.value = status === 401 || status === 403
-      ? "Session expired — sign in again to see metrics."
-      : "Aurora couldn't load metrics just now.";
+    metricErr.value = humanCopyForError(e, { subject: 'metrics', action: 'see' });
     metricSeries.value = { ts: [], values: [] };
   } finally {
     metricLoading.value = false;

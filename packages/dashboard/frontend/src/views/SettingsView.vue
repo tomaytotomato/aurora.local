@@ -2,6 +2,7 @@
 import { useAuthStore } from '@/stores/auth';
 import { useSystemStore } from '@/stores/system';
 import { AuditApi, type AuditEvent } from '@/api/audit';
+import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Alert from '@/components/ui/Alert.vue';
@@ -38,14 +39,11 @@ async function loadAudit(): Promise<void> {
       limit: 100,
     });
   } catch (e: unknown) {
-    const status = (e as { response?: { status?: number } })?.response?.status;
-    if (status === 400) {
-      auditErr.value = 'Filter must be an action prefix like "security." or "onboarding.".';
-    } else if (status === 401 || status === 403) {
-      auditErr.value = "Session expired \u2014 sign in again to see the audit log.";
-    } else {
-      auditErr.value = "Aurora couldn't load the audit log just now.";
-    }
+    auditErr.value = humanCopyForError(e, {
+      subject: 'the audit log',
+      action: 'see',
+      badRequest: 'Filter must be an action prefix like "security." or "onboarding.".',
+    });
     auditEvents.value = [];
   } finally {
     auditLoading.value = false;

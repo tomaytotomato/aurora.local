@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
+import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Tabs from '@/components/ui/Tabs.vue';
@@ -35,12 +36,10 @@ async function loadContainers(): Promise<void> {
     containers.value = await ContainersApi.list(name.value);
     containersLoaded.value = true;
   } catch (e: unknown) {
-    const status = (e as { response?: { status?: number } })?.response?.status;
-    if (status === 401 || status === 403) {
-      containersErr.value = 'You need to sign in again to see this package\u2019s containers.';
-    } else {
-      containersErr.value = 'Aurora couldn\u2019t list containers for this package just now.';
-    }
+    containersErr.value = humanCopyForError(e, {
+      subject: "this package's containers",
+      action: 'list',
+    });
   } finally {
     containersLoading.value = false;
   }
