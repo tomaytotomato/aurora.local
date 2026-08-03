@@ -1,0 +1,14 @@
+# fake-repo media package — vhosts declared only via caddy.snippet, so
+# the MdnsAliasService discovery-fallback path is exercised.
+http://sonarr.{$DOMAIN} {
+	reverse_proxy sonarr:8989
+}
+https://sonarr.{$DOMAIN} {
+	tls internal
+	reverse_proxy sonarr:8989
+}
+http://radarr.{$DOMAIN} {
+	reverse_proxy radarr:7878
+}
+# commented example — must NOT be picked up
+#http://zombie.{$DOMAIN} { reverse_proxy nowhere:80 }

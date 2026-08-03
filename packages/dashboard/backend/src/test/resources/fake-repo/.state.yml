@@ -14,4 +14,5 @@ bootstrap_version: 1
 enabled:
   - core
   - media
+  - notes
 profiles: []

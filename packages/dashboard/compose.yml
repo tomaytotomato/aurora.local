@@ -68,6 +68,13 @@ services:
       # so the onboarding welcome + posture engine can report disk sizes.
       # Read-only + aurora runs as UID 1000, so file perms still apply.
       - /:/host_root:ro
+      # Host D-Bus system socket — lets in-container avahi-publish (from the
+      # avahi-tools alpine package) reach the host's avahi-daemon so
+      # MdnsAliasService can register per-vhost aliases (notes.aurora.local,
+      # code.aurora.local, …). Read-write because D-Bus is bi-directional.
+      # Missing on hosts without avahi — MdnsAliasService detects that and
+      # marks aliases failed rather than crash-looping.
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:rw
       # Aurora's own state (SQLite DB, sessions).
       - aurora_data:/data
 

@@ -1,0 +1,16 @@
+name: notes
+title: Notes
+description: fixture
+category: productivity
+depends_on: [core]
+recommends: []
+profiles: {}
+ports: []
+# MdnsAliasService: manifest vhosts is the PREFERRED discovery path.
+vhosts: [notes, drafts]
+requires:
+  min_ram_mb: 256
+  min_disk_gb: 1
+  host_roles: []
+required_env: []
+post_install_notes: ""

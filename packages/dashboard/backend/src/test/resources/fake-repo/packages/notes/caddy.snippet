@@ -1,0 +1,6 @@
+# For notes, manifest vhosts wins. This snippet also declares 'notes'
+# and a 'legacy' — the manifest set should MASK the caddy fallback so
+# 'legacy' does NOT appear in the discovered set (deduplicated) but
+# 'notes' remains sourced from manifest.
+http://notes.{$DOMAIN} { reverse_proxy silverbullet:3000 }
+http://legacy.{$DOMAIN} { reverse_proxy silverbullet:3000 }
