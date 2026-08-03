@@ -1559,3 +1559,38 @@ deferred bullet from iters 27/28/29.
 Iter-31: **Settings audit-log viewer**. New `/settings/audit` route
 (or inline card on `/settings`) consuming `/api/audit/events` with
 action + date filters. Small; hardest part is the empty/error copy.
+
+## Iter 31 · 2026-08-03 10:22 · commit 0f92884
+**Settings audit-log viewer.**
+
+Closes the iter-30 deferred 'FE audit-log viewer' bullet.
+
+### What shipped
+- `api/audit.ts` (new): `AuditEvent` type, `AuditQuery` params,
+  `AuditApi.list(q)` helper.
+- `views/SettingsView.vue`: new inline **"Recent activity"** card at
+  the bottom of the Settings stack. Action-prefix input (enter to
+  submit) + Refresh button. §5 error copy for 400/401/403/generic.
+  §4 empty state 'Nothing to show yet…'. 3-column grid layout for
+  dense scannable rows (`[ts | action | target/user hint]`).
+
+### Verification
+- `vue-tsc --noEmit` → exit 0.
+- Backend 348/0/0 unchanged (FE-only).
+- `bash scripts/verify-v03-overnight.sh` → 4/4.
+
+### Files touched
+- `frontend/src/api/audit.ts` (+30, new)
+- `frontend/src/views/SettingsView.vue` (+85 -3)
+
+### Deferred (accepted)
+- Standalone /audit route with paging + date-range picker.
+- CSV / JSON export.
+- Live SSE tail.
+
+### Next iteration target
+Iter-32: **sidebar surface for /security dismissed count**. Right now
+the sidebar reveals /security only if `capabilities.securityScanner`.
+Add a small badge showing the number of open findings so a
+posture-worthy issue nudges the operator without needing to visit
+the page.
