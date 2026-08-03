@@ -238,3 +238,76 @@ A8 — Media Start-poll for multi-container stacks. Add
 that walks Start → Running against real docker on :8091 (self-skips
 without docker). Closes the last Phase A item; iter-8 reflection
 sits after that.
+
+## Iter 7 · 2026-08-03 08:12 · commit (see git log -1)
+**A8 — start_budget_seconds on multi-container manifests + honest backend read. Closes Phase A.**
+
+### What shipped
+
+Frontend already read `requires.start_budget_seconds` via `startBudgetMs()`
+and clamped at 600s, but only `media` (180s) and `privacy` (60s) manifests
+declared one. Every other multi-container stack fell back to the 30s
+default and would flip "Couldn't start" on a 7-container docs boot or
+9-container observability boot. Backend never touched the value.
+
+- Manifest updates (with justifying comments):
+  - `monitoring` 240s (Prometheus WAL replay + Grafana provisioning)
+  - `documents` 180s (paperless index rebuild + Postgres init)
+  - `ai` 240s (ollama first-run image pull ~4 GB)
+  - `photos` 120s (immich ML warm-up)
+  - `home-automation` 90s (Home Assistant init pass)
+  - `dev` 60s (code-server extension warm-up)
+- `Package.startBudgetSeconds()` typed helper on the domain record:
+  reads `requires.start_budget_seconds`, coerces `Number`/`String`,
+  clamps to `[30, 600]`, defaults 30. Mirrors the frontend contract.
+  Exposes `DEFAULT_START_BUDGET_SECONDS` + `MAX_START_BUDGET_SECONDS`
+  constants so future callers don't drift.
+- `LaunchService` gets an `@Autowired` 3-arg constructor
+  `(props, audit, packages)` alongside the existing test-only 2-arg
+  form (delegates with null packages). New `renderBudgetHeader(pkgs)`
+  + `resolveBudgetSeconds(pkg)` helpers. Launch log header now prints
+  `# start_budget: core=30s, media=180s (total=210s)`. Null-safe:
+  a manifest lookup that throws (torn `.state.yml`) logs at DEBUG and
+  falls back to 30s — never fails the launch.
+
+### Verification
+
+- `docker run --rm -v $PWD/packages/dashboard/backend:/app -v ~/.m2:/root/.m2
+   -w /app maven:3.9-eclipse-temurin-25-alpine mvn -B -o test` (touched
+   suites): 32/32 green.
+- Full backend suite: 156 tests, 1 pre-existing failure
+  (`PackagesServiceTests.parsesFakeRepoManifests`), 0 introduced.
+  Delta: 139 → 156 (+17 new tests: 11 PackageStartBudget + 6
+  LaunchServiceBudgetHeader).
+- `vue-tsc --noEmit` → exit 0.
+
+### Files touched
+- `packages/{monitoring,documents,ai,photos,home-automation,dev}/manifest.yml` (+6..+11 each)
+- `backend/…/domain/Package.java` (+51 -1, methods on the record)
+- `backend/…/services/LaunchService.java` (+70 -4)
+- `backend/…/test/domain/PackageStartBudgetTests.java` (+90, new)
+- `backend/…/test/services/LaunchServiceBudgetHeaderTests.java` (+126, new)
+
+### Deferred (out of iter-7 scope)
+- E2E `services-start-media.spec.ts` walking Start → Running against
+  real docker on `:8091`. Same infra debt as A4/TD5 — aurora-e2e project
+  not runnable from this worktree. Bruce's post-merge
+  `scripts/verify-iter3.sh VERIFY_E2E=1` sweep covers.
+- Process-kill on wallclock budget overflow. LaunchService still waits
+  on `up.sh` exit without a timeout; a hung daemon could keep a job
+  RUNNING forever. Real behavior change with its own regression
+  surface, deliberately not bundled. Tracked as v0.3 B-5 candidate.
+
+### Reflection cue
+Iter-8 is the reflection checkpoint. Phase A is now closed (A1–A8
+all shipped). Phase B starts with B1 (docker event stream → Containers
+card). The 5s poll cliff has already been dropped for
+`/api/services/status` (A5); docker events are the natural next
+promotion.
+
+### Next iteration target
+Reflection first (per Ralph reflectEvery=8), then B1 —
+`DockerEventService` subscribes to `dockerClient.eventsCmd()`, maintains
+a 200-entry rolling buffer, exposes `GET /api/containers/events/stream`
+via `SseEmitter`, and drives `RecentChangesList.vue`. Uses the same
+SSE pattern as `StatusController.stream()` from A5.
