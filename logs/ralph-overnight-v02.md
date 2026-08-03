@@ -1361,3 +1361,38 @@ endpoint auth posture in iter-21).
 Iter-26: **snooze duration picker** on the dismiss button. Small
 dropdown (1d / 7d / 30d / permanent) that unlocks the days parameter
 the backend already accepts. Keeps the Fix-it row compact.
+
+## Iter 26 · 2026-08-03 09:50 · commit b0b21a1
+**Snooze duration picker on the Dismiss button (FE-only).**
+
+Closes the iter-23 deferred 'custom snooze duration' bullet. Backend
+already accepted 1..365 or null (permanent); this iter surfaces it in
+the UI without a modal.
+
+### What shipped
+- `SNOOZE_CHOICES` readonly array (1d / 7d / 30d / 90d / Permanent)
+  + `snoozeSelection` per-finding record + `chosen(fid)` helper.
+- `onDismiss(id, days: number | null)` — null forwards `undefined`
+  so the JSON body omits `days` and the backend's permanent branch
+  fires.
+- Inline compact `<select>` next to the Dismiss button; disabled
+  while a dismiss is in flight.
+
+### Verification
+- `vue-tsc --noEmit` → exit 0.
+- Backend 314/0/0 unchanged (FE-only).
+- `bash scripts/verify-v03-overnight.sh` → 4/4 checks pass.
+
+### Files touched
+- `frontend/src/views/SecurityPosture.vue` (+30 -6)
+
+### Deferred (accepted)
+- Audit event on dismiss/restore.
+- Vitest + component tests.
+
+### Next iteration target
+Iter-27: **audit events on dismiss/restore** (backend). Reuse
+`AuditEventRepo` pattern from LaunchService/OnboardingService.
+Emit `security.dismiss` + `security.restore` records with the
+finding id + expiry so an operator can grep the audit log for
+who suppressed what and when.
