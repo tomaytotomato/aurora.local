@@ -80,11 +80,12 @@ public class SystemService {
     // hard-coding a version check. See UX_SPEC_DASHBOARD §4.5.
     Map<String, Object> capabilities = new LinkedHashMap<>();
     capabilities.put("metrics", false);
-    // iter-3 P1b: security-posture module lands with M4. Until then the
-    // capability flag stays false so the SPA renders the empty-state
-    // view instead of fabricated score/findings, and the sidebar
-    // hides the /security link.
-    capabilities.put("securityScanner", false);
+    // B4 (iter-13/14): three-rule scanner ships as v0.3 groundwork
+    // (WeakAdminPassword + DockerSocketExposure + UnpinnedImageTags).
+    // Flipping the capability true means the SecurityPosture view
+    // consumes GET /api/security/findings instead of rendering the
+    // 'lands with M4' empty state, and the sidebar reveals /security.
+    capabilities.put("securityScanner", true);
     out.put("capabilities", capabilities);
     return out;
   }

@@ -1,57 +1,129 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+// B4 (v0.3, iter-14): live security-findings view. Replaces the M4
+// empty-state stub for the /security route when SystemInfo.capabilities.
+// securityScanner is true. Backend endpoint: GET /api/security/findings.
+//
+// UX contract:
+//   - §5 error state (network / auth) — human copy, no axios strings.
+//   - §4 empty state ("Nothing to fix right now.") — the honest zero-
+//     findings render, not a fabricated score.
+//   - Per-finding card: severity Badge, title, description, remediation
+//     link (in-app router-link if the URL starts with '/', otherwise
+//     new-tab <a rel="noopener noreferrer">).
+//   - Refresh button re-hits the endpoint.
+//   - Findings arrive pre-sorted; the view does not re-order.
+//
+// The old empty-state block (scanner off) is preserved verbatim so a
+// downgrade of the capability flag still renders warm empty copy.
+import { computed, onMounted, ref } from 'vue';
 import { useSystemStore } from '@/stores/system';
+import { SecurityApi, type SecurityFinding, type SecuritySeverity } from '@/api/security';
 import Card from '@/components/ui/Card.vue';
 import Alert from '@/components/ui/Alert.vue';
-
-// iter-3 P1b: honest empty state. The previous stub emitted a fabricated
-// score = 78 and four made-up findings (UFW / backup / fail2ban / etc.)
-// even when hand-typed as /security. That was a footgun — Sarah would
-// screenshot it thinking Aurora had run a real scan. Now the view keys
-// off `system.capabilities.securityScanner`:
-//
-//   - false (v0.2.x default) → empty-state view. No score. No findings.
-//     Just a copy line describing what M4 will scan. Sidebar also hides
-//     the /security nav link (see Sidebar.vue).
-//   - true (M4+) → placeholder for the real posture view; not this
-//     iteration's scope.
+import Badge from '@/components/ui/Badge.vue';
+import Button from '@/components/ui/Button.vue';
 
 const system = useSystemStore();
 
-onMounted(() => {
-  if (!system.info) system.fetchInfo().catch(() => { /* silent */ });
-});
+const findings = ref<SecurityFinding[]>([]);
+const loading = ref(false);
+const err = ref<string | null>(null);
 
 const scannerLive = computed<boolean>(() =>
   system.info?.capabilities?.securityScanner === true,
 );
+
+async function fetchFindings(): Promise<void> {
+  loading.value = true;
+  err.value = null;
+  try {
+    findings.value = await SecurityApi.findings();
+  } catch (e: unknown) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    if (status === 401 || status === 403) {
+      err.value = "You need to sign in again to see the security scan.";
+    } else {
+      err.value = "Aurora couldn't run the security scan just now.";
+    }
+    findings.value = [];
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(async () => {
+  if (!system.info) {
+    try { await system.fetchInfo(); } catch { /* silent — the view renders empty */ }
+  }
+  if (scannerLive.value) await fetchFindings();
+});
+
+// Severity → Badge tone. Unknown severities default to neutral so a
+// future 'critical' or 'info' introduced by a new rule doesn't crash
+// the UI, just misses the coloured tone until the map is updated.
+type BadgeTone = 'ok' | 'warn' | 'err' | 'info' | 'neutral';
+function toneFor(severity: SecuritySeverity): BadgeTone {
+  switch (severity) {
+    case 'high': return 'err';
+    case 'medium': return 'warn';
+    case 'low': return 'info';
+    default: return 'neutral';
+  }
+}
+
+function isInternalHref(url: string | null): boolean {
+  return !!url && url.startsWith('/');
+}
+
+// Aggregate counts for the header pill. Purely derived; no fabricated
+// score — the old "78" number is gone for good.
+const counts = computed(() => {
+  const c: Record<string, number> = { high: 0, medium: 0, low: 0, other: 0 };
+  for (const f of findings.value) {
+    if (f.severity === 'high') c.high++;
+    else if (f.severity === 'medium') c.medium++;
+    else if (f.severity === 'low') c.low++;
+    else c.other++;
+  }
+  return c;
+});
 </script>
 
 <template>
   <section data-view="security-posture">
-    <div class="mb-10">
-      <div class="eyebrow mb-2">Security</div>
-      <h1 class="mb-3">Security posture</h1>
-      <p class="text-ink-3 max-w-2xl">
-        Aurora will run a fixed set of opinionated checks against your host,
-        containers, and secrets. Each finding will have a fix — no silent nags.
-      </p>
+    <div class="mb-10 flex items-start justify-between gap-6">
+      <div>
+        <div class="eyebrow mb-2">Security</div>
+        <h1 class="mb-3">Security posture</h1>
+        <p class="text-ink-3 max-w-2xl">
+          Aurora runs a fixed set of opinionated checks against your host,
+          containers, and secrets. Every finding has a fix — no silent nags.
+        </p>
+      </div>
+      <div v-if="scannerLive" class="flex items-center gap-2">
+        <Badge v-if="counts.high > 0" tone="err" data-test="sec-count-high">
+          {{ counts.high }} high
+        </Badge>
+        <Badge v-if="counts.medium > 0" tone="warn" data-test="sec-count-medium">
+          {{ counts.medium }} medium
+        </Badge>
+        <Badge v-if="counts.low > 0" tone="info" data-test="sec-count-low">
+          {{ counts.low }} low
+        </Badge>
+        <Button variant="secondary" size="sm" :disabled="loading" @click="fetchFindings"
+                data-test="sec-refresh">
+          {{ loading ? 'Scanning…' : 'Refresh' }}
+        </Button>
+      </div>
     </div>
 
     <!--
-      capability flag off — v0.2.x default. We render the same warm
-      empty-state pattern used on the dashboard cards: glyph + short
-      copy + planned-scope list. Zero fabricated data.
+      Scanner off — v0.2.x default. Preserved verbatim so a capability
+      downgrade still renders the honest empty state.
     -->
     <Card v-if="!scannerLive" data-state="empty" class="p-10 text-center" data-test="security-empty">
-      <svg
-        viewBox="0 0 24 24"
-        class="w-8 h-8 text-ink-4 mx-auto mb-4"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        aria-hidden="true"
-      >
+      <svg viewBox="0 0 24 24" class="w-8 h-8 text-ink-4 mx-auto mb-4"
+           fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" stroke-linecap="round" stroke-linejoin="round" />
         <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
@@ -60,41 +132,65 @@ const scannerLive = computed<boolean>(() =>
         The security scanner lands with milestone <span class="font-mono">M4</span>.
         Nothing on this page is a real audit yet — no score, no findings.
       </p>
-      <div class="grid grid-cols-2 gap-x-8 gap-y-2 max-w-xl mx-auto text-left text-sm text-ink-3">
-        <div class="flex items-baseline gap-2">
-          <span class="text-ink-4 text-xs font-mono">M4</span>
-          <span>Weak-secret detection</span>
-        </div>
-        <div class="flex items-baseline gap-2">
-          <span class="text-ink-4 text-xs font-mono">M4</span>
-          <span>Exposed-port audit</span>
-        </div>
-        <div class="flex items-baseline gap-2">
-          <span class="text-ink-4 text-xs font-mono">M4</span>
-          <span>TLS chain check</span>
-        </div>
-        <div class="flex items-baseline gap-2">
-          <span class="text-ink-4 text-xs font-mono">M4</span>
-          <span>Backup-age SLA</span>
-        </div>
-        <div class="flex items-baseline gap-2">
-          <span class="text-ink-4 text-xs font-mono">M4</span>
-          <span>fail2ban ban history</span>
-        </div>
-        <div class="flex items-baseline gap-2">
-          <span class="text-ink-4 text-xs font-mono">M4</span>
-          <span>Unattended-upgrades SLA</span>
-        </div>
-      </div>
     </Card>
 
-    <!--
-      capability flag on — placeholder for the M4 milestone. Not
-      implemented in this iteration. Kept as a stub so the M4 chain has
-      a target to render into.
-    -->
-    <Alert v-else tone="info">
-      Security scanner is enabled but the M4 view is not yet implemented.
-    </Alert>
+    <!-- Error state — §5 contract. -->
+    <template v-else-if="err">
+      <Alert tone="err" class="mb-4" data-test="sec-error">{{ err }}</Alert>
+      <div class="mb-6">
+        <Button variant="secondary" size="sm" @click="fetchFindings">Try again</Button>
+      </div>
+    </template>
+
+    <!-- Zero findings — the honest 'all clear' render. -->
+    <Card
+      v-else-if="!loading && findings.length === 0"
+      data-state="empty"
+      class="p-10 text-center"
+      data-test="sec-empty-clean"
+    >
+      <svg viewBox="0 0 24 24" class="w-8 h-8 text-ink-4 mx-auto mb-4"
+           fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <h3 class="mb-2">Nothing to fix right now</h3>
+      <p class="text-sm text-ink-3 max-w-xl mx-auto">
+        Every check Aurora runs came back clean. This page updates when
+        you refresh; nothing is polled in the background.
+      </p>
+    </Card>
+
+    <!-- Findings list. -->
+    <div v-else class="space-y-3" data-test="sec-findings">
+      <Card
+        v-for="f in findings"
+        :key="f.id"
+        class="p-6"
+        :data-severity="f.severity"
+        :data-finding-id="f.id"
+      >
+        <div class="flex items-start justify-between gap-4 mb-2">
+          <div class="flex items-center gap-2">
+            <Badge :tone="toneFor(f.severity)" class="uppercase">{{ f.severity }}</Badge>
+            <h3 class="text-base font-medium">{{ f.title }}</h3>
+          </div>
+          <template v-if="f.remediationUrl">
+            <router-link
+              v-if="isInternalHref(f.remediationUrl)"
+              :to="f.remediationUrl"
+              class="text-sm text-ink-2 no-underline hover:underline whitespace-nowrap"
+            >Fix it →</router-link>
+            <a
+              v-else
+              :href="f.remediationUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-sm text-ink-2 no-underline hover:underline whitespace-nowrap"
+            >Learn more ↗</a>
+          </template>
+        </div>
+        <p class="text-sm text-ink-3">{{ f.description }}</p>
+      </Card>
+    </div>
   </section>
 </template>
