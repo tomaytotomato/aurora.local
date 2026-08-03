@@ -557,3 +557,34 @@ All three deferrals tracked in scratchpad — worth doing but require live-box +
 **Coverage of the D14 checklist item.** Every user CRUD action (D8), every role change (D8), every propagation event (this iter) now emits an audit row. Onboarding SSO enable/skip (D10), secrets bootstrap/rotate (D3), SSO env-neutralise fanout (D11) already emit rows too. The audit log is the single source of truth for "what happened when" across Phase D's whole surface.
 
 **Next.** D15 — test coverage pass. Frontend view-level (UsersView.vue mount test) + backend integration test that exercises the whole users-CRUD → projection → audit-row chain end-to-end.
+
+### iter-16 (2026-08-03) — D15 test coverage pass
+
+**Item:** D15 — backend chain integration + frontend view mount test. Compose-profile Authelia end-to-end deferred to scratchpad.
+
+**Backend — `services/UsersPropagationChainTests` (3 new tests).**
+Guards the seam between D2 (Authelia projector) and D8 (Users CRUD). Uses a real `GenericApplicationContext` so the `@EventListener` wiring on `AutheliaService.onUserChanged` fires the same way it does in production. Mocks the DB layer (`AdminUserRepo`) + audit trail (`AuditEventRepo`); real filesystem via `@TempDir`.
+
+- **`create_user_writes_users_database_yml_and_emits_projection_audit`** — `UsersService.create()` → `UserChangedEvent(CREATE)` → `AutheliaService.reconcile()` → yaml on disk with correct group cascade + both `users.create` and `authelia.users.projected` audit rows.
+- **`role_change_reprojects_with_new_group_cascade_and_audits`** — verifies the ROLE_CHANGE reason triggers the projection audit.
+- **`delete_user_reprojects_without_the_user_and_audits`** — deleted user gone from the yaml; both `users.delete` and `authelia.users.projected` audit rows.
+
+**Frontend — `views/UsersView.spec.ts` (6 new tests).**
+Full mount tests covering click flows Phase C primitive-level tests can't reach:
+
+- Non-admin session bounces to `/` on mount (belt-and-braces guard beyond the router-level check).
+- Admin session loads users into the Table (fixed `data-test^=` overmatch bug — DropdownMenu/trigger data-tests also matched the prefix; switched to `tbody [data-test^="users-row-"]:not([data-test*="-menu-"])`).
+- Empty state renders correct copy.
+- Row DropdownMenu → Change role → Dialog → submit triggers the PUT + toast.
+- 422 last-admin demote surfaces inline Alert, no destructive toast (mutations opt out of the global 5xx toast).
+- Row DropdownMenu → Delete → confirm Dialog → DELETE + toast.
+
+**Diagnosed mid-iter — Dialog `data-test` doesn't fall through Teleport.** Passing `data-test="users-edit-dialog"` on `<Dialog>` didn't reach the teleported panel — Vue drops that fallthrough at the Teleport boundary. Refactored assertions to query by known slot (`[data-slot="dialog-content"]`) + text snippet ("Change role" / "Delete user") — more resilient anyway.
+
+**Settle helper.** Dialog opens through a `watch(props.open)` that awaits `nextTick()` before populating the Teleport target. `flushPromises()` alone isn't enough; `settle()` = flushPromises + `setTimeout(0)` + flushPromises so the panel is reliably visible by assertion time.
+
+**Deferred (scratchpad).** Compose-profile Authelia end-to-end integration test. The maven container in `scripts/verify-v03-overnight.sh` only mounts `packages/dashboard/backend/`, so a full compose-up (authelia + caddy + notes + aurora) can't be spawned from a JUnit test. Options for a future E2E: (a) extend the verify script with a `scripts/e2e/authelia.sh` phase that spins up a `e2e-sso` compose profile + curl-based test suite + teardown; (b) Playwright E2E in `packages/dashboard/e2e/` hitting `notes.aurora.local` through a real browser. Not shipped here because the D15 propagation-chain JUnit + UsersView mount tests already cover the same seams at a lower cost.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 479 tests (476 → 479, +3). Vitest 21 files / 183 tests (20/177 → 21/183, +6). vue-tsc clean. Dockerfile clean.
+
+**Next.** D16 — docs. `packages/identity/README.md` rewritten for the "Aurora is source of truth for users" story; `docs/DASHBOARD_BRIEF.md` §7 rewrite for SSO instead of per-service basic-auth.
