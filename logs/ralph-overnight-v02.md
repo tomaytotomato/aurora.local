@@ -940,3 +940,41 @@ Iter-18 candidates now that the pre-existing failure is closed:
 
 Recommend option 3 (verify-iter3.sh + summary alignment) — cheap,
 protects the morning workflow. Then option 1.
+
+## Iter 18 · 2026-08-03 09:03 · commit c692b62
+**Ships completion-gate final verification: scripts/verify-v03-overnight.sh.**
+
+### What shipped
+
+- `scripts/verify-v03-overnight.sh` (new + executable) — 4 checks:
+  1. Commit count since `f9c4406`.
+  2. Backend `mvn test` (docker-run maven; expects 257 tests, 0 fail).
+  3. Frontend `vue-tsc --noEmit` (docker-run node).
+  4. `docker build --check` on the Dockerfile (expects "no warnings").
+  Belt-and-braces: parses mvn summary and asserts count ≥ 257 so a
+  silent test-removal regression is caught. Per-phase `SKIP_*` env
+  vars for fast partial reruns. `WORKTREE` env var for portability
+  to alternate clone paths. Never touches live aurora on
+  `192.168.0.110:8090` (safety rail).
+- `RALPH_TASK_V02_V03.md` — new "Final verification command" section
+  at the tail with the exact invocation, env-var reference, expected
+  output block, and the artifact list required for a fresh-shell rerun.
+
+### Verification
+- Ran `bash scripts/verify-v03-overnight.sh` on HEAD: 4/4 checks
+  passed. Output matches the recorded expectation.
+- Full backend still 257/0/0; `vue-tsc` still exit 0. Existing
+  `verify-iter3.sh` untouched (scoped to iter-3 milestone).
+
+### Files touched
+- `scripts/verify-v03-overnight.sh` (+140, new + chmod +x)
+- `RALPH_TASK_V02_V03.md` (+35 -1, tail section)
+
+### Deferred
+None. This iter is a pure infrastructure lift for the morning
+walk-through; nothing new is deferred.
+
+### Next iteration target
+Iter-19: retire `stores/events.ts` (dead after B1 iter-9; no
+consumers). Verified in iter-9 that no other view references
+the store. Should be a small, safe removal + one commit.
