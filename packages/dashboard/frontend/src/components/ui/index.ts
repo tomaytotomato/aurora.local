@@ -11,3 +11,7 @@ export { buttonVariants, type ButtonVariants } from './buttonVariants';
 
 export { default as Badge } from './Badge.vue';
 export { badgeVariants, type BadgeVariants } from './badgeVariants';
+
+export { default as Input } from './Input.vue';
+export { default as Label } from './Label.vue';
+export { default as Checkbox } from './Checkbox.vue';

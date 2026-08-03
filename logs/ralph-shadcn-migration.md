@@ -137,3 +137,21 @@
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 7 files / 63 tests (54 → 63, +9). vue-tsc clean. Dockerfile clean.
 
 **Next.** C5 — migrate Input + Label + Checkbox to shadcn tokens.
+
+### iter-7 (2026-08-03) — C5 shadcn Input + Label + Checkbox
+
+**Item:** C5. Migrate Input + Label + Checkbox primitives to shadcn tokens.
+
+**What changed.**
+- **Input:** `bg-[var(--color-surface)]` → `bg-background`; `border-[var(--color-line)]` → `border-input`; `placeholder:text-[var(--color-ink-4)]` → `placeholder:text-muted-foreground`; invalid → `border-destructive focus-visible:ring-destructive`; disabled → `disabled:bg-muted disabled:text-muted-foreground`. Dropped the ref-tracked `focused` state — replaced by standard `focus-visible:ring-2 ring-ring ring-offset-2` so keyboard users get an affordance before typing. Added `aria-invalid` when the `invalid` prop is set.
+- **Label:** `text-[var(--color-ink-2)]` → `text-foreground`; hint → `text-muted-foreground`. Added `peer-disabled:cursor-not-allowed peer-disabled:opacity-70` + `leading-none` to match shadcn convention.
+- **Checkbox:** unchecked → `bg-background border-input hover:border-muted-foreground`; checked → `bg-primary border-primary text-primary-foreground`; focus ring → `ring-ring` (was `--color-accent/40`). Kept the `button + role=checkbox + aria-checked` pattern (native `<input type=checkbox>` is hard to style consistently under warm-monochrome). Added `aria-hidden` on the tick svg.
+- No CVA sidecars — the three primitives have no variant surface. Standard shadcn-vue keeps them flat too; if a variant appears later (Input `size`), extract at that point.
+- Barrel-exports `Input`, `Label`, `Checkbox` from `src/components/ui/index.ts`.
+- New `FormPrimitives.spec.ts` — 17 tests pinning token contracts + emit/aria/disabled/class-merge behaviour for all three.
+
+**Callers.** Public API unchanged — all callers (LoginView, SettingsView, OnboardingAdmin, OnboardingDomain, OnboardingDns, OnboardingPackages) keep working via existing props (`v-model`, `invalid`, `disabled`, `for`, `hint`). No caller sweep needed.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 8 files / 80 tests (63 → 80, +17). vue-tsc clean. Dockerfile clean.
+
+**Next.** C6 — migrate Tabs (PackageDetail rewrite).
