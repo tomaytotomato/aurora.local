@@ -20,7 +20,8 @@ public record Package(
     List<String> requiredEnv,
     String postInstallNotes,
     boolean enabled,
-    boolean running
+    boolean running,
+    SsoBlock sso
 ) {
 
   /**

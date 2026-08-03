@@ -25,7 +25,8 @@ class PackageStartBudgetTests {
         "test", "Test", "desc", "cat",
         List.of(), List.of(), Map.of(), List.of(),
         requires, List.of(),
-        null, false, false);
+        null, false, false,
+        com.tomaytotomato.aurora.domain.SsoBlock.DISABLED);
   }
 
   @Test

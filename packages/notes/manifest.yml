@@ -37,6 +37,18 @@ probe:
   container: silverbullet
   external_url: "http://notes.{domain}/"
 
+# ---- SSO (Phase D) -------------------------------------------------
+# SilverBullet keeps its own single-user SB_USER / SB_PASSWORD but
+# Authelia gates the notes.{DOMAIN} vhost at the edge — after SSO
+# lands nobody sees SilverBullet's login page unauthenticated.
+# trusted_headers=false because SilverBullet doesn't read Remote-User;
+# the SB_USER just prevents a random LAN device that somehow got past
+# Caddy from talking to :3000 directly.
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: false
+
 post_install_notes: |
   1. First-run: https://notes.$DOMAIN/ — log in with
      SB_USER / SB_PASSWORD from .env.

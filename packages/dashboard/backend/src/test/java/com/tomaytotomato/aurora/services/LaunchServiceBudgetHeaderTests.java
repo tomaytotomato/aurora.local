@@ -63,7 +63,8 @@ class LaunchServiceBudgetHeaderTests {
         name, name, "d", "cat",
         List.of(), List.of(), Map.of(), List.of(),
         Map.of("start_budget_seconds", budget), List.of(),
-        null, true, false);
+        null, true, false,
+        com.tomaytotomato.aurora.domain.SsoBlock.DISABLED);
   }
 
   @Test

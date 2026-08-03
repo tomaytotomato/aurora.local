@@ -161,3 +161,54 @@ Tests are hermetic — no Spring context, `@TempDir` per-test, `AdminUserRepo` m
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 409 tests (400 → 409, +9). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
 
 **Next.** D5 — manifest `sso:` block schema (`protect`, `min_role`, `trusted_headers`) + fill in for Notes / Grafana / Paperless / Forgejo / Home-Automation. Backend parser + validator.
+
+### iter-6 (2026-08-03) — D5 manifest sso: block
+
+**Item:** D5 — manifest `sso:` block spec + fill in for Notes / Grafana / Paperless / Forgejo / Home-Automation.
+
+**Schema.**
+```yaml
+sso:
+  protect: true            # gate the vhost behind Authelia forward-auth
+  min_role: user           # admin | user | guest (default: user)
+  trusted_headers: false   # true when the service reads Remote-User / Remote-Groups
+```
+
+Absent block = `SsoBlock.DISABLED` (Authelia stays out of the request path). Design choices:
+
+- **Package-level, not per-vhost.** Some packages ship multiple vhosts (monitoring: grafana + prometheus + uptime; documents: paperless + stirling-pdf). For now every vhost of a package inherits the same block. If a future need surfaces where one vhost wants trusted-header auth and another wants edge-gate only, we grow to a `vhosts: [{label, sso}]` shape in a later phase. Not premature.
+- **Lenient bool coercion.** yaml authors write `true / "true" / yes / on / 1` interchangeably; parser accepts any. Same for `false`.
+- **Unknown `min_role` values fall back to USER**, never crash. A fat-fingered manifest shouldn't lock every service into admin-only OR expose every service to guest. Middle tier is the safe default.
+- **Unknown keys ignored silently** for forward-compat. A Phase E manifest that adds `sso.oauth_client: authelia` won't break a Phase D backend parsing it.
+
+**Domain + parser.**
+- New `domain/SsoBlock` record with `DISABLED` constant + `fromManifest(Object)` static parser.
+- `domain/Package` grows an `sso: SsoBlock` 14th field.
+- `PackagesService.parseManifest()` reads `m.get("sso")` via `SsoBlock.fromManifest()` — never null, always a valid SsoBlock.
+- Three test-file call sites updated (`ServicesControllerTests`, `LaunchServiceBudgetHeaderTests`, `PackageStartBudgetTests`) pass `SsoBlock.DISABLED` since none of them exercise SSO logic.
+
+**Manifest fills.** Every block ships a comment explaining the intent so an operator maintaining the package understands what Aurora is doing to their vhost.
+
+| Package | protect | min_role | trusted_headers | Rationale |
+|---|---|---|---|---|
+| notes (SilverBullet) | true | user | false | SB_USER stays; Authelia gates at the edge. |
+| monitoring (Grafana/Prometheus/Uptime) | true | user | true | Grafana natively supports auth.proxy (Remote-User / Remote-Groups); Prometheus + Uptime get edge-gated. |
+| documents (Paperless/Stirling-PDF) | true | user | true | Paperless-ngx has `PAPERLESS_ENABLE_HTTP_REMOTE_USER=true` — auto-provisions the account on first visit. Household members can read receipts. |
+| git (Forgejo) | true | user | true | Forgejo `ReverseProxyAuthentication` — auto-provisions on first visit. Public repos still public via Forgejo's own ACL. |
+| home-automation (HA/z2m) | true | user | false | HA has a first-class auth system + trusted_networks; the trusted-header path is fiddly. Edge-gate + let HA handle inner session. z2m has no auth so Authelia is its only wall. |
+
+Design note: **min_role: user** across the board for the first pass. Bruce is currently the only admin; multi-user with GUEST tier lands after there's an actual "share a Grafana dashboard with a house-guest" use case. Easy to bump packages to `min_role: admin` in a follow-up manifest edit; hard to undo a demoted access surface once someone's been visiting.
+
+**Tests — 9 new** (`domain/SsoBlockTests`):
+- Absent block → DISABLED default; non-Map input returns DISABLED (fail-safe).
+- `DISABLED` field values.
+- Full block parses every field.
+- `min_role` defaults to USER when missing or unknown (both branches).
+- `protect` coerces `true/"true"/yes/on/1` truthy set + `false/"false"/no/off/0` falsy set.
+- `trusted_headers` uses the same coercer.
+- Unknown keys ignored for forward-compat (Phase E-friendly).
+- `min_role` case-insensitive.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 418 tests (409 → 418, +9). Vitest 169 unchanged. vue-tsc clean. Dockerfile clean.
+
+**Next.** D6 — patch the Caddy snippet renderer (scripts/lib/render.sh) to emit `import authelia` inside `http(s)://` blocks when `sso.protect: true`. Also emit a per-vhost matcher for `min_role` group filtering.

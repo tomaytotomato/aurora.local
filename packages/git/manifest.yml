@@ -26,6 +26,17 @@ required_env:
   - FORGEJO_ADMIN_EMAIL
   - FORGEJO_ADMIN_PASSWORD
 
+# ---- SSO (Phase D) -------------------------------------------------
+# Forgejo supports ReverseProxyAuthentication — Caddy forwards
+# Remote-User / Remote-Email, Forgejo auto-provisions the user on
+# first visit. Repos are still per-user; SSO removes the second
+# login page, not the ownership model. Public repos remain public
+# via Forgejo's own ACL — Aurora doesn't strip that out.
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: true
+
 post_install_notes: |
   1. First-run wizard: http://git.$DOMAIN/ (or http://<lan-ip>:3080).
      The admin user from .env is auto-created on container start.
