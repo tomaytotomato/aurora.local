@@ -1126,3 +1126,57 @@ Iter-22: frontend uPlot chart POC on the Metrics card. Consume
 `/api/metrics/last24h?key=…` for the series. Real work; may be 2 iters
 (uPlot bindings + data-shape adapter + empty/error states + typecheck
 around the uplot-vue package).
+
+## Iter 22 · 2026-08-03 09:24 · commit 5e618c5
+**B2-followup — DashboardHome Metrics card now renders a live uPlot chart.**
+
+Closes the DASHBOARD_BRIEF §4.5 M3 promise and the last B2 deferred
+frontend bullet.
+
+### What shipped
+
+- Backend: `SystemService.capabilities.metrics` flipped `true`;
+  `SystemServiceInfoTests` assertion inverted + renamed with iter-22
+  context.
+- `api/metrics.ts` (new): `MetricBucket`, `BucketMinutes` union,
+  `MetricsApi.keys(prefix?)`, `MetricsApi.last24h(key, bucketMinutes=5)`.
+- `components/MetricChart.vue` (new): thin, type-safe uPlot wrapper
+  (uses uPlot directly rather than the untyped uplot-vue). Unit
+  formatters for `%`, `B` (KiB/MiB/GiB/TiB), `ms` (ms/s/m/h).
+  ResizeObserver for card-fit responsiveness. Tear-down when data
+  goes empty so parent empty-state renders through.
+- `views/DashboardHome.vue`: metrics card gets a fixed picker
+  (`sys.cpu_pct`, `sys.mem_used_bytes`, `sys.disk.root.used_bytes`,
+  `app.uptime_ms`) + refresh button + `MetricChart`. Preserved the
+  empty-capability rendering path so a downgrade still shows warm
+  copy.
+
+### Verification
+- Full backend: **286 tests, 0 failures, 0 errors** (unchanged; only
+  test was an assertion inversion).
+- `vue-tsc --noEmit` → exit 0.
+- `bash scripts/verify-v03-overnight.sh` → 4/4 checks pass.
+
+### Files touched
+- `backend/…/services/SystemService.java` (+9 -1)
+- `backend/…/test/…/services/SystemServiceInfoTests.java` (+8 -6)
+- `frontend/src/api/metrics.ts` (+43, new)
+- `frontend/src/components/MetricChart.vue` (+165, new)
+- `frontend/src/views/DashboardHome.vue` (+140 -30)
+
+### Deferred
+- Per-container metric picker (search dropdown via /api/metrics/keys).
+- Chart hover/legend polish.
+- System-card sparkline.
+- Range picker (1h/24h/7d) — backend only exposes 24h currently.
+
+### Next iteration target
+Iter-23 candidates:
+1. Range picker (1h/6h/24h/7d). Backend addition + FE toggle.
+2. System-card sparkline for `sys.cpu_pct`. 48px MetricChart embedded
+   inline with the pill row.
+3. Dismiss/snooze security findings (B4-followup; settings table).
+4. Housekeeping: bump summary + verify-v03 with the 286/uPlot state.
+
+Recommend option 4 first (cheap, keeps morning verification honest)
+then option 2 (small, high-signal — the pill number gets context).
