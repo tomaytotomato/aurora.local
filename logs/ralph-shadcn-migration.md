@@ -90,3 +90,27 @@
 - **Verify:** 5/5 — 91 commits pre-commit (92 post), backend 348/0/0, vue-tsc clean, vitest 5/41, docker check clean.
 - **Deferred:** none. C2 complete.
 - **Next iter:** C3 — Button migration. `Button.vue` has variants primary/secondary/ghost + sizes sm/md. shadcn Button has variants default/destructive/outline/secondary/ghost/link + sizes default/sm/lg/icon. Migration: rename our Button.vue → ButtonLegacy.vue, write shadcn Button.vue + buttonVariants.ts. Callers use `variant="primary"` (many) — map to `default` (shadcn's default). `size="sm"` maps 1:1. Batch caller sweep if grep is mechanical.
+
+### iter-5 (2026-08-03) — C3 shadcn Button
+
+**Item:** C3. Migrate Button primitive to shadcn tokens.
+
+**What changed.**
+- Extracted CVA to `src/components/ui/buttonVariants.ts` sidecar (mirrors alertVariants).
+- Rewrote every variant to shadcn semantic tokens:
+  - `primary`  → `bg-primary text-primary-foreground hover:bg-primary/90`
+  - `secondary` → `bg-secondary text-secondary-foreground border-border hover:bg-muted`
+  - `ghost`    → `text-muted-foreground hover:bg-muted hover:text-foreground`
+  - `link`     → `text-foreground hover:underline`
+  - `danger`   → `text-destructive border-border hover:bg-destructive/10`
+  - `accent`   → `bg-[var(--color-accent)] text-[var(--color-on-accent)]` (brand amber; shadcn `accent` intentionally unmapped per main.css comment).
+- Added proper `focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background` — the old primitive only did `outline-none`, which was an a11y regression waiting to happen once dark mode landed.
+- Variant/size **names unchanged** — no caller sweep needed. All 14 caller sites (13 views + ChecklistItem) keep working via public API.
+- Barrel exports `Button` + `buttonVariants` from `src/components/ui/index.ts`.
+- New `Button.spec.ts` — 12 tests pinning every variant → token contract + size/type/disabled/loading/class-merge/focus-ring behaviour.
+
+**Why the API stayed Aurora-flavoured.** shadcn's canonical variant names are `default/destructive/outline/secondary/ghost/link`. Aurora already used `primary/secondary/ghost/link/danger/accent`, and 30+ callers use those names. The Phase C spec says "migrate to shadcn tokens" — that's a token-level migration, not an API rename. Preserving the names keeps this one-item commit tight and defers a cosmetic rename to a later cleanup (or never — Aurora's names read more clearly for a homelab UI).
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 6 files / 54 tests (32 → 54, +22 from Alert.spec growth + Button.spec.ts). vue-tsc clean. Dockerfile clean.
+
+**Next.** C4 — migrate Badge to shadcn tokens (Sidebar / SecurityPosture / DashboardHome / PackageDetail).
