@@ -79,7 +79,13 @@ public class SystemService {
     // Capability flags let the frontend gate feature fetches without
     // hard-coding a version check. See UX_SPEC_DASHBOARD §4.5.
     Map<String, Object> capabilities = new LinkedHashMap<>();
-    capabilities.put("metrics", false);
+    // B2 (iter-10) shipped MetricsSamplerService + MetricsRepo + /api/
+    // metrics/last24h; iter-22 flips this capability true so the
+    // DashboardHome Metrics card consumes the endpoint instead of the
+    // 'lands next release' empty state. The card falls back to its own
+    // empty state until the sampler has recorded at least one bucket's
+    // worth of data (~30s after boot).
+    capabilities.put("metrics", true);
     // B4 (iter-13/14): three-rule scanner ships as v0.3 groundwork
     // (WeakAdminPassword + DockerSocketExposure + UnpinnedImageTags).
     // Flipping the capability true means the SecurityPosture view

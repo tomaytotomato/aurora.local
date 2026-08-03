@@ -5,9 +5,11 @@ import { useSystemStore } from '@/stores/system';
 import { usePackagesStore } from '@/stores/packages';
 import { useContainerEvents } from '@/composables/useContainerEvents';
 import { ServicesApi } from '@/api/services';
+import { MetricsApi, type MetricBucket } from '@/api/metrics';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Badge from '@/components/ui/Badge.vue';
+import MetricChart from '@/components/MetricChart.vue';
 import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
 import { renderIdentity } from '@/lib/identity';
 import { startBudgetMs, type PackageSummary } from '@/api/packages';
@@ -74,9 +76,9 @@ async function fetchPackages(): Promise<void> {
 
 onMounted(async () => {
   await Promise.allSettled([fetchSystem(), fetchPackages()]);
-  // iter-1: no metrics fetch. Gated on capabilities.metrics; empty state
-  // in the Metrics strip renders unconditionally until the flag flips true.
-  // See UX_SPEC_DASHBOARD.md §4.5 + §6.
+  // B2-followup (iter-22): metrics fetch fires after system.info lands
+  // so capabilities.metrics is up-to-date before the guard runs.
+  if (metricsCapable.value) void loadMetric();
 });
 
 // ---- header + identity ---------------------------------------------
@@ -187,6 +189,62 @@ const enabledSorted = computed(() =>
 const recentEvents = computed(() =>
   [...containerEvents.events.value].reverse().slice(0, 5),
 );
+
+// ---- metrics chart (B2-followup iter-22) ----------------------------
+// Presented offerings for the picker; keys must exist as first-class
+// samples via MetricsSamplerService (iter-10) or ContainerStatsSampler
+// (iter-20). We deliberately do NOT hit /api/metrics/keys here — that
+// list is used by a future settings-side chooser; the DashboardHome
+// card sticks to the four canonical host metrics so operators see the
+// same shape every visit.
+interface MetricOption {
+  key: string;
+  label: string;
+  unit: '%' | 'B' | 'ms' | '';
+}
+const METRIC_OPTIONS: readonly MetricOption[] = [
+  { key: 'sys.cpu_pct', label: 'Host CPU %', unit: '%' },
+  { key: 'sys.mem_used_bytes', label: 'Host memory used', unit: 'B' },
+  { key: 'sys.disk.root.used_bytes', label: 'Root disk used', unit: 'B' },
+  { key: 'app.uptime_ms', label: 'Aurora uptime', unit: 'ms' },
+] as const;
+const selectedMetric = ref<MetricOption>(METRIC_OPTIONS[0]);
+const metricSeries = ref<{ ts: number[]; values: number[] }>({ ts: [], values: [] });
+const metricLoading = ref(false);
+const metricErr = ref<string | null>(null);
+
+const metricsCapable = computed<boolean>(() =>
+  system.info?.capabilities?.metrics === true,
+);
+
+async function loadMetric(): Promise<void> {
+  if (!metricsCapable.value) return;
+  metricLoading.value = true;
+  metricErr.value = null;
+  try {
+    const rows = await MetricsApi.last24h(selectedMetric.value.key, 5);
+    metricSeries.value = {
+      ts: rows.map((r: MetricBucket) => r.ts),
+      values: rows.map((r: MetricBucket) => r.avg),
+    };
+  } catch (e: unknown) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    metricErr.value = status === 401 || status === 403
+      ? "Session expired — sign in again to see metrics."
+      : "Aurora couldn't load metrics just now.";
+    metricSeries.value = { ts: [], values: [] };
+  } finally {
+    metricLoading.value = false;
+  }
+}
+
+function pickMetric(key: string): void {
+  const found = METRIC_OPTIONS.find((m) => m.key === key);
+  if (found) {
+    selectedMetric.value = found;
+    void loadMetric();
+  }
+}
 </script>
 
 <template>
@@ -400,12 +458,42 @@ const recentEvents = computed(() =>
            iter-dash-polish-2 P5: strip halved in height so it reads as a
            footer, not a broken chart region.
            P3 + P4: eyebrow → h3 (empty-state headline) → subtitle → body,
-           with the §4 glyph pattern. -->
+           with the §4 glyph pattern.
+           B2-followup (iter-22): scanner capability lands true; the
+           card now renders a real uPlot chart of the last 24 h. Empty
+           state preserved for the fresh-install window (0 samples) or
+           if the fetch errors. -->
       <Card class="col-span-6 p-8" data-card="metrics">
-        <div class="eyebrow mb-1">Metrics</div>
-        <h3 class="mb-1">Metrics land next release.</h3>
-        <p class="text-xs text-ink-4 mb-2">Last 24 hours</p>
+        <div class="flex items-baseline justify-between gap-4 mb-2">
+          <div>
+            <div class="eyebrow mb-1">Metrics</div>
+            <h3 v-if="!metricsCapable" class="mb-1">Metrics land next release.</h3>
+            <h3 v-else class="mb-1">{{ selectedMetric.label }}</h3>
+            <p class="text-xs text-ink-4">Last 24 hours</p>
+          </div>
+          <div v-if="metricsCapable" class="flex items-center gap-2">
+            <label for="metric-picker" class="sr-only">Metric</label>
+            <select
+              id="metric-picker"
+              class="rounded border border-line bg-surface text-ink px-2 py-1 text-sm"
+              :value="selectedMetric.key"
+              data-test="metric-picker"
+              @change="pickMetric(($event.target as HTMLSelectElement).value)"
+            >
+              <option v-for="m in METRIC_OPTIONS" :key="m.key" :value="m.key">
+                {{ m.label }}
+              </option>
+            </select>
+            <Button variant="secondary" size="sm" :disabled="metricLoading" @click="loadMetric"
+                    data-test="metric-refresh">
+              {{ metricLoading ? 'Loading…' : 'Refresh' }}
+            </Button>
+          </div>
+        </div>
+
+        <!-- Empty capability state (unchanged look, kept for downgrade path). -->
         <div
+          v-if="!metricsCapable"
           class="flex items-center justify-center gap-3 text-sm py-2"
           data-state="empty"
         >
@@ -416,6 +504,24 @@ const recentEvents = computed(() =>
           </svg>
           <p class="text-ink-4 text-xs">Aurora will chart your box's last 24 hours here.</p>
         </div>
+
+        <div
+          v-else-if="metricErr"
+          class="text-xs text-ink-2 py-2"
+          data-state="error"
+          role="alert"
+        >
+          {{ metricErr }}
+        </div>
+
+        <MetricChart
+          v-else
+          :series="metricSeries"
+          :label="selectedMetric.label"
+          :unit="selectedMetric.unit"
+          :height="220"
+          data-test="metric-chart"
+        />
       </Card>
     </div>
 

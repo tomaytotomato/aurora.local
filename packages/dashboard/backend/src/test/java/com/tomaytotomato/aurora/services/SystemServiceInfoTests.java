@@ -82,11 +82,14 @@ class SystemServiceInfoTests {
   }
 
   @Test
-  void info_capabilitiesFlagsMetricsFalseInIter1() {
-    // UX_SPEC_DASHBOARD.md §4.5 + §6 non-goal: no metrics backend in iter-1.
-    // Frontend must gate the metrics fetch on this flag so /dashboard/home
-    // never issues a 404 request. Guard the flag here so the toggle is one
-    // line of Java when the real backend lands.
+  void info_capabilitiesFlagsMetricsTrueAsOfIter22() {
+    // UX_SPEC_DASHBOARD.md §4.5 + §6: the metrics fetch is gated on this
+    // capability flag so DashboardHome doesn't 404 when the backend has
+    // no timeseries endpoint. iter-1 kept it false; iter-10 shipped
+    // MetricsSamplerService + MetricsRepo + /api/metrics/last24h; iter-22
+    // flipped this flag true so the DashboardHome Metrics card renders
+    // a real uPlot chart of the last 24 h. The gate now means: 'you may
+    // fetch metrics', not 'metrics aren't available'.
     StateFileService stateFiles = Mockito.mock(StateFileService.class);
     Mockito.when(stateFiles.readState()).thenReturn(
         new RepoState(1, "aurora", "aurora.local", null, List.of("core"), List.of()));
@@ -97,8 +100,8 @@ class SystemServiceInfoTests {
     @SuppressWarnings("unchecked")
     Map<String, Object> caps = (Map<String, Object>) info.get("capabilities");
     assertNotNull(caps, "capabilities block must exist");
-    assertEquals(false, caps.get("metrics"),
-        "capabilities.metrics must be false until a real timeseries backend ships");
+    assertEquals(true, caps.get("metrics"),
+        "capabilities.metrics must be true now that MetricsSamplerService + /api/metrics/last24h ship");
   }
 
   @Test
