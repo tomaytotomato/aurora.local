@@ -107,6 +107,28 @@ else
   fi
 fi
 
+# ─────────────────────────── 3b. frontend vitest ──────────────────────────
+if [ "$SKIP_FRONTEND" = "1" ] || [ "${SKIP_VITEST:-0}" = "1" ]; then
+  step "Frontend vitest (skipped — set SKIP_VITEST=0 to run)"
+  info "cached expectation: 2 tests passed (as of iter-34)"
+elif [ ! -f "$FRONTEND/vitest.config.ts" ]; then
+  step "Frontend vitest"; info "vitest.config.ts not present, skipping"
+else
+  step "Frontend vitest (docker-run, no host node)"
+  LOG=/tmp/verify-v03-vitest.log
+  # First run auto-installs missing deps; subsequent runs are cached.
+  if docker run --rm \
+      -v "$WORKTREE/$FRONTEND":/app -w /app \
+      node:22-alpine \
+      sh -c "npm run test:unit" >"$LOG" 2>&1; then
+    SUMMARY=$(grep -E 'Test Files|Tests' "$LOG" | tail -2 | tr '\n' ' ')
+    ok "vitest: ${SUMMARY:-(exit 0)}"
+  else
+    bad "vitest failed — tail $LOG"
+    tail -30 "$LOG" | sed 's/^/    /'
+  fi
+fi
+
 # ─────────────────────────── 4. Dockerfile check ──────────────────────────
 if [ "$SKIP_DOCKER_CHECK" = "1" ]; then
   step "Dockerfile static check (skipped — set SKIP_DOCKER_CHECK=0 to run)"

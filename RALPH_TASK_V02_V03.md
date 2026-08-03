@@ -177,18 +177,20 @@ Environment (all optional):
 - `AURORA_BASELINE` (default `f9c4406`) — branch-point on `rename/aurora`.
 - `SKIP_BACKEND` / `SKIP_FRONTEND` / `SKIP_DOCKER_CHECK` (default 0) — opt-out per phase for fast reruns.
 
-Expected output (as of iter-28; rerun any time on `HEAD`):
+Expected output (as of iter-34; rerun any time on `HEAD`):
 
 ```
 ✓ Commits since baseline (f9c4406)
-  54+ commits on feat/v0.2-overnight since f9c4406
+  N commits on feat/v0.2-overnight since f9c4406
 ✓ Backend tests (docker-run maven, no host JDK)
-  mvn test green — Tests run: 327, Failures: 0, Errors: 0, Skipped: 0
+  mvn test green — Tests run: 348, Failures: 0, Errors: 0, Skipped: 0
 ✓ Frontend typecheck (docker-run vue-tsc, no host node)
   vue-tsc --noEmit exit 0
+✓ Frontend vitest (docker-run, no host node)
+  vitest:  Test Files  1 passed (1)  Tests  2 passed (2)
 ✓ Dockerfile static check (docker build --check)
   docker build --check: no warnings
-✓ verify-v03-overnight.sh: 4 checks passed, 0 failed
+✓ verify-v03-overnight.sh: 5 checks passed, 0 failed
 ```
 
 Artifacts preserved for a rerun in a fresh shell:
