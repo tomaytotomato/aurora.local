@@ -25,6 +25,13 @@ requires:
   min_ram_mb: 1024
   min_disk_gb: 5
   host_roles: []
+  # A8 (iter-7): 9-container observability stack (prometheus, grafana,
+  # loki, promtail, alertmanager, node-exporter, cadvisor, blackbox,
+  # dashboards seed). Prometheus WAL replay + grafana provisioning
+  # dominate first-run cold-start; 240s covers a warm relaunch and the
+  # image-pull first launch on a cold cache without flipping the row to
+  # "Couldn't start".
+  start_budget_seconds: 240
 
 required_env:
   - GRAFANA_ADMIN_PASSWORD

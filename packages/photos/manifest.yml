@@ -21,6 +21,10 @@ requires:
   min_ram_mb: 4096
   min_disk_gb: 20            # metadata + ML cache; library grows separately
   host_roles: []
+  # A8 (iter-7): immich stack (server, machine-learning, postgres,
+  # redis, proxy). ML model warm-up dominates first boot; 120s covers
+  # warm relaunch. Cold-cache first launch relies on pull step.
+  start_budget_seconds: 120
 
 required_env:
   - DB_PASSWORD

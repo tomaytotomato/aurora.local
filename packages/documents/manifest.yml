@@ -22,6 +22,11 @@ requires:
   min_ram_mb: 2048
   min_disk_gb: 10
   host_roles: []
+  # A8 (iter-7): 7+-container docs stack (paperless-ngx web + consumer,
+  # postgres, redis, tika, gotenberg, etc). Postgres init + paperless
+  # index rebuild eat the boot budget; 180s matches media's precedent
+  # for stacks of this shape.
+  start_budget_seconds: 180
 
 required_env:
   - PAPERLESS_ADMIN_USER
