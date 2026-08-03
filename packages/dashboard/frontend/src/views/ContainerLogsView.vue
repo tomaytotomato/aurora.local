@@ -18,7 +18,7 @@ import { ContainersApi, type ContainerLogLine } from '@/api/containers';
 import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
-import { Alert, AlertDescription, Skeleton } from '@/components/ui';
+import { Alert, AlertDescription, Skeleton, Select } from '@/components/ui';
 import Badge from '@/components/ui/Badge.vue';
 
 interface RouteError {
@@ -86,14 +86,14 @@ function formatTs(ts: string | undefined): string {
         <h1 data-test="logs-container-id">{{ containerId }}</h1>
         <div class="flex items-center gap-2 text-sm">
           <label for="tail" class="text-muted-foreground">Show</label>
-          <select
+          <Select
             id="tail"
-            v-model.number="tail"
-            class="rounded border border-border bg-card text-foreground px-2 py-1 text-sm"
+            :model-value="tail"
+            :options="TAIL_OPTIONS.map((n) => ({ value: n, label: String(n) }))"
+            class="h-8 w-24 text-sm"
             data-test="logs-tail-select"
-          >
-            <option v-for="n in TAIL_OPTIONS" :key="n" :value="n">{{ n }}</option>
-          </select>
+            @update:model-value="tail = $event as number"
+          />
           <span class="text-muted-foreground">lines</span>
           <Button variant="secondary" size="sm" :disabled="loading" @click="load"
                   data-test="logs-refresh">

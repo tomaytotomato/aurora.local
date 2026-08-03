@@ -20,7 +20,7 @@ import { useSystemStore } from '@/stores/system';
 import { SecurityApi, type SecurityFinding, type SecuritySeverity, type DismissalRow } from '@/api/security';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
-import { Alert, AlertDescription } from '@/components/ui';
+import { Alert, AlertDescription, Select } from '@/components/ui';
 import Badge from '@/components/ui/Badge.vue';
 import Button from '@/components/ui/Button.vue';
 
@@ -315,15 +315,15 @@ const counts = computed(() => {
                 class="text-sm text-foreground no-underline hover:underline"
               >Learn more ↗</a>
             </template>
-            <select
-              class="text-xs bg-card border border-border rounded px-1 py-0.5 text-foreground"
-              :value="snoozeSelection[f.id] ?? '7d'"
+            <Select
+              :model-value="snoozeSelection[f.id] ?? '7d'"
+              :options="SNOOZE_CHOICES.map((c) => ({ value: c.key, label: c.label }))"
               :disabled="!!dismissing[f.id]"
+              :aria-label="`Snooze duration for ${f.title}`"
+              class="h-8 w-32 text-xs"
               data-test="sec-snooze-picker"
-              @change="snoozeSelection[f.id] = ($event.target as HTMLSelectElement).value"
-            >
-              <option v-for="c in SNOOZE_CHOICES" :key="c.key" :value="c.key">{{ c.label }}</option>
-            </select>
+              @update:model-value="snoozeSelection[f.id] = $event as string"
+            />
             <button
               type="button"
               class="text-sm text-muted-foreground hover:text-foreground disabled:text-muted-foreground disabled:cursor-not-allowed"

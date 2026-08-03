@@ -10,6 +10,7 @@ import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Badge from '@/components/ui/Badge.vue';
+import { Select } from '@/components/ui';
 import MetricChart from '@/components/MetricChart.vue';
 import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
 import { renderIdentity } from '@/lib/identity';
@@ -523,17 +524,14 @@ function pickMetric(key: string): void {
           </div>
           <div v-if="metricsCapable" class="flex items-center gap-2">
             <label for="metric-picker" class="sr-only">Metric</label>
-            <select
+            <Select
               id="metric-picker"
-              class="rounded border border-border bg-card text-foreground px-2 py-1 text-sm"
-              :value="selectedMetric.key"
+              :model-value="selectedMetric.key"
+              :options="METRIC_OPTIONS.map((m) => ({ value: m.key, label: m.label }))"
+              class="h-8 w-40 text-sm"
               data-test="metric-picker"
-              @change="pickMetric(($event.target as HTMLSelectElement).value)"
-            >
-              <option v-for="m in METRIC_OPTIONS" :key="m.key" :value="m.key">
-                {{ m.label }}
-              </option>
-            </select>
+              @update:model-value="pickMetric($event as string)"
+            />
             <Button variant="secondary" size="sm" :disabled="metricLoading" @click="loadMetric"
                     data-test="metric-refresh">
               {{ metricLoading ? 'Loading…' : 'Refresh' }}

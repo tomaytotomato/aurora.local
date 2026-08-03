@@ -363,3 +363,29 @@
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 13 files / 112 tests (103 → 112, +9). vue-tsc clean. Dockerfile clean.
 
 **Next.** C10.3 — Select (replace remaining raw `<select>` elements in views: OnboardingDns mode selector, any theme picker).
+
+### iter-16 (2026-08-03) — C10 shadcn Select (bonus)
+
+**Item:** C10.3 — introduce Select primitive + migrate all three raw `<select>` sites (ContainerLogsView tail size, SecurityPosture snooze picker, DashboardHome metric picker).
+
+**Primitive.** `src/components/ui/Select.vue` — a **pragmatic styled native `<select>`** rather than a full popover-listbox (would need a Vue headless UI dep). We inherit keyboard nav, screen-reader support, and the mobile OS picker for free, and layer shadcn tokens + an overlaid chevron SVG on top.
+
+Design details:
+- Generic `<T extends string | number>` so numeric selects (log tail size 100/500/1000) keep type-safe alongside string selects (snooze choice keys, metric keys).
+- `emit('update:modelValue', …)` **preserves numeric type** by coercing DOM string back to number when the source `modelValue` is numeric. Without this, `v-model="tail"` (a number) would silently become a string after the first change.
+- Options declared as `{ value, label, disabled? }` tuples instead of loose `<option>` slot markup — pushes structured data into the component and keeps caller sites tight.
+- **Chevron rendered as an overlaid `<svg>`** rather than a `background-image` on the `<select>`. Initial version used a data-URI `bg-[url(…)]`, but tailwind-merge grouped that under the same `bg-*` bucket as `bg-card` and dropped the surface color. Refactored to a positioned SVG (pointer-events-none, aria-hidden, text-muted-foreground) — the wrapper is a `<div class="relative inline-block">`, the SVG is `absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3`.
+
+**Migrations.**
+1. **ContainerLogsView tail-size picker** — was `<select v-model.number="tail" class="rounded border …">`. Now `<Select :model-value="tail" :options="TAIL_OPTIONS.map(n => ({value:n,label:String(n)}))" @update:model-value="tail = $event as number">`. `.number` v-model modifier retired — the primitive handles the coercion.
+2. **SecurityPosture snooze picker** — was a bare `<select>` with `:value` + `@change` two-way binding. Migrated to `<Select :model-value :options>` with an explicit `aria-label="Snooze duration for {finding title}"` per-row so a screen reader user knows which finding they're snoozing.
+3. **DashboardHome metric picker** — was `<select :value="selectedMetric.key" @change="pickMetric(($event.target as HTMLSelectElement).value)">`. Now `<Select :model-value="selectedMetric.key" @update:model-value="pickMetric($event as string)">`.
+
+All three keep their `data-test` hooks (`logs-tail-select`, `sec-snooze-picker`, `metric-picker`) so existing e2e wiring keeps working.
+
+- Barrel-exports `Select` from `src/components/ui/index.ts`.
+- `Select.spec.ts` — 8 tests: shadcn tokens on the trigger, option render with disabled attrs, string-type emit preservation, **numeric-type emit preservation** (critical), disabled styling, id/name/aria-label pass-through, overlaid chevron SVG (not a bg-image), class merge on the trigger.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 14 files / 120 tests (112 → 120, +8). vue-tsc clean. Dockerfile clean.
+
+**Next.** C10.4 — Toast/Sonner (needs an axios interceptor hook, more work than Skeleton/Dialog/Select) or C10.5 Table for the SettingsView audit log. Toast has broader UX impact; Table has smaller blast radius. Depending on remaining loop budget will pick Toast next.

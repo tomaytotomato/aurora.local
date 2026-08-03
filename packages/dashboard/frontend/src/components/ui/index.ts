@@ -25,3 +25,5 @@ export { default as Progress } from './Progress.vue';
 export { default as Skeleton } from './Skeleton.vue';
 
 export { default as Dialog } from './Dialog.vue';
+
+export { default as Select } from './Select.vue';
