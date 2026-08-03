@@ -8,3 +8,6 @@ export { alertVariants, type AlertVariants } from './alertVariants';
 
 export { default as Button } from './Button.vue';
 export { buttonVariants, type ButtonVariants } from './buttonVariants';
+
+export { default as Badge } from './Badge.vue';
+export { badgeVariants, type BadgeVariants } from './badgeVariants';

@@ -114,3 +114,26 @@
 **Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 6 files / 54 tests (32 → 54, +22 from Alert.spec growth + Button.spec.ts). vue-tsc clean. Dockerfile clean.
 
 **Next.** C4 — migrate Badge to shadcn tokens (Sidebar / SecurityPosture / DashboardHome / PackageDetail).
+
+### iter-6 (2026-08-03) — C4 shadcn Badge
+
+**Item:** C4. Migrate Badge primitive to shadcn tokens.
+
+**What changed.**
+- Extracted CVA to `src/components/ui/badgeVariants.ts` sidecar (mirrors alertVariants/buttonVariants).
+- Rewrote every tone onto shadcn semantic tokens:
+  - `ok`      → `bg-success/12 text-success`
+  - `warn`    → `bg-warning/12 text-warning`
+  - `err`     → `bg-destructive/12 text-destructive`
+  - `info`    → `bg-info/12 text-info`
+  - `neutral` → `bg-muted text-muted-foreground`
+- Tint density = `/12` (not Alert's `/8`) — Badge is a 10pt uppercase pill so needs slightly more density to read at that size. Rationale noted in the badgeVariants.ts header.
+- Kept `tone` prop (not `variant`) and the same five values so all six callers (ContainerLogsView, PackagesList, PackageDetail, SecurityPosture, DashboardHome, TopBar) keep working.
+- Coloured tones still render the small `bg-current` dot; neutral suppresses it. Switched from `:style="{ backgroundColor: 'currentColor' }"` to the `bg-current` utility for consistency.
+- Added `role="status"` and `aria-hidden="true"` on the dot — a11y bump the old primitive lacked.
+- Barrel exports `Badge` + `badgeVariants` from `src/components/ui/index.ts`.
+- New `Badge.spec.ts` — 9 tests pinning every tone → shadcn token contract + role/dot/class-merge behaviour.
+
+**Verify.** `bash scripts/verify-v03-overnight.sh` → 5/5 green. Backend 348/0/0. Vitest 7 files / 63 tests (54 → 63, +9). vue-tsc clean. Dockerfile clean.
+
+**Next.** C5 — migrate Input + Label + Checkbox to shadcn tokens.
