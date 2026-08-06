@@ -1,0 +1,7 @@
+# aurora.local / packages/memos / homepage services fragment
+
+- Productivity:
+    - Memos:
+        icon: mdi-note-text-outline
+        href: https://memos.{{HOMEPAGE_VAR_DOMAIN}}/
+        description: Quick notes and memos

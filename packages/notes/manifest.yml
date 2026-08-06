@@ -11,6 +11,12 @@ category: productivity
 depends_on:
   - core
 recommends: []
+
+# The default note-taking variant. Memos is the lighter alternative;
+# the picker offers the `notes` group as one choice.
+variant_group: notes
+variant_default: true
+
 profiles: {}
 
 ports:

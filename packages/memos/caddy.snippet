@@ -1,0 +1,13 @@
+# aurora.local / packages/memos / caddy vhost fragment
+#
+# Fronts Memos on memos.${DOMAIN}. Wired into
+# packages/core/caddy/Caddyfile by the installer's `import` mechanism.
+# Memos has its own accounts, so no `import authelia` here.
+
+http://memos.{$DOMAIN} {
+	reverse_proxy memos:5230
+}
+https://memos.{$DOMAIN} {
+	tls internal
+	reverse_proxy memos:5230
+}

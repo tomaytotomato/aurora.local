@@ -1,0 +1,42 @@
+name: memos
+title: Notes (Memos)
+description: |
+  Memos is a lightweight, self-hosted memo/notes stream: quick capture,
+  tags, Markdown, full-text search, backed by SQLite. The lighter
+  alternative to SilverBullet.
+
+category: productivity
+
+depends_on:
+  - core
+recommends: []
+
+# The lighter `notes` variant. SilverBullet (package `notes`) is the
+# default; this is the alternative.
+variant_group: notes
+variant_default: false
+
+profiles: {}
+
+ports:
+  - {port: 5230, proto: tcp, description: Memos web UI / API}
+
+requires:
+  min_ram_mb: 128
+  min_disk_gb: 1
+  host_roles: []
+
+required_env: []
+
+# The compose service is named `memos`; probe by container so the
+# dashboard resolves it directly.
+probe:
+  kind: docker
+  container: memos
+  external_url: "http://memos.{domain}/"
+
+post_install_notes: |
+  1. First-run: https://memos.$DOMAIN/ — the first account you create
+     becomes the host/admin.
+  2. Notes and the SQLite database live under ../../data/memos.
+  3. Memos has its own accounts; it is not behind Authelia.

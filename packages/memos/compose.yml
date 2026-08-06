@@ -1,0 +1,32 @@
+# aurora.local / packages/memos
+#
+# Memos is a lightweight, self-hosted note/memo service: a fast capture
+# stream for short notes, tagged and searchable, backed by SQLite. It is
+# the lighter alternative to SilverBullet in the `notes` variant group —
+# pick whichever suits; you can run both.
+
+name: aurora-memos
+
+networks:
+  aurora_net:
+    external: true
+
+services:
+  memos:
+    image: neosmemo/memos:stable
+    container_name: memos
+    restart: unless-stopped
+    networks: [aurora_net]
+    environment:
+      - TZ=${TZ:-Europe/London}
+    volumes:
+      - ../../data/memos:/var/opt/memos
+    ports:
+      - "5230:5230"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider",
+             "http://localhost:5230/healthz"]
+      start_period: 15s
+      interval: 15s
+      timeout: 3s
+      retries: 3
