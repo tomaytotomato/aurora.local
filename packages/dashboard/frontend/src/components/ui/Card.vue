@@ -23,18 +23,21 @@ import { cn } from '@/lib/utils';
 // text-card-foreground still guards against `.on-photo`'s white
 // cascade when Card sits over the photoBg canvas.
 //
-// Known latent quirk (documented in Card.spec.ts, tracked as
-// C-followup: Card padding default): Vue 3 coerces a missing boolean
-// `padded` prop to `false`, so the documented "p-7 by default" only
-// fires when a caller opts in with :padded="true". Every current
-// caller either overrides padding via class="p-8" or accepts the
-// no-padding default. Not fixed here — this iteration is scoped to
-// a TOKEN migration and a behaviour change belongs in its own commit.
-const props = defineProps<{
-  class?: HTMLAttributes['class'];
-  padded?: boolean;
-  hover?: boolean;
-}>();
+// Padding default (fixed): Vue 3 coerces a *missing* boolean prop to
+// `false`, so `props.padded !== false && 'p-7'` used to drop the
+// default whenever a caller wrote a bare <Card> — the "p-7 by default"
+// contract only fired for :padded="true". That's why the PackageDetail
+// Overview cards rendered unpadded. withDefaults({ padded: true })
+// gives the absent prop a real default, so bare <Card> is padded and
+// only :padded="false" opts out. Pinned by Card.spec.ts.
+const props = withDefaults(
+  defineProps<{
+    class?: HTMLAttributes['class'];
+    padded?: boolean;
+    hover?: boolean;
+  }>(),
+  { padded: true },
+);
 
 const cls = computed(() =>
   cn(

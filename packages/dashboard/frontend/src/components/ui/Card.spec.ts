@@ -25,15 +25,29 @@ describe('Card', () => {
     expect(cls).toContain('rounded-lg');
   });
 
+  it('applies default padding p-7 with no padded prop (bare <Card>)', () => {
+    // Regression guard for the padding-default bug. Vue 3 coerces a
+    // missing boolean prop to `false`, which used to kill the "p-7 by
+    // default" contract unless a caller opted in with :padded="true" —
+    // that's why the PackageDetail Overview cards rendered unpadded.
+    // Fixed by withDefaults({ padded: true }) in Card.vue. A bare
+    // <Card> MUST be padded; do not let this regress.
+    const w = mount(Card);
+    expect(w.classes().join(' ')).toContain('p-7');
+  });
+
   it('applies default padding p-7 when padded=true is explicitly set', () => {
-    // Note: Vue 3 coerces a missing boolean prop to `false`, so the
-    // documented "p-7 by default" contract only actually fires when a
-    // caller opts in with :padded="true". Every current caller either
-    // overrides padding via class="p-8" or accepts the no-padding
-    // default. Tracked as a followup (aurora: C-followup: Card padding
-    // default).
     const w = mount(Card, { props: { padded: true } });
     expect(w.classes().join(' ')).toContain('p-7');
+  });
+
+  it('caller padding class wins over the p-7 default (twMerge)', () => {
+    // Flat p-0 cards (UsersView, ContainerLogsView) must stay flat even
+    // though the default is now p-7 — twMerge keeps the caller's value.
+    const w = mount(Card, { props: { class: 'p-0' } });
+    const cls = w.classes().join(' ');
+    expect(cls).toContain('p-0');
+    expect(cls).not.toContain('p-7');
   });
 
   it('padded=false suppresses default padding', () => {
