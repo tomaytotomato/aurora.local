@@ -1,0 +1,23 @@
+# aurora.local / packages/jellyfin / caddy vhost fragment
+#
+# Fronts Jellyfin on jellyfin.${DOMAIN}. Wired into
+# packages/core/caddy/Caddyfile by the installer's `import` mechanism.
+#
+# NOTE: no `import authelia` here, on purpose. Jellyfin's native TV and
+# mobile clients cannot follow a forward-auth redirect, so Jellyfin owns
+# its own accounts. Do not put it behind Authelia unless you only ever
+# use the web UI.
+#
+# reverse_proxy handles Jellyfin's websockets automatically. The larger
+# body limit keeps subtitle/artwork uploads from the admin UI happy.
+
+http://jellyfin.{$DOMAIN} {
+	reverse_proxy jellyfin:8096
+}
+https://jellyfin.{$DOMAIN} {
+	tls internal
+	request_body {
+		max_size 100MB
+	}
+	reverse_proxy jellyfin:8096
+}

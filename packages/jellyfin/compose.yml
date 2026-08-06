@@ -1,0 +1,57 @@
+# aurora.local / packages/jellyfin
+#
+# The media *server* the arr stack was missing. Sonarr/Radarr acquire;
+# Jellyfin plays. Seerr (in packages/media) points its "media server"
+# setting at this. Free, no account, no paywalled transcoding.
+#
+# Fronted by Caddy on jellyfin.${DOMAIN}. Deliberately NOT behind
+# Authelia: native TV/mobile clients don't speak forward-auth, so
+# Jellyfin uses its own accounts. Libraries are mounted read-only —
+# Jellyfin reads media, it never writes to it.
+
+name: aurora-jellyfin
+
+networks:
+  aurora_net:
+    external: true
+
+services:
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    networks: [aurora_net]
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-Europe/London}
+      # Behind Caddy the base URL is the vhost. Set this so Jellyfin's
+      # own "remote access" links and clients report the right address.
+      - JELLYFIN_PublishedServerUrl=${JELLYFIN_PUBLISHED_URL:-https://jellyfin.${DOMAIN:-aurora.local}}
+    volumes:
+      - ../../data/jellyfin:/config
+      # Same library roots the arr stack writes into, read-only here.
+      - ${MEDIA_ROOT:-/home/bruce/media}/tv:/data/tv:ro
+      - ${MEDIA_ROOT:-/home/bruce/media}/movies:/data/movies:ro
+      - ${MEDIA_ROOT:-/home/bruce/media}/music:/data/music:ro
+    ports:
+      # HTTP UI/API. Caddy proxies this; the port is published so the
+      # first-run wizard is reachable before the vhost is wired.
+      - "8096:8096"
+      # Optional client auto-discovery on the LAN (uncomment if wanted):
+      #   - "7359:7359/udp"   # Jellyfin client discovery
+      #   - "1900:1900/udp"   # DLNA (conflicts with packages/storage minidlna)
+    # ---- Hardware transcoding (opt-in) --------------------------------
+    # Intel/AMD iGPU (VAAPI/QSV): uncomment and, in the Jellyfin
+    # dashboard, set Playback > Transcoding to VAAPI or QSV with device
+    # /dev/dri/renderD128. The reference box (i5-6500T) has Intel QuickSync.
+    #   devices:
+    #     - /dev/dri:/dev/dri
+    #   group_add:
+    #     - "989"   # the host `render` group GID (getent group render)
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8096/health"]
+      start_period: 30s
+      interval: 15s
+      timeout: 5s
+      retries: 5
