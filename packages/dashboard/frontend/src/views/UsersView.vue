@@ -24,6 +24,7 @@ import {
   Input,
   Label,
   Select,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -162,7 +163,22 @@ function fmt(iso: string | null): string {
           </TableRow>
         </TableHeader>
         <TableBody>
-          <TableRow v-for="u in users" :key="u.id" :data-user="u.username">
+          <template v-if="loading && !users.length">
+            <TableRow v-for="n in 3" :key="`skeleton-${n}`" class="hover:bg-transparent">
+              <TableCell class="align-middle"><Skeleton class="h-4 w-40" /></TableCell>
+              <TableCell class="align-middle"><Skeleton class="h-8 w-36" /></TableCell>
+              <TableCell class="align-middle"><Skeleton class="h-4 w-32" /></TableCell>
+              <TableCell class="align-middle"><Skeleton class="h-5 w-16" /></TableCell>
+              <TableCell></TableCell>
+            </TableRow>
+          </template>
+          <TableRow v-else-if="!users.length" class="hover:bg-transparent">
+            <TableCell :colspan="5" class="text-center text-sm text-muted-foreground py-10">
+              No users yet.
+            </TableCell>
+          </TableRow>
+          <template v-else>
+            <TableRow v-for="u in users" :key="u.id" :data-user="u.username">
             <TableCell class="align-middle">
               <span class="font-mono text-foreground">{{ u.username }}</span>
               <Badge v-if="isSelf(u)" tone="info" class="ml-2">you</Badge>
@@ -193,6 +209,7 @@ function fmt(iso: string | null): string {
               >Remove</button>
             </TableCell>
           </TableRow>
+          </template>
         </TableBody>
       </Table>
 
