@@ -38,6 +38,15 @@
       "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
       "uniqueItems": true
     },
+    "variant_group": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Packages sharing this label are interchangeable alternatives for the same job (e.g. notes: silverbullet | memos). The picker groups them and offers them as a choice within a category."
+    },
+    "variant_default": {
+      "type": "boolean",
+      "description": "True on the one package in a variant_group that is the recommended default pick."
+    },
     "profiles": {
       "type": "object",
       "additionalProperties": {
@@ -74,6 +83,11 @@
       "properties": {
         "min_ram_mb":  { "type": "integer", "minimum": 0 },
         "min_disk_gb": { "type": "integer", "minimum": 0 },
+        "start_budget_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How long the launcher waits for this stack to come up before reporting a failure. Bigger stacks (media) need a generous budget."
+        },
         "host_roles":  {
           "type": "array",
           "items": { "type": "string" },
@@ -85,6 +99,27 @@
       "type": "array",
       "items": { "type": "string" },
       "uniqueItems": true
+    },
+    "probe": {
+      "type": "object",
+      "description": "How the control plane checks whether the package is up. Shape varies by kind (docker | http_json | smb); validated loosely on purpose.",
+      "additionalProperties": true
+    },
+    "subpackages": {
+      "type": "array",
+      "description": "User-facing children shown under the package's row on the dashboard, each with its own status probe.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Pre-install advisories evaluated against the host resource snapshot.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
     },
     "post_install_notes": { "type": "string" }
   }

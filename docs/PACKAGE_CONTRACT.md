@@ -64,6 +64,40 @@ post_install_notes: |
   Prowlarr indexers must be linked in Sonarr/Radarr Settings > Download Clients.
 ```
 
+### Variants (interchangeable alternatives)
+
+A category often has more than one good answer: several note apps, more
+than one media player. Rather than bake one choice in, packages that do
+the same job share a **variant group** and the picker offers the group
+as a single choice.
+
+```yaml
+variant_group: notes            # packages with the same label are alternatives
+variant_default: true           # exactly one per group is the recommended pick
+```
+
+Both fields are optional; a package with no `variant_group` is a
+standalone stack as before. Example groups shipped today:
+
+| Group          | Packages                        | Default        |
+|----------------|---------------------------------|----------------|
+| `notes`        | `notes` (SilverBullet), `memos` | SilverBullet   |
+| `media-player` | `jellyfin`                      | Jellyfin       |
+
+Variants are not mutually exclusive at runtime (you can enable both); the
+grouping is a UI affordance so the picker presents "pick your notes app"
+instead of a flat list.
+
+### Other recognised fields
+
+Beyond the core schema above, manifests may also declare `probe` (how the
+control plane checks liveness), `subpackages` (user-facing children shown
+under the package's dashboard row, each with its own probe), `warnings`
+(pre-install advisories against the host resource snapshot), and
+`requires.start_budget_seconds` (how long the launcher waits before
+reporting a failure). See `packages/media/manifest.yml` for a full
+worked example. All are validated by `.github/schema/manifest.schema.json`.
+
 ## Adding a new package
 
 1. `mkdir packages/foo && cd packages/foo`
