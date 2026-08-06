@@ -1,0 +1,15 @@
+---
+# Disk health monitoring via smartmontools. Read-only: smartd never
+# writes to disks, it only reads SMART attributes and runs self-tests.
+# Safe to leave enabled everywhere; on VMs or disks without SMART it
+# simply finds nothing to monitor.
+smartd_enabled: true
+
+# Short self-test nightly at 02:00, long self-test weekly (Saturday 03:00).
+# Format is smartd's -s regex over (T/MM/DD/DW/HH).
+smartd_short_test: "S/../.././02"
+smartd_long_test: "L/../../6/03"
+
+# Where to send alerts. Empty = log to syslog only (no MTA needed).
+# Set to an address only if the host has a working local mailer.
+smartd_notify_email: ""

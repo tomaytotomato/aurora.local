@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# SnapRAID nightly runner for aurora.local. Managed by host/roles/snapraid.
+#
+# Runs `diff` first and refuses to `sync` if more than the configured
+# number of files were removed since the last run. That guard is the
+# whole point: a data disk that failed to mount looks like a mass
+# deletion, and syncing it would bake the loss into parity, destroying
+# your ability to recover. Better to alert and let a human look.
+
+set -uo pipefail
+
+DELETE_THRESHOLD={{ snapraid_delete_threshold }}
+log() { printf '%s snapraid-runner: %s\n' "$(date -Is)" "$*"; }
+
+log "diff"
+diff_out="$(snapraid diff 2>&1)"
+diff_rc=$?
+printf '%s\n' "$diff_out"
+
+# rc 0 = no changes, 2 = changes present, anything else = error.
+if [[ $diff_rc -ne 0 && $diff_rc -ne 2 ]]; then
+  log "diff failed (rc=$diff_rc); aborting without sync"
+  exit "$diff_rc"
+fi
+
+removed="$(printf '%s\n' "$diff_out" | awk '$2 == "removed" {print $1; exit}')"
+removed="${removed:-0}"
+log "removed since last sync: $removed (threshold $DELETE_THRESHOLD)"
+
+if (( removed > DELETE_THRESHOLD )); then
+  log "ABORT: $removed removals exceed threshold $DELETE_THRESHOLD."
+  log "A disk may have failed to mount. Investigate, then run"
+  log "'snapraid sync' by hand once you are sure the deletions are real."
+  exit 1
+fi
+
+if [[ $diff_rc -eq 0 ]]; then
+  log "no changes; nothing to sync"
+else
+  log "sync"
+  snapraid sync || { log "sync failed (rc=$?)"; exit 1; }
+fi
+
+{% if snapraid_scrub_enabled %}
+log "scrub {{ snapraid_scrub_percent }}% older than {{ snapraid_scrub_older_than }}d"
+snapraid scrub -p {{ snapraid_scrub_percent }} -o {{ snapraid_scrub_older_than }} \
+  || log "scrub reported issues (rc=$?) — check the log"
+{% endif %}
+
+log "done"

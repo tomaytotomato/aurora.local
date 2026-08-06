@@ -1,0 +1,29 @@
+---
+- name: Validate pool has at least one branch
+  ansible.builtin.assert:
+    that:
+      - mergerfs_branches | length > 0
+    fail_msg: >-
+      mergerfs_enabled is true but mergerfs_branches is empty.
+      List the already-mounted data disks to pool.
+
+- name: Install mergerfs
+  ansible.builtin.apt:
+    name: mergerfs
+    state: present
+
+- name: Ensure the pool mountpoint exists
+  ansible.builtin.file:
+    path: "{{ mergerfs_mountpoint }}"
+    state: directory
+    owner: "{{ mergerfs_owner }}"
+    group: "{{ mergerfs_group }}"
+    mode: "{{ mergerfs_mode }}"
+
+- name: Add fstab entry and mount the mergerfs pool
+  ansible.posix.mount:
+    src: "{{ mergerfs_branches | join(':') }}"
+    path: "{{ mergerfs_mountpoint }}"
+    fstype: fuse.mergerfs
+    opts: "{{ mergerfs_options }}"
+    state: mounted

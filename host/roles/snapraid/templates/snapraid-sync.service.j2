@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=SnapRAID nightly diff, sync and scrub
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/snapraid-runner
+# Parity work is IO-heavy; keep it from starving the rest of the box.
+Nice=15
+IOSchedulingClass=idle

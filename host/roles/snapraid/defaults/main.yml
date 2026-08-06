@@ -1,0 +1,55 @@
+---
+# Parity protection for the mergerfs pool. SnapRAID computes parity
+# across the data disks onto one or two dedicated parity disks, so a
+# failed data disk can be rebuilt. It is snapshot parity (not real-time
+# RAID): you run `sync` on a schedule, and recover to the last sync.
+# Perfect for a largely-static media library.
+#
+# NON-DESTRUCTIVE on install: this role writes config and a scheduled
+# sync, but never formats disks. The parity disk must be at least as
+# large as the largest data disk.
+snapraid_enabled: false
+
+# Data disks to protect. `path` is the already-mounted disk root; `name`
+# is a stable label SnapRAID uses internally (keep it constant).
+#   snapraid_data_disks:
+#     - {name: d1, path: /mnt/disk1}
+#     - {name: d2, path: /mnt/disk2}
+snapraid_data_disks: []
+
+# Parity files, one per parity disk (1 = single-disk fault tolerance,
+# 2 = dual). Each must live on its OWN dedicated disk, not a data disk.
+#   snapraid_parity_files:
+#     - /mnt/parity1/snapraid.parity
+snapraid_parity_files: []
+
+# Content (index) files. Best practice: one on the host plus one per
+# data disk, so the index survives losing any single disk. If empty,
+# the role derives a sensible set (see tasks).
+snapraid_content_files: []
+
+# Patterns SnapRAID ignores. Downloads and caches are reproducible and
+# churn constantly, which bloats parity for no benefit.
+snapraid_exclude:
+  - "/lost+found/"
+  - "/tmp/"
+  - "*.unrecoverable"
+  - "*.!sync"
+  - "/downloads/"
+  - "/.snapraid.content*"
+  - "*.bak"
+
+# Safety rail: if a sync would remove more than this many files, the
+# runner aborts and alerts instead of baking a mass deletion (e.g. a
+# mount that vanished) into parity. Raise it for a genuine big cleanup.
+snapraid_delete_threshold: 200
+
+# Nightly sync schedule (systemd OnCalendar).
+snapraid_sync_oncalendar: "*-*-* 03:30:00"
+
+# Scrub verifies a rolling slice of existing parity for bit-rot after
+# each sync. 8% older-than-10-days means the whole array is checked
+# about monthly.
+snapraid_scrub_enabled: true
+snapraid_scrub_percent: 8
+snapraid_scrub_older_than: 10

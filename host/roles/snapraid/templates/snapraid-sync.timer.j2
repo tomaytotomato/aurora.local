@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Run SnapRAID sync nightly
+
+[Timer]
+OnCalendar={{ snapraid_sync_oncalendar }}
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

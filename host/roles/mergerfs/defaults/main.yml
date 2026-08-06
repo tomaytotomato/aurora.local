@@ -1,0 +1,29 @@
+---
+# Union-filesystem pool via mergerfs. Presents several data disks as one
+# mountpoint, so the media library spans disks without RAID and without
+# caring about individual disk sizes. Disks are added over time; new
+# files land on whichever branch has the most free space.
+#
+# NON-DESTRUCTIVE: this role never formats or partitions anything. The
+# branches below must already be formatted filesystems, mounted (by the
+# storage-mount role or by hand). mergerfs just unions them.
+mergerfs_enabled: false
+
+# The single pooled mountpoint apps and shares point at.
+mergerfs_mountpoint: /mnt/storage
+
+# The already-mounted data disks to pool. Order is irrelevant.
+#   mergerfs_branches:
+#     - /mnt/disk1
+#     - /mnt/disk2
+mergerfs_branches: []
+
+# mergerfs mount options. category.create=mfs puts new files on the disk
+# with the most free space; minfreespace keeps a disk from filling to
+# the brim. allow_other lets containers (running as PUID 1000) read it.
+mergerfs_options: >-
+  defaults,allow_other,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs,minfreespace=20G,fsname=mergerfs,nofail
+
+mergerfs_owner: "{{ home_user | default('bruce') }}"
+mergerfs_group: "{{ home_user | default('bruce') }}"
+mergerfs_mode: "0775"

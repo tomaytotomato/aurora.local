@@ -31,6 +31,29 @@ media_root: /home/{{ home_user }}/media
 #       fstype: xfs
 external_mounts: []
 
+# ---- disk pooling + parity (opt-in) ----
+# mergerfs unions several already-mounted data disks into one pool at
+# storage_pool_mountpoint. SnapRAID adds parity so a failed data disk
+# can be rebuilt. smartd watches disk health (on by default; harmless
+# where there is no SMART). None of these format or partition anything —
+# the disks must already be formatted and mounted (see external_mounts).
+#
+# mergerfs_enabled: true
+# mergerfs_mountpoint: /mnt/storage
+# mergerfs_branches:
+#   - /mnt/disk1
+#   - /mnt/disk2
+#
+# snapraid_enabled: true
+# snapraid_data_disks:
+#   - {name: d1, path: /mnt/disk1}
+#   - {name: d2, path: /mnt/disk2}
+# snapraid_parity_files:
+#   - /mnt/parity1/snapraid.parity      # dedicated disk, >= largest data disk
+#
+# smartd_enabled: true                  # default; set false to disable
+# smartd_notify_email: ""               # needs a working local MTA if set
+
 # ---- package toggles ----
 # Consumed by scripts/up.sh; ansible only cares about host-level roles.
 packages_enabled:

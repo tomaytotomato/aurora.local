@@ -1,0 +1,81 @@
+---
+- name: Validate SnapRAID has data and parity
+  ansible.builtin.assert:
+    that:
+      - snapraid_data_disks | length > 0
+      - snapraid_parity_files | length > 0
+    fail_msg: >-
+      snapraid_enabled is true but snapraid_data_disks or
+      snapraid_parity_files is empty. Parity needs at least one data disk
+      and one parity file on a dedicated disk.
+
+- name: Install snapraid
+  ansible.builtin.apt:
+    name: snapraid
+    state: present
+
+# Default content layout: one index on the host, plus one on every data
+# disk, so the index survives the loss of any single disk.
+- name: Derive default content files when none given
+  ansible.builtin.set_fact:
+    snapraid_content_effective: >-
+      {{ ['/var/snapraid/snapraid.content']
+         + (snapraid_data_disks | map(attribute='path')
+            | map('regex_replace', '$', '/.snapraid.content') | list) }}
+  when: snapraid_content_files | length == 0
+
+- name: Use explicit content files when given
+  ansible.builtin.set_fact:
+    snapraid_content_effective: "{{ snapraid_content_files }}"
+  when: snapraid_content_files | length > 0
+
+- name: Ensure the host content directory exists
+  ansible.builtin.file:
+    path: /var/snapraid
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy /etc/snapraid.conf
+  ansible.builtin.template:
+    src: snapraid.conf.j2
+    dest: /etc/snapraid.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Deploy the SnapRAID runner
+  ansible.builtin.template:
+    src: snapraid-runner.sh.j2
+    dest: /usr/local/bin/snapraid-runner
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the sync service unit
+  ansible.builtin.template:
+    src: snapraid-sync.service.j2
+    dest: /etc/systemd/system/snapraid-sync.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the sync timer unit
+  ansible.builtin.template:
+    src: snapraid-sync.timer.j2
+    dest: /etc/systemd/system/snapraid-sync.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers so the timer unit is known before enabling
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the nightly sync timer
+  ansible.builtin.systemd:
+    name: snapraid-sync.timer
+    enabled: true
+    state: started

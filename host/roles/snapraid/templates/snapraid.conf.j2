@@ -1,0 +1,32 @@
+# {{ ansible_managed }}
+# SnapRAID configuration for aurora.local. Managed by host/roles/snapraid.
+
+# ---- parity ----------------------------------------------------------
+{% for p in snapraid_parity_files %}
+{% if loop.index == 1 %}
+parity {{ p }}
+{% else %}
+{{ loop.index }}-parity {{ p }}
+{% endif %}
+{% endfor %}
+
+# ---- content (index) -------------------------------------------------
+{% for c in snapraid_content_effective %}
+content {{ c }}
+{% endfor %}
+
+# ---- data disks ------------------------------------------------------
+{% for d in snapraid_data_disks %}
+data {{ d.name }} {{ d.path }}
+{% endfor %}
+
+# ---- excludes --------------------------------------------------------
+{% for e in snapraid_exclude %}
+exclude {{ e }}
+{% endfor %}
+
+# ---- tuning ----------------------------------------------------------
+# autosave flushes the index every N GB during a long sync so an
+# interruption doesn't cost the whole run.
+autosave 500
+blocksize 256

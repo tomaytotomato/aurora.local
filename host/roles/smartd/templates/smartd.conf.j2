@@ -1,0 +1,19 @@
+# {{ ansible_managed }}
+# smartd configuration for aurora.local. Managed by host/roles/smartd.
+#
+# DEVICESCAN monitors every SMART-capable device automatically, so disks
+# added later are picked up without editing this file.
+#
+#   -a            monitor all attributes
+#   -o on         enable automatic offline data collection
+#   -S on         enable attribute autosave
+#   -n standby,q  don't spin up a sleeping disk just to poll it (quiet)
+#   -s (...)      self-test schedule: short nightly, long weekly
+#   -W 4,45,55    warn on 4C swing, alert at 45C, critical at 55C
+#   -m/-M         email alerts (only emitted when an address is set;
+#                 otherwise warnings go to syslog, which needs no MTA)
+{% if smartd_notify_email | length > 0 %}
+DEVICESCAN -a -o on -S on -n standby,q -W 4,45,55 -s ({{ smartd_short_test }}|{{ smartd_long_test }}) -m {{ smartd_notify_email }} -M exec /usr/share/smartmontools/smartd-runner
+{% else %}
+DEVICESCAN -a -o on -S on -n standby,q -W 4,45,55 -s ({{ smartd_short_test }}|{{ smartd_long_test }})
+{% endif %}

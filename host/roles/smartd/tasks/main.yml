@@ -1,0 +1,20 @@
+---
+- name: Install smartmontools
+  ansible.builtin.apt:
+    name: smartmontools
+    state: present
+
+- name: Deploy smartd.conf
+  ansible.builtin.template:
+    src: smartd.conf.j2
+    dest: /etc/smartd.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart smartd
+
+- name: Enable and start smartd
+  ansible.builtin.systemd:
+    name: smartd
+    enabled: true
+    state: started

@@ -21,6 +21,15 @@
     - role: storage-mount
       tags: [storage, system]
       when: external_mounts | default([]) | length > 0
+    - role: mergerfs
+      tags: [storage, mergerfs, system]
+      when: mergerfs_enabled | default(false)
+    - role: snapraid
+      tags: [storage, snapraid, system]
+      when: snapraid_enabled | default(false)
+    - role: smartd
+      tags: [storage, smartd, system]
+      when: smartd_enabled | default(true)
     - role: avahi
       tags: [avahi, network]
     - role: unattended-upgrades
