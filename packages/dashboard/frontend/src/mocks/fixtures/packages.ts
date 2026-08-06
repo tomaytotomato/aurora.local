@@ -231,6 +231,148 @@ export const packageSeeds: Seed[] = [
     },
     env: [],
   },
+  {
+    summary: {
+      name: 'jellyfin',
+      title: 'Media server (Jellyfin)',
+      category: 'media',
+      description: 'Jellyfin — free media server for the films, TV and music the *arr stack collects.',
+      enabled: false,
+      running: false,
+      requires: { start_budget_seconds: 90 },
+      ports: [{ host: 8096, container: 8096 }],
+      dependsOn: ['core'],
+    },
+    detail: {
+      readme: '# Jellyfin\n\nThe media server the *arr stack was missing. Libraries\nmount read-only from your media root. Not behind Authelia.',
+      vhosts: ['jellyfin.aurora.local'],
+      homepageTiles: 1,
+    },
+    env: [],
+  },
+  {
+    summary: {
+      name: 'notes',
+      title: 'Notes (SilverBullet)',
+      category: 'productivity',
+      description: 'SilverBullet — markdown-native, extensible notes and PKM.',
+      enabled: false,
+      running: false,
+      requires: { start_budget_seconds: 30 },
+      ports: [{ host: 3030, container: 3000 }],
+      dependsOn: ['core'],
+    },
+    detail: {
+      readme: '# Notes\n\nSilverBullet keeps every note as a plain .md file on disk,\nwith a live command palette and a plug ecosystem.',
+      vhosts: ['notes.aurora.local'],
+      homepageTiles: 1,
+    },
+    env: [
+      envVar({ key: 'SB_USER', example: 'aurora', required: true }),
+      envVar({ key: 'SB_PASSWORD', secret: true, required: true }),
+    ],
+  },
+  {
+    summary: {
+      name: 'memos',
+      title: 'Notes (Memos)',
+      category: 'productivity',
+      description: 'Memos — lightweight, self-hosted memo stream on SQLite.',
+      enabled: false,
+      running: false,
+      requires: { start_budget_seconds: 15 },
+      ports: [{ host: 5230, container: 5230 }],
+      dependsOn: ['core'],
+    },
+    detail: {
+      readme: '# Memos\n\nThe lighter alternative to SilverBullet: quick capture,\ntags, full-text search.',
+      vhosts: ['memos.aurora.local'],
+      homepageTiles: 1,
+    },
+    env: [],
+  },
+  {
+    summary: {
+      name: 'documents',
+      title: 'Documents',
+      category: 'productivity',
+      description: 'Paperless-ngx + Stirling-PDF — scan, OCR and manage documents.',
+      enabled: false,
+      running: false,
+      requires: { start_budget_seconds: 120 },
+      ports: [{ host: 8010, container: 8000 }],
+      dependsOn: ['core'],
+    },
+    detail: {
+      readme: '# Documents\n\nPaperless-ngx OCRs and indexes your paperwork; Stirling-PDF\nhandles splits, merges and conversions.',
+      vhosts: ['paperless.aurora.local'],
+      homepageTiles: 2,
+    },
+    env: [
+      envVar({ key: 'PAPERLESS_ADMIN_PASSWORD', secret: true, required: true }),
+    ],
+  },
+  {
+    summary: {
+      name: 'backup',
+      title: 'Backup',
+      category: 'storage',
+      description: 'Kopia — deduplicated, encrypted backups with a web UI.',
+      enabled: false,
+      running: false,
+      requires: { start_budget_seconds: 30 },
+      ports: [{ host: 51515, container: 51515 }],
+      dependsOn: ['core'],
+    },
+    detail: {
+      readme: '# Backup\n\nKopia snapshots configs and data to a local or remote\nrepository, deduplicated and encrypted at rest.',
+      vhosts: ['backup.aurora.local'],
+      homepageTiles: 1,
+    },
+    env: [
+      envVar({ key: 'KOPIA_PASSWORD', secret: true, required: true, comment: 'Repository encryption password. Losing it loses the repo.' }),
+    ],
+  },
+  {
+    summary: {
+      name: 'dev',
+      title: 'Dev',
+      category: 'dev',
+      description: 'code-server + Postgres 16 + Redis 7.',
+      enabled: false,
+      running: false,
+      requires: { start_budget_seconds: 60 },
+      ports: [{ host: 8443, container: 8443 }],
+      dependsOn: ['core'],
+    },
+    detail: {
+      readme: '# Dev\n\nA browser IDE (code-server) with a Postgres and Redis\nready for whatever you are building.',
+      vhosts: ['code.aurora.local'],
+      homepageTiles: 1,
+    },
+    env: [
+      envVar({ key: 'CODE_SERVER_PASSWORD', secret: true, required: true }),
+    ],
+  },
+  {
+    summary: {
+      name: 'home-automation',
+      title: 'Home Automation',
+      category: 'home-automation',
+      description: 'Home Assistant + Mosquitto + Zigbee2MQTT (--zigbee opt-in).',
+      enabled: false,
+      running: false,
+      requires: { start_budget_seconds: 90 },
+      ports: [{ host: 8123, container: 8123 }],
+      dependsOn: ['core'],
+    },
+    detail: {
+      readme: '# Home Automation\n\nHome Assistant with an MQTT broker and optional Zigbee\nbridge for local, cloud-free automation.',
+      vhosts: ['home.aurora.local'],
+      homepageTiles: 1,
+    },
+    env: [],
+  },
 ];
 
 export function summaryFor(name: string): PackageSummary | undefined {
