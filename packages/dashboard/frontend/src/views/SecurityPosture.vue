@@ -215,7 +215,7 @@ const counts = computed(() => {
 
 <template>
   <section data-view="security-posture">
-    <div class="mb-10 flex items-start justify-between gap-6">
+    <div class="mb-10 flex items-start justify-between gap-6 on-photo">
       <div>
         <div class="eyebrow mb-2">Security</div>
         <h1 class="mb-3">Security posture</h1>
@@ -225,13 +225,13 @@ const counts = computed(() => {
         </p>
       </div>
       <div v-if="scannerLive" class="flex items-center gap-2">
-        <Badge v-if="counts.high > 0" tone="err" data-test="sec-count-high">
+        <Badge v-if="counts.high > 0" tone="err" class="bg-card" data-test="sec-count-high">
           {{ counts.high }} high
         </Badge>
-        <Badge v-if="counts.medium > 0" tone="warn" data-test="sec-count-medium">
+        <Badge v-if="counts.medium > 0" tone="warn" class="bg-card" data-test="sec-count-medium">
           {{ counts.medium }} medium
         </Badge>
-        <Badge v-if="counts.low > 0" tone="info" data-test="sec-count-low">
+        <Badge v-if="counts.low > 0" tone="info" class="bg-card" data-test="sec-count-low">
           {{ counts.low }} low
         </Badge>
         <Button variant="secondary" size="sm" :disabled="loading" @click="fetchFindings"
@@ -259,14 +259,12 @@ const counts = computed(() => {
     </Card>
 
     <!-- Error state — §5 contract. -->
-    <template v-else-if="err">
+    <Card v-else-if="err" class="p-8">
       <Alert variant="destructive" class="mb-4" data-test="sec-error">
         <AlertDescription>{{ err }}</AlertDescription>
       </Alert>
-      <div class="mb-6">
-        <Button variant="secondary" size="sm" @click="fetchFindings">Try again</Button>
-      </div>
-    </template>
+      <Button variant="secondary" size="sm" @click="fetchFindings">Try again</Button>
+    </Card>
 
     <!-- Zero findings — the honest 'all clear' render. -->
     <Card

@@ -125,32 +125,31 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
 
 <template>
   <section>
-    <div class="mb-10">
+    <div class="mb-10 on-photo">
       <div class="eyebrow mb-2">Preferences</div>
       <h1>Settings</h1>
     </div>
 
     <div class="space-y-6 max-w-2xl">
       <Card class="p-8">
-        <div class="eyebrow mb-2">Admin</div>
-        <h3 class="mb-2">Account</h3>
-        <div class="text-sm text-muted-foreground mb-4">
+        <h3 class="card-title mb-1">Account</h3>
+        <p class="card-subtitle mb-4">
           Signed in as <span class="font-mono text-foreground">{{ auth.session?.username ?? '—' }}</span>.
-        </div>
+        </p>
         <Button variant="secondary" size="sm" @click="signOut">Sign out</Button>
       </Card>
 
       <Card class="p-8">
-        <div class="eyebrow mb-2">Passkey</div>
-        <h3 class="mb-2">Second factor</h3>
+        <h3 class="card-title mb-1">Second factor</h3>
+        <p class="card-subtitle mb-3">Passkey</p>
         <Alert variant="info">
           <AlertDescription>Passkey enrollment lands in v0.2.</AlertDescription>
         </Alert>
       </Card>
 
       <Card v-if="info" class="p-8">
-        <div class="eyebrow mb-2">System</div>
-        <h3 class="mb-4">Metadata</h3>
+        <h3 class="card-title mb-1">System</h3>
+        <p class="card-subtitle mb-4">Metadata</p>
         <dl class="text-sm space-y-2">
           <div class="flex justify-between"><dt class="text-muted-foreground">Hostname</dt><dd class="font-mono">{{ info.hostname }}</dd></div>
           <div class="flex justify-between"><dt class="text-muted-foreground">Domain</dt><dd class="font-mono">{{ info.domain }}</dd></div>
@@ -168,8 +167,7 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
       <Card class="p-8" data-card="lan-discovery">
         <div class="flex items-baseline justify-between mb-3 gap-4">
           <div>
-            <div class="eyebrow mb-2">Discovery</div>
-            <h3>LAN aliases</h3>
+            <h3 class="card-title mb-1">LAN aliases</h3>
             <p class="text-xs text-muted-foreground mt-1">
               mDNS A-records published for each enabled-package vhost.
               Lets LAN devices hit <span class="font-mono">&lt;label&gt;.{{ info?.domain ?? 'aurora.local' }}</span>
@@ -237,8 +235,7 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
       <Card class="p-8" data-card="audit-log">
         <div class="flex items-baseline justify-between mb-3 gap-4">
           <div>
-            <div class="eyebrow mb-2">Audit</div>
-            <h3>Recent activity</h3>
+            <h3 class="card-title mb-1">Recent activity</h3>
             <p class="text-xs text-muted-foreground mt-1">Newest first, last 100 events.</p>
           </div>
           <div class="flex items-center gap-2">

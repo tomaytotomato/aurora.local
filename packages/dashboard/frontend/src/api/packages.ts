@@ -11,7 +11,11 @@ export type PackageCategory =
   | 'dev'
   | 'ai'
   | 'home-automation'
-  | 'identity';
+  | 'identity'
+  // 'vpn' package (2026-08-06): an inbound WireGuard/OpenVPN server for
+  // remote access, which is the opposite direction of 'privacy''s
+  // outbound Gluetun tunnel — neither existing category fits.
+  | 'network';
 
 export interface EnvVarSpec {
   key: string;

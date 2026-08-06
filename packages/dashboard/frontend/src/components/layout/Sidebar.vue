@@ -30,7 +30,9 @@ interface NavItem {
 // Sarah can't route into what is honestly a placeholder page.
 const nav: NavItem[] = [
   { to: '/', label: 'Overview', icon: 'M3 12 L12 3 L21 12 M5 10 V21 H19 V10' },
-  { to: '/packages', label: 'Packages', icon: 'M3 7 L12 3 L21 7 L12 11 Z M3 7 V17 L12 21 M21 7 V17 L12 21' },
+  { to: '/apps', label: 'Apps', icon: 'M3 7 L12 3 L21 7 L12 11 Z M3 7 V17 L12 21 M21 7 V17 L12 21' },
+  { to: '/vpn', label: 'VPN', icon: 'M12 3 L4 6 V11 C4 16 7.5 19.5 12 21 C16.5 19.5 20 16 20 11 V6 Z M9 11.5 L11 13.5 L15 9.5' },
+  { to: '/users', label: 'Users', icon: 'M16 20 V18 A3 3 0 0 0 13 15 H7 A3 3 0 0 0 4 18 V20 M10 11 A3.5 3.5 0 1 0 10 4 A3.5 3.5 0 0 0 10 11 M20 20 V18 A3 3 0 0 0 17.5 15.1 M15 4.2 A3.5 3.5 0 0 1 15 10.8' },
   { to: '/security', label: 'Security', icon: 'M12 3 L20 6 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V6 Z', requiresCapability: 'securityScanner', badgeKey: 'security' },
   { to: '/settings', label: 'Settings', icon: 'M12 8 A4 4 0 1 1 12 16 A4 4 0 1 1 12 8 M12 2 V4 M12 20 V22 M4 12 H2 M22 12 H20 M5 5 L6.5 6.5 M17.5 17.5 L19 19 M5 19 L6.5 17.5 M17.5 6.5 L19 5' },
 ];

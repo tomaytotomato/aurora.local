@@ -78,23 +78,38 @@ onMounted(async () => {
 
 <template>
   <section>
-    <div class="mb-8">
-      <router-link to="/packages" class="text-xs text-muted-foreground no-underline">← All packages</router-link>
+    <div class="mb-8 on-photo">
+      <router-link to="/apps" class="text-xs text-white/70 no-underline hover:text-white">← All apps</router-link>
       <div class="flex items-baseline gap-3 mt-4">
-        <h1>{{ name }}</h1>
-        <Badge v-if="detail" :tone="detail.enabled ? 'ok' : 'neutral'">
+        <h1 class="capitalize">{{ name }}</h1>
+        <Badge v-if="detail" :tone="detail.enabled ? 'ok' : 'neutral'" class="bg-card">
           {{ detail.enabled ? (detail.running ? 'running' : 'stopped') : 'disabled' }}
         </Badge>
       </div>
-      <p v-if="detail" class="text-muted-foreground mt-2">{{ detail.description }}</p>
+      <p v-if="detail" class="mt-2">{{ detail.description }}</p>
+      <!-- VPN has a bespoke config surface at its own route; peer/QR
+           management doesn't fit the generic env-var Config tab. -->
+      <router-link
+        v-if="name === 'vpn'"
+        to="/vpn"
+        class="inline-block mt-3 text-sm text-white/85 no-underline hover:text-white"
+      >Full configuration →</router-link>
     </div>
 
-    <Alert v-if="err" variant="destructive" class="mb-6">
-      <AlertDescription>{{ err }}</AlertDescription>
-    </Alert>
+    <Card v-if="err" class="p-6 mb-6">
+      <Alert variant="destructive"><AlertDescription>{{ err }}</AlertDescription></Alert>
+    </Card>
 
+    <!--
+      The tabbed region sits over the app-wide aurora photo. The tab
+      strip stays transparent and uses on-photo-tabs for legible triggers
+      (same as PackagesList's filter bar and VpnView); the panels below
+      are opaque Cards. No opaque box around the tabs — it reads as a
+      panel floating detached from the content cards under it.
+    -->
     <Tabs
       v-model="activeTab"
+      class="on-photo-tabs"
       :tabs="[
         { value: 'overview', label: 'Overview' },
         { value: 'config', label: 'Config' },
@@ -133,9 +148,11 @@ onMounted(async () => {
       </div>
 
       <div v-else-if="activeTab === 'config'">
-        <Alert variant="info">
-          <AlertDescription>Env-form editor lands with M2 (see brief §6.2).</AlertDescription>
-        </Alert>
+        <Card class="p-6">
+          <Alert variant="info">
+            <AlertDescription>Env-form editor lands with M2 (see brief §6.2).</AlertDescription>
+          </Alert>
+        </Card>
       </div>
 
       <div v-else-if="activeTab === 'logs'">
@@ -144,7 +161,7 @@ onMounted(async () => {
           The old 'lands with M3' Alert stayed too long — M3 shipped B1
           + B2 + B3 already, so this promise is due.
         -->
-        <div v-if="containersErr" data-state="error" role="alert" class="space-y-3">
+        <Card v-if="containersErr" data-state="error" role="alert" class="p-6 space-y-3">
           <Alert variant="destructive">
             <AlertDescription>{{ containersErr }}</AlertDescription>
           </Alert>
@@ -153,7 +170,7 @@ onMounted(async () => {
             class="text-sm text-foreground underline"
             @click="loadContainers"
           >Try again</button>
-        </div>
+        </Card>
         <div
           v-else-if="!containersLoaded && (containersLoading || !detail)"
           data-state="loading"
@@ -177,36 +194,38 @@ onMounted(async () => {
             package first, then come back here.
           </p>
         </Card>
-        <ul v-else class="space-y-2" data-test="package-logs-list">
-          <li
-            v-for="c in containers"
-            :key="c.id"
-            class="flex items-center justify-between gap-3 border border-border rounded-md px-4 py-3"
-          >
-            <div class="min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="font-mono text-sm truncate">{{ cleanName(c.names) }}</span>
-                <Badge :tone="c.state === 'running' ? 'ok' : 'neutral'">{{ c.state }}</Badge>
+        <Card v-else class="p-4">
+          <ul class="space-y-2" data-test="package-logs-list">
+            <li
+              v-for="c in containers"
+              :key="c.id"
+              class="flex items-center justify-between gap-3 border border-border rounded-md px-4 py-3"
+            >
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-sm truncate">{{ cleanName(c.names) }}</span>
+                  <Badge :tone="c.state === 'running' ? 'ok' : 'neutral'">{{ c.state }}</Badge>
+                </div>
+                <div class="text-xs text-muted-foreground mt-0.5 truncate">{{ c.image }}</div>
               </div>
-              <div class="text-xs text-muted-foreground mt-0.5 truncate">{{ c.image }}</div>
-            </div>
-            <router-link
-              :to="`/containers/${encodeURIComponent(cleanName(c.names))}/logs`"
-              class="text-sm text-foreground no-underline hover:underline whitespace-nowrap"
-              data-test="package-logs-link"
-            >View logs →</router-link>
-          </li>
-        </ul>
+              <router-link
+                :to="`/containers/${encodeURIComponent(cleanName(c.names))}/logs`"
+                class="text-sm text-foreground no-underline hover:underline whitespace-nowrap"
+                data-test="package-logs-link"
+              >View logs →</router-link>
+            </li>
+          </ul>
+        </Card>
       </div>
 
       <div v-else>
-        <div v-if="detail" class="text-sm text-muted-foreground">
+        <Card v-if="detail" class="p-6 text-sm text-muted-foreground">
           <div class="mb-2"><span class="eyebrow">Dependencies:</span></div>
           <div class="flex gap-2 flex-wrap">
             <span v-for="d in (detail.dependsOn ?? [])" :key="d" class="font-mono text-xs px-2 py-1 rounded border border-border">{{ d }}</span>
             <span v-if="!(detail.dependsOn ?? []).length" class="text-muted-foreground">none</span>
           </div>
-        </div>
+        </Card>
       </div>
     </Tabs>
   </section>

@@ -208,13 +208,35 @@
 }
 
 @layer components {
-  /* Editorial rule — the little uppercase eyebrow. */
+  /* Editorial rule — the little uppercase eyebrow. Use it as a SECTION
+     kicker inside a card (a divider label like "Recent changes"), never
+     as the card's own title. A card's title must be the most prominent
+     text in its header; see .card-title below and docs/STYLEGUIDE.md. */
   .eyebrow {
     font-size: 0.6875rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--color-muted-foreground);
     font-weight: 500;
+  }
+
+  /* Card header anatomy (opinionated, one way to do it).
+     The title is the largest text in the card header; the subtitle sits
+     under it, smaller and muted. Previously cards led with a tiny
+     uppercase kicker over a large serif line, which read as a big
+     SUBTITLE under a small title. This inverts that for good. */
+  .card-title {
+    font-family: var(--font-serif);
+    font-size: 1.25rem;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+    color: var(--color-foreground);
+  }
+  .card-subtitle {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--color-muted-foreground);
   }
 
   /* iter-3 light-mode fix: outside-card content on the aurora photo
@@ -240,6 +262,37 @@
   .on-photo > .eyebrow,
   .on-photo > div > .eyebrow {
     color: rgba(255, 255, 255, 0.72);
+  }
+  /* Supporting lines in an outside-card header (the page description
+     paragraph). Overrides text-muted-foreground so the copy reads over
+     the photo. Scoped to direct children so it never touches a Card's
+     own muted body text. */
+  .on-photo > p,
+  .on-photo > div > p,
+  .on-photo > .card-subtitle,
+  .on-photo > div > .card-subtitle {
+    color: rgba(255, 255, 255, 0.78) !important;
+  }
+
+  /* Tabs strip sitting directly on the aurora photo. Pass
+     class="on-photo-tabs" to <Tabs>. Recolours the triggers, the active
+     underline, and the base rule so the strip reads on the photo WITHOUT
+     an opaque card behind it — a boxed tab bar floats as a panel
+     disconnected from the content cards below it (the "bun in mid-air"
+     look). !important because the triggers carry Tailwind text-* utility
+     classes, which otherwise win the layer cascade. */
+  .on-photo-tabs {
+    border-color: rgba(255, 255, 255, 0.22) !important;
+  }
+  .on-photo-tabs button {
+    color: rgba(255, 255, 255, 0.6) !important;
+  }
+  .on-photo-tabs button:hover,
+  .on-photo-tabs button[aria-selected="true"] {
+    color: rgba(255, 255, 255, 0.98) !important;
+  }
+  .on-photo-tabs button > span {
+    background-color: #fff !important;
   }
 
   /* Content column.

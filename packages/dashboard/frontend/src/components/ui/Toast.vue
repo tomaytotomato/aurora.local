@@ -8,9 +8,20 @@ import type { ToastVariant } from '@/composables/useToast';
 // Single toast presentation — rendered by Toaster.vue, not directly
 // by callers. Callers invoke `toast({ … })` from useToast.
 //
-// Variants map onto Alert's shadcn token pattern (bg-<name>/10 tint +
-// border-<name>/40 + text-<name>) so a success toast reads as the same
-// visual family as a success alert. Consistency > cleverness.
+// Variants map onto Alert's shadcn token pattern (tint + border-<name>/40 +
+// text-<name>) so a success toast reads as the same visual family as a
+// success alert. Consistency > cleverness.
+//
+// Unlike Alert, a toast can never sit inside a Card — Toaster teleports it
+// straight to <body> as a floating, fixed-position notification, so it
+// always has the app-wide aurora photo (or plain canvas) directly behind
+// it. A plain `bg-<name>/10` alpha tint would let that show straight
+// through, and in light mode text-<name> on the near-black photo is close
+// to unreadable — the same contrast bug Alert avoids by always being
+// wrapped in an opaque Card. The tint here is layered as a background-
+// *image* (a flat two-stop gradient) on top of an opaque `bg-card` base
+// instead of as the background-color itself, so the toast keeps the same
+// look while staying fully opaque wherever it renders.
 
 const props = defineProps<{
   title?: string;
@@ -29,9 +40,9 @@ const cls = computed(() => {
   const variant = props.variant ?? 'default';
   const variantCls: Record<ToastVariant, string> = {
     default: 'bg-card text-card-foreground border-border',
-    success: 'bg-success/10 border-success/40 text-success',
-    warning: 'bg-warning/10 border-warning/40 text-warning',
-    destructive: 'bg-destructive/10 border-destructive/40 text-destructive',
+    success: 'bg-card bg-gradient-to-r from-success/10 to-success/10 border-success/40 text-success',
+    warning: 'bg-card bg-gradient-to-r from-warning/10 to-warning/10 border-warning/40 text-warning',
+    destructive: 'bg-card bg-gradient-to-r from-destructive/10 to-destructive/10 border-destructive/40 text-destructive',
   };
   return cn(
     'pointer-events-auto relative w-80 max-w-full rounded-md border p-4 pr-10 shadow-lg',

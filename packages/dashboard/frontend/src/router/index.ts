@@ -29,10 +29,24 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     component: AppShell,
+    // The aurora photo background is app-wide now (see AppShell.vue). Meta
+    // lives on the parent so every child inherits it via the merged
+    // route.meta — views read `route.meta.photoBg` to light their headers.
+    meta: { photoBg: true },
     children: [
-      { path: '', component: () => import('@/views/DashboardHome.vue'), meta: { photoBg: true } },
-      { path: 'packages', component: () => import('@/views/PackagesList.vue') },
-      { path: 'packages/:name', component: () => import('@/views/PackageDetail.vue') },
+      { path: '', component: () => import('@/views/DashboardHome.vue') },
+      // "Packages" is now "Apps" in the UI (2026-08-06). The route moved
+      // to /apps; the old /packages paths redirect so bookmarks and any
+      // in-flight links keep working. The wire (/api/packages) is
+      // unchanged — this is a user-facing rename only.
+      { path: 'apps', component: () => import('@/views/PackagesList.vue') },
+      { path: 'apps/:name', component: () => import('@/views/PackageDetail.vue') },
+      { path: 'packages', redirect: '/apps' },
+      { path: 'packages/:name', redirect: (to) => `/apps/${to.params.name}` },
+      // User management (2026-08-06).
+      { path: 'users', component: () => import('@/views/UsersView.vue') },
+      // VPN configuration — WireGuard-first (2026-08-06).
+      { path: 'vpn', component: () => import('@/views/VpnView.vue') },
       // B3 (v0.3): container log tail. Snapshot only.
       { path: 'containers/:id/logs', component: () => import('@/views/ContainerLogsView.vue') },
       { path: 'security', component: () => import('@/views/SecurityPosture.vue') },

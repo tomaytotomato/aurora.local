@@ -2,25 +2,21 @@
 import Sidebar from './Sidebar.vue';
 import TopBar from './TopBar.vue';
 import AuroraBackground from '@/components/AuroraBackground.vue';
-import { computed } from 'vue';
-import { useRoute } from 'vue-router';
 
-// iter-3 V1: routes can opt into the aurora photo background via
-// `meta: { photoBg: true }` on their router entry. Keeps existing
-// opaque chrome (sidebar + topbar keep their warm surface bg) and
-// lets the photo peek around content edges and beneath the fold —
-// same idea as OnboardingShell, adjusted for the two-column app grid.
-const route = useRoute();
-const photoBg = computed<boolean>(() => Boolean(route.meta?.photoBg));
+// The aurora photo background is now a constant across every app page,
+// not a per-route opt-in. It is Aurora's signature; showing it only on
+// Overview made the rest of the app feel like a different product. The
+// opaque chrome (sidebar + topbar) and every Card keep their own solid
+// surface, so the photo only shows through the gutters and behind
+// outside-card headers. Those headers carry the `.on-photo` class so
+// their text stays legible over the photo in either theme. See
+// docs/STYLEGUIDE.md.
 </script>
 
 <template>
-  <AuroraBackground v-if="photoBg" scrim="strong" />
+  <AuroraBackground scrim="strong" />
 
-  <div
-    class="min-h-screen grid grid-cols-[240px_1fr]"
-    :class="photoBg ? 'relative z-10' : 'bg-background'"
-  >
+  <div class="min-h-screen grid grid-cols-[240px_1fr] relative z-10">
     <Sidebar />
     <div class="flex flex-col min-h-screen">
       <TopBar />
@@ -33,13 +29,6 @@ const photoBg = computed<boolean>(() => Boolean(route.meta?.photoBg));
           </router-view>
         </div>
       </main>
-      <footer
-        class="content py-6 text-xs border-t mt-8"
-        :class="photoBg ? 'text-white/70 border-white/15' : 'text-muted-foreground border-border/60'"
-      >
-        Aurora — admin plane for aurora.local. The tile grid is
-        <a href="/" :class="photoBg ? 'text-white/85' : 'text-muted-foreground'">Homepage</a>; this is the fuse box.
-      </footer>
     </div>
   </div>
 </template>

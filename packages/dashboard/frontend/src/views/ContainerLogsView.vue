@@ -80,12 +80,19 @@ function formatTs(ts: string | undefined): string {
 
 <template>
   <section>
-    <div class="mb-6">
-      <router-link to="/" class="text-xs text-muted-foreground no-underline">← Dashboard</router-link>
+    <div class="mb-6 on-photo">
+      <router-link to="/" class="text-xs text-white/70 no-underline hover:text-white">← Dashboard</router-link>
       <div class="flex items-baseline justify-between gap-3 mt-4">
         <h1 data-test="logs-container-id">{{ containerId }}</h1>
         <div class="flex items-center gap-2 text-sm">
-          <label for="tail" class="text-muted-foreground">Show</label>
+          <!--
+            Nested two levels below .on-photo's direct-child selectors
+            (main.css only overrides h1-h4/.eyebrow/p at that depth), so
+            text-muted-foreground here would keep the near-black light-mode
+            token and disappear against the photo. Match the breadcrumb
+            link above with the same hardcoded on-photo white.
+          -->
+          <label for="tail" class="text-white/70">Show</label>
           <Select
             id="tail"
             :model-value="tail"
@@ -94,7 +101,7 @@ function formatTs(ts: string | undefined): string {
             data-test="logs-tail-select"
             @update:model-value="tail = $event as number"
           />
-          <span class="text-muted-foreground">lines</span>
+          <span class="text-white/70">lines</span>
           <Button variant="secondary" size="sm" :disabled="loading" @click="load"
                   data-test="logs-refresh">
             {{ loading ? 'Refreshing…' : 'Refresh' }}

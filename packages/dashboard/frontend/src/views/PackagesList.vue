@@ -27,17 +27,24 @@ const filtered = computed(() => {
 
 <template>
   <section>
-    <div class="mb-8">
+    <div class="mb-8 on-photo">
       <div class="eyebrow mb-2">Catalogue</div>
-      <h1 class="mb-3">Packages</h1>
-      <p class="text-muted-foreground max-w-2xl">
-        Every package is a small compose stack. Enabling a package brings it under the
-        <code class="font-mono text-foreground">aurora</code> compose project and adds its
+      <h1 class="mb-3">Apps</h1>
+      <p class="max-w-2xl">
+        Every app is a small compose stack. Enabling one brings it under the
+        <code class="font-mono">aurora</code> compose project and adds its
         vhost to Caddy.
       </p>
     </div>
 
-    <div class="flex items-center gap-1 border-b border-border mb-6">
+    <!--
+      Hand-rolled filter strip (not the shared Tabs component) but the same
+      shape: triggers + an underline span over a bottom rule. It sits on
+      the app-wide aurora photo, so it takes `on-photo-tabs` for legible
+      triggers — the one, consistent treatment every tab strip on the
+      photo uses (see docs/STYLEGUIDE.md). No opaque box; that floats.
+    -->
+    <div class="flex items-center gap-1 border-b border-border mb-6 on-photo-tabs">
       <button
         v-for="f in (['all','enabled','available'] as const)"
         :key="f"
@@ -54,26 +61,26 @@ const filtered = computed(() => {
       </button>
     </div>
 
-    <div v-if="packages.loading && !packages.list.length" class="text-sm text-muted-foreground">
+    <Card v-if="packages.loading && !packages.list.length" class="p-6 text-sm text-muted-foreground">
       Loading catalogue…
-    </div>
+    </Card>
 
-    <div v-else-if="!filtered.length" class="text-sm text-muted-foreground py-16 text-center">
-      No packages in this view.
-    </div>
+    <Card v-else-if="!filtered.length" class="py-16 text-sm text-muted-foreground text-center">
+      No apps in this view.
+    </Card>
 
     <div v-else class="grid grid-cols-3 gap-6">
       <router-link
         v-for="pkg in filtered"
         :key="pkg.name"
-        :to="`/packages/${pkg.name}`"
+        :to="`/apps/${pkg.name}`"
         class="no-underline block"
       >
         <Card hover class="h-full p-8">
           <div class="flex items-start justify-between mb-3">
             <div>
               <div class="eyebrow mb-1">{{ pkg.category }}</div>
-              <h3 class="text-foreground">{{ pkg.name }}</h3>
+              <h3 class="card-title text-foreground capitalize">{{ pkg.title || pkg.name }}</h3>
             </div>
             <Badge :tone="pkg.enabled ? (pkg.running ? 'ok' : 'neutral') : 'neutral'">
               {{ pkg.enabled ? (pkg.running ? 'running' : 'stopped') : 'off' }}

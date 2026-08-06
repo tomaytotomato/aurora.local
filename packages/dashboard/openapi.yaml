@@ -1,0 +1,1355 @@
+openapi: 3.1.0
+info:
+  title: Aurora Dashboard API
+  version: 0.3.0
+  description: >
+    Admin-plane API for aurora.local. Same-origin, cookie-authenticated
+    (session cookie set by POST /auth/login). All paths below are served
+    under the `/api` prefix by the Spring Boot backend; the Vite dev
+    server proxies `/api` to :8090.
+
+
+    This spec is hand-authored from the typed frontend `src/api/*`
+    modules and is the source of truth the MSW mock layer answers to.
+    Field casing is deliberately mixed: most bodies are camelCase, but a
+    handful of endpoints emit snake_case verbatim from the backend
+    (onboarding draft/plan/launch, services, containers logs, security
+    dismissals, audit). Casing here matches the wire, not a convention.
+servers:
+  - url: /api
+    description: Same-origin, behind Caddy / Vite proxy.
+
+tags:
+  - name: auth
+  - name: onboarding
+  - name: packages
+  - name: services
+  - name: containers
+  - name: metrics
+  - name: security
+  - name: audit
+  - name: system
+  - name: mdns
+  - name: vpn
+  - name: users
+
+security:
+  - sessionCookie: []
+
+paths:
+  # ─────────────────────────────── auth ───────────────────────────────
+  /auth/session:
+    get:
+      tags: [auth]
+      summary: Current session
+      security: []
+      responses:
+        '200':
+          description: Session state (authenticated may be false).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Log in; sets the session cookie
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Logged in.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '401':
+          description: Bad credentials.
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Log out; clears the session cookie
+      responses:
+        '204': { description: Logged out. }
+
+  # ──────────────────────────── onboarding ────────────────────────────
+  /onboarding:
+    get:
+      tags: [onboarding]
+      summary: Full onboarding draft (hydration)
+      security: []
+      responses:
+        '200':
+          description: Draft.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OnboardingDraft' }
+    patch:
+      tags: [onboarding]
+      summary: Partial update of any draft field
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OnboardingPatch' }
+      responses:
+        '200':
+          description: Updated draft.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OnboardingDraft' }
+        '409':
+          description: No admin yet, or wizard already committed.
+  /onboarding/status:
+    get:
+      tags: [onboarding]
+      deprecated: true
+      summary: Legacy status shape (use GET /onboarding)
+      security: []
+      responses:
+        '200':
+          description: Status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OnboardingStatus' }
+  /onboarding/env:
+    get:
+      tags: [onboarding]
+      summary: Box facts safe to expose pre-login
+      security: []
+      responses:
+        '200':
+          description: Environment.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OnboardingEnv' }
+  /onboarding/admin:
+    post:
+      tags: [onboarding]
+      summary: One-shot bootstrap of the initial admin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        '204': { description: Admin created. }
+        '409': { description: Admin already exists. }
+  /onboarding/plan:
+    get:
+      tags: [onboarding]
+      summary: Install plan (optionally scoped to a speculative enabled set)
+      security: []
+      parameters:
+        - name: enabled
+          in: query
+          required: false
+          description: CSV of package names to preview instead of on-disk state.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Plan (snake_case wire shape).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanWire' }
+  /onboarding/install:
+    post:
+      tags: [onboarding]
+      summary: Apply the plan to .state.yml (does not spawn containers in v0.1)
+      responses:
+        '200':
+          description: Install result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstallResult' }
+  /onboarding/launch:
+    post:
+      tags: [onboarding]
+      summary: Kick off scripts/up.sh for the enabled packages
+      responses:
+        '202':
+          description: Launch job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchStart' }
+  /onboarding/launch/{id}:
+    get:
+      tags: [onboarding]
+      summary: Snapshot of a launch job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Launch status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchStatus' }
+        '404': { description: Unknown job. }
+  /onboarding/launch/{id}/stream:
+    get:
+      tags: [onboarding]
+      summary: SSE — live launch log + terminal state
+      description: >
+        Server-Sent Events. Emits `log` events (one line per message),
+        `ping` keepalives, and a terminal `done` event carrying the final
+        LaunchStatus.
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /onboarding/complete:
+    post:
+      tags: [onboarding]
+      summary: Commit the wizard
+      responses:
+        '204': { description: Completed. }
+
+  # ───────────────────────────── packages ─────────────────────────────
+  /packages:
+    get:
+      tags: [packages]
+      summary: List packages
+      responses:
+        '200':
+          description: Summaries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PackageSummary' }
+  /packages/{name}:
+    get:
+      tags: [packages]
+      summary: Package detail
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '200':
+          description: Detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageDetail' }
+        '404': { description: Unknown package. }
+  /packages/{name}/env:
+    get:
+      tags: [packages]
+      summary: Read env vars (secrets masked unless reveal=1)
+      parameters:
+        - { $ref: '#/components/parameters/PkgName' }
+        - name: reveal
+          in: query
+          schema: { type: integer, enum: [1] }
+      responses:
+        '200':
+          description: Key/value map.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: string }
+    put:
+      tags: [packages]
+      summary: Write env vars
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: { type: string }
+      responses:
+        '204': { description: Saved. }
+  /packages/{name}/enable:
+    post:
+      tags: [packages]
+      summary: Enable and start a package
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '202':
+          description: Job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+  /packages/{name}/disable:
+    post:
+      tags: [packages]
+      summary: Stop and disable a package
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '202':
+          description: Job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+  /packages/{name}/restart:
+    post:
+      tags: [packages]
+      summary: Restart a package
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '204': { description: Restarted. }
+  /packages/{name}/upgrade:
+    post:
+      tags: [packages]
+      summary: Pull latest images and recreate
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '202':
+          description: Job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+
+  # ───────────────────────────── services ─────────────────────────────
+  /services/status:
+    get:
+      tags: [services]
+      summary: Per-package live status probes
+      responses:
+        '200':
+          description: Status snapshot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServicesStatusResponse' }
+  /services/status/stream:
+    get:
+      tags: [services]
+      summary: SSE — live per-package status
+      description: Server-Sent Events; each message is a ServicesStatusResponse JSON payload.
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /services/{package}/start:
+    post:
+      tags: [services]
+      summary: Launch a single package post-onboarding
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '202':
+          description: Start job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceStartResponse' }
+
+  # ──────────────────────────── containers ────────────────────────────
+  /containers:
+    get:
+      tags: [containers]
+      summary: List containers, optionally filtered to a package
+      parameters:
+        - name: package
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Containers ([] when filter matches nothing).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ContainerInfo' }
+  /containers/events:
+    get:
+      tags: [containers]
+      summary: Snapshot of the container-event ring buffer (oldest first)
+      responses:
+        '200':
+          description: Events.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ContainerEventItem' }
+  /containers/events/stream:
+    get:
+      tags: [containers]
+      summary: SSE — replays buffer then live container events
+      description: Server-Sent Events named `container-event`; data is a ContainerEventItem.
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /containers/{id}/logs:
+    get:
+      tags: [containers]
+      summary: Tail a container's logs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: tail
+          in: query
+          description: Lines to return; backend clamps to [1, 2000].
+          schema: { type: integer, default: 200 }
+      responses:
+        '200':
+          description: Log lines.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContainerLogsResponse' }
+
+  # ───────────────────────────── metrics ──────────────────────────────
+  /metrics/keys:
+    get:
+      tags: [metrics]
+      summary: Distinct metric keys, optionally filtered by prefix
+      parameters:
+        - name: prefix
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Keys.
+          content:
+            application/json:
+              schema: { type: array, items: { type: string } }
+  /metrics/last24h:
+    get:
+      tags: [metrics]
+      summary: Bucketed last-24h series for one key
+      parameters:
+        - name: key
+          in: query
+          required: true
+          schema: { type: string }
+        - name: bucketMinutes
+          in: query
+          schema: { type: integer, enum: [1, 2, 5, 10, 15, 30, 60], default: 5 }
+      responses:
+        '200':
+          description: Buckets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MetricBucket' }
+
+  # ───────────────────────────── security ─────────────────────────────
+  /security/findings:
+    get:
+      tags: [security]
+      summary: Current findings (HIGH → MEDIUM → LOW, render-ready)
+      parameters:
+        - name: includeDismissed
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Findings.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SecurityFinding' }
+  /security/findings/{id}/dismiss:
+    post:
+      tags: [security]
+      summary: Dismiss or snooze a finding
+      parameters: [{ $ref: '#/components/parameters/FindingId' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                days: { type: integer, minimum: 1, maximum: 365, description: Omit or 0 for permanent. }
+                reason: { type: string, maxLength: 512 }
+      responses:
+        '204': { description: Dismissed. }
+    delete:
+      tags: [security]
+      summary: Restore a dismissed finding
+      parameters: [{ $ref: '#/components/parameters/FindingId' }]
+      responses:
+        '204': { description: Restored. }
+  /security/dismissals:
+    get:
+      tags: [security]
+      summary: Currently suppressed findings
+      responses:
+        '200':
+          description: Dismissals.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DismissalRow' }
+
+  # ────────────────────────────── audit ───────────────────────────────
+  /audit/events:
+    get:
+      tags: [audit]
+      summary: Audit events (newest first)
+      parameters:
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: userId
+          in: query
+          schema: { type: integer }
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+      responses:
+        '200':
+          description: Events.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AuditEvent' }
+
+  # ────────────────────────────── system ──────────────────────────────
+  /system:
+    get:
+      tags: [system]
+      summary: Host + capability summary
+      responses:
+        '200':
+          description: System info.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemInfo' }
+  /system/metrics:
+    get:
+      tags: [system]
+      summary: Coarse host metric samples
+      parameters:
+        - name: window
+          in: query
+          schema: { type: string, enum: ['1h', '24h', '7d'], default: '24h' }
+      responses:
+        '200':
+          description: Samples.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MetricSample' }
+  /system/state:
+    get:
+      tags: [system]
+      summary: Parsed .state.yml
+      responses:
+        '200':
+          description: State file.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StateFile' }
+  /system/caddy-root.crt:
+    get:
+      tags: [system]
+      summary: Caddy root CA certificate (for client HTTPS trust)
+      security: []
+      responses:
+        '200':
+          description: PEM certificate.
+          content:
+            application/x-x509-ca-cert:
+              schema: { type: string }
+
+  # ─────────────────────────────── mdns ───────────────────────────────
+  /mdns/aliases:
+    get:
+      tags: [mdns]
+      summary: List published mDNS aliases
+      responses:
+        '200':
+          description: Aliases.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MdnsAliasPayload' }
+  /mdns/reconcile:
+    post:
+      tags: [mdns]
+      summary: Force a republish
+      responses:
+        '200':
+          description: Aliases after reconcile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MdnsAliasPayload' }
+
+  # ─────────────────────────────── users ─────────────────────────────
+  /users:
+    get:
+      tags: [users]
+      summary: List admin users
+      responses:
+        '200':
+          description: Users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/User' }
+    post:
+      tags: [users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, role, password]
+              properties:
+                username: { type: string }
+                role: { $ref: '#/components/schemas/UserRole' }
+                password: { type: string, minLength: 8 }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '409': { description: Username already taken. }
+  /users/{id}:
+    patch:
+      tags: [users]
+      summary: Update a user's role
+      parameters: [{ $ref: '#/components/parameters/UserId' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { $ref: '#/components/schemas/UserRole' }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '404': { description: Unknown user. }
+    delete:
+      tags: [users]
+      summary: Remove a user
+      parameters: [{ $ref: '#/components/parameters/UserId' }]
+      responses:
+        '204': { description: Removed. }
+        '409': { description: Cannot remove your own account. }
+
+  # ─────────────────────────────── vpn ────────────────────────────────
+  # Aurora's own inbound VPN server for remote access into the LAN.
+  # NOT packages/privacy's Gluetun sidecar (an outbound client tunnel
+  # for the media stack) — see docs/VPN_PAGE_DESIGN.md.
+  /vpn/status:
+    get:
+      tags: [vpn]
+      summary: Live tunnel status snapshot
+      responses:
+        '200':
+          description: Status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VpnStatus' }
+  /vpn/status/stream:
+    get:
+      tags: [vpn]
+      summary: SSE — live tunnel status
+      description: Server-Sent Events named `vpn-status`; payload is a VpnStatus.
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /vpn/config:
+    get:
+      tags: [vpn]
+      summary: Current server/tunnel configuration
+      responses:
+        '200':
+          description: Config.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VpnConfig' }
+        '404': { description: Not configured yet — call POST /vpn/config/init first. }
+    put:
+      tags: [vpn]
+      summary: Update the server/tunnel configuration
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VpnConfig' }
+      responses:
+        '200':
+          description: Updated config.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VpnConfig' }
+  /vpn/config/init:
+    post:
+      tags: [vpn]
+      summary: First-run — generate a server keypair and sensible defaults
+      responses:
+        '200':
+          description: Newly generated config.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VpnConfig' }
+        '409': { description: Already configured. }
+  /vpn/server/rotate-key:
+    post:
+      tags: [vpn]
+      summary: Regenerate the server keypair (invalidates every peer's .conf)
+      responses:
+        '200':
+          description: Config with the new public key.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VpnConfig' }
+  /vpn/peers:
+    get:
+      tags: [vpn]
+      summary: List WireGuard peers
+      responses:
+        '200':
+          description: Peers.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/VpnPeer' }
+    post:
+      tags: [vpn]
+      summary: Add a peer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, allowedIpsMode]
+              properties:
+                name: { type: string }
+                allowedIpsMode: { $ref: '#/components/schemas/AllowedIpsMode' }
+      responses:
+        '201':
+          description: One-time reveal of the new peer's private key + QR + full .conf. Never retrievable again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VpnPeerSecret' }
+  /vpn/peers/{id}:
+    delete:
+      tags: [vpn]
+      summary: Remove a peer
+      parameters: [{ $ref: '#/components/parameters/VpnPeerId' }]
+      responses:
+        '204': { description: Removed. }
+  /vpn/peers/{id}/toggle:
+    post:
+      tags: [vpn]
+      summary: Suspend or resume a peer without deleting it
+      parameters: [{ $ref: '#/components/parameters/VpnPeerId' }]
+      responses:
+        '200':
+          description: The flipped peer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VpnPeer' }
+  /vpn/peers/{id}/config:
+    get:
+      tags: [vpn]
+      summary: Download this peer's .conf
+      parameters: [{ $ref: '#/components/parameters/VpnPeerId' }]
+      responses:
+        '200':
+          description: WireGuard client config.
+          content:
+            text/plain:
+              schema: { type: string }
+  /vpn/peers/{id}/qrcode:
+    get:
+      tags: [vpn]
+      summary: QR code of this peer's .conf, for mobile scanning
+      parameters: [{ $ref: '#/components/parameters/VpnPeerId' }]
+      responses:
+        '200':
+          description: PNG image.
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+  /vpn/openvpn/config:
+    get:
+      tags: [vpn]
+      summary: Secondary OpenVPN server config (de-emphasised; off by default)
+      responses:
+        '200':
+          description: Config.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpenVpnConfig' }
+    put:
+      tags: [vpn]
+      summary: Update the OpenVPN config
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenVpnConfig' }
+      responses:
+        '200':
+          description: Updated config.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpenVpnConfig' }
+  /vpn/openvpn/clients:
+    get:
+      tags: [vpn]
+      summary: List OpenVPN clients
+      responses:
+        '200':
+          description: Clients.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/OpenVpnClient' }
+    post:
+      tags: [vpn]
+      summary: Add an OpenVPN client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        '201':
+          description: The new client plus its .ovpn text. No QR — OpenVPN gets deliberately less UI than WireGuard.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [client, confText]
+                properties:
+                  client: { $ref: '#/components/schemas/OpenVpnClient' }
+                  confText: { type: string }
+  /vpn/openvpn/clients/{id}:
+    delete:
+      tags: [vpn]
+      summary: Remove an OpenVPN client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Removed. }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: AURORA_SESSION
+
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    PkgName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string }
+    PkgNamePackage:
+      name: package
+      in: path
+      required: true
+      schema: { type: string }
+    JobId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    FindingId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    VpnPeerId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+
+  schemas:
+    Session:
+      type: object
+      required: [authenticated, username, passkeyEnrolled, tz]
+      properties:
+        authenticated: { type: boolean }
+        username: { type: [string, 'null'] }
+        passkeyEnrolled: { type: boolean }
+        tz: { type: [string, 'null'] }
+
+    OnboardingStepId:
+      type: string
+      enum: [welcome, admin, domain, packages, secrets, dns, tls, review, done]
+    DnsMode:
+      type: string
+      enum: [adguard, router, mdns]
+
+    OnboardingDraft:
+      type: object
+      required: [complete, bootstrap_mode, step, admin_username, domain, enabled_packages, dns_mode]
+      properties:
+        complete: { type: boolean }
+        bootstrap_mode: { type: boolean }
+        step: { $ref: '#/components/schemas/OnboardingStepId' }
+        admin_username: { type: [string, 'null'] }
+        domain: { type: [string, 'null'] }
+        enabled_packages:
+          type: array
+          items: { type: string }
+        dns_mode:
+          oneOf:
+            - { $ref: '#/components/schemas/DnsMode' }
+            - { type: 'null' }
+    OnboardingStatus:
+      type: object
+      required: [complete, bootstrap_mode, step]
+      properties:
+        complete: { type: boolean }
+        bootstrap_mode: { type: boolean }
+        step: { $ref: '#/components/schemas/OnboardingStepId' }
+    OnboardingPatch:
+      type: object
+      properties:
+        domain: { type: string }
+        enabled_packages: { type: array, items: { type: string } }
+        dns_mode: { $ref: '#/components/schemas/DnsMode' }
+        step: { $ref: '#/components/schemas/OnboardingStepId' }
+    OnboardingEnv:
+      type: object
+      properties:
+        hostname: { type: [string, 'null'] }
+        lanIp: { type: [string, 'null'] }
+        distro: { type: [string, 'null'] }
+        kernel: { type: [string, 'null'] }
+        dockerVersion: { type: [string, 'null'] }
+        cpu:
+          type: [object, 'null']
+          properties:
+            model: { type: [string, 'null'] }
+            threads: { type: integer }
+            cores: { type: integer }
+            sockets: { type: integer }
+            mhz: { type: [number, 'null'] }
+            load1: { type: [number, 'null'] }
+        memory:
+          type: [object, 'null']
+          properties:
+            MemTotal: { type: integer }
+            MemAvailable: { type: integer }
+            MemFree: { type: integer }
+        disks:
+          type: [array, 'null']
+          items:
+            type: object
+            properties:
+              device: { type: string }
+              mount: { type: string }
+              fstype: { type: string }
+              total_bytes: { type: integer }
+              free_bytes: { type: integer }
+              used_bytes: { type: integer }
+        gpu:
+          type: [object, 'null']
+          properties:
+            present: { type: boolean }
+            vendor: { type: [string, 'null'] }
+            model: { type: [string, 'null'] }
+    PlanWire:
+      type: object
+      required: [packages_to_enable, packages_to_disable, vhosts, ports, warnings]
+      properties:
+        packages_to_enable: { type: array, items: { type: string } }
+        packages_to_disable: { type: array, items: { type: string } }
+        vhosts: { type: array, items: { type: string } }
+        ports: { type: array, items: { type: integer } }
+        warnings: { type: array, items: { type: string } }
+    InstallResult:
+      type: object
+      required: [applied, packages_to_start, packages_to_stop, host_command]
+      properties:
+        applied: { type: array, items: { type: string } }
+        packages_to_start: { type: array, items: { type: string } }
+        packages_to_stop: { type: array, items: { type: string } }
+        host_command: { type: string }
+    LaunchStart:
+      type: object
+      required: [job_id, packages, started_at]
+      properties:
+        job_id: { type: string }
+        packages: { type: array, items: { type: string } }
+        started_at: { type: string, format: date-time }
+    LaunchStatus:
+      type: object
+      required: [id, state, packages, started_at, finished_at, exit_code, failure_reason, tail]
+      properties:
+        id: { type: string }
+        state: { type: string, enum: [running, success, failed] }
+        packages: { type: array, items: { type: string } }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: [string, 'null'], format: date-time }
+        exit_code: { type: [integer, 'null'] }
+        failure_reason: { type: [string, 'null'] }
+        tail: { type: array, items: { type: string } }
+
+    PackageCategory:
+      type: string
+      enum: [core, privacy, media, storage, productivity, monitoring, dev, ai, home-automation, identity, network]
+    PackageSummary:
+      type: object
+      required: [name, category, description, enabled, running]
+      properties:
+        name: { type: string }
+        title: { type: string }
+        category: { $ref: '#/components/schemas/PackageCategory' }
+        description: { type: string }
+        enabled: { type: boolean }
+        running: { type: boolean }
+        requires:
+          type: [object, 'null']
+          additionalProperties: true
+        ports:
+          type: [array, 'null']
+          items: { type: object, additionalProperties: true }
+        dependsOn:
+          type: [array, 'null']
+          items: { type: string }
+    EnvVarSpec:
+      type: object
+      required: [key, secret, required]
+      properties:
+        key: { type: string }
+        value: { type: string }
+        example: { type: string }
+        comment: { type: string }
+        secret: { type: boolean }
+        required: { type: boolean }
+    PackageDetail:
+      allOf:
+        - { $ref: '#/components/schemas/PackageSummary' }
+        - type: object
+          properties:
+            readme: { type: string }
+            vhosts: { type: array, items: { type: string } }
+            homepageTiles: { type: integer }
+            envVars: { type: array, items: { $ref: '#/components/schemas/EnvVarSpec' } }
+    JobRef:
+      type: object
+      required: [jobId]
+      properties:
+        jobId: { type: string }
+
+    ServiceState:
+      type: string
+      enum: [running, needs-config, failed, not-started, starting]
+    ServiceStatus:
+      type: object
+      required: [package, container, state, reason, detail, open_url, priority, probed_ms]
+      properties:
+        package: { type: string }
+        container: { type: [string, 'null'] }
+        state: { $ref: '#/components/schemas/ServiceState' }
+        reason: { type: [string, 'null'] }
+        detail: { type: [string, 'null'] }
+        open_url: { type: [string, 'null'] }
+        priority: { type: integer }
+        probed_ms: { type: integer }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/ServiceStatus' }
+    ServicesStatusResponse:
+      type: object
+      required: [generated_at, services]
+      properties:
+        generated_at: { type: string, format: date-time }
+        services:
+          type: array
+          items: { $ref: '#/components/schemas/ServiceStatus' }
+    ServiceStartResponse:
+      type: object
+      required: [job_id, packages, started_at]
+      properties:
+        job_id: { type: string }
+        packages: { type: array, items: { type: string } }
+        started_at: { type: string, format: date-time }
+
+    ContainerInfo:
+      type: object
+      required: [id, names, image, state, status, service, labels]
+      properties:
+        id: { type: string }
+        names: { type: array, items: { type: string } }
+        image: { type: string }
+        state: { type: string }
+        status: { type: string }
+        service: { type: string }
+        labels: { type: object, additionalProperties: { type: string } }
+    ContainerEventItem:
+      type: object
+      required: [ts, container, action]
+      properties:
+        ts: { type: integer, description: Unix milliseconds. }
+        container: { type: string }
+        action: { type: string }
+        image: { type: string }
+    ContainerLogLine:
+      type: object
+      required: [stream, line]
+      properties:
+        ts: { type: string }
+        stream: { type: string, enum: [stdout, stderr] }
+        line: { type: string }
+    ContainerLogsResponse:
+      type: object
+      required: [container_id, tail, truncated, lines]
+      properties:
+        container_id: { type: string }
+        tail: { type: integer }
+        truncated: { type: boolean }
+        lines: { type: array, items: { $ref: '#/components/schemas/ContainerLogLine' } }
+
+    MetricBucket:
+      type: object
+      required: [ts, avg, min, max, count]
+      properties:
+        ts: { type: integer, description: Bucket start, unix ms. }
+        avg: { type: number }
+        min: { type: number }
+        max: { type: number }
+        count: { type: integer }
+
+    SecurityFinding:
+      type: object
+      required: [id, severity, title, description, remediationUrl]
+      properties:
+        id: { type: string }
+        severity: { type: string, description: 'high | medium | low, extensible.' }
+        title: { type: string }
+        description: { type: string }
+        remediationUrl: { type: [string, 'null'] }
+    DismissalRow:
+      type: object
+      required: [finding_id, dismissed_at, expires_at, reason]
+      properties:
+        finding_id: { type: string }
+        dismissed_at: { type: string, format: date-time }
+        expires_at: { type: [string, 'null'], format: date-time }
+        reason: { type: [string, 'null'] }
+
+    AuditEvent:
+      type: object
+      required: [id, ts, user_id, action, target, diff_json]
+      properties:
+        id: { type: integer }
+        ts: { type: string, format: date-time }
+        user_id: { type: [integer, 'null'] }
+        action: { type: string }
+        target: { type: [string, 'null'] }
+        diff_json: { type: [string, 'null'] }
+
+    SystemCapabilities:
+      type: object
+      required: [metrics]
+      properties:
+        metrics: { type: boolean }
+        securityScanner: { type: boolean }
+    SystemInfo:
+      type: object
+      required: [capabilities]
+      properties:
+        hostname: { type: [string, 'null'] }
+        domain: { type: [string, 'null'] }
+        lanIp: { type: [string, 'null'] }
+        distro: { type: [string, 'null'] }
+        kernel: { type: [string, 'null'] }
+        uptimeSeconds: { type: [integer, 'null'] }
+        cpuCount: { type: [integer, 'null'] }
+        memTotalBytes: { type: [integer, 'null'] }
+        memUsedBytes: { type: [integer, 'null'] }
+        diskTotalBytes: { type: [integer, 'null'] }
+        diskUsedBytes: { type: [integer, 'null'] }
+        dockerVersion: { type: [string, 'null'] }
+        containerCount: { type: [integer, 'null'] }
+        capabilities: { $ref: '#/components/schemas/SystemCapabilities' }
+    MetricSample:
+      type: object
+      required: [ts, cpuPct, memPct, diskPct, containers]
+      properties:
+        ts: { type: integer }
+        cpuPct: { type: number }
+        memPct: { type: number }
+        diskPct: { type: number }
+        containers: { type: integer }
+    StateFile:
+      type: object
+      required: [enabled, profiles]
+      properties:
+        bootstrapVersion: { type: [integer, 'null'] }
+        hostname: { type: [string, 'null'] }
+        domain: { type: [string, 'null'] }
+        installedAt: { type: [string, 'null'], format: date-time }
+        enabled: { type: array, items: { type: string } }
+        profiles: { type: array, items: { type: string } }
+
+    AliasState:
+      type: string
+      enum: [up, failed, starting]
+    AliasSource:
+      type: string
+      enum: [manifest, caddy, unknown]
+    MdnsAlias:
+      type: object
+      required: [alias, label, pkg, source, state, targetIp, publishedAt, error]
+      properties:
+        alias: { type: string }
+        label: { type: string }
+        pkg: { type: string }
+        source: { $ref: '#/components/schemas/AliasSource' }
+        state: { $ref: '#/components/schemas/AliasState' }
+        targetIp: { type: string }
+        publishedAt: { type: [string, 'null'], format: date-time }
+        error: { type: [string, 'null'] }
+    MdnsAliasPayload:
+      type: object
+      required: [aliases, total, up, failed]
+      properties:
+        aliases: { type: array, items: { $ref: '#/components/schemas/MdnsAlias' } }
+        total: { type: integer }
+        up: { type: integer }
+        failed: { type: integer }
+
+    VpnRunState:
+      type: string
+      enum: [running, stopped, degraded, not-configured]
+    AllowedIpsMode:
+      type: string
+      description: >
+        'split' (default) pushes only the LAN + tunnel subnets to the
+        peer — remote access to this network only. 'full' pushes
+        0.0.0.0/0 + ::/0 and marks the peer killSwitch: true, routing
+        every bit of the peer's traffic through this box.
+      enum: [split, full]
+    VpnStatus:
+      type: object
+      required: [runState, interface, listenPort, endpoint, peersTotal, peersOnline, reachable, lastCheckedAt, generatedAt]
+      properties:
+        runState: { $ref: '#/components/schemas/VpnRunState' }
+        interface: { type: [string, 'null'], description: 'e.g. "wg0"; null while not-configured.' }
+        listenPort: { type: [integer, 'null'] }
+        endpoint: { type: [string, 'null'], description: 'host:port once known.' }
+        peersTotal: { type: integer }
+        peersOnline: { type: integer, description: Handshake within the last 3 minutes. }
+        reachable:
+          type: [boolean, 'null']
+          description: null = not checked yet; the backend probes an external service to confirm the port is actually forwarded.
+        lastCheckedAt: { type: [string, 'null'], format: date-time }
+        generatedAt: { type: string, format: date-time }
+    VpnConfig:
+      type: object
+      required: [endpointHost, listenPort, dns, serverAddress, mtu, serverPublicKey]
+      properties:
+        endpointHost: { type: string, description: "DDNS name or public IP; may be '' before first fill-in." }
+        listenPort: { type: integer, description: Default 51820. }
+        dns: { type: string, description: Pushed to peers. Defaults to Privacy's AdGuard LAN IP if enabled, else a public resolver. }
+        serverAddress: { type: string, description: 'Tunnel subnet, e.g. "10.66.66.1/24".' }
+        mtu: { type: integer, description: Default 1420. }
+        serverPublicKey: { type: [string, 'null'], description: null until POST /vpn/config/init has run once. }
+    VpnPeer:
+      type: object
+      required: [id, name, publicKey, allowedIps, killSwitch, enabled, lastHandshakeAt, rxBytes, txBytes, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        publicKey: { type: string }
+        allowedIps: { type: string, description: What's actually pushed to this peer's client routing table. }
+        killSwitch: { type: boolean, description: 'true when this peer was created with allowedIpsMode: full.' }
+        enabled: { type: boolean }
+        lastHandshakeAt: { type: [string, 'null'], format: date-time }
+        rxBytes: { type: integer }
+        txBytes: { type: integer }
+        createdAt: { type: string, format: date-time }
+    VpnPeerSecret:
+      type: object
+      required: [peer, privateKey, qrPngBase64, confText]
+      description: >
+        Returned exactly once, from POST /vpn/peers. The private key is
+        never retrievable again — there is no reveal=1 for a WireGuard
+        key the way there is for a package env secret. Losing it means
+        removing the peer and adding a new one.
+      properties:
+        peer: { $ref: '#/components/schemas/VpnPeer' }
+        privateKey: { type: string }
+        qrPngBase64: { type: string }
+        confText: { type: string }
+    OpenVpnConfig:
+      type: object
+      required: [enabled, port, protocol]
+      properties:
+        enabled: { type: boolean, description: Off by default — WireGuard above is the recommended path. }
+        port: { type: integer, description: Default 1194. }
+        protocol: { type: string, enum: [udp, tcp] }
+    OpenVpnClient:
+      type: object
+      required: [id, name, createdAt, lastConnectedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastConnectedAt: { type: [string, 'null'], format: date-time }
+
+    UserRole:
+      type: string
+      enum: [admin, operator, viewer]
+    User:
+      type: object
+      required: [id, username, role, createdAt, lastLoginAt, passkeyEnrolled]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        role: { $ref: '#/components/schemas/UserRole' }
+        createdAt: { type: string, format: date-time }
+        lastLoginAt: { type: [string, 'null'], format: date-time }
+        passkeyEnrolled: { type: boolean }

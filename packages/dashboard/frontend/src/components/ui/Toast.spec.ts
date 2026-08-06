@@ -34,15 +34,23 @@ describe('Toast (presentation)', () => {
   });
 
   it('success / warning / destructive variants map to shadcn status tokens', () => {
+    // Toast is always teleported straight to <body> as a floating overlay
+    // (never inside a Card), so its tint is layered as a background-image
+    // gradient on top of an opaque bg-card base rather than as a plain
+    // bg-<tone>/10 background-color — that keeps the toast fully opaque
+    // over the app-wide aurora photo instead of letting it show through.
     const s = mount(Toast, { props: { description: 'x', variant: 'success' } });
-    expect(s.classes().join(' ')).toContain('bg-success/10');
+    expect(s.classes().join(' ')).toContain('bg-card');
+    expect(s.classes().join(' ')).toContain('from-success/10');
     expect(s.classes().join(' ')).toContain('text-success');
 
     const w = mount(Toast, { props: { description: 'x', variant: 'warning' } });
-    expect(w.classes().join(' ')).toContain('bg-warning/10');
+    expect(w.classes().join(' ')).toContain('bg-card');
+    expect(w.classes().join(' ')).toContain('from-warning/10');
 
     const d = mount(Toast, { props: { description: 'x', variant: 'destructive' } });
-    expect(d.classes().join(' ')).toContain('bg-destructive/10');
+    expect(d.classes().join(' ')).toContain('bg-card');
+    expect(d.classes().join(' ')).toContain('from-destructive/10');
     expect(d.classes().join(' ')).toContain('text-destructive');
   });
 

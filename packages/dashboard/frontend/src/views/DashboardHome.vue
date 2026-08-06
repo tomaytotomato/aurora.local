@@ -296,10 +296,9 @@ function pickMetric(key: string): void {
            The `uptime` string moved out of the top-right corner into the
            subtitle slot so all four cards share the same slot rhythm. -->
       <Card class="col-span-3 row-span-2 p-8" data-card="system">
-        <div class="eyebrow mb-1">System</div>
-        <h3 class="mb-1">Resources</h3>
-        <p class="text-xs text-muted-foreground font-mono mb-4" data-test="uptime">
-          uptime {{ uptimeText }}
+        <h3 class="card-title mb-1">System</h3>
+        <p class="card-subtitle font-mono mb-4" data-test="uptime">
+          Resources · uptime {{ uptimeText }}
         </p>
 
         <!-- iter-3 P1a: reach-info banner. Renders the mDNS host + LAN IP
@@ -424,10 +423,10 @@ function pickMetric(key: string): void {
         </ul>
       </Card>
 
-      <!-- Packages card -->
+      <!-- Apps card -->
       <Card class="col-span-3 p-8" data-card="packages">
-        <div class="eyebrow mb-1">Packages</div>
-        <h3 class="mb-3" data-test="packages-count">{{ packagesCount.text }}</h3>
+        <h3 class="card-title mb-1">Apps</h3>
+        <p class="card-subtitle mb-3" data-test="packages-count">{{ packagesCount.text }}</p>
 
         <!-- error state -->
         <div v-if="packagesErr" data-state="error" role="alert">
@@ -438,10 +437,10 @@ function pickMetric(key: string): void {
 
         <!-- empty state -->
         <div v-else-if="packages.enabled.length === 0" data-state="empty">
-          <p class="text-sm text-foreground mb-1">You haven't enabled any packages yet.</p>
+          <p class="text-sm text-foreground mb-1">You haven't enabled any apps yet.</p>
           <p class="text-sm text-muted-foreground">
-            Add a package from
-            <router-link to="/packages" class="text-foreground underline">Settings → Packages</router-link>.
+            Add one from
+            <router-link to="/apps" class="text-foreground underline">Apps</router-link>.
           </p>
         </div>
 
@@ -475,7 +474,7 @@ function pickMetric(key: string): void {
               </div>
             </li>
           </ul>
-          <router-link to="/packages" class="text-sm text-muted-foreground">Manage packages →</router-link>
+          <router-link to="/apps" class="text-sm text-muted-foreground">Manage apps →</router-link>
         </div>
       </Card>
 
@@ -488,8 +487,8 @@ function pickMetric(key: string): void {
            headline; body wrapped in the centred glyph pattern so the
            card reads as a designed empty state, not a stub. -->
       <Card class="col-span-3 p-8" data-card="security">
-        <div class="eyebrow mb-1">Security</div>
-        <h3 class="mb-4">Security posture</h3>
+        <h3 class="card-title mb-1">Security</h3>
+        <p class="card-subtitle mb-4">Security posture</p>
         <div
           data-state="empty"
           class="flex flex-col items-center text-center py-6"
@@ -517,10 +516,9 @@ function pickMetric(key: string): void {
       <Card class="col-span-6 p-8" data-card="metrics">
         <div class="flex items-baseline justify-between gap-4 mb-2">
           <div>
-            <div class="eyebrow mb-1">Metrics</div>
-            <h3 v-if="!metricsCapable" class="mb-1">Metrics land next release.</h3>
-            <h3 v-else class="mb-1">{{ selectedMetric.label }}</h3>
-            <p class="text-xs text-muted-foreground">Last 24 hours</p>
+            <h3 class="card-title mb-1">Metrics</h3>
+            <p v-if="!metricsCapable" class="card-subtitle">Charts land next release.</p>
+            <p v-else class="card-subtitle">{{ selectedMetric.label }} · last 24 hours</p>
           </div>
           <div v-if="metricsCapable" class="flex items-center gap-2">
             <label for="metric-picker" class="sr-only">Metric</label>
