@@ -38,10 +38,12 @@ services:
     image: qmcgaw/gluetun:latest
     container_name: gluetun
     restart: unless-stopped
-    # Opt-in: only starts when COMPOSE_PROFILES includes 'torrent'.
-    # Currently qbittorrent is gluetun's only consumer, so both are
-    # gated together. If gluetun gains other consumers, split them.
-    profiles: ["torrent"]
+    # The reusable WireGuard egress gateway. Any app that sets
+    # `network_mode: "service:gluetun"` egresses through the tunnel while
+    # the host and every other container stay on the WAN. Started by the
+    # `torrent` profile (for qBittorrent) or the `vpn` profile (to serve
+    # any other app on its own). See docs/SPLIT_TUNNEL.md.
+    profiles: ["torrent", "vpn"]
     networks: [aurora_net]
     cap_add: [NET_ADMIN]
     devices:
