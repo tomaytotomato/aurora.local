@@ -105,17 +105,19 @@ Overview card reads: `be1523c08f0f. · vCPU · Docker`.
    between `SystemService.info()` and the composable that consumes it
    (`domain_name` vs `domain`, or the field is on a different endpoint).
 
-The correct rendered string is **`aurora.aurora.local`** — both values
-come from `.state.yml`. `idle` and `Back to Homepage · bruce` also get
-crammed on the same line with no visual separation; header anatomy is
-absent (see §3).
+The correct rendered string is **`aurora.local`**. Both values come from
+`.state.yml` (`hostname: aurora`, `domain: aurora.local`), and
+`renderIdentity()` (`lib/identity.ts`) collapses the duplicate first label
+so the header never reads the doubled `aurora.aurora.local`. See
+`Essence.md`. `idle` and `Back to Homepage · bruce` also get crammed on
+the same line with no visual separation; header anatomy is absent (see §3).
 
 **Acceptance criterion.**
 
-- Header renders `aurora.aurora.local` (or whatever `.state.yml`'s
-  `hostname` + `domain` produces, joined with a single `.`). No 12-hex
-  short id appears anywhere in the header. No literal string `undefined`
-  appears in the DOM.
+- Header renders `aurora.local` (hostname + domain joined, with the
+  duplicate leading label collapsed by `renderIdentity`). It must never
+  read the doubled `aurora.aurora.local`. No 12-hex short id appears
+  anywhere in the header. No literal string `undefined` appears in the DOM.
 - If either value is missing from the backend response, the header renders
   a single em-dash `—`, never the string `undefined`, never the token
   `null`, never a bare trailing dot (`aurora.`).
@@ -228,7 +230,7 @@ Single row, full-width, sticky. Three regions with real gap between them:
 
 ```
 [  identity  ]           [  health  ]                    [  user + actions  ]
-aurora.aurora.local      ● Running · 5 packages          bruce · Sign out
+aurora.local      ● Running · 5 packages          bruce · Sign out
 ```
 
 - **Identity (left).** `hostname.domain` in one line, monospace-adjacent
@@ -575,7 +577,7 @@ is worse than fallback to no answer.
   container id, or the string `Back to Homepage`.
 - Clicking Start on a not-started package flips the pill to `starting`
   within 500 ms and to `running` within 5 s on a healthy pull.
-- Header reads `aurora.aurora.local` on Bruce's live box, `bruce` on the
+- Header reads `aurora.local` on Bruce's live box, `bruce` on the
   right, aggregated health pill in the centre.
 - System card renders real values for uptime, memory, disk with human
   units.
