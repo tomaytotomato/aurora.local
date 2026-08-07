@@ -21,42 +21,14 @@ const scrimOpacity = computed(() => ({ soft: 0.35, medium: 0.55, strong: 0.7 }[p
 <template>
   <!-- Fixed background layer. Sits at z-index: 0; all app content should
        be at z-index >= 1. Ignores pointer events except on the credit bubble. -->
+  <!-- Photo layer only. The attribution is a separate <AuroraCredit>
+       footer that each layout renders at the bottom of its page flow, so
+       the credit sits at the bottom of the page rather than floating over
+       the fixed background. -->
   <div class="aurora-bg" aria-hidden="true">
     <img :src="src" :alt="''" class="photo" />
     <div class="scrim" :style="{ '--scrim-a': scrimOpacity }" />
   </div>
-
-  <!-- Bing-style credit bubble, anchored to the viewport (not the photo).
-       Teleported to <body> so its `position: fixed` pins to the viewport
-       regardless of any transformed/filtered ancestor in the app shell
-       (a transformed ancestor makes `fixed` resolve against that ancestor
-       instead of the viewport, which made the credit scroll with the
-       page). Rendered outside the aria-hidden background so it stays
-       accessible. -->
-  <Teleport to="body">
-    <a
-      class="credit"
-      :href="chosen.sourceUrl"
-      target="_blank"
-      rel="noopener noreferrer"
-      :title="`${chosen.location} · ${chosen.photographer} · ${chosen.license}`"
-      :aria-label="`Aurora photo: ${chosen.location}, by ${chosen.photographer}, licensed ${chosen.license}. Opens Wikimedia source page.`"
-    >
-      <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
-        <path
-          d="M12 8v4l3 2M12 2a10 10 0 100 20 10 10 0 000-20z"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.75"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-      <span class="location">{{ chosen.location }}</span>
-      <span class="sep" aria-hidden="true">·</span>
-      <span class="photographer">{{ chosen.photographer }}</span>
-    </a>
-  </Teleport>
 </template>
 
 <style scoped>
@@ -101,53 +73,5 @@ const scrimOpacity = computed(() => ({ soft: 0.35, medium: 0.55, strong: 0.7 }[p
 
 @media (prefers-reduced-motion: reduce) {
   .aurora-bg .photo { animation: none; }
-}
-
-/* -- Credit bubble ------------------------------------------------------- */
-
-.credit {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 20;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 13px;
-  background: rgba(20, 18, 15, 0.55);
-  backdrop-filter: blur(12px) saturate(140%);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
-  color: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  line-height: 1;
-  text-decoration: none;
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
-  max-width: calc(100vw - 40px);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.credit:hover {
-  background: rgba(20, 18, 15, 0.78);
-  color: #fff;
-}
-
-.credit:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.75);
-  outline-offset: 2px;
-}
-
-.credit svg { flex-shrink: 0; opacity: 0.8; }
-.credit .sep { opacity: 0.5; padding: 0 1px; }
-.credit .photographer { opacity: 0.85; }
-
-@media (max-width: 520px) {
-  .credit .sep,
-  .credit .photographer { display: none; }
 }
 </style>

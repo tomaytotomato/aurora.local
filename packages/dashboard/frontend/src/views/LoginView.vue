@@ -9,6 +9,7 @@ import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
 import { Alert, AlertDescription } from '@/components/ui';
 import AuroraBackground from '@/components/AuroraBackground.vue';
+import AuroraCredit from '@/components/AuroraCredit.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -85,8 +86,9 @@ function passkey(): void {
        See db306d0 for the .on-photo cascade rules. -->
   <AuroraBackground scrim="strong" />
 
-  <div class="relative z-10 min-h-screen grid place-items-center px-6">
-    <div class="w-full max-w-sm anim-enter login-card p-8 rounded-lg">
+  <div class="relative z-10 min-h-screen flex flex-col px-6">
+    <div class="flex-1 grid place-items-center w-full">
+      <div class="w-full max-w-sm anim-enter login-card p-8 rounded-lg">
       <div class="flex items-center gap-2.5 mb-10">
         <svg viewBox="0 0 32 32" class="w-7 h-7">
           <rect width="32" height="32" rx="6" fill="var(--color-foreground)"/>
@@ -133,7 +135,10 @@ function passkey(): void {
         First time here?
         <router-link to="/onboarding" class="text-muted-foreground">Start onboarding</router-link>.
       </p>
+      </div>
     </div>
+    <!-- Photo attribution at the foot of the page. -->
+    <AuroraCredit class="pb-4" />
   </div>
 </template>
 

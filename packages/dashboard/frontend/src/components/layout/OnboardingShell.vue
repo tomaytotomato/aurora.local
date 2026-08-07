@@ -2,6 +2,7 @@
 import { useOnboardingStore, STEPS, STEP_LABELS } from '@/stores/onboarding';
 import Progress from '@/components/ui/Progress.vue';
 import AuroraBackground from '@/components/AuroraBackground.vue';
+import AuroraCredit from '@/components/AuroraCredit.vue';
 import { computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { OnboardingStepId } from '@/api/onboarding';
@@ -109,6 +110,8 @@ function goTo(id: (typeof STEPS)[number]): void {
       >
         <router-view />
       </div>
+      <!-- Photo attribution at the foot of the page. -->
+      <AuroraCredit class="w-full max-w-2xl mx-auto mt-auto pt-8" />
     </main>
   </div>
 </template>

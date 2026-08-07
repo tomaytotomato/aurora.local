@@ -2,6 +2,7 @@
 import Sidebar from './Sidebar.vue';
 import TopBar from './TopBar.vue';
 import AuroraBackground from '@/components/AuroraBackground.vue';
+import AuroraCredit from '@/components/AuroraCredit.vue';
 
 // The aurora photo background is now a constant across every app page,
 // not a per-route opt-in. It is Aurora's signature; showing it only on
@@ -20,14 +21,16 @@ import AuroraBackground from '@/components/AuroraBackground.vue';
     <Sidebar />
     <div class="flex flex-col min-h-screen">
       <TopBar />
-      <main class="flex-1 anim-enter">
-        <div class="content py-10">
+      <main class="flex-1 flex flex-col anim-enter">
+        <div class="content py-10 flex-1">
           <router-view v-slot="{ Component }">
             <transition name="fade" mode="out-in">
               <component :is="Component" />
             </transition>
           </router-view>
         </div>
+        <!-- Photo attribution at the foot of the page (scrolls with it). -->
+        <AuroraCredit class="content pb-6" />
       </main>
     </div>
   </div>
