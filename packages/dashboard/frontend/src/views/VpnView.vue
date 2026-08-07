@@ -26,6 +26,7 @@ import {
   Input,
   Label,
   Select,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -282,8 +283,12 @@ function onTab(t: string): void {
 
     <!-- loading -->
     <div v-if="pageState === 'loading'" class="grid grid-cols-2 gap-4" data-state="loading">
-      <Card class="h-40" />
-      <Card class="h-40" />
+      <Card v-for="n in 2" :key="`skeleton-${n}`" class="h-40 p-6 space-y-3">
+        <Skeleton class="h-3 w-20" />
+        <Skeleton class="h-6 w-40" />
+        <Skeleton class="h-4 w-full" />
+        <Skeleton class="h-4 w-2/3" />
+      </Card>
     </div>
 
     <!--
