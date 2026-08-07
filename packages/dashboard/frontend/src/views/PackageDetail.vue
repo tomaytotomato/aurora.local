@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
-import { PackagesApi, dockerStructureFor, isCorePackage, isRemovable } from '@/api/packages';
+import { PackagesApi, dockerStructureFor, isCorePackage, isRemovable, packageLinks } from '@/api/packages';
 import { buildEnvForm, isEnvFormDirty, validateEnvForm } from '@/lib/envForm';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import { packageLabel, prettyPackageName } from '@/lib/packageName';
@@ -29,6 +29,10 @@ const heading = computed(() =>
 const isCore = computed(() => (detail.value ? isCorePackage(detail.value) : false));
 const removable = computed(() => (detail.value ? isRemovable(detail.value) : false));
 const structure = computed(() => (detail.value ? dockerStructureFor(detail.value) : 'container'));
+// Core apps live on their own page now; send the back link to whichever
+// one the operator actually came from.
+const backTo = computed(() => (isCore.value ? '/apps/core' : '/apps/catalogue'));
+const links = computed(() => (detail.value ? packageLinks(detail.value) : []));
 
 const readmeBody = computed(() => (detail.value?.readme ?? '').replace(/^#\s+.*\n+/, '').trim());
 
@@ -38,6 +42,16 @@ function portLabel(p: Record<string, unknown>): string {
   const container = p.container;
   return container !== undefined && container !== host ? `${host} → ${container}/${proto}` : `${host}/${proto}`;
 }
+
+/** Read a numeric requirement (min_ram_mb / min_disk_gb) off the
+ * manifest-derived `requires` bag. Honest-state: undefined renders
+ * nothing rather than a fabricated zero. */
+function requirement(key: string): number | undefined {
+  const raw = detail.value?.requires?.[key];
+  return typeof raw === 'number' ? raw : undefined;
+}
+const minRamMb = computed(() => requirement('min_ram_mb'));
+const minDiskGb = computed(() => requirement('min_disk_gb'));
 
 // B3-followup (iter-16): Logs tab lists containers scoped to this package
 // so the operator picks the right service (media stack = 7 containers).
@@ -278,7 +292,7 @@ onMounted(async () => {
 <template>
   <section>
     <div class="mb-8 on-photo">
-      <router-link to="/apps" class="text-xs text-white/70 no-underline hover:text-white">← All apps</router-link>
+      <router-link :to="backTo" class="text-xs text-white/70 no-underline hover:text-white">← All apps</router-link>
       <div class="flex items-baseline gap-3 mt-4">
         <h1>{{ heading }}</h1>
         <Badge v-if="detail" :tone="detail.enabled ? 'ok' : 'neutral'" class="bg-card">
@@ -304,11 +318,22 @@ onMounted(async () => {
          non-core branch offers it, and confirmDisable() double-checks
          `removable` regardless. -->
     <Card v-if="detail" class="p-5 mb-6 flex flex-wrap items-center justify-between gap-4" data-card="package-actions">
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 flex-wrap">
         <DockerBadge :structure="structure" />
         <p class="text-xs text-muted-foreground">
           {{ isCore ? "Always on — can't be removed." : (detail.enabled ? 'Enabled on this box.' : 'Not currently running.') }}
         </p>
+        <template v-if="links.length">
+          <span class="text-muted-foreground text-xs">·</span>
+          <a
+            v-for="link in links"
+            :key="link.label"
+            :href="link.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-xs text-muted-foreground no-underline hover:text-foreground hover:underline"
+          >{{ link.label }} ↗</a>
+        </template>
       </div>
       <div class="flex items-center gap-2">
         <template v-if="isCore || detail.enabled">
@@ -340,9 +365,10 @@ onMounted(async () => {
     <!--
       The tabbed region sits over the app-wide aurora photo. The tab
       strip stays transparent and uses on-photo-tabs for legible triggers
-      (same as PackagesList's filter bar and VpnView); the panels below
-      are opaque Cards. No opaque box around the tabs — it reads as a
-      panel floating detached from the content cards under it.
+      (same as PackagesCatalogue's Installed/Marketplace tabs and
+      VpnView); the panels below are opaque Cards. No opaque box around
+      the tabs — it reads as a panel floating detached from the content
+      cards under it.
     -->
     <Tabs
       v-model="activeTab"
@@ -412,6 +438,14 @@ onMounted(async () => {
               <span v-for="d in (detail.dependsOn ?? [])" :key="d" class="font-mono text-xs px-2 py-1 rounded border border-border">{{ d }}</span>
               <span v-if="!(detail.dependsOn ?? []).length" class="text-muted-foreground text-sm">none</span>
             </div>
+          </Card>
+          <Card v-if="minRamMb !== undefined || minDiskGb !== undefined">
+            <div class="eyebrow mb-1">Requirements</div>
+            <h3 class="mb-3">Resources</h3>
+            <dl class="text-sm space-y-2">
+              <div v-if="minRamMb !== undefined" class="flex justify-between"><dt class="text-muted-foreground">Minimum RAM</dt><dd class="font-mono">{{ minRamMb }} MB</dd></div>
+              <div v-if="minDiskGb !== undefined" class="flex justify-between"><dt class="text-muted-foreground">Minimum disk</dt><dd class="font-mono">{{ minDiskGb }} GB</dd></div>
+            </dl>
           </Card>
         </div>
       </div>
