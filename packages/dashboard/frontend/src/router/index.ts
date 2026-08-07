@@ -39,9 +39,19 @@ const routes: RouteRecordRaw[] = [
       // to /apps; the old /packages paths redirect so bookmarks and any
       // in-flight links keep working. The wire (/api/packages) is
       // unchanged — this is a user-facing rename only.
-      { path: 'apps', component: () => import('@/views/PackagesList.vue') },
+      //
+      // Apps split into two pages (2026-08-07): Catalogue (Installed /
+      // Marketplace) and Core, reached via SectionNav rather than a
+      // nested tab strip — see PackagesCatalogue.vue / PackagesCore.vue.
+      // Static children are listed before the dynamic `:name` so
+      // `/apps/catalogue` and `/apps/core` never get swallowed by it
+      // (vue-router ranks static segments first regardless, but the
+      // order still reads correctly here).
+      { path: 'apps', redirect: '/apps/catalogue' },
+      { path: 'apps/catalogue', component: () => import('@/views/PackagesCatalogue.vue') },
+      { path: 'apps/core', component: () => import('@/views/PackagesCore.vue') },
       { path: 'apps/:name', component: () => import('@/views/PackageDetail.vue') },
-      { path: 'packages', redirect: '/apps' },
+      { path: 'packages', redirect: '/apps/catalogue' },
       { path: 'packages/:name', redirect: (to) => `/apps/${to.params.name}` },
       // User management (2026-08-06).
       { path: 'users', component: () => import('@/views/UsersView.vue') },

@@ -333,7 +333,7 @@ function onTab(t: string): void {
     <!--
       ready. The tabbed region sits over the app-wide aurora photo. The
       tab strip stays transparent and takes on-photo-tabs for legible
-      triggers (same as PackagesList's filter bar); the content panels
+      triggers (same as PackagesCatalogue's Installed/Marketplace tabs); the content panels
       below are opaque Cards. An opaque box around the tabs reads as a
       floating panel detached from the cards under it, so we don't use one.
     -->
