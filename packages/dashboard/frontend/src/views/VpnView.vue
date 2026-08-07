@@ -523,7 +523,7 @@ function onTab(t: string): void {
       <template #description>That device will lose access immediately. You can add it again later, but it'll need a fresh config.</template>
       <template #footer>
         <Button variant="secondary" @click="removeTarget = null">Cancel</Button>
-        <Button :disabled="removing" @click="confirmRemove">{{ removing ? 'Removing…' : 'Remove' }}</Button>
+        <Button variant="danger" :disabled="removing" @click="confirmRemove">{{ removing ? 'Removing…' : 'Remove' }}</Button>
       </template>
     </Dialog>
 

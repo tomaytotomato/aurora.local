@@ -260,7 +260,7 @@ function fmt(iso: string | null): string {
       <template #description>They'll lose access immediately. This can't be undone, but you can add them again later.</template>
       <template #footer>
         <Button variant="secondary" @click="removeTarget = null">Cancel</Button>
-        <Button :disabled="removing" @click="confirmRemove">{{ removing ? 'Removing…' : 'Remove' }}</Button>
+        <Button variant="danger" :disabled="removing" @click="confirmRemove">{{ removing ? 'Removing…' : 'Remove' }}</Button>
       </template>
     </Dialog>
   </section>
