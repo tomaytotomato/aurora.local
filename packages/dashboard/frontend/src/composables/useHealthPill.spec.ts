@@ -6,7 +6,6 @@ import type { PackageSummary } from '@/api/packages';
 
 function pkg(over: Partial<PackageSummary> & { name: string }): PackageSummary {
   return {
-    name: over.name,
     category: 'core',
     description: '',
     enabled: true,
