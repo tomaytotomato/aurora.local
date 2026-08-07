@@ -71,6 +71,48 @@ export interface PackageDetail extends PackageSummary {
   envVars?: EnvVarSpec[];
 }
 
+/**
+ * Core packages (category === 'core', i.e. Caddy + Homepage today) are the
+ * platform baseline every other app relies on. They can be configured but
+ * never added/removed from the box — see docs/PACKAGE_CONTRACT.md. Written
+ * as a rule against `category` rather than a hard-coded name list so a
+ * future second core package (e.g. if identity moves into the baseline)
+ * is covered for free.
+ */
+export function isCorePackage(p: Pick<PackageSummary, 'category'>): boolean {
+  return p.category === 'core';
+}
+
+/** Only non-core packages can be enabled/disabled from the dashboard. */
+export function isRemovable(p: Pick<PackageSummary, 'category'>): boolean {
+  return !isCorePackage(p);
+}
+
+/** Split a catalogue into its core and non-core halves, in original order. */
+export function splitByCore(list: PackageSummary[]): { core: PackageSummary[]; apps: PackageSummary[] } {
+  const core: PackageSummary[] = [];
+  const apps: PackageSummary[] = [];
+  for (const p of list) (isCorePackage(p) ? core : apps).push(p);
+  return { core, apps };
+}
+
+export type DockerStructure = 'container' | 'compose';
+
+/**
+ * Best-effort read of whether a package's compose.yml is one service or a
+ * multi-service Docker Compose stack. The catalogue wire only gives us
+ * dependsOn + ports, not the manifest itself, so this is a heuristic: a
+ * package that depends on something beyond the implicit `core`, or that
+ * exposes more than one host port, reads as a compose stack. Anything
+ * weaker than that stays labelled as plain "Docker" rather than guessing
+ * per-app — see docs/PACKAGE_CONTRACT.md for the real manifest shape.
+ */
+export function dockerStructureFor(p: Pick<PackageSummary, 'dependsOn' | 'ports'>): DockerStructure {
+  const extraDeps = (p.dependsOn ?? []).filter((d) => d !== 'core');
+  const portCount = (p.ports ?? []).length;
+  return extraDeps.length > 0 || portCount > 1 ? 'compose' : 'container';
+}
+
 export const PackagesApi = {
   async list(): Promise<PackageSummary[]> {
     const { data } = await http.get<PackageSummary[]>('/packages');

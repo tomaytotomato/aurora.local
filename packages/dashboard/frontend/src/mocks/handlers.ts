@@ -181,9 +181,14 @@ const packages = [
     HttpResponse.json(packageSeeds.map((s) => liveSummary(s.summary))),
   ),
   http.get('/api/packages/:name', ({ params }) => {
-    const detail = detailFor(String(params.name));
+    const name = String(params.name);
+    const detail = detailFor(name);
     if (!detail) return new HttpResponse(null, { status: 404 });
-    return HttpResponse.json({ ...detail, ...liveSummary(detail) });
+    // envVars carries the *specs* (key/secret/required/example/comment),
+    // not values — GET .../env is the values endpoint. The real API
+    // documents both on PackageDetail (see openapi.yaml); this handler
+    // was missing the specs, so the Config tab had nothing to render.
+    return HttpResponse.json({ ...detail, ...liveSummary(detail), envVars: envFor(name) });
   }),
   http.get('/api/packages/:name/env', ({ params, request }) => {
     const reveal = new URL(request.url).searchParams.has('reveal');
