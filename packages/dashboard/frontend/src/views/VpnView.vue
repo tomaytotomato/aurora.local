@@ -580,7 +580,17 @@ function onTab(t: string): void {
         </div>
         <div>
           <button type="button" class="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2" @click="showRawConf = !showRawConf">
-            <span class="font-mono" aria-hidden="true">{{ showRawConf ? '▾' : '▸' }}</span>
+            <svg
+              viewBox="0 0 24 24"
+              class="w-3.5 h-3.5 transition-transform duration-150"
+              :class="{ 'rotate-90': showRawConf }"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
             Show raw config
           </button>
           <pre v-if="showRawConf" class="mt-2 text-xs font-mono bg-muted rounded p-3 overflow-auto whitespace-pre-wrap">{{ secret.confText }}</pre>

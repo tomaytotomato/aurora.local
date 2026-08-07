@@ -20,7 +20,7 @@ import { useSystemStore } from '@/stores/system';
 import { SecurityApi, type SecurityFinding, type SecuritySeverity, type DismissalRow } from '@/api/security';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
-import { Alert, AlertDescription, Select } from '@/components/ui';
+import { Alert, AlertDescription, Select, Skeleton } from '@/components/ui';
 import Badge from '@/components/ui/Badge.vue';
 import Button from '@/components/ui/Button.vue';
 
@@ -253,8 +253,8 @@ const counts = computed(() => {
       </svg>
       <h3 class="mb-2">Watching for common misconfigurations</h3>
       <p class="text-sm text-muted-foreground max-w-xl mx-auto mb-6">
-        The security scanner lands with milestone <span class="font-mono">M4</span>.
-        Nothing on this page is a real audit yet — no score, no findings.
+        Aurora isn't auditing this box yet, so there's no score and no
+        findings. This page fills in once the security scanner is switched on.
       </p>
     </Card>
 
@@ -266,9 +266,21 @@ const counts = computed(() => {
       <Button variant="secondary" size="sm" @click="fetchFindings">Try again</Button>
     </Card>
 
+    <!-- First load — skeleton instead of a blank page. -->
+    <div v-else-if="loading && !findings.length" class="space-y-3" data-state="loading">
+      <Card v-for="n in 3" :key="`sec-sk-${n}`" class="p-6 space-y-3">
+        <div class="flex items-center gap-2">
+          <Skeleton class="h-5 w-16 rounded-full" />
+          <Skeleton class="h-5 w-48" />
+        </div>
+        <Skeleton class="h-4 w-full" />
+        <Skeleton class="h-4 w-2/3" />
+      </Card>
+    </div>
+
     <!-- Zero findings — the honest 'all clear' render. -->
     <Card
-      v-else-if="!loading && findings.length === 0"
+      v-else-if="findings.length === 0"
       data-state="empty"
       class="p-10 text-center"
       data-test="sec-empty-clean"
@@ -351,7 +363,17 @@ const counts = computed(() => {
         :aria-expanded="suppressedOpen"
         @click="toggleSuppressed"
       >
-        <span class="font-mono" aria-hidden="true">{{ suppressedOpen ? '▾' : '▸' }}</span>
+        <svg
+          viewBox="0 0 24 24"
+          class="w-3.5 h-3.5 transition-transform duration-150"
+          :class="{ 'rotate-90': suppressedOpen }"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
         Suppressed findings
         <span class="text-muted-foreground">({{ suppressed.length }})</span>
       </button>

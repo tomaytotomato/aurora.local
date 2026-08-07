@@ -12,6 +12,7 @@ import {
   AlertDescription,
   Badge,
   Input,
+  Skeleton,
   Table,
   TableHeader,
   TableBody,
@@ -188,7 +189,15 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
         </Alert>
 
         <div
-          v-else-if="!mdnsLoading && mdnsAliases.length === 0"
+          v-else-if="mdnsLoading && !mdnsAliases.length"
+          class="space-y-2 py-3"
+          data-state="loading"
+        >
+          <Skeleton v-for="n in 3" :key="`mdns-sk-${n}`" class="h-7 w-full" />
+        </div>
+
+        <div
+          v-else-if="mdnsAliases.length === 0"
           class="text-xs text-muted-foreground py-4"
           data-state="empty"
           data-test="mdns-empty"
@@ -260,7 +269,15 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
         </Alert>
 
         <div
-          v-else-if="!auditLoading && auditEvents.length === 0"
+          v-else-if="auditLoading && !auditEvents.length"
+          class="space-y-2 py-3"
+          data-state="loading"
+        >
+          <Skeleton v-for="n in 4" :key="`audit-sk-${n}`" class="h-6 w-full" />
+        </div>
+
+        <div
+          v-else-if="auditEvents.length === 0"
           class="text-xs text-muted-foreground py-4"
           data-state="empty"
           data-test="audit-empty"
