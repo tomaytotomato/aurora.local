@@ -3,15 +3,17 @@ import {
   dockerStructureFor,
   isCorePackage,
   isRemovable,
+  packageLinks,
   splitByCore,
+  splitCatalogue,
   type PackageSummary,
 } from './packages';
 
 /**
- * Core-vs-non-core and Docker/Compose heuristics behind the Apps/Core
- * split (PackagesList) and the lifecycle action gating (PackageDetail).
- * Both are pure reads off PackageSummary so they're covered here rather
- * than by mounting either view.
+ * Pure logic behind the Apps section: the Apps/Core page split, the
+ * Installed/Marketplace catalogue split, the Docker/Compose heuristic,
+ * and the source/homepage link guard. All are pure reads off
+ * PackageSummary so they're covered here rather than by mounting a view.
  */
 
 function pkg(over: Partial<PackageSummary> & { name: string }): PackageSummary {
@@ -75,5 +77,58 @@ describe('dockerStructureFor', () => {
   it('reads as compose when it exposes more than one port', () => {
     const p = pkg({ name: 'privacy', dependsOn: ['core'], ports: [{ host: 53 }, { host: 3000 }] });
     expect(dockerStructureFor(p)).toBe('compose');
+  });
+});
+
+describe('splitCatalogue', () => {
+  it('excludes core and partitions the rest on enabled', () => {
+    const list = [
+      pkg({ name: 'core', category: 'core', enabled: true }),
+      pkg({ name: 'media', enabled: true }),
+      pkg({ name: 'photos', enabled: false }),
+    ];
+    const { installed, marketplace } = splitCatalogue(list);
+    expect(installed.map((p) => p.name)).toEqual(['media']);
+    expect(marketplace.map((p) => p.name)).toEqual(['photos']);
+  });
+
+  it('never puts a core package in either half, even if flagged enabled', () => {
+    const list = [pkg({ name: 'core', category: 'core', enabled: false })];
+    const { installed, marketplace } = splitCatalogue(list);
+    expect(installed).toEqual([]);
+    expect(marketplace).toEqual([]);
+  });
+
+  it('returns empty groups for an empty catalogue', () => {
+    expect(splitCatalogue([])).toEqual({ installed: [], marketplace: [] });
+  });
+});
+
+describe('packageLinks', () => {
+  it('returns both links when both URLs are present', () => {
+    const p = pkg({ name: 'jellyfin', sourceUrl: 'https://github.com/jellyfin/jellyfin', homepageUrl: 'https://jellyfin.org' });
+    expect(packageLinks(p)).toEqual([
+      { label: 'Source', url: 'https://github.com/jellyfin/jellyfin' },
+      { label: 'Docs', url: 'https://jellyfin.org' },
+    ]);
+  });
+
+  it('omits Source when sourceUrl is missing', () => {
+    const p = pkg({ name: 'x', homepageUrl: 'https://example.com' });
+    expect(packageLinks(p)).toEqual([{ label: 'Docs', url: 'https://example.com' }]);
+  });
+
+  it('omits Docs when homepageUrl is missing', () => {
+    const p = pkg({ name: 'x', sourceUrl: 'https://example.com/repo' });
+    expect(packageLinks(p)).toEqual([{ label: 'Source', url: 'https://example.com/repo' }]);
+  });
+
+  it('returns an empty array when neither is present', () => {
+    expect(packageLinks(pkg({ name: 'x' }))).toEqual([]);
+  });
+
+  it('treats a null URL the same as a missing one', () => {
+    const p = pkg({ name: 'x', sourceUrl: null, homepageUrl: null });
+    expect(packageLinks(p)).toEqual([]);
   });
 });

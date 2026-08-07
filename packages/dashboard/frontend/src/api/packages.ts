@@ -42,6 +42,11 @@ export interface PackageSummary {
   requires?: Record<string, unknown> | null;
   ports?: Array<Record<string, unknown>> | null;
   dependsOn?: string[] | null;
+  /** Upstream project source repo (e.g. GitHub). Optional — the manifest
+   * doesn't always carry one yet; render nothing when absent. */
+  sourceUrl?: string | null;
+  /** Upstream project homepage or docs site. Same optionality as above. */
+  homepageUrl?: string | null;
 }
 
 /** Derive a status label from the on-wire booleans. */
@@ -94,6 +99,33 @@ export function splitByCore(list: PackageSummary[]): { core: PackageSummary[]; a
   const apps: PackageSummary[] = [];
   for (const p of list) (isCorePackage(p) ? core : apps).push(p);
   return { core, apps };
+}
+
+/**
+ * The Catalogue page's Installed/Marketplace split — non-core packages
+ * only (Core has its own page), partitioned on the same `enabled` flag
+ * the old All/Enabled/Available filter used.
+ */
+export function splitCatalogue(list: PackageSummary[]): { installed: PackageSummary[]; marketplace: PackageSummary[] } {
+  const { apps } = splitByCore(list);
+  return {
+    installed: apps.filter((p) => p.enabled),
+    marketplace: apps.filter((p) => !p.enabled),
+  };
+}
+
+export interface PackageLink {
+  label: 'Source' | 'Docs';
+  url: string;
+}
+
+/** Renderable {label, url} pairs for a package's upstream links — guards
+ * against missing data so callers can `v-for` without an `v-if` per link. */
+export function packageLinks(p: Pick<PackageSummary, 'sourceUrl' | 'homepageUrl'>): PackageLink[] {
+  const links: PackageLink[] = [];
+  if (p.sourceUrl) links.push({ label: 'Source', url: p.sourceUrl });
+  if (p.homepageUrl) links.push({ label: 'Docs', url: p.homepageUrl });
+  return links;
 }
 
 export type DockerStructure = 'container' | 'compose';
