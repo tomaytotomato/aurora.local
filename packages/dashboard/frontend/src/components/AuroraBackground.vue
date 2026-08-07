@@ -27,29 +27,36 @@ const scrimOpacity = computed(() => ({ soft: 0.35, medium: 0.55, strong: 0.7 }[p
   </div>
 
   <!-- Bing-style credit bubble, anchored to the viewport (not the photo).
-       Rendered outside the aria-hidden background so it stays accessible. -->
-  <a
-    class="credit"
-    :href="chosen.sourceUrl"
-    target="_blank"
-    rel="noopener noreferrer"
-    :title="`${chosen.location} · ${chosen.photographer} · ${chosen.license}`"
-    :aria-label="`Aurora photo: ${chosen.location}, by ${chosen.photographer}, licensed ${chosen.license}. Opens Wikimedia source page.`"
-  >
-    <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
-      <path
-        d="M12 8v4l3 2M12 2a10 10 0 100 20 10 10 0 000-20z"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.75"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    </svg>
-    <span class="location">{{ chosen.location }}</span>
-    <span class="sep" aria-hidden="true">·</span>
-    <span class="photographer">{{ chosen.photographer }}</span>
-  </a>
+       Teleported to <body> so its `position: fixed` pins to the viewport
+       regardless of any transformed/filtered ancestor in the app shell
+       (a transformed ancestor makes `fixed` resolve against that ancestor
+       instead of the viewport, which made the credit scroll with the
+       page). Rendered outside the aria-hidden background so it stays
+       accessible. -->
+  <Teleport to="body">
+    <a
+      class="credit"
+      :href="chosen.sourceUrl"
+      target="_blank"
+      rel="noopener noreferrer"
+      :title="`${chosen.location} · ${chosen.photographer} · ${chosen.license}`"
+      :aria-label="`Aurora photo: ${chosen.location}, by ${chosen.photographer}, licensed ${chosen.license}. Opens Wikimedia source page.`"
+    >
+      <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+        <path
+          d="M12 8v4l3 2M12 2a10 10 0 100 20 10 10 0 000-20z"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <span class="location">{{ chosen.location }}</span>
+      <span class="sep" aria-hidden="true">·</span>
+      <span class="photographer">{{ chosen.photographer }}</span>
+    </a>
+  </Teleport>
 </template>
 
 <style scoped>
