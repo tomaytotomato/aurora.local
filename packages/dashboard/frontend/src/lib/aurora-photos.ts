@@ -3,7 +3,7 @@
 // with attribution. See ATTRIBUTIONS.md in this dir for full details.
 
 export interface AuroraPhoto {
-  slot: number;              // 1..5, matches /aurora/{slot}.jpg
+  slot: number;              // 1..7, matches /aurora/{slot}.jpg
   location: string;
   photographer: string;
   license: string;
@@ -55,6 +55,26 @@ export const AURORA_PHOTOS: AuroraPhoto[] = [
     licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
     sourceUrl:
       'https://commons.wikimedia.org/wiki/File:Green_aurora_over_north_Brofjorden,_Loddebo_3.jpg',
+  },
+  {
+    slot: 6,
+    location: 'Tromsø, Norway',
+    photographer: 'Lenny K Photography',
+    license: 'CC BY 2.0',
+    licenseUrl: 'https://creativecommons.org/licenses/by/2.0/',
+    sourceUrl:
+      'https://commons.wikimedia.org/wiki/File:Aurora_Borealis_(24641937989).jpg',
+  },
+  {
+    // Commons gives no location for this Unsplash shot; 'Northern lights'
+    // is a neutral, honest placeholder until a real place is confirmed.
+    slot: 7,
+    location: 'Northern lights',
+    photographer: 'Jonathan Bean',
+    license: 'CC0 · public domain',
+    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+    sourceUrl:
+      'https://commons.wikimedia.org/wiki/File:Jonathan_Bean_2016-10-20_(Unsplash).jpg',
   },
 ];
 
