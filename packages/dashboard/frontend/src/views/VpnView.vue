@@ -149,6 +149,8 @@ async function rotateKey(): Promise<void> {
     config.value = await VpnApi.rotateServerKey();
     syncForm();
     toast({ title: 'Server key rotated', description: 'Every peer config must be re-downloaded.', variant: 'warning', duration: 5000 });
+  } catch (e) {
+    toast({ title: "Couldn't rotate the server key", description: humanCopyForError(e, { subject: 'the server key', action: 'rotate' }), variant: 'destructive' });
   } finally {
     rotating.value = false;
     rotateOpen.value = false;
@@ -159,7 +161,11 @@ async function rotateKey(): Promise<void> {
 const onlineCount = computed(() => peers.value.filter((p) => peerOnline(p)).length);
 
 async function refreshPeers(): Promise<void> {
-  peers.value = await VpnApi.peers();
+  try {
+    peers.value = await VpnApi.peers();
+  } catch (e) {
+    toast({ title: "Couldn't refresh peers", description: humanCopyForError(e, { subject: 'the peer list', action: 'refresh' }), variant: 'destructive' });
+  }
 }
 
 async function togglePeer(p: VpnPeer): Promise<void> {
@@ -180,6 +186,8 @@ async function confirmRemove(): Promise<void> {
   try {
     await VpnApi.removePeer(removeTarget.value.id);
     await refreshPeers();
+  } catch (e) {
+    toast({ title: "Couldn't remove the peer", description: humanCopyForError(e, { subject: 'the peer', action: 'remove' }), variant: 'destructive' });
   } finally {
     removing.value = false;
     removeTarget.value = null;
@@ -255,7 +263,11 @@ async function loadOpenVpn(): Promise<void> {
   } catch { /* silent — advanced tab is optional */ }
 }
 async function toggleOpenVpn(on: boolean): Promise<void> {
-  openVpn.value = await VpnApi.saveOpenVpnConfig({ enabled: on });
+  try {
+    openVpn.value = await VpnApi.saveOpenVpnConfig({ enabled: on });
+  } catch (e) {
+    toast({ title: "Couldn't update OpenVPN", description: humanCopyForError(e, { subject: 'the OpenVPN setting', action: 'update' }), variant: 'destructive' });
+  }
 }
 function onTab(t: string): void {
   activeTab.value = t as typeof activeTab.value;
