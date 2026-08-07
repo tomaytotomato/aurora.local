@@ -17,7 +17,11 @@ import { renderIdentity } from '@/lib/identity';
  *   - hostname / domain: for the `aurora.local` line (uses shared
  *     renderIdentity so the dedup rule from B2 applies).
  *   - lanIp: for the always-works fallback line.
- *   - port: appended to both URLs (defaults to 8090 until Caddy/TLS lands).
+ *   - port: optional, appended to both URLs. Left unset in production:
+ *     Caddy fronts the box on the standard port, so the address is a bare
+ *     `http://aurora.local`. Pass a port only for a direct-to-backend dev
+ *     link. (Previously defaulted to 8090, which advertised the dev port
+ *     as the way back to a box that actually answers on Caddy.)
  *   - variant: 'card' (bordered box, for Done page) or 'inline' (borderless,
  *     for the System card on /dashboard/home).
  */
@@ -29,13 +33,13 @@ const props = withDefaults(defineProps<{
   port?: number;
   variant?: 'card' | 'inline';
 }>(), {
-  port: 8090,
   variant: 'card',
 });
 
 const mdnsHost = computed(() => renderIdentity(props.hostname, props.domain));
-const mdnsUrl = computed(() => `http://${mdnsHost.value}:${props.port}`);
-const ipUrl = computed(() => (props.lanIp ? `http://${props.lanIp}:${props.port}` : null));
+const portSuffix = computed(() => (props.port ? `:${props.port}` : ''));
+const mdnsUrl = computed(() => `http://${mdnsHost.value}${portSuffix.value}`);
+const ipUrl = computed(() => (props.lanIp ? `http://${props.lanIp}${portSuffix.value}` : null));
 
 // Copy-feedback state, keyed by which button was clicked.
 const copied = ref<'mdns' | 'ip' | null>(null);
