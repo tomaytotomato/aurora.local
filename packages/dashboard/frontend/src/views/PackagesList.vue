@@ -3,12 +3,17 @@ import { computed, onMounted, ref } from 'vue';
 import { usePackagesStore } from '@/stores/packages';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
+import Button from '@/components/ui/Button.vue';
 import Skeleton from '@/components/ui/Skeleton.vue';
 
 const packages = usePackagesStore();
 
 type Filter = 'all' | 'enabled' | 'available';
 const activeFilter = ref<Filter>('all');
+// A failed load used to be swallowed, so the catalogue rendered "No apps"
+// — indistinguishable from a genuinely empty view. Track it so the
+// template can offer an honest error state with a retry.
+const loadError = ref(false);
 
 function countFor(f: Filter): number {
   if (f === 'enabled') return packages.enabled.length;
@@ -16,9 +21,12 @@ function countFor(f: Filter): number {
   return packages.list.length;
 }
 
-onMounted(() => {
-  packages.fetchList().catch(() => { /* silent for v0.1 */ });
-});
+function load(): void {
+  loadError.value = false;
+  packages.fetchList().catch(() => { loadError.value = true; });
+}
+
+onMounted(load);
 
 const filtered = computed(() => {
   if (activeFilter.value === 'enabled') return packages.enabled;
@@ -83,6 +91,11 @@ const filtered = computed(() => {
         <Skeleton class="h-4 w-2/3" />
       </Card>
     </div>
+
+    <Card v-else-if="loadError && !packages.list.length" class="py-16 text-center">
+      <p class="text-sm text-muted-foreground mb-4">Couldn't load the catalogue.</p>
+      <Button size="sm" variant="secondary" @click="load">Try again</Button>
+    </Card>
 
     <Card v-else-if="!filtered.length" class="py-16 text-sm text-muted-foreground text-center">
       No apps in this view.
