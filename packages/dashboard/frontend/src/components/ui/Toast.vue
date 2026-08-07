@@ -36,6 +36,11 @@ const emit = defineEmits<{
   action: [];
 }>();
 
+// Errors must interrupt a screen reader (assertive), not wait politely in
+// the queue behind whatever it's reading — several call sites use a
+// destructive toast as the only failure feedback.
+const urgent = computed(() => (props.variant ?? 'default') === 'destructive');
+
 const cls = computed(() => {
   const variant = props.variant ?? 'default';
   const variantCls: Record<ToastVariant, string> = {
@@ -56,8 +61,8 @@ const cls = computed(() => {
 <template>
   <div
     :class="cls"
-    role="status"
-    aria-live="polite"
+    :role="urgent ? 'alert' : 'status'"
+    :aria-live="urgent ? 'assertive' : 'polite'"
     data-slot="toast"
     :data-variant="variant ?? 'default'"
   >

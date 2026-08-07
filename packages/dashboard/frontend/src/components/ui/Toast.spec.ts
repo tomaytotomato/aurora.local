@@ -17,6 +17,12 @@ import { toast, dismiss, dismissAll, useToastQueue } from '@/composables/useToas
  */
 
 describe('Toast (presentation)', () => {
+  it('escalates destructive toasts to role=alert + aria-live=assertive', () => {
+    const w = mount(Toast, { props: { description: 'Couldn\'t remove user', variant: 'destructive' } });
+    expect(w.attributes('role')).toBe('alert');
+    expect(w.attributes('aria-live')).toBe('assertive');
+  });
+
   it('renders description + aria-live=polite', () => {
     const w = mount(Toast, { props: { description: 'hello' } });
     expect(w.text()).toContain('hello');

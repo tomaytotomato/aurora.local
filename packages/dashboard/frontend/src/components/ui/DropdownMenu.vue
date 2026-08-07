@@ -44,7 +44,14 @@ function close() {
   if (!open.value) return;
   open.value = false;
   emit('update:open', false);
-  triggerRef.value?.focus?.();
+  // Return focus to the real interactive element the caller rendered in
+  // #trigger (a <button>/<a>), not the wrapper <div> — a div isn't
+  // focusable, so the previous `triggerRef.focus()` silently no-op'd and
+  // left keyboard users orphaned at the top of the document.
+  const inner = triggerRef.value?.querySelector<HTMLElement>(
+    'button, a[href], [role="button"], [tabindex]',
+  );
+  (inner ?? triggerRef.value)?.focus?.();
 }
 
 function onDocClick(ev: MouseEvent) {
