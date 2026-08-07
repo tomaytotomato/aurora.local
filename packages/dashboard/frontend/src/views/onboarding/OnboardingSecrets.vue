@@ -16,18 +16,16 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
     <div class="eyebrow mb-3">Step 5 of 9</div>
     <h1 class="mb-4">Configure secrets.</h1>
     <p class="text-foreground mb-8">
-      Each selected package has an <code class="bg-muted px-1 py-0.5 rounded border border-border">.env</code>
-      file. Aurora renders it as a form and generates strong values for anything that looks
-      like a secret.
+      Some apps need secrets like passwords or API keys. Aurora fills in strong
+      values for you, so there's nothing to type here.
     </p>
 
     <Alert variant="info" class="mb-8">
-      <AlertTitle>Landing in the next slice</AlertTitle>
+      <AlertTitle>Secrets are handled for you</AlertTitle>
       <AlertDescription>
-        The per-package secrets form ships with M2. For v0.1, Aurora uses each package's
-        <code>.env.example</code> as-is and auto-generates any missing secrets during
-        install. You can edit them from
-        <em>Packages → &lt;name&gt; → Config</em> after onboarding.
+        Aurora generates a strong value for anything that looks like a secret
+        when it installs each app. You can review or change any of them from an
+        app's Config screen afterwards.
       </AlertDescription>
     </Alert>
 

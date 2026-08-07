@@ -143,8 +143,8 @@ async function proceed(): Promise<void> {
     <div class="eyebrow mb-3">Step 4 of 9</div>
     <h1 class="mb-4">Pick your packages.</h1>
     <p class="text-foreground mb-6">
-      Each package is a small compose stack with sensible defaults. You can add or
-      remove any of them later — nothing is permanent.
+      Each app comes with sensible defaults. You can add or remove any of them
+      later; nothing is permanent.
     </p>
 
     <div class="mb-8">

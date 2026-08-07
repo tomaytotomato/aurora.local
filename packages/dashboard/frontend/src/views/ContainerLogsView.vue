@@ -120,9 +120,8 @@ function formatTs(ts: string | undefined): string {
 
     <Alert v-if="truncated" variant="warning" class="mb-4" data-test="logs-truncated">
       <AlertDescription>
-        Log payload hit Aurora's 2 MiB collection cap. Older lines were
-        dropped. Reduce the tail count or use <code>docker logs</code> for
-        full history.
+        This view hit Aurora's 2 MiB limit, so older lines were dropped.
+        Lower the tail count to focus on the most recent activity.
       </AlertDescription>
     </Alert>
 

@@ -107,9 +107,6 @@ async function copy(kind: string, text: string): Promise<void> {
           @click="copy('windows', uncPath)"
         >{{ copiedKey === 'windows' ? 'Copied' : 'Copy' }}</button>
       </div>
-      <p class="text-xs text-muted-foreground">
-        Or from a terminal: <code class="font-mono">net use Z: {{ uncPath }} /persistent:yes</code>.
-      </p>
     </div>
 
     <div v-else-if="active === 'ios'" role="tabpanel" data-panel="ios" class="space-y-3">

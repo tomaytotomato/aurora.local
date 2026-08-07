@@ -73,7 +73,7 @@ async function submit(): Promise<void> {
 }
 
 function passkey(): void {
-  passkeyToast.value = 'Passkey sign-in lands in v0.2. Use password for now.';
+  passkeyToast.value = "Passkey sign-in isn't available yet. Use your password.";
   setTimeout(() => (passkeyToast.value = null), 4000);
 }
 </script>

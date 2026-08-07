@@ -144,7 +144,7 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
         <h3 class="card-title mb-1">Second factor</h3>
         <p class="card-subtitle mb-3">Passkey</p>
         <Alert variant="info">
-          <AlertDescription>Passkey enrollment lands in v0.2.</AlertDescription>
+          <AlertDescription>Passkey sign-in isn't set up on this box yet.</AlertDescription>
         </Alert>
       </Card>
 
@@ -170,9 +170,10 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           <div>
             <h3 class="card-title mb-1">LAN aliases</h3>
             <p class="text-xs text-muted-foreground mt-1">
-              mDNS A-records published for each enabled-package vhost.
-              Lets LAN devices hit <span class="font-mono">&lt;label&gt;.{{ info?.domain ?? 'aurora.local' }}</span>
-              without editing /etc/hosts.
+              Publishes a friendly name for each enabled app so other devices on
+              your network can reach
+              <span class="font-mono">&lt;label&gt;.{{ info?.domain ?? 'aurora.local' }}</span>
+              with no setup on those devices.
             </p>
           </div>
           <Button

@@ -57,9 +57,8 @@ const filtered = computed(() => {
       <div class="eyebrow mb-2">Catalogue</div>
       <h1 class="mb-3">Apps</h1>
       <p class="max-w-2xl">
-        Every app is a small compose stack. Enabling one brings it under the
-        <code class="font-mono">aurora</code> compose project and adds its
-        vhost to Caddy.
+        Each app runs in its own container. Enabling one starts it and gives
+        it a web address on your network.
       </p>
     </div>
 

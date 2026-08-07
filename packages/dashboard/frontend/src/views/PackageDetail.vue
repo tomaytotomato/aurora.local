@@ -187,11 +187,9 @@ onMounted(async () => {
           class="p-8 text-center"
           data-test="package-logs-empty"
         >
-          <p class="text-sm text-foreground mb-1">No containers for this package.</p>
+          <p class="text-sm text-foreground mb-1">Nothing running for this app yet.</p>
           <p class="text-xs text-muted-foreground">
-            Aurora only sees containers labelled with the compose project
-            <span class="font-mono">aurora-{{ name }}</span>. Start the
-            package first, then come back here.
+            Start the app first, then come back to see its logs here.
           </p>
         </Card>
         <Card v-else class="p-4">
