@@ -3,10 +3,18 @@ import { computed, onMounted, ref } from 'vue';
 import { usePackagesStore } from '@/stores/packages';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
+import Skeleton from '@/components/ui/Skeleton.vue';
 
 const packages = usePackagesStore();
 
-const activeFilter = ref<'all' | 'enabled' | 'available'>('all');
+type Filter = 'all' | 'enabled' | 'available';
+const activeFilter = ref<Filter>('all');
+
+function countFor(f: Filter): number {
+  if (f === 'enabled') return packages.enabled.length;
+  if (f === 'available') return packages.available.length;
+  return packages.list.length;
+}
 
 onMounted(() => {
   packages.fetchList().catch(() => { /* silent for v0.1 */ });
@@ -54,6 +62,7 @@ const filtered = computed(() => {
         @click="activeFilter = f"
       >
         {{ f }}
+        <span class="ml-1.5 text-xs tabular-nums opacity-70">{{ countFor(f) }}</span>
         <span
           v-if="activeFilter === f"
           class="absolute inset-x-0 -bottom-px h-px bg-foreground"
@@ -61,9 +70,19 @@ const filtered = computed(() => {
       </button>
     </div>
 
-    <Card v-if="packages.loading && !packages.list.length" class="p-6 text-sm text-muted-foreground">
-      Loading catalogue…
-    </Card>
+    <div v-if="packages.loading && !packages.list.length" class="grid grid-cols-3 gap-6">
+      <Card v-for="n in 6" :key="`skeleton-${n}`" class="h-full p-8">
+        <div class="flex items-start justify-between mb-3">
+          <div class="space-y-2">
+            <Skeleton class="h-3 w-16" />
+            <Skeleton class="h-5 w-28" />
+          </div>
+          <Skeleton class="h-5 w-14 rounded-full" />
+        </div>
+        <Skeleton class="h-4 w-full mb-2" />
+        <Skeleton class="h-4 w-2/3" />
+      </Card>
+    </div>
 
     <Card v-else-if="!filtered.length" class="py-16 text-sm text-muted-foreground text-center">
       No apps in this view.
