@@ -1,9 +1,16 @@
 # aurora.local
 
-Turn any fresh Debian/Ubuntu box into a self-hosted server: reverse
-proxy + dashboard + LAN DNS + VPN + media automation + file sharing +
-whatever else you enable. Everything runs in Docker, orchestrated
-under a single `aurora` compose project.
+Opinionated and simple home server setup to allow you to get the basics up and running.
+
+This project is a formalisation of the last year of me tinkering around with a home server.
+
+It has a list of applications and configurations that have worked for me, and hopefully will work for you.
+
+If you are wanting something more advanced there are many other alternatives out there like TrueNas, ZimaOS or ProxMox.
+
+## Screenshots
+
+
 
 ## Quick start
 
