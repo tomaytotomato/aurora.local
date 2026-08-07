@@ -33,7 +33,7 @@ const core = computed(() => splitByCore(packages.list).core);
   <section>
     <div class="mb-6 on-photo">
       <h1 class="mb-3">Core</h1>
-      <p class="max-w-2xl">The platform packages every other app relies on. Always on; you can configure them, but they can't be removed.</p>
+      <p class="max-w-2xl">The essentials aurora needs to run. You can configure them, but not remove them.</p>
     </div>
 
     <SectionNav
@@ -41,12 +41,6 @@ const core = computed(() => splitByCore(packages.list).core);
       class="mb-6"
     />
 
-    <Card class="mb-6 p-5 text-sm text-muted-foreground">
-      Core apps are the essential platform packages aurora needs to run and to support
-      every other app: the reverse proxy and dashboard, single sign-on (Authelia), and
-      LAN file sharing (Samba). They're always on; you can view and configure them, but
-      not remove them.
-    </Card>
 
     <div v-if="packages.loading && !packages.list.length" class="grid grid-cols-3 gap-6">
       <Card v-for="n in 3" :key="`skeleton-${n}`" class="h-full p-8">

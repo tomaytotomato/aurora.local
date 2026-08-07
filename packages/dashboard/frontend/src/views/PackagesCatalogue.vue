@@ -60,7 +60,7 @@ function openDetail(pkg: PackageSummary): void {
   <section>
     <div class="mb-6 on-photo">
       <h1 class="mb-3">Apps</h1>
-      <p class="max-w-2xl">Every app runs in Docker. Install, configure and remove the ones you want; the essentials live under Core.</p>
+      <p class="max-w-2xl">Add, configure and remove the apps you want.</p>
     </div>
 
     <SectionNav
