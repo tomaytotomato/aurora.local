@@ -6,6 +6,7 @@ import { OnboardingApi, type InstallPlan } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import { Alert, AlertDescription } from '@/components/ui';
 import { prettyPackageName } from '@/lib/packageName';
+import { humanCopyForError } from '@/lib/http-error-copy';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -29,9 +30,7 @@ onMounted(async () => {
   try {
     plan.value = await OnboardingApi.plan();
   } catch (e) {
-    planErr.value = e instanceof Error
-      ? `Backend unreachable (${e.message}) — showing local preview only`
-      : 'Backend unreachable — showing local preview only';
+    planErr.value = "Aurora couldn't reach the backend, so this is a local preview only.";
   }
 });
 
@@ -134,11 +133,12 @@ function classifyInstallError(e: unknown): string {
           }
         } catch { /* fall through */ }
       }
-      // Bare message — wrap it so we never surface a raw stack trace.
-      if (!/Exception|Traceback|\tat /.test(raw)) return raw;
     }
   }
-  return "Something went wrong installing Aurora. Try again in a moment.";
+  // Anything not mapped to a human backend message routes through the
+  // shared helper, so a raw axios string ("Request failed with status
+  // code 500") never reaches the user.
+  return humanCopyForError(e, { subject: 'the install', action: 'run' });
 }
 
 function retry(): void {

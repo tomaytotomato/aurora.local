@@ -5,6 +5,7 @@ import { useOnboardingStore } from '@/stores/onboarding';
 import Button from '@/components/ui/Button.vue';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui';
 import { humanBytes } from '@/lib/utils';
+import { humanCopyForError } from '@/lib/http-error-copy';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -16,7 +17,7 @@ onMounted(async () => {
     if (!store.env) await store.fetchEnv();
   } catch (e) {
     // Public endpoint; a real failure means backend is broken. Surface it.
-    err.value = e instanceof Error ? e.message : 'Failed to read system info';
+    err.value = humanCopyForError(e, { subject: 'system info', action: 'read' });
   }
 });
 

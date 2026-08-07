@@ -8,6 +8,7 @@ import DoneChecklist from '@/components/onboarding/DoneChecklist.vue';
 import ReachInfo from '@/components/ReachInfo.vue';
 import { OnboardingApi } from '@/api/onboarding';
 import { prettyPackageName } from '@/lib/packageName';
+import { humanCopyForError } from '@/lib/http-error-copy';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -94,11 +95,10 @@ async function onLaunchRetry(): Promise<void> {
   await startServices();
 }
 
-function extractError(e: unknown): string | null {
-  if (typeof e === 'object' && e !== null && 'message' in e) {
-    return String((e as { message: unknown }).message);
-  }
-  return null;
+function extractError(e: unknown): string {
+  // Route through the shared helper so a raw axios/stack string never
+  // reaches the launch-error span on the most consequential screen.
+  return humanCopyForError(e, { subject: 'the launch', action: 'start' });
 }
 
 function toDashboard(): void {

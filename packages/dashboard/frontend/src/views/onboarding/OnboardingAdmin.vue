@@ -9,6 +9,7 @@ import Label from '@/components/ui/Label.vue';
 import { Alert, AlertDescription, Dialog } from '@/components/ui';
 import Checkbox from '@/components/ui/Checkbox.vue';
 import { generatePassword, copyToClipboard } from '@/lib/utils';
+import { humanCopyForError } from '@/lib/http-error-copy';
 import { toast } from '@/composables/useToast';
 
 const store = useOnboardingStore();
@@ -91,7 +92,7 @@ async function proceed(): Promise<void> {
     try {
       await OnboardingApi.setAdmin({ username: username.value, password: password.value });
     } catch (e) {
-      err.value = e instanceof Error ? e.message : 'Failed to create admin.';
+      err.value = humanCopyForError(e, { subject: 'your admin account', action: 'create' });
       return;
     }
     store.admin = {
