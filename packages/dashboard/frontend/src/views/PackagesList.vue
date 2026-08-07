@@ -70,7 +70,12 @@ const filtered = computed(() => {
         @click="activeFilter = f"
       >
         {{ f }}
-        <span class="ml-1.5 text-xs tabular-nums opacity-70">{{ countFor(f) }}</span>
+        <!--
+          A <small>, not a <span>: `.on-photo-tabs button > span` paints
+          the active underline white, so a bare count span rendered as a
+          white box with invisible text over the photo.
+        -->
+        <small class="ml-1.5 tabular-nums opacity-70">{{ countFor(f) }}</small>
         <span
           v-if="activeFilter === f"
           class="absolute inset-x-0 -bottom-px h-px bg-foreground"
