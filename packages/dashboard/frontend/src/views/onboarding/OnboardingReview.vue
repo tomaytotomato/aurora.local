@@ -5,6 +5,7 @@ import { useOnboardingStore } from '@/stores/onboarding';
 import { OnboardingApi, type InstallPlan } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import { Alert, AlertDescription } from '@/components/ui';
+import { prettyPackageName } from '@/lib/packageName';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -196,7 +197,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
             v-for="p in packagesToShow"
             :key="p"
             class="font-mono text-xs px-2 py-0.5 rounded border border-border bg-card"
-          >{{ p }}</span>
+          >{{ prettyPackageName(p) }}</span>
           <span v-if="packagesToShow.length === 0" class="text-muted-foreground text-sm">
             No packages selected.
           </span>

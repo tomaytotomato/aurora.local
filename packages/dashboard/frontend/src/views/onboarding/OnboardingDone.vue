@@ -7,6 +7,7 @@ import LaunchProgress from '@/components/onboarding/LaunchProgress.vue';
 import DoneChecklist from '@/components/onboarding/DoneChecklist.vue';
 import ReachInfo from '@/components/ReachInfo.vue';
 import { OnboardingApi } from '@/api/onboarding';
+import { prettyPackageName } from '@/lib/packageName';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -164,7 +165,7 @@ onMounted(async () => {
           v-for="(p, i) in toStart"
           :key="p"
           class="font-mono text-xs px-1.5 py-0.5 rounded border border-border bg-card ml-1"
-        >{{ p }}<template v-if="i < toStart.length - 1">&nbsp;</template></span>
+        >{{ prettyPackageName(p) }}<template v-if="i < toStart.length - 1">&nbsp;</template></span>
         for you. No typing required.
       </p>
       <div class="flex items-center gap-3">

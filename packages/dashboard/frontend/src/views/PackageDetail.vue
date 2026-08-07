@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { humanCopyForError } from '@/lib/http-error-copy';
+import { packageLabel, prettyPackageName } from '@/lib/packageName';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Tabs from '@/components/ui/Tabs.vue';
@@ -17,6 +18,9 @@ const activeTab = ref<'overview' | 'config' | 'logs' | 'related'>('overview');
 
 const name = computed(() => route.params.name as string);
 const detail = computed(() => packages.byName[name.value]);
+const heading = computed(() =>
+  detail.value ? packageLabel(detail.value) : prettyPackageName(name.value),
+);
 
 // B3-followup (iter-16): Logs tab lists containers scoped to this package
 // so the operator picks the right service (media stack = 7 containers).
@@ -81,7 +85,7 @@ onMounted(async () => {
     <div class="mb-8 on-photo">
       <router-link to="/apps" class="text-xs text-white/70 no-underline hover:text-white">← All apps</router-link>
       <div class="flex items-baseline gap-3 mt-4">
-        <h1 class="capitalize">{{ name }}</h1>
+        <h1>{{ heading }}</h1>
         <Badge v-if="detail" :tone="detail.enabled ? 'ok' : 'neutral'" class="bg-card">
           {{ detail.enabled ? (detail.running ? 'running' : 'stopped') : 'disabled' }}
         </Badge>

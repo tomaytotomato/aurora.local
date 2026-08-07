@@ -9,6 +9,7 @@ import Checkbox from '@/components/ui/Checkbox.vue';
 import Tabs from '@/components/ui/Tabs.vue';
 import { Alert, AlertDescription } from '@/components/ui';
 import type { PackageCategory } from '@/api/packages';
+import { packageLabel } from '@/lib/packageName';
 
 const store = useOnboardingStore();
 const packages = usePackagesStore();
@@ -183,7 +184,7 @@ async function proceed(): Promise<void> {
         <Checkbox :model-value="isSelected(pkg.name)" class="mt-0.5" :disabled="pkg.name === 'core'" />
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-foreground">{{ pkg.name }}</span>
+            <span class="text-sm font-medium text-foreground">{{ packageLabel(pkg) }}</span>
             <span v-if="pkg.name === 'core'" class="eyebrow" style="color: var(--color-accent)">required</span>
           </div>
           <p class="text-xs text-muted-foreground mt-1 line-clamp-2">{{ pkg.description }}</p>
