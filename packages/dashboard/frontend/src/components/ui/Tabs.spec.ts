@@ -88,4 +88,45 @@ describe('Tabs', () => {
     expect(cls).toContain('mb-6');
     expect(cls).toContain('border-border');
   });
+
+  it('renders an optional hint after the label', () => {
+    const withHints = [
+      { value: 'all', label: 'All', hint: '16' },
+      { value: 'enabled', label: 'Enabled', hint: '6' },
+    ] as const;
+    const w = mount(Tabs, { props: { modelValue: 'all', tabs: withHints } });
+    const first = w.findAll('[role="tab"]')[0];
+    expect(first.find('small').exists()).toBe(true);
+    expect(first.find('small').text()).toBe('16');
+  });
+
+  it('applies the compact padding under size="sm"', () => {
+    const w = mount(Tabs, { props: { modelValue: 'overview', tabs, size: 'sm' } });
+    const cls = w.findAll('[role="tab"]')[0].classes().join(' ');
+    expect(cls).toContain('px-3');
+    expect(cls).toContain('text-xs');
+  });
+
+  it('moves selection with ArrowRight/ArrowLeft/Home/End', async () => {
+    const w = mount(Tabs, { props: { modelValue: 'config', tabs } });
+    const list = w.find('[role="tablist"]');
+
+    await list.trigger('keydown', { key: 'ArrowRight' });
+    expect(w.emitted('update:modelValue')!.at(-1)).toEqual(['logs']);
+
+    await list.trigger('keydown', { key: 'ArrowLeft' });
+    expect(w.emitted('update:modelValue')!.at(-1)).toEqual(['overview']);
+
+    await list.trigger('keydown', { key: 'End' });
+    expect(w.emitted('update:modelValue')!.at(-1)).toEqual(['logs']);
+
+    await list.trigger('keydown', { key: 'Home' });
+    expect(w.emitted('update:modelValue')!.at(-1)).toEqual(['overview']);
+  });
+
+  it('wraps around at the ends', async () => {
+    const w = mount(Tabs, { props: { modelValue: 'logs', tabs } });
+    await w.find('[role="tablist"]').trigger('keydown', { key: 'ArrowRight' });
+    expect(w.emitted('update:modelValue')!.at(-1)).toEqual(['overview']);
+  });
 });

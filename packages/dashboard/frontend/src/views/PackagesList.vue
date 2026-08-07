@@ -5,6 +5,7 @@ import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Button from '@/components/ui/Button.vue';
 import Skeleton from '@/components/ui/Skeleton.vue';
+import Tabs from '@/components/ui/Tabs.vue';
 
 const packages = usePackagesStore();
 
@@ -20,6 +21,15 @@ function countFor(f: Filter): number {
   if (f === 'available') return packages.available.length;
   return packages.list.length;
 }
+
+// Feed the shared Tabs strip: label + a dim count hint per filter.
+const filterTabs = computed(() =>
+  (['all', 'enabled', 'available'] as const).map((f) => ({
+    value: f,
+    label: f.charAt(0).toUpperCase() + f.slice(1),
+    hint: String(countFor(f)),
+  })),
+);
 
 function load(): void {
   loadError.value = false;
@@ -54,34 +64,16 @@ const filtered = computed(() => {
     </div>
 
     <!--
-      Hand-rolled filter strip (not the shared Tabs component) but the same
-      shape: triggers + an underline span over a bottom rule. It sits on
-      the app-wide aurora photo, so it takes `on-photo-tabs` for legible
-      triggers — the one, consistent treatment every tab strip on the
-      photo uses (see docs/STYLEGUIDE.md). No opaque box; that floats.
+      Shared Tabs, styled `on-photo-tabs` so the triggers read on the
+      app-wide photo without an opaque box. Used as a filter strip: no
+      default slot, so the filtered grid below renders as normal.
     -->
-    <div class="flex items-center gap-1 border-b border-border mb-6 on-photo-tabs">
-      <button
-        v-for="f in (['all','enabled','available'] as const)"
-        :key="f"
-        type="button"
-        class="px-4 py-2 text-sm capitalize relative"
-        :class="activeFilter === f ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
-        @click="activeFilter = f"
-      >
-        {{ f }}
-        <!--
-          A <small>, not a <span>: `.on-photo-tabs button > span` paints
-          the active underline white, so a bare count span rendered as a
-          white box with invisible text over the photo.
-        -->
-        <small class="ml-1.5 tabular-nums opacity-70">{{ countFor(f) }}</small>
-        <span
-          v-if="activeFilter === f"
-          class="absolute inset-x-0 -bottom-px h-px bg-foreground"
-        />
-      </button>
-    </div>
+    <Tabs
+      :model-value="activeFilter"
+      :tabs="filterTabs"
+      class="on-photo-tabs mb-6"
+      @update:model-value="activeFilter = $event as Filter"
+    />
 
     <div v-if="packages.loading && !packages.list.length" class="grid grid-cols-3 gap-6">
       <Card v-for="n in 6" :key="`skeleton-${n}`" class="h-full p-8">

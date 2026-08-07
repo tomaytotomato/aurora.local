@@ -6,6 +6,7 @@ import { usePackagesStore } from '@/stores/packages';
 import { OnboardingApi } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Checkbox from '@/components/ui/Checkbox.vue';
+import Tabs from '@/components/ui/Tabs.vue';
 import { Alert, AlertDescription } from '@/components/ui';
 import type { PackageCategory } from '@/api/packages';
 
@@ -101,7 +102,13 @@ const catalogue = computed(() => {
 const categories = computed<Array<{ value: PackageCategory | 'all'; label: string }>>(() => {
   const set = new Set<PackageCategory>();
   catalogue.value.forEach((p) => set.add(p.category));
-  return [{ value: 'all', label: 'All' }, ...[...set].map((c) => ({ value: c, label: c.replace('-', ' ') }))];
+  return [
+    { value: 'all', label: 'All' },
+    ...[...set].map((c) => ({
+      value: c,
+      label: c.replace('-', ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
+    })),
+  ];
 });
 
 const filtered = computed(() =>
@@ -153,24 +160,13 @@ async function proceed(): Promise<void> {
       <AlertDescription>{{ err }}</AlertDescription>
     </Alert>
 
-    <div class="mb-6">
-      <div class="flex items-center gap-1 border-b border-border overflow-x-auto">
-        <button
-          v-for="cat in categories"
-          :key="cat.value"
-          type="button"
-          class="px-3 py-2 text-xs capitalize whitespace-nowrap relative transition-colors"
-          :class="activeCategory === cat.value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
-          @click="activeCategory = cat.value"
-        >
-          {{ cat.label }}
-          <span
-            v-if="activeCategory === cat.value"
-            class="absolute inset-x-0 -bottom-px h-px bg-foreground"
-          />
-        </button>
-      </div>
-    </div>
+    <Tabs
+      :model-value="activeCategory"
+      :tabs="categories"
+      size="sm"
+      class="overflow-x-auto mb-6"
+      @update:model-value="activeCategory = $event as PackageCategory | 'all'"
+    />
 
     <div class="grid grid-cols-2 gap-3 mb-6">
       <button
