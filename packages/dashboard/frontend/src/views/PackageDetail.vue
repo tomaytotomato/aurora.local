@@ -32,6 +32,7 @@ const structure = computed(() => (detail.value ? dockerStructureFor(detail.value
 // Core apps live on their own page now; send the back link to whichever
 // one the operator actually came from.
 const backTo = computed(() => (isCore.value ? '/apps/core' : '/apps/catalogue'));
+const backLabel = computed(() => (isCore.value ? '← Core' : '← Apps'));
 const links = computed(() => (detail.value ? packageLinks(detail.value) : []));
 
 const readmeBody = computed(() => (detail.value?.readme ?? '').replace(/^#\s+.*\n+/, '').trim());
@@ -292,7 +293,7 @@ onMounted(async () => {
 <template>
   <section>
     <div class="mb-8 on-photo">
-      <router-link :to="backTo" class="text-xs text-white/70 no-underline hover:text-white">← All apps</router-link>
+      <router-link :to="backTo" class="text-xs text-white/70 no-underline hover:text-white">{{ backLabel }}</router-link>
       <div class="flex items-baseline gap-3 mt-4">
         <h1>{{ heading }}</h1>
         <Badge v-if="detail" :tone="detail.enabled ? 'ok' : 'neutral'" class="bg-card">

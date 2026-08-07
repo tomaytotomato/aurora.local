@@ -32,13 +32,12 @@ const core = computed(() => splitByCore(packages.list).core);
 <template>
   <section>
     <div class="mb-6 on-photo">
-      <div class="eyebrow mb-2">Catalogue</div>
-      <h1 class="mb-3">Apps</h1>
-      <p class="max-w-2xl">The platform packages every other app relies on.</p>
+      <h1 class="mb-3">Core</h1>
+      <p class="max-w-2xl">The platform packages every other app relies on. Always on; you can configure them, but they can't be removed.</p>
     </div>
 
     <SectionNav
-      :items="[{ to: '/apps/catalogue', label: 'Catalogue' }, { to: '/apps/core', label: 'Core' }]"
+      :items="[{ to: '/apps/catalogue', label: 'Apps' }, { to: '/apps/core', label: 'Core' }]"
       class="mb-6"
     />
 
@@ -64,7 +63,7 @@ const core = computed(() => splitByCore(packages.list).core);
     </div>
 
     <Card v-else-if="loadError && !packages.list.length" class="py-16 text-center">
-      <p class="text-sm text-muted-foreground mb-4">Couldn't load the catalogue.</p>
+      <p class="text-sm text-muted-foreground mb-4">Couldn't load core apps.</p>
       <Button size="sm" variant="secondary" @click="load">Try again</Button>
     </Card>
 

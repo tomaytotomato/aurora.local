@@ -59,13 +59,12 @@ function openDetail(pkg: PackageSummary): void {
 <template>
   <section>
     <div class="mb-6 on-photo">
-      <div class="eyebrow mb-2">Catalogue</div>
       <h1 class="mb-3">Apps</h1>
-      <p class="max-w-2xl">Every app here runs in Docker. Install, configure and manage them below.</p>
+      <p class="max-w-2xl">Every app runs in Docker. Install, configure and remove the ones you want; the essentials live under Core.</p>
     </div>
 
     <SectionNav
-      :items="[{ to: '/apps/catalogue', label: 'Catalogue' }, { to: '/apps/core', label: 'Core' }]"
+      :items="[{ to: '/apps/catalogue', label: 'Apps' }, { to: '/apps/core', label: 'Core' }]"
       class="mb-6"
     />
 
