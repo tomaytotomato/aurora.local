@@ -47,7 +47,10 @@ const failureReason = ref<string | null>(null);
 const failureCode = ref<FailureCode>(null);
 const startedAt = Date.now();
 const elapsedMs = ref(0);
-const logOpen = ref(true);
+// Collapsed by default: the per-package pills carry the honest signal on
+// the "you're finished" screen, so the raw stream stays behind a "Show
+// details" disclosure. A failure re-opens it (see the completion handler).
+const logOpen = ref(false);
 const perPkg = ref<Record<string, PkgState>>(
   Object.fromEntries(props.packages.map((p) => [p, 'not-started'])),
 );
