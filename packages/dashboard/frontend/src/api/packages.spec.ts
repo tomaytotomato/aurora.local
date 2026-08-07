@@ -27,16 +27,20 @@ function pkg(over: Partial<PackageSummary> & { name: string }): PackageSummary {
 }
 
 describe('isCorePackage / isRemovable', () => {
-  it('treats category "core" as core', () => {
-    const core = pkg({ name: 'core', category: 'core' });
-    expect(isCorePackage(core)).toBe(true);
-    expect(isRemovable(core)).toBe(false);
+  it('treats the curated platform set (core, identity, storage) as core and non-removable', () => {
+    for (const name of ['core', 'identity', 'storage']) {
+      const p = pkg({ name });
+      expect(isCorePackage(p)).toBe(true);
+      expect(isRemovable(p)).toBe(false);
+    }
   });
 
-  it('treats every other category as removable', () => {
-    const media = pkg({ name: 'media', category: 'media' });
-    expect(isCorePackage(media)).toBe(false);
-    expect(isRemovable(media)).toBe(true);
+  it('treats every other app as removable', () => {
+    for (const name of ['media', 'photos', 'notes', 'ai']) {
+      const p = pkg({ name });
+      expect(isCorePackage(p)).toBe(false);
+      expect(isRemovable(p)).toBe(true);
+    }
   });
 });
 
@@ -49,8 +53,9 @@ describe('splitByCore', () => {
       pkg({ name: 'media', category: 'media' }),
     ];
     const { core, apps } = splitByCore(list);
-    expect(core.map((p) => p.name)).toEqual(['core']);
-    expect(apps.map((p) => p.name)).toEqual(['privacy', 'identity', 'media']);
+    // identity is part of the curated core set, so it lands in `core`.
+    expect(core.map((p) => p.name)).toEqual(['core', 'identity']);
+    expect(apps.map((p) => p.name)).toEqual(['privacy', 'media']);
   });
 
   it('returns empty groups for an empty catalogue', () => {

@@ -77,19 +77,23 @@ export interface PackageDetail extends PackageSummary {
 }
 
 /**
- * Core packages (category === 'core', i.e. Caddy + Homepage today) are the
- * platform baseline every other app relies on. They can be configured but
- * never added/removed from the box — see docs/PACKAGE_CONTRACT.md. Written
- * as a rule against `category` rather than a hard-coded name list so a
- * future second core package (e.g. if identity moves into the baseline)
- * is covered for free.
+ * Core packages are the platform baseline every other app relies on: the
+ * reverse proxy + dashboard (`core`), the auth provider (`identity` /
+ * Authelia — it fronts sign-on for everything), and LAN file sharing
+ * (`storage` / Samba). They can be configured but never added/removed from
+ * the box — see docs/PACKAGE_CONTRACT.md. This is an opinionated, curated
+ * set (aurora ships a fixed baseline), so it's an explicit name list rather
+ * than a category rule. A backend `core` manifest flag can supersede this
+ * later; until then the frontend owns the list.
  */
-export function isCorePackage(p: Pick<PackageSummary, 'category'>): boolean {
-  return p.category === 'core';
+const CORE_PACKAGES: ReadonlySet<string> = new Set(['core', 'identity', 'storage']);
+
+export function isCorePackage(p: Pick<PackageSummary, 'name'>): boolean {
+  return CORE_PACKAGES.has(p.name);
 }
 
 /** Only non-core packages can be enabled/disabled from the dashboard. */
-export function isRemovable(p: Pick<PackageSummary, 'category'>): boolean {
+export function isRemovable(p: Pick<PackageSummary, 'name'>): boolean {
   return !isCorePackage(p);
 }
 

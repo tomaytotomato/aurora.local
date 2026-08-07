@@ -21,7 +21,8 @@ function load(): void {
 
 onMounted(load);
 
-// Core (category === 'core': Caddy + Homepage today) runs the platform
+// Core (the curated platform set: core/Caddy, identity/Authelia,
+// storage/Samba) runs the platform
 // everything else depends on. It's a separate page now rather than a
 // tab inside Apps, so its "always on, not removable" framing doesn't
 // have to share a tab strip with Installed/Marketplace.
@@ -43,8 +44,9 @@ const core = computed(() => splitByCore(packages.list).core);
 
     <Card class="mb-6 p-5 text-sm text-muted-foreground">
       Core apps are the essential platform packages aurora needs to run and to support
-      every other app — the reverse proxy and the landing dashboard today. They're
-      always on: you can view and configure them, but not remove them.
+      every other app: the reverse proxy and dashboard, single sign-on (Authelia), and
+      LAN file sharing (Samba). They're always on; you can view and configure them, but
+      not remove them.
     </Card>
 
     <div v-if="packages.loading && !packages.list.length" class="grid grid-cols-3 gap-6">

@@ -62,11 +62,13 @@ export const state: MockState = {
     step: 'done',
     admin_username: 'admin',
     domain: 'aurora.local',
-    enabled_packages: ['core', 'privacy', 'media', 'monitoring'],
+    enabled_packages: ['core', 'identity', 'storage', 'privacy', 'media', 'monitoring'],
     dns_mode: 'adguard',
   },
-  enabled: new Set(['core', 'privacy', 'media', 'monitoring']),
-  running: new Set(['core', 'privacy', 'monitoring']), // media enabled but not yet up
+  // identity (Authelia) and storage (Samba) are core/essential, so they're
+  // always on alongside core.
+  enabled: new Set(['core', 'identity', 'storage', 'privacy', 'media', 'monitoring']),
+  running: new Set(['core', 'identity', 'storage', 'privacy', 'monitoring']), // media enabled but not yet up
   vpn: {
     // Configured by default so the VPN page lands on its ready state. To
     // exercise the not-configured empty state, set this to null.
