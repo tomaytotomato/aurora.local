@@ -11,16 +11,30 @@
 //   • session.authenticated — set false to land on /login.
 
 import type { Session } from '@/api/auth';
+import type { JobStatus } from '@/api/jobs';
 import type { OnboardingDraft } from '@/api/onboarding';
+import type { PackageUpdate } from '@/api/updates';
 import type { OpenVpnClient, OpenVpnConfig, VpnConfig, VpnPeer } from '@/api/vpn';
 import type { User } from '@/api/users';
+import { jobScript, type JobScript } from './fixtures/jobs';
 import {
   initialOpenVpnClients,
   initialOpenVpnConfig,
   initialPeers,
   initialVpnConfig,
 } from './fixtures/vpn';
+import { initialUpdates } from './fixtures/updates';
 import { CURRENT_USER_ID, initialUsers } from './fixtures/users';
+
+/**
+ * A job plus the script it is playing out. `cursor` is how many of the
+ * script's lines have already been emitted, so a stream that reconnects
+ * mid-job replays the tail it missed and then carries on.
+ */
+export interface MockJob extends JobStatus {
+  script: JobScript;
+  cursor: number;
+}
 
 export interface MockState {
   session: Session;
@@ -40,6 +54,10 @@ export interface MockState {
   /** Admin users. The row whose id === currentUserId is "you". */
   users: User[];
   currentUserId: string;
+  /** Long-running operations, keyed by job id. Grows as actions are taken. */
+  jobs: Record<string, MockJob>;
+  /** Per-package update availability, keyed by package name. */
+  updates: Record<string, PackageUpdate>;
 }
 
 // Default: onboarding DONE, admin logged in. Every dashboard screen and
@@ -79,4 +97,30 @@ export const state: MockState = {
   },
   users: initialUsers(),
   currentUserId: CURRENT_USER_ID,
+  jobs: initialJobs(),
+  updates: initialUpdates(),
 };
+
+/**
+ * One already-finished job so the "last update failed" link on the AI
+ * card leads to a real log rather than a 404. Its id matches
+ * `lastUpdateJobId` in the updates fixture.
+ */
+function initialJobs(): Record<string, MockJob> {
+  const script = jobScript('update', 'ai');
+  const failed: MockJob = {
+    id: 'job-update-ai-prior',
+    kind: 'update',
+    target: 'ai',
+    state: 'failed',
+    startedAt: '2026-08-07T21:04:11Z',
+    finishedAt: '2026-08-07T21:04:58Z',
+    exitCode: script.exitCode,
+    failureCode: script.failureCode,
+    failureReason: script.failureReason,
+    tail: [...script.lines],
+    script,
+    cursor: script.lines.length,
+  };
+  return { [failed.id]: failed };
+}

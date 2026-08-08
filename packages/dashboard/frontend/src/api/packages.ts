@@ -77,6 +77,15 @@ export interface PackageDetail extends PackageSummary {
 }
 
 /**
+ * What every lifecycle verb that produces a log returns. Named here
+ * because it matches the `JobRef` schema in openapi.yaml; stream it with
+ * `JobsApi.openStream(jobId)`.
+ */
+export interface JobRef {
+  jobId: string;
+}
+
+/**
  * Core packages are the platform baseline every other app relies on: the
  * reverse proxy + dashboard (`core`), the auth provider (`identity` /
  * Authelia — it fronts sign-on for everything), and LAN file sharing
@@ -167,19 +176,19 @@ export const PackagesApi = {
   async setEnv(name: string, vars: Record<string, string>): Promise<void> {
     await http.put(`/packages/${name}/env`, vars);
   },
-  async enable(name: string): Promise<{ jobId: string }> {
-    const { data } = await http.post<{ jobId: string }>(`/packages/${name}/enable`);
+  async enable(name: string): Promise<JobRef> {
+    const { data } = await http.post<JobRef>(`/packages/${name}/enable`);
     return data;
   },
-  async disable(name: string): Promise<{ jobId: string }> {
-    const { data } = await http.post<{ jobId: string }>(`/packages/${name}/disable`);
+  async disable(name: string): Promise<JobRef> {
+    const { data } = await http.post<JobRef>(`/packages/${name}/disable`);
     return data;
   },
   async restart(name: string): Promise<void> {
     await http.post(`/packages/${name}/restart`);
   },
-  async upgrade(name: string): Promise<{ jobId: string }> {
-    const { data } = await http.post<{ jobId: string }>(`/packages/${name}/upgrade`);
+  async upgrade(name: string): Promise<JobRef> {
+    const { data } = await http.post<JobRef>(`/packages/${name}/upgrade`);
     return data;
   },
 };
