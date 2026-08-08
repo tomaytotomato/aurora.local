@@ -8,6 +8,7 @@
 // package routes, as they did when this was one file.
 
 import { authHandlers } from './auth';
+import { backupHandlers } from './backup';
 import { containersHandlers } from './containers';
 import { jobsHandlers } from './jobs';
 import { observabilityHandlers } from './observability';
@@ -26,6 +27,7 @@ export const handlers = [
   ...packagesHandlers,
   ...updatesHandlers,
   ...jobsHandlers,
+  ...backupHandlers,
   ...servicesHandlers,
   ...containersHandlers,
   ...observabilityHandlers,

@@ -133,6 +133,23 @@ export function jobScript(kind: JobKind, target: string | null): JobScript {
         500,
       );
 
+    case 'backup':
+      return ok(
+        [
+          'Connecting to repository…',
+          'Running before-snapshot actions',
+          ' immich-postgres: pg_dump … 214 MB',
+          ' silverbullet: sqlite checkpoint … done',
+          'Snapshotting /data/home/bruce/aurora.local … 1,204 files',
+          'Snapshotting /data/photos/library … 94,612 files',
+          'Snapshotting /data/documents … 8,431 files',
+          'Snapshotting /data/notes … 612 files',
+          'Uploading 1.2 GiB (of 412 GiB, rest deduplicated)',
+          'Snapshot complete',
+        ],
+        650,
+      );
+
     case 'restore':
       return ok(
         [

@@ -56,6 +56,19 @@ export function finishJob(job: MockJob): void {
   job.failureCode = job.script.failureCode;
   job.failureReason = job.script.failureReason;
 
+  // A backup that succeeds is the thing the whole page reports on, so the
+  // status has to move with it or the mock contradicts itself.
+  if (job.kind === 'backup') {
+    state.backup.status = {
+      ...state.backup.status,
+      lastRunAt: job.finishedAt,
+      lastRunState: job.state === 'success' ? 'ok' : 'failed',
+      snapshotCount:
+        job.state === 'success' ? state.backup.status.snapshotCount + 1 : state.backup.status.snapshotCount,
+      generatedAt: job.finishedAt ?? state.backup.status.generatedAt,
+    };
+  }
+
   // An update that fails leaves the package on its old version and the
   // update still waiting; an update that succeeds clears it. The updates
   // fixture is the thing the cards read, so keep it honest.

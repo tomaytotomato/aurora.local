@@ -30,6 +30,17 @@ export const securityFindings: SecurityFinding[] = [
     remediationUrl: null,
   },
   {
+    // The backup equivalent of a smoke alarm with a flat battery. Raised
+    // by the same rules engine as the rest, so it shows up in the sidebar
+    // count and can be dismissed with a reason like anything else.
+    id: 'backup-source-inconsistent',
+    severity: 'medium',
+    title: 'A backed-up folder holds a database with nothing dumping it first',
+    description:
+      'Documents (Paperless) keeps a Postgres database inside a path being snapshotted live. A database file copied while the server is writing to it is not a backup, and the problem only shows up during a restore.',
+    remediationUrl: '/backup',
+  },
+  {
     id: 'tls-not-trusted',
     severity: 'low',
     title: 'Caddy root CA not installed on this device',

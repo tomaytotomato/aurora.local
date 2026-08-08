@@ -1,4 +1,5 @@
 import { http } from './client';
+import type { BackupAction } from './backup';
 
 export type PackageStatus = 'running' | 'degraded' | 'stopped' | 'not-installed';
 export type PackageCategory =
@@ -69,11 +70,23 @@ export function startBudgetMs(p: PackageSummary | undefined | null): number {
   return 30_000;
 }
 
+/**
+ * The `backup:` block from the package manifest: which paths this app
+ * owns, and what has to happen before they can be snapshotted
+ * consistently. Read-only in the dashboard — writing the block is a
+ * manifest job. See docs/BACKUP_PAGE_DESIGN.md §6.
+ */
+export interface PackageBackupSpec {
+  paths: string[];
+  before: BackupAction[];
+}
+
 export interface PackageDetail extends PackageSummary {
   readme?: string;
   vhosts?: string[];
   homepageTiles?: number;
   envVars?: EnvVarSpec[];
+  backup?: PackageBackupSpec | null;
 }
 
 /**

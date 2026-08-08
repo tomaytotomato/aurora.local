@@ -17,6 +17,7 @@ export function jobHeadline(kind: JobKind, state: JobState): string {
     'update-check': ['Checking for updates…', 'Check complete', "Couldn't check for updates"],
     start: ['Starting…', 'Started', "Couldn't start"],
     restart: ['Restarting…', 'Restarted', "Couldn't restart"],
+    backup: ['Backing up…', 'Backup complete', 'Backup failed'],
     restore: ['Restoring…', 'Restore complete', 'Restore failed'],
     deploy: ['Deploying…', 'Deployed', 'Deploy failed'],
   };

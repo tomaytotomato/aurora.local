@@ -11,6 +11,7 @@ const ALL_KINDS: JobKind[] = [
   'update-check',
   'start',
   'restart',
+  'backup',
   'restore',
   'deploy',
 ];

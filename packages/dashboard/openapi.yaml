@@ -34,6 +34,7 @@ tags:
   - name: users
   - name: updates
   - name: jobs
+  - name: backup
 
 security:
   - sessionCookie: []
@@ -414,6 +415,121 @@ paths:
             text/event-stream:
               schema: { type: string }
         '404': { description: Unknown job. }
+
+  # ────────────────────────────── backup ──────────────────────────────
+  # Aurora reports on Kopia rather than replacing it: repository
+  # management and the snapshot browser stay in Kopia's own UI.
+  # See docs/BACKUP_PAGE_DESIGN.md.
+  /backup/status:
+    get:
+      tags: [backup]
+      summary: Repository state, last run, size
+      responses:
+        '200':
+          description: Backup status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupStatus' }
+  /backup/sources:
+    get:
+      tags: [backup]
+      summary: The paths being protected
+      responses:
+        '200':
+          description: One row per source.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BackupSource' }
+  /backup/sources/{id}:
+    patch:
+      tags: [backup]
+      summary: Turn a source on or off
+      parameters:
+        - $ref: '#/components/parameters/BackupSourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: The updated source.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupSource' }
+        '404': { description: Unknown source. }
+  /backup/snapshots:
+    get:
+      tags: [backup]
+      summary: Snapshot history, newest first
+      parameters:
+        - name: sourceId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Snapshots.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Snapshot' }
+    post:
+      tags: [backup]
+      summary: Back up now
+      responses:
+        '202':
+          description: Backup job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+  /backup/snapshots/{id}/restore:
+    post:
+      tags: [backup]
+      summary: Restore a whole snapshot to its original path
+      description: >
+        Deliberately the plainest flow there is: whole source, whole
+        snapshot, original location. Per-file and restore-elsewhere are
+        out of scope and stay in Kopia's UI.
+      parameters:
+        - $ref: '#/components/parameters/SnapshotId'
+      responses:
+        '202':
+          description: Restore job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+        '404': { description: Unknown snapshot. }
+  /backup/policy:
+    get:
+      tags: [backup]
+      summary: Schedule, retention and the staleness threshold
+      responses:
+        '200':
+          description: Policy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupPolicy' }
+    put:
+      tags: [backup]
+      summary: Save the policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BackupPolicy' }
+      responses:
+        '200':
+          description: The saved policy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupPolicy' }
 
   # ───────────────────────────── services ─────────────────────────────
   /services/status:
@@ -1007,6 +1123,16 @@ components:
       in: path
       required: true
       schema: { type: string }
+    BackupSourceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    SnapshotId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
 
   schemas:
     Session:
@@ -1179,6 +1305,24 @@ components:
             vhosts: { type: array, items: { type: string } }
             homepageTiles: { type: integer }
             envVars: { type: array, items: { $ref: '#/components/schemas/EnvVarSpec' } }
+            backup:
+              oneOf:
+                - { $ref: '#/components/schemas/PackageBackupSpec' }
+                - { type: 'null' }
+    PackageBackupSpec:
+      type: object
+      description: >
+        The manifest's `backup:` block: which paths this package owns and
+        what must run before they can be snapshotted consistently.
+        Read-only over the API. See docs/BACKUP_PAGE_DESIGN.md §6.
+      required: [paths, before]
+      properties:
+        paths:
+          type: array
+          items: { type: string }
+        before:
+          type: array
+          items: { $ref: '#/components/schemas/BackupAction' }
     JobRef:
       type: object
       required: [jobId]
@@ -1187,7 +1331,7 @@ components:
 
     JobKind:
       type: string
-      enum: [enable, disable, update, update-check, start, restart, restore, deploy]
+      enum: [enable, disable, update, update-check, start, restart, backup, restore, deploy]
     JobState:
       type: string
       enum: [queued, running, success, failed]
@@ -1266,6 +1410,103 @@ components:
           type: [string, 'null']
           description: Most recent update attempt, for linking back to its log.
         lastUpdateFailed: { type: boolean }
+
+    RepoState:
+      type: string
+      enum: [not-configured, connected, unreachable]
+    SnapshotState:
+      type: string
+      enum: [ok, partial, failed]
+    BackupAction:
+      type: object
+      description: What has to happen before a path can be snapshotted consistently.
+      required: [kind, description, container]
+      properties:
+        kind:
+          type: string
+          enum: [postgres-dump, mysql-dump, sqlite-backup, command]
+        description: { type: string }
+        container: { type: [string, 'null'] }
+    BackupStatus:
+      type: object
+      required: [repoState, repoKind, repoLocation, encrypted, totalSizeBytes, uniqueSizeBytes, snapshotCount, lastRunAt, lastRunState, lastRunDurationMs, nextRunAt, generatedAt]
+      properties:
+        repoState: { $ref: '#/components/schemas/RepoState' }
+        repoKind:
+          type: [string, 'null']
+          description: filesystem, s3, b2, sftp… as Kopia reports it.
+        repoLocation: { type: [string, 'null'] }
+        encrypted: { type: boolean }
+        totalSizeBytes:
+          type: [integer, 'null']
+          description: Logical size of everything protected.
+        uniqueSizeBytes:
+          type: [integer, 'null']
+          description: What it occupies after dedup and compression.
+        snapshotCount: { type: integer }
+        lastRunAt: { type: [string, 'null'], format: date-time }
+        lastRunState:
+          oneOf:
+            - { $ref: '#/components/schemas/SnapshotState' }
+            - { type: 'null' }
+        lastRunDurationMs: { type: [integer, 'null'] }
+        nextRunAt: { type: [string, 'null'], format: date-time }
+        generatedAt: { type: string, format: date-time }
+    BackupSource:
+      type: object
+      required: [id, path, package, enabled, lastSnapshotAt, lastSnapshotState, sizeBytes, fileCount, beforeActions, needsConsistencyAction]
+      properties:
+        id: { type: string }
+        path: { type: string }
+        package:
+          type: [string, 'null']
+          description: The aurora package this path belongs to, when Aurora can tell.
+        enabled: { type: boolean }
+        lastSnapshotAt: { type: [string, 'null'], format: date-time }
+        lastSnapshotState:
+          oneOf:
+            - { $ref: '#/components/schemas/SnapshotState' }
+            - { type: 'null' }
+        sizeBytes: { type: [integer, 'null'] }
+        fileCount: { type: [integer, 'null'] }
+        beforeActions:
+          type: array
+          items: { $ref: '#/components/schemas/BackupAction' }
+        needsConsistencyAction:
+          type: boolean
+          description: >
+            The source contains a database Aurora knows about and no
+            before-action is declared for it, so the snapshot is a copy of
+            a live data directory. Surfaced as a warning rather than left
+            to be discovered during a restore.
+    Snapshot:
+      type: object
+      required: [id, sourceId, path, createdAt, state, sizeBytes, fileCount, consistent]
+      properties:
+        id: { type: string }
+        sourceId: { type: string }
+        path: { type: string }
+        createdAt: { type: string, format: date-time }
+        state: { $ref: '#/components/schemas/SnapshotState' }
+        sizeBytes: { type: integer }
+        fileCount: { type: integer }
+        consistent:
+          type: boolean
+          description: Taken with the source's before-actions applied.
+    BackupPolicy:
+      type: object
+      required: [scheduleCron, scheduleLabel, keepDaily, keepWeekly, keepMonthly, stalenessWarnDays]
+      properties:
+        scheduleCron: { type: string }
+        scheduleLabel:
+          type: string
+          description: The cron expression in English, rendered server-side.
+        keepDaily: { type: integer }
+        keepWeekly: { type: integer }
+        keepMonthly: { type: integer }
+        stalenessWarnDays:
+          type: integer
+          description: Days without a successful snapshot before Aurora calls it stale.
 
     ServiceState:
       type: string
@@ -1381,6 +1622,11 @@ components:
       properties:
         metrics: { type: boolean }
         securityScanner: { type: boolean }
+        backup:
+          type: boolean
+          description: >
+            Gates /backup. False until the backend can talk to Kopia's
+            server API; while false the nav entry hides.
     SystemInfo:
       type: object
       required: [capabilities]

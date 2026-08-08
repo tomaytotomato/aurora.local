@@ -9,6 +9,13 @@ export interface SystemCapabilities {
    * the sidebar hides the nav link.
    */
   securityScanner?: boolean;
+  /**
+   * Gates /backup. False until the backend can talk to Kopia's server
+   * API; while false the nav entry hides, on the same principle as
+   * securityScanner — a page that cannot be honest should not be
+   * reachable.
+   */
+  backup?: boolean;
 }
 
 export interface SystemInfo {

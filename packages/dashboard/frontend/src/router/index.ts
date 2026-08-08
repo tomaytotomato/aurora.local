@@ -57,6 +57,11 @@ const routes: RouteRecordRaw[] = [
       { path: 'users', component: () => import('@/views/UsersView.vue') },
       // VPN configuration — WireGuard-first (2026-08-06).
       { path: 'vpn', component: () => import('@/views/VpnView.vue') },
+      // Backup (2026-08-08). Reports on Kopia rather than replacing it —
+      // see docs/BACKUP_PAGE_DESIGN.md. Nav entry is gated on
+      // capabilities.backup; the route itself stays reachable by URL so a
+      // bookmark doesn't 404 into the catch-all redirect.
+      { path: 'backup', component: () => import('@/views/BackupView.vue') },
       // B3 (v0.3): container log tail. Snapshot only.
       { path: 'containers/:id/logs', component: () => import('@/views/ContainerLogsView.vue') },
       { path: 'security', component: () => import('@/views/SecurityPosture.vue') },

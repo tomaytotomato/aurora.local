@@ -11,6 +11,7 @@
 //   • session.authenticated — set false to land on /login.
 
 import type { Session } from '@/api/auth';
+import type { BackupPolicy, BackupSource, BackupStatus, Snapshot } from '@/api/backup';
 import type { JobStatus } from '@/api/jobs';
 import type { OnboardingDraft } from '@/api/onboarding';
 import type { PackageUpdate } from '@/api/updates';
@@ -24,6 +25,12 @@ import {
   initialVpnConfig,
 } from './fixtures/vpn';
 import { initialUpdates } from './fixtures/updates';
+import {
+  initialPolicy,
+  initialSnapshots,
+  initialSources,
+  initialStatus,
+} from './fixtures/backup';
 import { CURRENT_USER_ID, initialUsers } from './fixtures/users';
 
 /**
@@ -58,6 +65,13 @@ export interface MockState {
   jobs: Record<string, MockJob>;
   /** Per-package update availability, keyed by package name. */
   updates: Record<string, PackageUpdate>;
+  /** Kopia repository state, what it protects, and its history. */
+  backup: {
+    status: BackupStatus;
+    sources: BackupSource[];
+    snapshots: Snapshot[];
+    policy: BackupPolicy;
+  };
 }
 
 // Default: onboarding DONE, admin logged in. Every dashboard screen and
@@ -99,6 +113,12 @@ export const state: MockState = {
   currentUserId: CURRENT_USER_ID,
   jobs: initialJobs(),
   updates: initialUpdates(),
+  backup: {
+    status: initialStatus(),
+    sources: initialSources(),
+    snapshots: initialSnapshots(),
+    policy: initialPolicy(),
+  },
 };
 
 /**

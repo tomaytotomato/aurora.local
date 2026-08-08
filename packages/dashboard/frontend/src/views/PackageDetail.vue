@@ -578,6 +578,34 @@ onMounted(async () => {
               <span v-if="!(detail.dependsOn ?? []).length" class="text-muted-foreground text-sm">none</span>
             </div>
           </Card>
+          <!-- The manifest's backup: block, read-only. Writing it is a
+               manifest job; this is here so an operator can see at a
+               glance whether this app's data is covered, and whether the
+               copy would actually restore. -->
+          <Card v-if="detail.backup" data-test="package-backup-card">
+            <div class="eyebrow mb-1">Backup</div>
+            <h3 class="mb-3">What gets protected</h3>
+            <ul class="text-sm font-mono text-foreground space-y-0.5 mb-3">
+              <li v-for="p in detail.backup.paths" :key="p">{{ p }}</li>
+              <li v-if="!detail.backup.paths.length" class="text-muted-foreground font-sans">nothing declared</li>
+            </ul>
+            <template v-if="detail.backup.before.length">
+              <div class="eyebrow mb-1">Before each snapshot</div>
+              <ul class="text-xs text-muted-foreground space-y-1">
+                <li v-for="a in detail.backup.before" :key="a.description">
+                  {{ a.description }}<span v-if="a.container" class="font-mono"> ({{ a.container }})</span>
+                </li>
+              </ul>
+            </template>
+            <p v-else-if="detail.backup.paths.length" class="text-xs text-destructive" data-test="package-backup-warning">
+              Nothing runs before the snapshot. If this app keeps a database in that path, the copy
+              is being taken while it is being written to, and may not restore.
+            </p>
+            <router-link to="/backup" class="text-xs text-muted-foreground no-underline hover:underline mt-3 inline-block">
+              Backup →
+            </router-link>
+          </Card>
+
           <Card v-if="minRamMb !== undefined || minDiskGb !== undefined">
             <div class="eyebrow mb-1">Requirements</div>
             <h3 class="mb-3">Resources</h3>

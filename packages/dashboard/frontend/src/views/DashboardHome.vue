@@ -6,11 +6,20 @@ import { usePackagesStore } from '@/stores/packages';
 import { useContainerEvents } from '@/composables/useContainerEvents';
 import { ServicesApi } from '@/api/services';
 import { MetricsApi, type MetricBucket } from '@/api/metrics';
+import {
+  BackupApi,
+  backupHeadline,
+  backupPageState,
+  backupTone,
+  daysSinceLastRun,
+  type BackupPolicy,
+  type BackupStatus,
+} from '@/api/backup';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Badge from '@/components/ui/Badge.vue';
-import { Select } from '@/components/ui';
+import { Select, Skeleton } from '@/components/ui';
 import MetricChart from '@/components/MetricChart.vue';
 import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
 import { renderIdentity } from '@/lib/identity';
@@ -80,8 +89,37 @@ async function fetchPackages(): Promise<void> {
   }
 }
 
+// ---- backup health --------------------------------------------------
+// The whole point of surfacing this on Overview: nobody logs into Kopia
+// to check, so a schedule that stopped in March goes unnoticed until the
+// day it matters. Gated on the same capability as the /backup nav entry —
+// no capability, no tile, rather than a tile that guesses.
+const backupStatus = ref<BackupStatus | null>(null);
+const backupPolicy = ref<BackupPolicy | null>(null);
+const backupErr = ref(false);
+
+const backupCapable = computed(() => system.info?.capabilities?.backup === true);
+const backupState = computed(() =>
+  backupStatus.value && backupPolicy.value
+    ? backupPageState(backupStatus.value, backupPolicy.value)
+    : null,
+);
+const backupDays = computed(() => (backupStatus.value ? daysSinceLastRun(backupStatus.value) : null));
+
+async function fetchBackup(): Promise<void> {
+  backupErr.value = false;
+  try {
+    const [s, p] = await Promise.all([BackupApi.status(), BackupApi.policy()]);
+    backupStatus.value = s;
+    backupPolicy.value = p;
+  } catch {
+    backupErr.value = true;
+  }
+}
+
 onMounted(async () => {
   await Promise.allSettled([fetchSystem(), fetchPackages()]);
+  if (backupCapable.value) void fetchBackup();
   // B2-followup (iter-22): metrics fetch fires after system.info lands
   // so capabilities.metrics is up-to-date before the guard runs.
   // iter-24: sparkline fetch fans out in parallel so the pill picks up
@@ -530,6 +568,39 @@ function pickMetric(key: string): void {
           />
 
           <router-link to="/apps" class="text-sm text-muted-foreground">Manage apps →</router-link>
+        </div>
+      </Card>
+
+      <!-- Backup health. Deliberately small: the only job here is to say
+           whether the answer is "fine" or "look at this", and to be
+           impossible to miss when it is the latter. -->
+      <Card v-if="backupCapable" class="col-span-3 p-8" data-card="backup">
+        <h3 class="card-title mb-1">Backup</h3>
+        <p class="card-subtitle mb-4">Kopia</p>
+
+        <div v-if="backupErr" data-state="error" class="text-sm">
+          <p class="text-foreground mb-1">Aurora couldn't read the backup state.</p>
+          <Button variant="secondary" size="sm" class="mt-2" @click="fetchBackup">Try again</Button>
+        </div>
+
+        <div v-else-if="!backupState" data-state="loading">
+          <Skeleton class="h-5 w-32 mb-2" />
+          <Skeleton class="h-4 w-48" />
+        </div>
+
+        <div v-else data-test="backup-tile">
+          <div class="flex items-center gap-2 mb-2">
+            <Badge :tone="backupTone(backupState)">{{ backupState }}</Badge>
+          </div>
+          <p class="text-sm text-foreground mb-1">{{ backupHeadline(backupState, backupDays) }}</p>
+          <p class="text-xs text-muted-foreground mb-3">
+            <template v-if="backupStatus?.uniqueSizeBytes !== null && backupStatus">
+              {{ humanBytes(backupStatus.uniqueSizeBytes) }} stored ·
+              {{ backupStatus.snapshotCount }} snapshots
+            </template>
+            <template v-else>Size unknown.</template>
+          </p>
+          <router-link to="/backup" class="text-sm text-muted-foreground">Backup →</router-link>
         </div>
       </Card>
 

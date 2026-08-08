@@ -23,6 +23,7 @@ export const systemInfo: SystemInfo = {
   capabilities: {
     metrics: true,
     securityScanner: true,
+    backup: true,
   },
 };
 

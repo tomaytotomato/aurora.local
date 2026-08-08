@@ -23,6 +23,7 @@ export type JobKind =
   | 'update-check'
   | 'start'
   | 'restart'
+  | 'backup'
   | 'restore'
   | 'deploy';
 
