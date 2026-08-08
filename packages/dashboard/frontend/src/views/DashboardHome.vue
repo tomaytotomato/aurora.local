@@ -14,8 +14,12 @@ import { Select } from '@/components/ui';
 import MetricChart from '@/components/MetricChart.vue';
 import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
 import { renderIdentity } from '@/lib/identity';
-import { startBudgetMs, type PackageSummary } from '@/api/packages';
+// startBudgetMs is no longer needed here: the start job's own lifetime is
+// the budget now, rather than a timer racing it. DoneChecklist still uses
+// it for the wizard's per-package polling.
+import { type PackageSummary } from '@/api/packages';
 import { useHealthPill } from '@/composables/useHealthPill';
+import JobLogPanel from '@/components/JobLogPanel.vue';
 import ReachInfo from '@/components/ReachInfo.vue';
 import DoneChecklist from '@/components/onboarding/DoneChecklist.vue';
 
@@ -159,23 +163,59 @@ const packagesCount = computed(() => {
 // the media sub-checklist (BL1).
 const { pill: healthPill } = useHealthPill();
 
-// Per-package Start (§2.1 fix). Delegates to POST /api/services/{pkg}/start
-// which returns 202 with a job_id. We refresh the package list on both
-// success and failure so the pill flips to whatever the probe says next.
+// Per-package Start (§2.1). POST /api/services/{pkg}/start returns 202
+// with a job id, and we now stream that job instead of guessing at a
+// delay.
+//
+// What this replaces: a flat `setTimeout(1500)` before re-listing. On a
+// seven-container stack with first-run pulls, that flipped the row back
+// to a Start button long before anything was actually running, which
+// invited a second click and a 409 launch-in-progress. The row now stays
+// "Starting…" until the job itself says otherwise, however long that
+// takes, and the log underneath shows why it is taking that long.
+const startJobId = ref<string | null>(null);
+const startJobPackage = ref<string | null>(null);
+
 async function onStart(name: string): Promise<void> {
   startState.value = { ...startState.value, [name]: 'starting' };
+  startJobId.value = null;
+  startJobPackage.value = name;
   try {
-    await ServicesApi.start(name);
-    // Give the launch a beat to register a container before re-listing.
-    setTimeout(() => {
-      const next = { ...startState.value };
-      delete next[name];
-      startState.value = next;
-      fetchPackages().catch(() => { /* row already in its own state */ });
-    }, 1500);
+    const { job_id } = await ServicesApi.start(name);
+    startJobId.value = job_id;
   } catch {
     startState.value = { ...startState.value, [name]: 'error' };
+    startJobPackage.value = null;
   }
+}
+
+function clearStartState(name: string): void {
+  const next = { ...startState.value };
+  delete next[name];
+  startState.value = next;
+}
+
+function onStartJobSuccess(): void {
+  const name = startJobPackage.value;
+  if (name) clearStartState(name);
+  fetchPackages().catch(() => { /* row already in its own state */ });
+}
+
+function onStartJobFailed(): void {
+  const name = startJobPackage.value;
+  if (name) startState.value = { ...startState.value, [name]: 'error' };
+  fetchPackages().catch(() => { /* row already in its own state */ });
+}
+
+function retryStart(): void {
+  const name = startJobPackage.value;
+  startJobId.value = null;
+  if (name) void onStart(name);
+}
+
+function dismissStartJob(): void {
+  startJobId.value = null;
+  startJobPackage.value = null;
 }
 
 // Sort blocker-first for the Packages card — running last, so the user's
@@ -474,6 +514,21 @@ function pickMetric(key: string): void {
               </div>
             </li>
           </ul>
+
+          <!-- Live start log. A first pull of Immich or Ollama runs for
+               minutes; without this the row just sits on "Starting…" and
+               the operator has no way to tell progress from a hang. -->
+          <JobLogPanel
+            v-if="startJobId"
+            :job-id="startJobId"
+            dismissible
+            class="mb-3"
+            @success="onStartJobSuccess"
+            @failed="onStartJobFailed"
+            @retry="retryStart"
+            @dismiss="dismissStartJob"
+          />
+
           <router-link to="/apps" class="text-sm text-muted-foreground">Manage apps →</router-link>
         </div>
       </Card>

@@ -2,8 +2,10 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
+import { useUpdatesStore } from '@/stores/updates';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { PackagesApi, dockerStructureFor, isCorePackage, isRemovable, packageLinks } from '@/api/packages';
+import { versionLabel } from '@/api/updates';
 import { buildEnvForm, isEnvFormDirty, validateEnvForm } from '@/lib/envForm';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import { packageLabel, prettyPackageName } from '@/lib/packageName';
@@ -12,10 +14,12 @@ import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Tabs from '@/components/ui/Tabs.vue';
 import DockerBadge from '@/components/DockerBadge.vue';
+import JobLogPanel from '@/components/JobLogPanel.vue';
 import { Alert, AlertDescription, Button, Dialog, Input, Label, Skeleton } from '@/components/ui';
 
 const route = useRoute();
 const packages = usePackagesStore();
+const updates = useUpdatesStore();
 
 const err = ref<string | null>(null);
 const activeTab = ref<'overview' | 'config' | 'logs' | 'related'>('overview');
@@ -53,6 +57,24 @@ function requirement(key: string): number | undefined {
 }
 const minRamMb = computed(() => requirement('min_ram_mb'));
 const minDiskGb = computed(() => requirement('min_disk_gb'));
+
+// ── Updates ───────────────────────────────────────────────────────────
+// Read-only state from the updates domain. Applying one goes through the
+// existing upgrade verb below; this only decides what the card says.
+const update = computed(() => updates.byPackage[name.value]);
+const updateAvailable = computed(() => update.value?.state === 'available');
+const updateUnknown = computed(() => update.value?.state === 'unknown');
+
+function checkedLabel(iso: string | null): string {
+  if (!iso) return 'never';
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return 'never';
+  const hours = Math.floor((Date.now() - ms) / 3_600_000);
+  if (hours < 1) return 'in the last hour';
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
 
 // B3-followup (iter-16): Logs tab lists containers scoped to this package
 // so the operator picks the right service (media stack = 7 containers).
@@ -215,42 +237,61 @@ function cleanName(names: string[] | undefined): string {
 // Core packages only ever get restart/upgrade; add/remove is gated by
 // `removable` both here and in the template (belt + braces — the button
 // simply doesn't render for core, but the handlers double-check too).
+// Add, remove and update all return a job id and stream their log into
+// the panel below the action bar, rather than reporting "started" in a
+// toast and going quiet. Restart stays a plain 204: it is over in
+// seconds and has nothing worth watching.
 type Busy = 'enable' | 'disable' | 'restart' | 'upgrade' | null;
+type JobAction = 'enable' | 'disable' | 'upgrade';
 const busy = ref<Busy>(null);
 const removeOpen = ref(false);
+const activeJobId = ref<string | null>(null);
+const activeAction = ref<JobAction | null>(null);
+
+/** Actions are locked while a job of our own is still running. */
+const jobRunning = ref(false);
+const actionsLocked = computed(() => busy.value !== null || jobRunning.value);
 
 async function refreshAfterLifecycle(): Promise<void> {
   await Promise.all([packages.fetchList(), packages.fetchOne(name.value)]);
 }
 
-async function enablePackage(): Promise<void> {
+const FAILURE_COPY: Record<JobAction, { title: string; subject: string; action: string }> = {
+  enable: { title: "Couldn't add the app", subject: 'this app', action: 'enable' },
+  disable: { title: "Couldn't remove the app", subject: 'this app', action: 'remove' },
+  upgrade: { title: "Couldn't update the app", subject: 'this app', action: 'update' },
+};
+
+async function startJob(action: JobAction): Promise<void> {
   if (!detail.value) return;
-  busy.value = 'enable';
+  if (action === 'disable' && !removable.value) return;
+  busy.value = action;
   try {
-    await PackagesApi.enable(detail.value.name);
-    await refreshAfterLifecycle();
-    toast({ title: 'Added', description: `${heading.value} is starting up.`, variant: 'success', duration: 4000 });
+    const call = {
+      enable: PackagesApi.enable,
+      disable: PackagesApi.disable,
+      upgrade: PackagesApi.upgrade,
+    }[action];
+    const { jobId } = await call(detail.value.name);
+    activeAction.value = action;
+    activeJobId.value = jobId;
+    jobRunning.value = true;
   } catch (e) {
-    toast({ title: "Couldn't add the app", description: humanCopyForError(e, { subject: 'this app', action: 'enable' }), variant: 'destructive' });
+    const copy = FAILURE_COPY[action];
+    toast({
+      title: copy.title,
+      description: humanCopyForError(e, { subject: copy.subject, action: copy.action }),
+      variant: 'destructive',
+    });
   } finally {
     busy.value = null;
+    if (action === 'disable') removeOpen.value = false;
   }
 }
 
-async function confirmDisable(): Promise<void> {
-  if (!detail.value || !removable.value) return;
-  busy.value = 'disable';
-  try {
-    await PackagesApi.disable(detail.value.name);
-    await refreshAfterLifecycle();
-    toast({ title: 'Removed', description: `${heading.value} has been stopped and removed.`, variant: 'success', duration: 4000 });
-  } catch (e) {
-    toast({ title: "Couldn't remove the app", description: humanCopyForError(e, { subject: 'this app', action: 'remove' }), variant: 'destructive' });
-  } finally {
-    busy.value = null;
-    removeOpen.value = false;
-  }
-}
+const enablePackage = () => startJob('enable');
+const confirmDisable = () => startJob('disable');
+const upgradePackage = () => startJob('upgrade');
 
 async function restartPackage(): Promise<void> {
   if (!detail.value) return;
@@ -265,20 +306,52 @@ async function restartPackage(): Promise<void> {
   }
 }
 
-async function upgradePackage(): Promise<void> {
-  if (!detail.value) return;
-  busy.value = 'upgrade';
-  try {
-    await PackagesApi.upgrade(detail.value.name);
-    toast({ title: 'Upgrading', description: `${heading.value} is pulling the latest images.`, variant: 'success', duration: 3000 });
-  } catch (e) {
-    toast({ title: "Couldn't upgrade the app", description: humanCopyForError(e, { subject: 'this app', action: 'upgrade' }), variant: 'destructive' });
-  } finally {
-    busy.value = null;
+const SUCCESS_COPY: Record<JobAction, (n: string) => { title: string; description: string }> = {
+  enable: (n) => ({ title: 'Added', description: `${n} is up and running.` }),
+  disable: (n) => ({ title: 'Removed', description: `${n} has been stopped and removed. Its data is still on disk.` }),
+  upgrade: (n) => ({ title: 'Updated', description: `${n} is running the latest version.` }),
+};
+
+async function onJobSuccess(): Promise<void> {
+  jobRunning.value = false;
+  const action = activeAction.value;
+  await refreshAfterLifecycle();
+  if (action === 'upgrade') await updates.refreshOne(name.value);
+  if (action) {
+    const copy = SUCCESS_COPY[action](heading.value);
+    toast({ ...copy, variant: 'success', duration: 4000 });
   }
 }
 
+async function onJobFailed(): Promise<void> {
+  jobRunning.value = false;
+  // No toast: the panel is already showing the failure and what to do
+  // about it, and two accounts of the same problem is one too many.
+  await refreshAfterLifecycle();
+  if (activeAction.value === 'upgrade') await updates.refreshOne(name.value);
+}
+
+function retryJob(): void {
+  const action = activeAction.value;
+  activeJobId.value = null;
+  if (action) void startJob(action);
+}
+
+function dismissJob(): void {
+  activeJobId.value = null;
+  activeAction.value = null;
+}
+
+watch(name, () => {
+  // Navigating to a different app should not leave the previous app's
+  // job log sitting on screen.
+  activeJobId.value = null;
+  activeAction.value = null;
+  jobRunning.value = false;
+});
+
 onMounted(async () => {
+  void updates.ensureLoaded();
   try {
     await packages.fetchOne(name.value);
   } catch (e) {
@@ -338,30 +411,50 @@ onMounted(async () => {
       </div>
       <div class="flex items-center gap-2">
         <template v-if="isCore || detail.enabled">
-          <Button size="sm" variant="secondary" :disabled="busy !== null" data-test="package-restart" @click="restartPackage">
+          <Button size="sm" variant="secondary" :disabled="actionsLocked" data-test="package-restart" @click="restartPackage">
             {{ busy === 'restart' ? 'Restarting…' : 'Restart' }}
           </Button>
-          <Button size="sm" variant="secondary" :disabled="busy !== null" data-test="package-upgrade" @click="upgradePackage">
-            {{ busy === 'upgrade' ? 'Upgrading…' : 'Upgrade' }}
-          </Button>
+          <!-- Primary only when there is genuinely something to install;
+               otherwise updating is a maintenance action, not the thing
+               the page is inviting you to do. -->
+          <Button
+            size="sm"
+            :variant="updateAvailable ? 'primary' : 'secondary'"
+            :disabled="actionsLocked"
+            data-test="package-upgrade"
+            @click="upgradePackage"
+          >{{ busy === 'upgrade' ? 'Updating…' : (updateAvailable ? 'Update' : 'Check and update') }}</Button>
         </template>
         <Button
           v-if="removable && detail.enabled"
           size="sm"
           variant="danger"
-          :disabled="busy !== null"
+          :disabled="actionsLocked"
           data-test="package-remove"
           @click="removeOpen = true"
         >Remove</Button>
         <Button
           v-else-if="removable"
           size="sm"
-          :disabled="busy !== null"
+          :disabled="actionsLocked"
           data-test="package-add"
           @click="enablePackage"
         >{{ busy === 'enable' ? 'Adding…' : 'Add app' }}</Button>
       </div>
     </Card>
+
+    <!-- Live log for whichever of add / remove / update is in flight.
+         Renders nothing at all until there is a job. -->
+    <JobLogPanel
+      v-if="activeJobId"
+      :job-id="activeJobId"
+      dismissible
+      class="mb-6"
+      @success="onJobSuccess"
+      @failed="onJobFailed"
+      @retry="retryJob"
+      @dismiss="dismissJob"
+    />
 
     <!--
       The tabbed region sits over the app-wide aurora photo. The tab
@@ -401,6 +494,51 @@ onMounted(async () => {
             <p v-if="readmeBody" class="text-sm text-foreground whitespace-pre-line">{{ readmeBody }}</p>
             <p v-else class="text-sm text-muted-foreground">No description yet.</p>
           </Card>
+          <!-- Versions. Absent entirely when the updates domain has
+               nothing for this app: a card that says "no data" is worse
+               than no card. -->
+          <Card v-if="update" class="col-span-2" data-test="package-updates-card">
+            <div class="eyebrow mb-1">Version</div>
+            <div class="flex items-baseline gap-3 mb-3">
+              <h3>{{ updateAvailable ? 'Update available' : (updateUnknown ? 'Version unknown' : 'Up to date') }}</h3>
+              <Badge v-if="updateAvailable" tone="info">update</Badge>
+              <Badge v-else-if="updateUnknown" tone="warn">unchecked</Badge>
+            </div>
+
+            <p v-if="updateUnknown" class="text-sm text-muted-foreground mb-3">
+              Aurora couldn't reach the image registry last time it looked, so this is the version
+              on the box rather than the newest one available.
+            </p>
+
+            <div
+              v-if="update.lastUpdateFailed"
+              data-tone="err"
+              class="mb-3 px-4 py-3 rounded border border-destructive/25 bg-destructive/10 text-destructive text-sm"
+              data-test="package-update-failed"
+            >
+              The last update attempt didn't finish, so this app is still on its previous version.
+            </div>
+
+            <ul class="text-sm space-y-1.5" data-test="package-update-images">
+              <li
+                v-for="img in update.images"
+                :key="img.image"
+                class="flex items-center justify-between gap-4"
+              >
+                <span class="font-mono text-xs text-muted-foreground truncate">{{ img.image }}</span>
+                <span class="flex items-center gap-2 shrink-0">
+                  <span class="font-mono">{{ versionLabel(img) }}</span>
+                  <Badge v-if="img.pinned" tone="neutral">pinned</Badge>
+                </span>
+              </li>
+            </ul>
+
+            <p class="text-xs text-muted-foreground mt-3">
+              Checked {{ checkedLabel(update.lastCheckedAt) }}.
+              <template v-if="update.lastUpdatedAt"> Last updated {{ checkedLabel(update.lastUpdatedAt) }}.</template>
+            </p>
+          </Card>
+
           <Card>
             <div class="eyebrow mb-1">Runtime</div>
             <h3 class="mb-3">Status</h3>

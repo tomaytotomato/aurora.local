@@ -32,6 +32,8 @@ tags:
   - name: mdns
   - name: vpn
   - name: users
+  - name: updates
+  - name: jobs
 
 security:
   - sessionCookie: []
@@ -317,6 +319,101 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/JobRef' }
+
+  # ────────────────────────────── updates ─────────────────────────────
+  # Read-only. Applying an update goes through
+  # POST /packages/{name}/upgrade, which already exists and already
+  # returns a job id — there is deliberately no second update verb.
+  /updates:
+    get:
+      tags: [updates]
+      summary: Update availability for every package
+      responses:
+        '200':
+          description: One row per package, in catalogue order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PackageUpdate' }
+  /updates/{name}:
+    get:
+      tags: [updates]
+      summary: Update availability for one package
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '200':
+          description: Update row.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageUpdate' }
+        '404': { description: Unknown package. }
+  /updates/check:
+    post:
+      tags: [updates]
+      summary: Re-query every registry
+      description: >
+        Returns a job rather than blocking: checking nine registries takes
+        long enough that the operator should see it happening.
+      responses:
+        '202':
+          description: Check job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+
+  # ─────────────────────────────── jobs ───────────────────────────────
+  /jobs:
+    get:
+      tags: [jobs]
+      summary: List jobs, newest first
+      parameters:
+        - name: state
+          in: query
+          schema: { $ref: '#/components/schemas/JobState' }
+        - name: kind
+          in: query
+          schema: { $ref: '#/components/schemas/JobKind' }
+      responses:
+        '200':
+          description: Job summaries without their logs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/JobSummary' }
+  /jobs/{id}:
+    get:
+      tags: [jobs]
+      summary: Snapshot of one job, including its log so far
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobStatus' }
+        '404': { description: Unknown job. }
+  /jobs/{id}/stream:
+    get:
+      tags: [jobs]
+      summary: SSE — live job log + terminal state
+      description: >
+        Server-Sent Events. Replays the lines already produced, then emits
+        `log` events (one line per message), `ping` keepalives, and a
+        terminal `done` carrying the final JobStatus as JSON. Opening the
+        stream of an already-finished job replays its whole tail and then
+        terminates immediately, so a log stays readable after the fact.
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '404': { description: Unknown job. }
 
   # ───────────────────────────── services ─────────────────────────────
   /services/status:
@@ -1057,6 +1154,12 @@ components:
         dependsOn:
           type: [array, 'null']
           items: { type: string }
+        # Upstream links. Not every manifest carries them yet, so both are
+        # nullable and the UI renders nothing when absent.
+        sourceUrl:
+          type: [string, 'null']
+        homepageUrl:
+          type: [string, 'null']
     EnvVarSpec:
       type: object
       required: [key, secret, required]
@@ -1081,6 +1184,88 @@ components:
       required: [jobId]
       properties:
         jobId: { type: string }
+
+    JobKind:
+      type: string
+      enum: [enable, disable, update, update-check, start, restart, restore, deploy]
+    JobState:
+      type: string
+      enum: [queued, running, success, failed]
+    JobFailureCode:
+      type: string
+      description: >
+        Machine-readable failure classification. The frontend picks its
+        copy from this rather than showing a raw stderr line; `unknown`
+        falls back to the job's own failureReason.
+      enum: [port_conflict, pull_rate_limited, registry_unreachable, disk_full, docker_down, container_crashed, unknown]
+    JobSummary:
+      type: object
+      required: [id, kind, target, state, startedAt, finishedAt, exitCode, failureCode, failureReason]
+      properties:
+        id: { type: string }
+        kind: { $ref: '#/components/schemas/JobKind' }
+        target:
+          type: [string, 'null']
+          description: Package name, snapshot id, stack name. Null for box-wide jobs.
+        state: { $ref: '#/components/schemas/JobState' }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        exitCode: { type: [integer, 'null'] }
+        failureCode:
+          oneOf:
+            - { $ref: '#/components/schemas/JobFailureCode' }
+            - { type: 'null' }
+        failureReason: { type: [string, 'null'] }
+    JobStatus:
+      allOf:
+        - { $ref: '#/components/schemas/JobSummary' }
+        - type: object
+          required: [tail]
+          properties:
+            tail:
+              type: array
+              items: { type: string }
+              description: Log lines so far, oldest first. Capped server-side.
+
+    UpdateState:
+      type: string
+      description: >
+        `unknown` means the registry check itself failed, which is not the
+        same as up to date, and the UI says so rather than showing a tick.
+      enum: [current, available, unknown]
+    ImageUpdate:
+      type: object
+      required: [image, currentTag, currentDigest, latestTag, latestDigest, pinned, state]
+      properties:
+        image:
+          type: string
+          description: Repository without the tag, e.g. "jellyfin/jellyfin".
+        currentTag: { type: string }
+        currentDigest: { type: [string, 'null'] }
+        latestTag: { type: [string, 'null'] }
+        latestDigest: { type: [string, 'null'] }
+        pinned:
+          type: boolean
+          description: >
+            Compose references this image by digest (via pins.env) rather
+            than a floating tag. A pinned image can still report an
+            update; it just will not move on its own.
+        state: { $ref: '#/components/schemas/UpdateState' }
+    PackageUpdate:
+      type: object
+      required: [package, state, images, lastCheckedAt, lastUpdatedAt, lastUpdateJobId, lastUpdateFailed]
+      properties:
+        package: { type: string }
+        state: { $ref: '#/components/schemas/UpdateState' }
+        images:
+          type: array
+          items: { $ref: '#/components/schemas/ImageUpdate' }
+        lastCheckedAt: { type: [string, 'null'], format: date-time }
+        lastUpdatedAt: { type: [string, 'null'], format: date-time }
+        lastUpdateJobId:
+          type: [string, 'null']
+          description: Most recent update attempt, for linking back to its log.
+        lastUpdateFailed: { type: boolean }
 
     ServiceState:
       type: string

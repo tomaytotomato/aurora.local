@@ -97,6 +97,20 @@ jobs:
           docker compose "${args[@]}" config -q \
             || docker compose "${args[@]}" --profile torrent config -q
 
+  openapi-spec:
+    name: openapi spec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.x"}
+      - name: install validator
+        run: pip install --user "pyyaml>=6"
+      - name: check
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          python3 scripts/check-openapi.py
+
   manifest-schema:
     name: manifest schema
     runs-on: ubuntu-latest
