@@ -28,6 +28,11 @@ import { renderIdentity } from '@/lib/identity';
 // it for the wizard's per-package polling.
 import { type PackageSummary } from '@/api/packages';
 import { useHealthPill } from '@/composables/useHealthPill';
+import { useUpdatesStore } from '@/stores/updates';
+import { SecurityApi, type SecurityFinding } from '@/api/security';
+import { DisksApi, type Disk, type Parity, type Pool } from '@/api/disks';
+import { buildAttention } from '@/lib/attention';
+import AttentionStrip from '@/components/AttentionStrip.vue';
 import JobLogPanel from '@/components/JobLogPanel.vue';
 import ReachInfo from '@/components/ReachInfo.vue';
 import DoneChecklist from '@/components/onboarding/DoneChecklist.vue';
@@ -117,9 +122,53 @@ async function fetchBackup(): Promise<void> {
   }
 }
 
+// ---- needs-attention strip ------------------------------------------
+// Every input here is already fetched by some page or other; the strip's
+// only job is to put them in one place so a problem does not depend on
+// the operator happening to visit the right tab. Each fetch is
+// capability-gated and failure-tolerant: a missing input means one fewer
+// row, never an error banner on Overview.
+const updates = useUpdatesStore();
+const findings = ref<SecurityFinding[]>([]);
+const diskState = ref<{ disks: Disk[]; pool: Pool; parity: Parity } | null>(null);
+
+const disksCapable = computed(() => system.info?.capabilities?.disks === true);
+
+async function fetchFindings(): Promise<void> {
+  try {
+    findings.value = await SecurityApi.findings();
+  } catch {
+    findings.value = [];
+  }
+}
+
+async function fetchDisks(): Promise<void> {
+  try {
+    const [disks, pool, parity] = await Promise.all([DisksApi.list(), DisksApi.pool(), DisksApi.parity()]);
+    diskState.value = { disks, pool, parity };
+  } catch {
+    diskState.value = null;
+  }
+}
+
+const attentionItems = computed(() =>
+  buildAttention({
+    updates: updates.list,
+    findings: findings.value,
+    backup: backupStatus.value && backupPolicy.value
+      ? { status: backupStatus.value, policy: backupPolicy.value }
+      : null,
+    disks: diskState.value,
+    system: system.info,
+  }),
+);
+
 onMounted(async () => {
   await Promise.allSettled([fetchSystem(), fetchPackages()]);
   if (backupCapable.value) void fetchBackup();
+  if (disksCapable.value) void fetchDisks();
+  if (system.info?.capabilities?.securityScanner === true) void fetchFindings();
+  void updates.ensureLoaded();
   // B2-followup (iter-22): metrics fetch fires after system.info lands
   // so capabilities.metrics is up-to-date before the guard runs.
   // iter-24: sparkline fetch fans out in parallel so the pill picks up
@@ -369,6 +418,11 @@ function pickMetric(key: string): void {
          padding class. Also loosened row `space-y-3` → `space-y-4` on
          the System hydrated block for more air. -->
     <div class="grid grid-cols-6 gap-6 mb-10">
+      <!-- What needs a person, if anything. Full width and first,
+           because everything below it is context and this is the point.
+           Renders nothing on a clean box. -->
+      <AttentionStrip :items="attentionItems" />
+
       <!-- System card.
            iter-dash-polish-2 P3: eyebrow → h3 → subtitle → body anatomy.
            The `uptime` string moved out of the top-right corner into the
