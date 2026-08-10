@@ -8,13 +8,33 @@ spring:
     # mock takes precedence without renaming the production bean.
     allow-bean-definition-overriding: true
   datasource:
-    url: jdbc:sqlite::memory:?cache=shared
+    # `jdbc:sqlite::memory:?cache=shared` looks right and is not: xerial
+    # treats the query string as part of the filename, so every connection
+    # got its own empty database and the schema created by sql.init was
+    # invisible to everything afterwards. Nothing noticed until the first
+    # integration test tried to write a row, because every repository test
+    # mocks JdbcTemplate. The `file:name?mode=memory&cache=shared` form is
+    # the one that actually shares.
+    url: jdbc:sqlite:file:auroratest?mode=memory&cache=shared
     hikari:
-      # sqlite in-memory + shared cache: single connection so schema survives.
+      # Shared-cache in-memory SQLite lives only as long as a connection is
+      # open to it, so keep exactly one and never let it go idle away.
       maximum-pool-size: 1
       minimum-idle: 1
+      idle-timeout: 0
+      max-lifetime: 0
   flyway:
     clean-disabled: false
+  # This file shadows src/main/resources/application.yml rather than merging
+  # with it — same classpath location, and test-classes comes first — so the
+  # schema bootstrap has to be repeated here. Without it the datasource comes
+  # up with no tables at all, which went unnoticed for as long as every
+  # repository test mocked JdbcTemplate.
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/migration/V1__init.sql,classpath:db/migration/V2__security_dismissal.sql
+      continue-on-error: false
 aurora:
   repo-path: ${AURORA_TEST_REPO:src/test/resources/fake-repo}
   host-proc-path: /proc

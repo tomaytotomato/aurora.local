@@ -386,92 +386,15 @@ public class LaunchService {
 
   record Classified(String reason, String code) {}
 
+  /**
+   * Kept as the launch-shaped entry point; the patterns now live in
+   * {@link JobFailureClassifier} because every job kind fails in the same
+   * handful of ways. {@code LaunchServiceClassifierTests} still pins the
+   * behaviour through this method.
+   */
   static Classified classify(String tail, int exitCode, String firstPackage, String rawReason) {
-    String t = tail == null ? "" : tail;
-    String tl = t.toLowerCase();
-
-    // Port conflict: "bind: address already in use" (docker & compose both emit).
-    if (tl.contains("address already in use") || tl.contains("port is already allocated")) {
-      String port = findPort(t);
-      String p = port == null ? "a required port" : ("Port " + port);
-      return new Classified(
-          p + " is already in use by another program on this box. Free it up or pick a different port.",
-          "port_conflict");
-    }
-
-    // Container registry rate-limit (Docker Hub etc).
-    if (tl.contains("toomanyrequests") || tl.contains("429 too many requests")
-        || tl.contains("pull access denied") || tl.contains("rate limit")) {
-      return new Classified(
-          "The container registry is rate-limiting Aurora right now. Wait a couple of minutes and try again.",
-          "pull_rate_limited");
-    }
-
-    // Disk full.
-    if (tl.contains("no space left on device")) {
-      return new Classified(
-          "The disk Aurora is installing to is full. Free up space or pick a different drive.",
-          "disk_full");
-    }
-
-    // Docker daemon unreachable.
-    if (tl.contains("cannot connect to the docker daemon")
-        || tl.contains("is the docker daemon running")) {
-      return new Classified(
-          "Aurora can't reach the container engine on this box. Check that the container service is running.",
-          "docker_down");
-    }
-
-    // Bind-mount missing / wrong type. Classic symptom when Aurora runs
-    // inside a container and shells out to compose via the host socket,
-    // but the repo isn't mounted at the same absolute path on the host.
-    // Runtime message shape (OCI runtime create failed):
-    //   "not a directory: Are you trying to mount a directory onto a file"
-    // or the inverse ("not a file") when the host path is missing entirely
-    // and docker auto-creates an empty directory in its place.
-    if ((tl.contains("not a directory") || tl.contains("not a file"))
-        && (tl.contains("mount") || tl.contains("rootfs") || tl.contains("bind"))) {
-      return new Classified(
-          "Aurora couldn't find one of its config files on the host. "
-              + "This usually means the aurora repo isn't mounted at the same path "
-              + "inside and outside the aurora container. Check AURORA_REPO_PATH_HOST.",
-          "bind_mount_missing");
-    }
-
-    // Container crash: line indicates a container Exited with non-zero soon
-    // after starting. Compose prints e.g. `Container aurora-media-sonarr Exited (1)`.
-    if (tl.contains(" exited (") || tl.contains("exited with code") || tl.contains("unhealthy")) {
-      String container = findContainer(t);
-      String who = container == null ? firstPackage : container;
-      return new Classified(
-          who + " started but crashed straight away. Aurora tailed its log to the panel below.",
-          "container_crashed");
-    }
-
-    // Fallback — never surface the raw shell-y reason.
-    return new Classified(
-        "Something went wrong bringing up " + firstPackage + ". The log below has the details.",
-        "unknown");
-  }
-
-  private static final java.util.regex.Pattern PORT_RE =
-      java.util.regex.Pattern.compile(":(\\d{2,5})[ :\\\"']|port (\\d{2,5})\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
-
-  private static String findPort(String s) {
-    var m = PORT_RE.matcher(s);
-    if (m.find()) {
-      String a = m.group(1);
-      return a != null ? a : m.group(2);
-    }
-    return null;
-  }
-
-  private static final java.util.regex.Pattern CONTAINER_RE =
-      java.util.regex.Pattern.compile("Container ([\\w.-]+)", java.util.regex.Pattern.CASE_INSENSITIVE);
-
-  private static String findContainer(String s) {
-    var m = CONTAINER_RE.matcher(s);
-    return m.find() ? m.group(1) : null;
+    var c = JobFailureClassifier.classify(tail, exitCode, firstPackage, rawReason);
+    return new Classified(c.reason(), c.code());
   }
 
   static String jsonEscape(String s) {
