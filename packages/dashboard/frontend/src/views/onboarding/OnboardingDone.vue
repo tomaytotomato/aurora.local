@@ -145,7 +145,7 @@ onMounted(async () => {
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 9 of 9</div>
+    <div class="eyebrow mb-3">Step 10 of 10</div>
     <h1 class="mb-4">You're set.</h1>
     <p class="text-foreground mb-8">
       Aurora is configured. Bring your services online, then head to the dashboard.

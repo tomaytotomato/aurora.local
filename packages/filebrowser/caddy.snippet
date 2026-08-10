@@ -1,0 +1,16 @@
+# aurora.local / packages/filebrowser / caddy vhost fragment
+#
+# Fronts FileBrowser on files.${DOMAIN}. Behind Authelia, unlike most
+# packages that carry their own accounts: this one can read and write
+# every file in the pool, so it gets the same front door as the
+# dashboard rather than relying on its own login.
+
+http://files.{$DOMAIN} {
+	import authelia
+	reverse_proxy filebrowser:80
+}
+https://files.{$DOMAIN} {
+	tls internal
+	import authelia
+	reverse_proxy filebrowser:80
+}

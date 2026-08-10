@@ -1,0 +1,7 @@
+# aurora.local / packages/filebrowser / homepage services fragment
+
+- Storage:
+    - Files:
+        icon: mdi-folder-open-outline
+        href: https://files.{{HOMEPAGE_VAR_DOMAIN}}/
+        description: Browse the storage pool

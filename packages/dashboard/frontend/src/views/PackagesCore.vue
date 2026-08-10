@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useSystemStore } from '@/stores/system';
 import { computed, onMounted, ref } from 'vue';
 import { usePackagesStore } from '@/stores/packages';
 import { dockerStructureFor, splitByCore } from '@/api/packages';
@@ -27,6 +28,21 @@ onMounted(load);
 // tab inside Apps, so its "always on, not removable" framing doesn't
 // have to share a tab strip with Installed/Marketplace.
 const core = computed(() => splitByCore(packages.list).core);
+
+// The "Your own" tab only appears when the backend can actually run a
+// custom stack. Ground rule: a page must never be reachable in
+// production while it is still a mock.
+const system = useSystemStore();
+const appsNav = computed(() => {
+  const items = [
+    { to: '/apps/catalogue', label: 'Apps' },
+    { to: '/apps/core', label: 'Core' },
+  ];
+  if (system.info?.capabilities?.customStacks === true) {
+    items.push({ to: '/apps/custom', label: 'Your own' });
+  }
+  return items;
+});
 </script>
 
 <template>
@@ -37,7 +53,7 @@ const core = computed(() => splitByCore(packages.list).core);
     </div>
 
     <SectionNav
-      :items="[{ to: '/apps/catalogue', label: 'Apps' }, { to: '/apps/core', label: 'Core' }]"
+      :items="appsNav"
       class="mb-6"
     />
 

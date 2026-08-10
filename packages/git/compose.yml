@@ -32,6 +32,34 @@ services:
       - FORGEJO__ADMIN_USER=${FORGEJO_ADMIN_USER}
       - FORGEJO__ADMIN_EMAIL=${FORGEJO_ADMIN_EMAIL}
       - FORGEJO__ADMIN_PASSWORD=${FORGEJO_ADMIN_PASSWORD}
+      # ---- Phase D SSO (D12) -------------------------------------------
+      # Trust Caddy's Remote-User / Remote-Email headers so an Aurora
+      # sign-in propagates into Forgejo without a second login page.
+      # Auto-provisioning creates a Forgejo user on first visit; public
+      # repos remain public per Forgejo's own ACL — Aurora doesn't
+      # strip that out.
+      #
+      # Safe when SSO is disabled: no Remote-User header → Forgejo
+      # falls back to normal /user/login. FORGEJO__ADMIN_USER +
+      # PASSWORD are the emergency-access root credentials.
+      - FORGEJO__service__ENABLE_REVERSE_PROXY_AUTHENTICATION=true
+      - FORGEJO__service__ENABLE_REVERSE_PROXY_AUTO_REGISTRATION=true
+      - FORGEJO__service__ENABLE_REVERSE_PROXY_EMAIL=true
+      - FORGEJO__service__ENABLE_REVERSE_PROXY_FULL_NAME=true
+      - FORGEJO__security__REVERSE_PROXY_AUTHENTICATION_USER=Remote-User
+      - FORGEJO__security__REVERSE_PROXY_AUTHENTICATION_EMAIL=Remote-Email
+      - FORGEJO__security__REVERSE_PROXY_AUTHENTICATION_FULL_NAME=Remote-Name
+      # Whitelist the caddy container's IP range on aurora_net. Docker's
+      # user-defined bridge nets typically live in 172.17.0.0/16-172.31/16;
+      # be permissive here since aurora_net is internal-only and Forgejo
+      # falls back to its own login if the header is absent anyway.
+      - FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES=172.16.0.0/12
+      # Phase D iter-14 (D13). Forgejo sign-out clears its own session
+      # cookie AND redirects to Authelia's logout so the shared
+      # .{DOMAIN} authelia_session cookie is nuked — otherwise the
+      # next click re-authenticates automatically via the reverse-
+      # proxy header path.
+      - FORGEJO__service__LOGOUT_COOKIE_URL=https://auth.${DOMAIN:-aurora.local}/logout
     volumes:
       - ../../data/git/forgejo:/data
       - /etc/timezone:/etc/timezone:ro

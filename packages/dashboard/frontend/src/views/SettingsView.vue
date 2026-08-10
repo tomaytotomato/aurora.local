@@ -7,6 +7,9 @@ import { humanCopyForError } from '@/lib/http-error-copy';
 import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
+import NotificationsCard from '@/components/NotificationsCard.vue';
+import ProxyRoutesCard from '@/components/ProxyRoutesCard.vue';
+import SettingsPortabilityCard from '@/components/SettingsPortabilityCard.vue';
 import {
   Alert,
   AlertDescription,
@@ -30,7 +33,13 @@ const router = useRouter();
 const info = computed(() => system.info);
 
 async function signOut(): Promise<void> {
-  await auth.logout();
+  const next = await auth.logout();
+  if (next) {
+    // Phase D iter-14 (D13): Authelia logout bounces the browser to
+    // the `rd` param after clearing the shared session cookie.
+    window.location.href = next;
+    return;
+  }
   router.push('/login');
 }
 
@@ -148,6 +157,11 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
         </Alert>
       </Card>
 
+      <!-- Notifications. Sits high on the page on purpose: it is the
+           only card here that changes whether you find out about a
+           problem at all. -->
+      <NotificationsCard v-if="info?.capabilities?.notifications" />
+
       <Card v-if="info" class="p-8">
         <h3 class="card-title mb-1">System</h3>
         <p class="card-subtitle mb-4">Metadata</p>
@@ -159,6 +173,11 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           <div class="flex justify-between"><dt class="text-muted-foreground">Docker</dt><dd class="font-mono">{{ info.dockerVersion }}</dd></div>
         </dl>
       </Card>
+
+      <!-- Reverse-proxy routes. Sits directly above LAN aliases because
+           the two are the same idea at different layers: this one is
+           what Caddy answers to, that one is what the LAN resolves. -->
+      <ProxyRoutesCard v-if="info?.capabilities?.proxy" />
 
       <!-- LAN discovery (2026-08-03 v0.3.x productionize).
            Publishes one avahi A-record per enabled-package vhost so
@@ -237,6 +256,11 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           </TableBody>
         </Table>
       </Card>
+
+      <!-- Export / import. Near the bottom because it is a once-a-year
+           card, but it is the difference between a reinstall costing an
+           evening and costing ten minutes. -->
+      <SettingsPortabilityCard />
 
       <!-- iter-31: audit-log viewer. Consumes GET /api/audit/events
            (iter-30). Kept as an inline card rather than its own route

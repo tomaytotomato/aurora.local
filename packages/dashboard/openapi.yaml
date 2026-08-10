@@ -32,6 +32,14 @@ tags:
   - name: mdns
   - name: vpn
   - name: users
+  - name: updates
+  - name: jobs
+  - name: backup
+  - name: disks
+  - name: notifications
+  - name: network
+  - name: proxy
+  - name: custom
 
 security:
   - sessionCookie: []
@@ -72,6 +80,20 @@ paths:
               schema: { $ref: '#/components/schemas/Session' }
         '401':
           description: Bad credentials.
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: The signed-in user, or 401
+      description: >
+        Sibling of /auth/session. Public in SecurityConfig so the SPA can
+        ask before it knows whether it has a session.
+      responses:
+        '200':
+          description: The current user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '401': { description: Not signed in. }
   /auth/logout:
     post:
       tags: [auth]
@@ -318,6 +340,790 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/JobRef' }
 
+  /packages/{name}/resources:
+    get:
+      tags: [packages]
+      summary: Memory and CPU ceilings, and live usage
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '200':
+          description: Resource state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageResources' }
+    put:
+      tags: [packages]
+      summary: Override the ceilings
+      description: >
+        Null on either field clears the override and restores the
+        manifest default. New limits apply the next time the package
+        restarts.
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memLimitMb, cpus]
+              properties:
+                memLimitMb: { type: [integer, 'null'] }
+                cpus: { type: [number, 'null'] }
+      responses:
+        '200':
+          description: The saved state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageResources' }
+
+  # ─────────────────────── previously undocumented ────────────────────
+  # Endpoints that existed in the backend before anything checked the
+  # controllers against this file. Found by OpenApiConformanceTest.
+  /health:
+    get:
+      tags: [system]
+      summary: Liveness and basic box facts
+      description: Public — the only /api route reachable without a session.
+      responses:
+        '200':
+          description: Health.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /state:
+    get:
+      tags: [system]
+      summary: Parsed .state.yml
+      responses:
+        '200':
+          description: Repo state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StateFile' }
+  /system/snapshot:
+    get:
+      tags: [system]
+      summary: Host resource snapshot used by the onboarding warnings
+      responses:
+        '200':
+          description: Snapshot.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /events:
+    get:
+      tags: [system]
+      summary: SSE — box-wide event stream
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /onboarding/domain:
+    post:
+      tags: [onboarding]
+      summary: Set the domain during the wizard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                domain: { type: string }
+      responses:
+        '204': { description: Saved. }
+        '400': { description: The domain is not usable. }
+  /onboarding/packages:
+    post:
+      tags: [onboarding]
+      summary: Set the enabled packages during the wizard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                packages:
+                  type: array
+                  items: { type: string }
+      responses:
+        '204': { description: Saved. }
+  /onboarding/sso:
+    post:
+      tags: [onboarding]
+      summary: Set the single sign-on choice during the wizard
+      description: Phase D. Decides whether Authelia fronts the apps that support it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '204': { description: Saved. }
+
+  # ────────────────────────────── updates ─────────────────────────────
+  # Read-only. Applying an update goes through
+  # POST /packages/{name}/upgrade, which already exists and already
+  # returns a job id — there is deliberately no second update verb.
+  /updates:
+    get:
+      tags: [updates]
+      summary: Update availability for every package
+      responses:
+        '200':
+          description: One row per package, in catalogue order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PackageUpdate' }
+  /updates/{name}:
+    get:
+      tags: [updates]
+      summary: Update availability for one package
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '200':
+          description: Update row.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageUpdate' }
+        '404': { description: Unknown package. }
+  /updates/check:
+    post:
+      tags: [updates]
+      summary: Re-query every registry
+      description: >
+        Returns a job rather than blocking: checking nine registries takes
+        long enough that the operator should see it happening.
+      responses:
+        '202':
+          description: Check job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+
+  # ─────────────────────────────── jobs ───────────────────────────────
+  /jobs:
+    get:
+      tags: [jobs]
+      summary: List jobs, newest first
+      parameters:
+        - name: state
+          in: query
+          schema: { $ref: '#/components/schemas/JobState' }
+        - name: kind
+          in: query
+          schema: { $ref: '#/components/schemas/JobKind' }
+      responses:
+        '200':
+          description: Job summaries without their logs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/JobSummary' }
+  /jobs/{id}:
+    get:
+      tags: [jobs]
+      summary: Snapshot of one job, including its log so far
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobStatus' }
+        '404': { description: Unknown job. }
+  /jobs/{id}/stream:
+    get:
+      tags: [jobs]
+      summary: SSE — live job log + terminal state
+      description: >
+        Server-Sent Events. Replays the lines already produced, then emits
+        `log` events (one line per message), `ping` keepalives, and a
+        terminal `done` carrying the final JobStatus as JSON. Opening the
+        stream of an already-finished job replays its whole tail and then
+        terminates immediately, so a log stays readable after the fact.
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '404': { description: Unknown job. }
+
+  # ────────────────────────────── backup ──────────────────────────────
+  # Aurora reports on Kopia rather than replacing it: repository
+  # management and the snapshot browser stay in Kopia's own UI.
+  # See docs/BACKUP_PAGE_DESIGN.md.
+  /backup/status:
+    get:
+      tags: [backup]
+      summary: Repository state, last run, size
+      responses:
+        '200':
+          description: Backup status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupStatus' }
+  /backup/sources:
+    get:
+      tags: [backup]
+      summary: The paths being protected
+      responses:
+        '200':
+          description: One row per source.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BackupSource' }
+  /backup/sources/{id}:
+    patch:
+      tags: [backup]
+      summary: Turn a source on or off
+      parameters:
+        - $ref: '#/components/parameters/BackupSourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: The updated source.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupSource' }
+        '404': { description: Unknown source. }
+  /backup/snapshots:
+    get:
+      tags: [backup]
+      summary: Snapshot history, newest first
+      parameters:
+        - name: sourceId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Snapshots.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Snapshot' }
+    post:
+      tags: [backup]
+      summary: Back up now
+      responses:
+        '202':
+          description: Backup job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+  /backup/snapshots/{id}/restore:
+    post:
+      tags: [backup]
+      summary: Restore a whole snapshot to its original path
+      description: >
+        Deliberately the plainest flow there is: whole source, whole
+        snapshot, original location. Per-file and restore-elsewhere are
+        out of scope and stay in Kopia's UI.
+      parameters:
+        - $ref: '#/components/parameters/SnapshotId'
+      responses:
+        '202':
+          description: Restore job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+        '404': { description: Unknown snapshot. }
+  /backup/policy:
+    get:
+      tags: [backup]
+      summary: Schedule, retention and the staleness threshold
+      responses:
+        '200':
+          description: Policy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupPolicy' }
+    put:
+      tags: [backup]
+      summary: Save the policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BackupPolicy' }
+      responses:
+        '200':
+          description: The saved policy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupPolicy' }
+
+  # ─────────────────────────────── disks ──────────────────────────────
+  # Read-only, plus the two SnapRAID operations that are safe to run at
+  # any time. Formatting, partitioning and pool membership stay in
+  # group_vars and Ansible on purpose: a UI that can repartition a disk
+  # is a UI that can destroy a library at 11pm.
+  # See docs/DISKS_PAGE_DESIGN.md.
+  /disks:
+    get:
+      tags: [disks]
+      summary: Every physical disk, with its SMART summary
+      responses:
+        '200':
+          description: Disks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Disk' }
+  /disks/pool:
+    get:
+      tags: [disks]
+      summary: The mergerfs pool and its branches
+      responses:
+        '200':
+          description: Pool.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pool' }
+  /disks/parity:
+    get:
+      tags: [disks]
+      summary: SnapRAID parity freshness
+      responses:
+        '200':
+          description: Parity state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Parity' }
+  /disks/parity/sync:
+    post:
+      tags: [disks]
+      summary: Bring parity up to date
+      responses:
+        '202':
+          description: Sync job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+  /disks/parity/scrub:
+    post:
+      tags: [disks]
+      summary: Verify existing parity against the data
+      responses:
+        '202':
+          description: Scrub job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+  /disks/{id}/smart:
+    get:
+      tags: [disks]
+      summary: Full SMART attribute table for one disk
+      parameters:
+        - $ref: '#/components/parameters/DiskId'
+      responses:
+        '200':
+          description: >
+            Attributes, or `supported` false for a drive that has none.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiskSmart' }
+        '404': { description: Unknown disk. }
+
+  # ────────────────────────── notifications ───────────────────────────
+  # Aurora detects service failures, security findings, backup failures
+  # and drive trouble already, and until now told nobody. Email is
+  # deliberately not a channel kind: a working MTA on a home box is a
+  # multi-hour yak shave that ends in a spam folder.
+  /notifications/channels:
+    get:
+      tags: [notifications]
+      summary: Configured notification channels
+      responses:
+        '200':
+          description: Channels.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NotificationChannel' }
+    post:
+      tags: [notifications]
+      summary: Add a channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChannelDraft' }
+      responses:
+        '201':
+          description: The created channel.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationChannel' }
+  /notifications/channels/{id}:
+    patch:
+      tags: [notifications]
+      summary: Change a channel, or mute it
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/ChannelDraft' }
+                - type: object
+                  properties:
+                    enabled: { type: boolean }
+      responses:
+        '200':
+          description: The updated channel.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationChannel' }
+        '404': { description: Unknown channel. }
+    delete:
+      tags: [notifications]
+      summary: Remove a channel
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '204': { description: Removed. }
+  /notifications/channels/{id}/test:
+    post:
+      tags: [notifications]
+      summary: Send a test message now
+      description: >
+        Reports what actually happened rather than acknowledging the
+        attempt. A channel that has silently stopped working is worse
+        than no channel, because you believe you are covered.
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '200':
+          description: Delivery outcome.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [result, error]
+                properties:
+                  result: { type: string, enum: [ok, failed] }
+                  error: { type: [string, 'null'] }
+        '404': { description: Unknown channel. }
+  /notifications/history:
+    get:
+      tags: [notifications]
+      summary: What Aurora has sent, newest first
+      responses:
+        '200':
+          description: Deliveries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NotificationDelivery' }
+
+  # ────────────────────────────── network ─────────────────────────────
+  # Outbound: which apps egress through the VPN gateway. The mechanism is
+  # container network-namespace sharing (network_mode: service:gluetun),
+  # chosen over host-level policy routing precisely because it is safe to
+  # flip from a UI without rewriting the host's routing table. See
+  # docs/SPLIT_TUNNEL.md.
+  #
+  # Inbound: rate limiting, geo-blocking and bot filtering in Caddy in
+  # front of anything exposed past the LAN.
+  /packages/{name}/network:
+    get:
+      tags: [network]
+      summary: How this app's traffic leaves the box
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '200':
+          description: Egress state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageNetwork' }
+    put:
+      tags: [network]
+      summary: Move this app on or off the VPN gateway
+      description: >
+        Rewrites the app's network_mode, moves its published ports onto
+        the gateway, re-points its Caddy vhost, and restarts it. Returns a
+        job because containers go down and come back.
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { $ref: '#/components/schemas/EgressMode' }
+      responses:
+        '202':
+          description: Restart job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+        '409':
+          description: >
+            This app's egress cannot be changed — it is the gateway
+            itself, or it has to answer on the LAN directly.
+  /protection:
+    get:
+      tags: [network]
+      summary: What sits in front of each vhost
+      responses:
+        '200':
+          description: One row per vhost.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/VhostProtection' }
+  /protection/{vhost}:
+    put:
+      tags: [network]
+      summary: Change the protection on one vhost
+      parameters:
+        - $ref: '#/components/parameters/Vhost'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rateLimit: { $ref: '#/components/schemas/RateLimit' }
+                geoBlock: { $ref: '#/components/schemas/GeoBlock' }
+                botDetection: { type: boolean }
+      responses:
+        '200':
+          description: The updated row.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VhostProtection' }
+        '404': { description: Unknown vhost. }
+
+  # ─────────────────────────────── proxy ──────────────────────────────
+  # Exposing a container at a friendly address without hand-editing
+  # caddy.snippet. The file stays the source of truth and stays in git;
+  # Aurora writes a fragment and Caddy's existing --watch reloads. The
+  # preview endpoint exists so the exact fragment can be shown before
+  # anything is written.
+  /proxy/routes:
+    get:
+      tags: [proxy]
+      summary: Every vhost Caddy answers to
+      responses:
+        '200':
+          description: Routes, both manifest-generated and hand-added.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProxyRoute' }
+    post:
+      tags: [proxy]
+      summary: Point a new address at a container
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subdomain, target]
+              properties:
+                subdomain: { type: string }
+                target: { type: string }
+      responses:
+        '201':
+          description: The created route.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProxyRoute' }
+        '409': { description: The name is taken or reserved. }
+  /proxy/routes/{id}:
+    delete:
+      tags: [proxy]
+      summary: Remove a hand-added route
+      parameters:
+        - $ref: '#/components/parameters/RouteId'
+      responses:
+        '204': { description: Removed. }
+        '409': { description: The route comes from a package manifest. }
+  /proxy/targets:
+    get:
+      tags: [proxy]
+      summary: Containers worth pointing an address at
+      responses:
+        '200':
+          description: Targets with the ports they listen on.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProxyTarget' }
+  /proxy/preview:
+    post:
+      tags: [proxy]
+      summary: Dry run — the fragment that would be written, and what it clashes with
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subdomain, target]
+              properties:
+                subdomain: { type: string }
+                target: { type: string }
+      responses:
+        '200':
+          description: Preview.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProxyPreview' }
+
+  # ────────────────────────────── custom ──────────────────────────────
+  # Operator-supplied compose files. The curated catalogue stays the
+  # default and the only recommended path; these are listed separately
+  # everywhere and never enter the dependency graph.
+  # See docs/CUSTOM_STACK_DESIGN.md.
+  /custom/stacks:
+    get:
+      tags: [custom]
+      summary: List custom stacks
+      responses:
+        '200':
+          description: Stacks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CustomStack' }
+    post:
+      tags: [custom]
+      summary: Save a stack without running it
+      description: >
+        Saving and deploying are separate steps. A stack that exists but
+        has never run is a useful state — it is how a draft is kept while
+        the problems are worked out.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, composeYaml]
+              properties:
+                name: { type: string }
+                composeYaml: { type: string }
+      responses:
+        '201':
+          description: The saved stack.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomStack' }
+        '400': { description: The file has blocking problems. }
+  /custom/stacks/validate:
+    post:
+      tags: [custom]
+      summary: Dry run — what the file contains and what Aurora thinks of it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [composeYaml]
+              properties:
+                composeYaml: { type: string }
+      responses:
+        '200':
+          description: Two-tier report.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StackValidation' }
+  /custom/stacks/{id}:
+    put:
+      tags: [custom]
+      summary: Edit a stack
+      parameters:
+        - $ref: '#/components/parameters/StackId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                composeYaml: { type: string }
+      responses:
+        '200':
+          description: The updated stack.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomStack' }
+        '404': { description: Unknown stack. }
+    delete:
+      tags: [custom]
+      summary: Stop and remove a stack
+      parameters:
+        - $ref: '#/components/parameters/StackId'
+      responses:
+        '204': { description: Removed. }
+  /custom/stacks/{id}/deploy:
+    post:
+      tags: [custom]
+      summary: Bring a stack up
+      parameters:
+        - $ref: '#/components/parameters/StackId'
+      responses:
+        '202':
+          description: Deploy job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+        '404': { description: Unknown stack. }
+  /custom/stacks/{id}/stop:
+    post:
+      tags: [custom]
+      summary: Take a stack down
+      parameters:
+        - $ref: '#/components/parameters/StackId'
+      responses:
+        '202':
+          description: Stop job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+        '404': { description: Unknown stack. }
+
   # ───────────────────────────── services ─────────────────────────────
   /services/status:
     get:
@@ -499,6 +1305,22 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/DismissalRow' }
 
+  /security/hardening:
+    get:
+      tags: [security]
+      summary: Where the three outstanding hardening decisions stand
+      description: >
+        State, not control. Pinning, sops encryption and the socket proxy
+        are each an Ansible run or a script that rewrites files on disk,
+        so there is deliberately no endpoint to perform them from the
+        dashboard.
+      responses:
+        '200':
+          description: Hardening state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HardeningState' }
+
   # ────────────────────────────── audit ───────────────────────────────
   /audit/events:
     get:
@@ -566,6 +1388,42 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/StateFile' }
+  /system/export:
+    get:
+      tags: [system]
+      summary: A portable copy of how this box is set up
+      description: >
+        Carries no secrets: .env values stay on the box, which is what
+        makes this file safe to keep alongside ordinary backups, and also
+        why an import can never be the whole story.
+      responses:
+        '200':
+          description: Settings.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SettingsExport' }
+  /system/import:
+    post:
+      tags: [system]
+      summary: Apply an exported file
+      parameters:
+        - name: preview
+          in: query
+          description: Dry run. The default in the UI, because an import that silently enables nine packages should not be discovered afterwards.
+          schema: { type: integer, enum: [1] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SettingsExport' }
+      responses:
+        '200':
+          description: What changed, or would.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportResult' }
+        '400': { description: The file came from a different version. }
+
   /system/caddy-root.crt:
     get:
       tags: [system]
@@ -604,7 +1462,7 @@ paths:
   /users:
     get:
       tags: [users]
-      summary: List admin users
+      summary: List users
       responses:
         '200':
           description: Users.
@@ -635,9 +1493,20 @@ paths:
               schema: { $ref: '#/components/schemas/User' }
         '409': { description: Username already taken. }
   /users/{id}:
-    patch:
+    get:
       tags: [users]
-      summary: Update a user's role
+      summary: One user
+      parameters: [{ $ref: '#/components/parameters/UserId' }]
+      responses:
+        '200':
+          description: The user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '404': { description: Unknown user. }
+    put:
+      tags: [users]
+      summary: Update a user's role or password
       parameters: [{ $ref: '#/components/parameters/UserId' }]
       requestBody:
         content:
@@ -910,6 +1779,41 @@ components:
       in: path
       required: true
       schema: { type: string }
+    BackupSourceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    SnapshotId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    DiskId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    ChannelId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    StackId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    RouteId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    Vhost:
+      name: vhost
+      in: path
+      required: true
+      schema: { type: string }
 
   schemas:
     Session:
@@ -1057,6 +1961,12 @@ components:
         dependsOn:
           type: [array, 'null']
           items: { type: string }
+        # Upstream links. Not every manifest carries them yet, so both are
+        # nullable and the UI renders nothing when absent.
+        sourceUrl:
+          type: [string, 'null']
+        homepageUrl:
+          type: [string, 'null']
     EnvVarSpec:
       type: object
       required: [key, secret, required]
@@ -1076,11 +1986,600 @@ components:
             vhosts: { type: array, items: { type: string } }
             homepageTiles: { type: integer }
             envVars: { type: array, items: { $ref: '#/components/schemas/EnvVarSpec' } }
+            backup:
+              oneOf:
+                - { $ref: '#/components/schemas/PackageBackupSpec' }
+                - { type: 'null' }
+    PackageResources:
+      type: object
+      description: >
+        Per-container ceilings for one package. A home box has no spare
+        capacity and usually no swap, so one runaway container takes the
+        whole machine down; a cap means the kernel kills the offender
+        rather than the OOM killer choosing at random.
+      required: [package, defaultMemLimitMb, defaultCpus, memLimitMb, cpus, memUsedMb, cpuPct]
+      properties:
+        package: { type: string }
+        defaultMemLimitMb:
+          type: [integer, 'null']
+          description: From the manifest. Null means the package ships uncapped.
+        defaultCpus: { type: [number, 'null'] }
+        memLimitMb:
+          type: [integer, 'null']
+          description: Operator override. Null means the manifest default applies.
+        cpus: { type: [number, 'null'] }
+        memUsedMb: { type: [integer, 'null'] }
+        cpuPct: { type: [number, 'null'] }
+    PackageBackupSpec:
+      type: object
+      description: >
+        The manifest's `backup:` block: which paths this package owns and
+        what must run before they can be snapshotted consistently.
+        Read-only over the API. See docs/BACKUP_PAGE_DESIGN.md §6.
+      required: [paths, before]
+      properties:
+        paths:
+          type: array
+          items: { type: string }
+        before:
+          type: array
+          items: { $ref: '#/components/schemas/BackupAction' }
     JobRef:
       type: object
       required: [jobId]
       properties:
         jobId: { type: string }
+
+    JobKind:
+      type: string
+      enum: [enable, disable, update, update-check, start, restart, backup, restore, parity-sync, parity-scrub, deploy]
+    JobState:
+      type: string
+      enum: [queued, running, success, failed]
+    JobFailureCode:
+      type: string
+      description: >
+        Machine-readable failure classification. The frontend picks its
+        copy from this rather than showing a raw stderr line; `unknown`
+        falls back to the job's own failureReason.
+      enum: [port_conflict, pull_rate_limited, registry_unreachable, disk_full, docker_down, container_crashed, unknown]
+    JobSummary:
+      type: object
+      required: [id, kind, target, state, startedAt, finishedAt, exitCode, failureCode, failureReason]
+      properties:
+        id: { type: string }
+        kind: { $ref: '#/components/schemas/JobKind' }
+        target:
+          type: [string, 'null']
+          description: Package name, snapshot id, stack name. Null for box-wide jobs.
+        state: { $ref: '#/components/schemas/JobState' }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        exitCode: { type: [integer, 'null'] }
+        failureCode:
+          oneOf:
+            - { $ref: '#/components/schemas/JobFailureCode' }
+            - { type: 'null' }
+        failureReason: { type: [string, 'null'] }
+    JobStatus:
+      allOf:
+        - { $ref: '#/components/schemas/JobSummary' }
+        - type: object
+          required: [tail]
+          properties:
+            tail:
+              type: array
+              items: { type: string }
+              description: Log lines so far, oldest first. Capped server-side.
+
+    UpdateState:
+      type: string
+      description: >
+        `unknown` means the registry check itself failed, which is not the
+        same as up to date, and the UI says so rather than showing a tick.
+      enum: [current, available, unknown]
+    ImageUpdate:
+      type: object
+      required: [image, currentTag, currentDigest, latestTag, latestDigest, pinned, state]
+      properties:
+        image:
+          type: string
+          description: Repository without the tag, e.g. "jellyfin/jellyfin".
+        currentTag: { type: string }
+        currentDigest: { type: [string, 'null'] }
+        latestTag: { type: [string, 'null'] }
+        latestDigest: { type: [string, 'null'] }
+        pinned:
+          type: boolean
+          description: >
+            Compose references this image by digest (via pins.env) rather
+            than a floating tag. A pinned image can still report an
+            update; it just will not move on its own.
+        state: { $ref: '#/components/schemas/UpdateState' }
+    PackageUpdate:
+      type: object
+      required: [package, state, images, lastCheckedAt, lastUpdatedAt, lastUpdateJobId, lastUpdateFailed]
+      properties:
+        package: { type: string }
+        state: { $ref: '#/components/schemas/UpdateState' }
+        images:
+          type: array
+          items: { $ref: '#/components/schemas/ImageUpdate' }
+        lastCheckedAt: { type: [string, 'null'], format: date-time }
+        lastUpdatedAt: { type: [string, 'null'], format: date-time }
+        lastUpdateJobId:
+          type: [string, 'null']
+          description: Most recent update attempt, for linking back to its log.
+        lastUpdateFailed: { type: boolean }
+
+    RepoState:
+      type: string
+      enum: [not-configured, connected, unreachable]
+    SnapshotState:
+      type: string
+      enum: [ok, partial, failed]
+    BackupAction:
+      type: object
+      description: What has to happen before a path can be snapshotted consistently.
+      required: [kind, description, container]
+      properties:
+        kind:
+          type: string
+          enum: [postgres-dump, mysql-dump, sqlite-backup, command]
+        description: { type: string }
+        container: { type: [string, 'null'] }
+    BackupStatus:
+      type: object
+      required: [repoState, repoKind, repoLocation, encrypted, totalSizeBytes, uniqueSizeBytes, snapshotCount, lastRunAt, lastRunState, lastRunDurationMs, nextRunAt, generatedAt]
+      properties:
+        repoState: { $ref: '#/components/schemas/RepoState' }
+        repoKind:
+          type: [string, 'null']
+          description: filesystem, s3, b2, sftp… as Kopia reports it.
+        repoLocation: { type: [string, 'null'] }
+        encrypted: { type: boolean }
+        totalSizeBytes:
+          type: [integer, 'null']
+          description: Logical size of everything protected.
+        uniqueSizeBytes:
+          type: [integer, 'null']
+          description: What it occupies after dedup and compression.
+        snapshotCount: { type: integer }
+        lastRunAt: { type: [string, 'null'], format: date-time }
+        lastRunState:
+          oneOf:
+            - { $ref: '#/components/schemas/SnapshotState' }
+            - { type: 'null' }
+        lastRunDurationMs: { type: [integer, 'null'] }
+        nextRunAt: { type: [string, 'null'], format: date-time }
+        generatedAt: { type: string, format: date-time }
+    BackupSource:
+      type: object
+      required: [id, path, package, enabled, lastSnapshotAt, lastSnapshotState, sizeBytes, fileCount, beforeActions, needsConsistencyAction]
+      properties:
+        id: { type: string }
+        path: { type: string }
+        package:
+          type: [string, 'null']
+          description: The aurora package this path belongs to, when Aurora can tell.
+        enabled: { type: boolean }
+        lastSnapshotAt: { type: [string, 'null'], format: date-time }
+        lastSnapshotState:
+          oneOf:
+            - { $ref: '#/components/schemas/SnapshotState' }
+            - { type: 'null' }
+        sizeBytes: { type: [integer, 'null'] }
+        fileCount: { type: [integer, 'null'] }
+        beforeActions:
+          type: array
+          items: { $ref: '#/components/schemas/BackupAction' }
+        needsConsistencyAction:
+          type: boolean
+          description: >
+            The source contains a database Aurora knows about and no
+            before-action is declared for it, so the snapshot is a copy of
+            a live data directory. Surfaced as a warning rather than left
+            to be discovered during a restore.
+    Snapshot:
+      type: object
+      required: [id, sourceId, path, createdAt, state, sizeBytes, fileCount, consistent]
+      properties:
+        id: { type: string }
+        sourceId: { type: string }
+        path: { type: string }
+        createdAt: { type: string, format: date-time }
+        state: { $ref: '#/components/schemas/SnapshotState' }
+        sizeBytes: { type: integer }
+        fileCount: { type: integer }
+        consistent:
+          type: boolean
+          description: Taken with the source's before-actions applied.
+    BackupPolicy:
+      type: object
+      required: [scheduleCron, scheduleLabel, keepDaily, keepWeekly, keepMonthly, stalenessWarnDays]
+      properties:
+        scheduleCron: { type: string }
+        scheduleLabel:
+          type: string
+          description: The cron expression in English, rendered server-side.
+        keepDaily: { type: integer }
+        keepWeekly: { type: integer }
+        keepMonthly: { type: integer }
+        stalenessWarnDays:
+          type: integer
+          description: Days without a successful snapshot before Aurora calls it stale.
+
+    SmartHealth:
+      type: string
+      description: >
+        What smartctl reports overall. Optimistic by design — a drive can
+        report `passed` while steadily reallocating sectors — so the UI
+        also reads the reallocated and pending counts before calling a
+        disk healthy. `unknown` means the drive exposes no SMART data
+        (USB enclosure, VM), which is not the same as passing.
+      enum: [passed, warning, failing, unknown]
+    DiskRole:
+      type: string
+      enum: [data, parity, system, unassigned]
+    Disk:
+      type: object
+      required: [id, device, model, serial, sizeBytes, role, mountpoint, filesystem, usedBytes, health, temperatureC, powerOnHours, reallocatedSectors, pendingSectors, lastSelfTestAt, lastSelfTestResult]
+      properties:
+        id:
+          type: string
+          description: Stable id, by-id where available so it survives a re-cable.
+        device: { type: string }
+        model: { type: [string, 'null'] }
+        serial: { type: [string, 'null'] }
+        sizeBytes: { type: integer }
+        role: { $ref: '#/components/schemas/DiskRole' }
+        mountpoint: { type: [string, 'null'] }
+        filesystem: { type: [string, 'null'] }
+        usedBytes: { type: [integer, 'null'] }
+        health: { $ref: '#/components/schemas/SmartHealth' }
+        temperatureC: { type: [integer, 'null'] }
+        powerOnHours: { type: [integer, 'null'] }
+        reallocatedSectors: { type: [integer, 'null'] }
+        pendingSectors: { type: [integer, 'null'] }
+        lastSelfTestAt: { type: [string, 'null'], format: date-time }
+        lastSelfTestResult: { type: [string, 'null'] }
+    SmartAttribute:
+      type: object
+      required: [id, name, value, worst, threshold, raw, failedWhen]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        value: { type: integer }
+        worst: { type: integer }
+        threshold: { type: integer }
+        raw: { type: string }
+        failedWhen: { type: [string, 'null'] }
+    DiskSmart:
+      type: object
+      required: [diskId, supported, overall, attributes, collectedAt]
+      properties:
+        diskId: { type: string }
+        supported: { type: boolean }
+        overall: { $ref: '#/components/schemas/SmartHealth' }
+        attributes:
+          type: array
+          items: { $ref: '#/components/schemas/SmartAttribute' }
+        collectedAt: { type: string, format: date-time }
+    PoolBranch:
+      type: object
+      required: [diskId, path, totalBytes, usedBytes]
+      properties:
+        diskId: { type: string }
+        path: { type: string }
+        totalBytes: { type: integer }
+        usedBytes: { type: integer }
+    Pool:
+      type: object
+      required: [configured, mountpoint, totalBytes, usedBytes, branches, createPolicy, minFreeBytes]
+      properties:
+        configured:
+          type: boolean
+          description: False on a single-disk box, which is a valid setup rather than an error.
+        mountpoint: { type: [string, 'null'] }
+        totalBytes: { type: [integer, 'null'] }
+        usedBytes: { type: [integer, 'null'] }
+        branches:
+          type: array
+          items: { $ref: '#/components/schemas/PoolBranch' }
+        createPolicy:
+          type: [string, 'null']
+          description: mergerfs create policy, e.g. 'mfs' (most free space).
+        minFreeBytes:
+          type: [integer, 'null']
+          description: >
+            mergerfs minfreespace. A branch below this has quietly stopped
+            receiving new files, which a pool-wide percentage hides.
+    ParityRunState:
+      type: string
+      description: >
+        `aborted` is distinct from `failed`: the snapraid-runner refuses
+        to sync when deletions exceed snapraid_delete_threshold, which is
+        a deliberate guard rather than a fault. Parity is still not
+        current, and it still needs a person.
+      enum: [ok, failed, aborted, never]
+    Parity:
+      type: object
+      required: [configured, parityDiskIds, lastSyncAt, lastSyncState, lastScrubAt, pendingChanges, deletedSinceSync, deletionThreshold, stalenessWarnDays]
+      properties:
+        configured: { type: boolean }
+        parityDiskIds:
+          type: array
+          items: { type: string }
+        lastSyncAt: { type: [string, 'null'], format: date-time }
+        lastSyncState: { $ref: '#/components/schemas/ParityRunState' }
+        lastScrubAt: { type: [string, 'null'], format: date-time }
+        pendingChanges:
+          type: [integer, 'null']
+          description: Files added or changed since the last sync, and so unprotected.
+        deletedSinceSync: { type: [integer, 'null'] }
+        deletionThreshold:
+          type: [integer, 'null']
+          description: snapraid_delete_threshold from the host role.
+        stalenessWarnDays: { type: integer }
+
+    ChannelKind:
+      type: string
+      enum: [ntfy, discord, webhook]
+    NotifyEvent:
+      type: string
+      enum: [service-down, security-finding, backup-failed, backup-stale, disk-health, update-available, job-failed]
+    ChannelDraft:
+      type: object
+      required: [kind, name, target, events]
+      properties:
+        kind: { $ref: '#/components/schemas/ChannelKind' }
+        name: { type: string }
+        target:
+          type: string
+          description: ntfy topic URL, Discord webhook URL, or any POST target.
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/NotifyEvent' }
+    NotificationChannel:
+      allOf:
+        - { $ref: '#/components/schemas/ChannelDraft' }
+        - type: object
+          required: [id, enabled, lastSentAt, lastResult, lastError]
+          properties:
+            id: { type: string }
+            enabled: { type: boolean }
+            lastSentAt: { type: [string, 'null'], format: date-time }
+            lastResult: { type: [string, 'null'], enum: [ok, failed, null] }
+            lastError: { type: [string, 'null'] }
+    NotificationDelivery:
+      type: object
+      required: [id, channelId, event, subject, sentAt, result, error]
+      properties:
+        id: { type: string }
+        channelId: { type: string }
+        event: { $ref: '#/components/schemas/NotifyEvent' }
+        subject: { type: string }
+        sentAt: { type: string, format: date-time }
+        result: { type: string, enum: [ok, failed] }
+        error: { type: [string, 'null'] }
+
+    PinningState:
+      type: object
+      required: [total, pinned, unpinned, pinsFileExists, generatedAt]
+      properties:
+        total: { type: integer }
+        pinned: { type: integer }
+        unpinned: { type: array, items: { type: string } }
+        pinsFileExists: { type: boolean }
+        generatedAt: { type: [string, 'null'], format: date-time }
+    SecretsState:
+      type: object
+      required: [encrypted, method, envFiles, encryptedFiles]
+      properties:
+        encrypted: { type: boolean }
+        method: { type: [string, 'null'], enum: [sops-age, null] }
+        envFiles: { type: integer }
+        encryptedFiles: { type: integer }
+    SocketState:
+      type: object
+      required: [proxied, exposedContainers, writable]
+      properties:
+        proxied:
+          type: boolean
+          description: The dashboard talks to a least-privilege proxy rather than the raw socket.
+        exposedContainers: { type: array, items: { type: string } }
+        writable: { type: boolean }
+    HardeningState:
+      type: object
+      required: [pinning, secrets, dockerSocket]
+      properties:
+        pinning: { $ref: '#/components/schemas/PinningState' }
+        secrets: { $ref: '#/components/schemas/SecretsState' }
+        dockerSocket: { $ref: '#/components/schemas/SocketState' }
+    SettingsExport:
+      type: object
+      required: [version, exportedAt, hostname, domain, enabledPackages, profiles, dnsMode, settings]
+      properties:
+        version:
+          type: integer
+          description: Schema version, so a future import can migrate it.
+        exportedAt: { type: string, format: date-time }
+        hostname: { type: [string, 'null'] }
+        domain: { type: [string, 'null'] }
+        enabledPackages: { type: array, items: { type: string } }
+        profiles: { type: array, items: { type: string } }
+        dnsMode: { type: [string, 'null'] }
+        settings:
+          type: object
+          additionalProperties: true
+          description: Non-secret preferences — notification channels, backup policy, edge protection, custom routes.
+    ImportResult:
+      type: object
+      required: [applied, skipped, preview]
+      properties:
+        applied: { type: array, items: { type: string } }
+        skipped: { type: array, items: { type: string } }
+        preview: { type: boolean }
+    StackState:
+      type: string
+      enum: [draft, running, stopped, failed]
+    IssueKind:
+      type: string
+      description: >
+        The first five block a deploy; the rest are advisory and state a
+        consequence rather than refusing. The advisory list is the point
+        of the screen — anyone pasting a compose file from a forum post
+        is, statistically, pasting all of them.
+      enum: [parse-error, no-services, port-conflict, name-conflict, privileged-port, unpinned-image, privileged, docker-socket, host-network, no-restart-policy, uncapped]
+    StackIssue:
+      type: object
+      required: [kind, message, service]
+      properties:
+        kind: { $ref: '#/components/schemas/IssueKind' }
+        message: { type: string }
+        service: { type: [string, 'null'] }
+    StackValidation:
+      type: object
+      required: [valid, errors, warnings, services, ports, images, volumes]
+      properties:
+        valid: { type: boolean }
+        errors:
+          type: array
+          items: { $ref: '#/components/schemas/StackIssue' }
+        warnings:
+          type: array
+          items: { $ref: '#/components/schemas/StackIssue' }
+        services: { type: array, items: { type: string } }
+        ports: { type: array, items: { type: integer } }
+        images: { type: array, items: { type: string } }
+        volumes: { type: array, items: { type: string } }
+    CustomStack:
+      type: object
+      required: [id, name, state, composeYaml, createdAt, lastDeployedAt, lastJobId, containers]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        state: { $ref: '#/components/schemas/StackState' }
+        composeYaml: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastDeployedAt: { type: [string, 'null'], format: date-time }
+        lastJobId: { type: [string, 'null'] }
+        containers: { type: array, items: { type: string } }
+    ProxyRoute:
+      type: object
+      required: [id, subdomain, vhost, target, managed, package, createdAt]
+      properties:
+        id: { type: string }
+        subdomain:
+          type: string
+          description: Label only — "photos" becomes photos.aurora.local.
+        vhost: { type: string }
+        target:
+          type: string
+          description: Where Caddy forwards to, as container:port.
+        managed:
+          type: boolean
+          description: >
+            Generated from a package manifest, so read-only here.
+            Changing it means changing the package.
+        package: { type: [string, 'null'] }
+        createdAt: { type: [string, 'null'], format: date-time }
+    ProxyTarget:
+      type: object
+      required: [container, ports, package]
+      properties:
+        container: { type: string }
+        ports:
+          type: array
+          items: { type: integer }
+        package: { type: [string, 'null'] }
+    ConflictKind:
+      type: string
+      enum: [vhost-taken, mdns-alias, reserved, target-unreachable]
+    ProxyConflict:
+      type: object
+      required: [kind, message, advisory]
+      properties:
+        kind: { $ref: '#/components/schemas/ConflictKind' }
+        message: { type: string }
+        advisory:
+          type: boolean
+          description: Worth saying, but not a reason to refuse.
+    ProxyPreview:
+      type: object
+      required: [vhost, snippet, conflicts]
+      properties:
+        vhost: { type: string }
+        snippet:
+          type: string
+          description: Exactly what would be appended to caddy.snippet.
+        conflicts:
+          type: array
+          items: { $ref: '#/components/schemas/ProxyConflict' }
+    EgressMode:
+      type: string
+      enum: [direct, vpn]
+    PackageNetwork:
+      type: object
+      required: [package, mode, gateway, locked, lockedReason, containers, publishedPorts, egressIp, egressCountry, gatewayHealthy]
+      properties:
+        package: { type: string }
+        mode: { $ref: '#/components/schemas/EgressMode' }
+        gateway:
+          type: [string, 'null']
+          description: Gateway container whose network namespace this app would share.
+        locked: { type: boolean }
+        lockedReason: { type: [string, 'null'] }
+        containers:
+          type: array
+          items: { type: string }
+          description: Containers that restart when the mode changes.
+        publishedPorts:
+          type: array
+          items: { type: integer }
+          description: >
+            Host ports this app publishes. A namespaced app cannot publish
+            its own ports, so these move onto the gateway when tunnelled.
+        egressIp: { type: [string, 'null'] }
+        egressCountry: { type: [string, 'null'] }
+        gatewayHealthy:
+          type: boolean
+          description: >
+            A tunnelled app has no network at all while the gateway is
+            down. That is the kill switch, and it is deliberate.
+    RateLimit:
+      type: object
+      required: [enabled, requestsPerMinute]
+      properties:
+        enabled: { type: boolean }
+        requestsPerMinute: { type: integer }
+    GeoBlock:
+      type: object
+      required: [enabled, allowCountries]
+      properties:
+        enabled: { type: boolean }
+        allowCountries:
+          type: array
+          items: { type: string }
+          description: ISO-3166 alpha-2 allow-list. Empty with enabled true blocks everything.
+    VhostProtection:
+      type: object
+      required: [vhost, package, publiclyResolvable, authelia, rateLimit, geoBlock, botDetection, blocked24h, lastBlockedAt]
+      properties:
+        vhost: { type: string }
+        package: { type: string }
+        publiclyResolvable:
+          type: boolean
+          description: >
+            Resolves from outside the LAN. Protection defaults on for
+            these and stays off for LAN-only names, because rate-limiting
+            your own laptop is pure downside.
+        authelia: { type: boolean }
+        rateLimit: { $ref: '#/components/schemas/RateLimit' }
+        geoBlock: { $ref: '#/components/schemas/GeoBlock' }
+        botDetection: { type: boolean }
+        blocked24h: { type: integer }
+        lastBlockedAt: { type: [string, 'null'], format: date-time }
 
     ServiceState:
       type: string
@@ -1196,6 +2695,16 @@ components:
       properties:
         metrics: { type: boolean }
         securityScanner: { type: boolean }
+        backup:
+          type: boolean
+          description: >
+            Gates /backup. False until the backend can talk to Kopia's
+            server API; while false the nav entry hides.
+        disks:
+          type: boolean
+          description: >
+            Gates /disks. False until the backend can read smartctl and
+            the mergerfs/snapraid state.
     SystemInfo:
       type: object
       required: [capabilities]
@@ -1342,14 +2851,18 @@ components:
 
     UserRole:
       type: string
-      enum: [admin, operator, viewer]
+      description: >
+        Phase D's vocabulary. `user` is a regular authenticated identity
+        and `guest` is read-mostly; the DDL default is `user` so a caller
+        that forgets to specify a role cannot accidentally create an
+        admin. Enforced by SQLite triggers, not just application code.
+      enum: [admin, user, guest]
     User:
       type: object
-      required: [id, username, role, createdAt, lastLoginAt, passkeyEnrolled]
+      required: [id, username, role, tz, createdAt]
       properties:
-        id: { type: string }
+        id: { type: integer }
         username: { type: string }
         role: { $ref: '#/components/schemas/UserRole' }
+        tz: { type: string }
         createdAt: { type: string, format: date-time }
-        lastLoginAt: { type: [string, 'null'], format: date-time }
-        passkeyEnrolled: { type: boolean }

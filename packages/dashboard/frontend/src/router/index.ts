@@ -18,6 +18,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'admin', component: () => import('@/views/onboarding/OnboardingAdmin.vue') },
       { path: 'domain', component: () => import('@/views/onboarding/OnboardingDomain.vue') },
       { path: 'packages', component: () => import('@/views/onboarding/OnboardingPackages.vue') },
+      { path: 'sso', component: () => import('@/views/onboarding/OnboardingSso.vue') },
       { path: 'secrets', component: () => import('@/views/onboarding/OnboardingSecrets.vue') },
       { path: 'dns', component: () => import('@/views/onboarding/OnboardingDns.vue') },
       { path: 'tls', component: () => import('@/views/onboarding/OnboardingTls.vue') },
@@ -50,6 +51,11 @@ const routes: RouteRecordRaw[] = [
       { path: 'apps', redirect: '/apps/catalogue' },
       { path: 'apps/catalogue', component: () => import('@/views/PackagesCatalogue.vue') },
       { path: 'apps/core', component: () => import('@/views/PackagesCore.vue') },
+      // Your own compose files (2026-08-08). Deliberately a third page
+      // rather than a filter on the catalogue: these are not curated and
+      // must never read as though they were. See
+      // docs/CUSTOM_STACK_DESIGN.md.
+      { path: 'apps/custom', component: () => import('@/views/CustomStacks.vue') },
       { path: 'apps/:name', component: () => import('@/views/PackageDetail.vue') },
       { path: 'packages', redirect: '/apps/catalogue' },
       { path: 'packages/:name', redirect: (to) => `/apps/${to.params.name}` },
@@ -57,9 +63,18 @@ const routes: RouteRecordRaw[] = [
       { path: 'users', component: () => import('@/views/UsersView.vue') },
       // VPN configuration — WireGuard-first (2026-08-06).
       { path: 'vpn', component: () => import('@/views/VpnView.vue') },
+      // Backup (2026-08-08). Reports on Kopia rather than replacing it —
+      // see docs/BACKUP_PAGE_DESIGN.md. Nav entry is gated on
+      // capabilities.backup; the route itself stays reachable by URL so a
+      // bookmark doesn't 404 into the catch-all redirect.
+      { path: 'backup', component: () => import('@/views/BackupView.vue') },
+      // Disks (2026-08-08): SMART health, mergerfs pool capacity and
+      // SnapRAID parity freshness. See docs/DISKS_PAGE_DESIGN.md.
+      { path: 'disks', component: () => import('@/views/DisksView.vue') },
       // B3 (v0.3): container log tail. Snapshot only.
       { path: 'containers/:id/logs', component: () => import('@/views/ContainerLogsView.vue') },
       { path: 'security', component: () => import('@/views/SecurityPosture.vue') },
+      { path: 'users', component: () => import('@/views/UsersView.vue'), meta: { requiresAdmin: true } },
       { path: 'settings', component: () => import('@/views/SettingsView.vue') },
     ],
   },
@@ -112,6 +127,15 @@ router.beforeEach(async (to) => {
 
   const auth = useAuthStore();
   if (!auth.session) await auth.fetchSession();
-  if (auth.session?.authenticated) return true;
-  return { path: '/login', query: { from: to.fullPath } };
+  if (!auth.session?.authenticated) {
+    return { path: '/login', query: { from: to.fullPath } };
+  }
+  // Phase D iter-10 (D9): admin-only routes bounce non-admin sessions
+  // back to the dashboard home. Belt-and-braces — the sidebar link is
+  // already role-gated, but a direct URL paste to /users from a USER
+  // account would otherwise render an empty view and 403 on data load.
+  if (to.meta.requiresAdmin && auth.session?.role !== 'admin') {
+    return { path: '/' };
+  }
+  return true;
 });

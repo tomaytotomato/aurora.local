@@ -33,6 +33,16 @@ requires:
   # "Couldn't start".
   start_budget_seconds: 240
 
+# Prometheus grows with retention and will quietly eat the box if a
+# scrape target starts emitting high-cardinality labels.
+resources:
+  mem_limit_mb: 2048
+  cpus: 1.5
+
+backup:
+  paths:
+    - data/monitoring/grafana
+
 required_env:
   - GRAFANA_ADMIN_PASSWORD
 
@@ -43,6 +53,17 @@ warnings:
   - id: monitoring_low_disk
     if: { free_disk_gb_below: 10 }
     message: 'Prometheus retains metrics on disk (default 15d). Less than 10 GB free means retention will be short.'
+
+# ---- SSO (Phase D) -------------------------------------------------
+# Grafana + Prometheus + Uptime Kuma all live behind grafana.{DOMAIN}
+# etc. Grafana natively supports auth.proxy (reads Remote-User /
+# Remote-Groups from Caddy); Prometheus + Uptime Kuma just get gated
+# at the edge with min_role: user (everyone authenticated can peek
+# at the dashboards; nobody unauthenticated can).
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: true
 
 post_install_notes: |
   Grafana:    https://grafana.$DOMAIN/    (admin / GRAFANA_ADMIN_PASSWORD)

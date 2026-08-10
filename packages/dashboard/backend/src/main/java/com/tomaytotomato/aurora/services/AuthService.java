@@ -51,4 +51,14 @@ public class AuthService {
     return users.findByUsername(username)
         .filter(u -> verify(u.passwordHash(), password.toCharArray()));
   }
+
+  /** Look up the DB role for a username; empty when the user is gone. */
+  public Optional<com.tomaytotomato.aurora.domain.Role> roleFor(String username) {
+    return users.findByUsername(username).map(AdminUser::role);
+  }
+
+  /** Look up the DB tz for a username; empty when the user is gone. */
+  public Optional<String> tzFor(String username) {
+    return users.findByUsername(username).map(AdminUser::tz);
+  }
 }

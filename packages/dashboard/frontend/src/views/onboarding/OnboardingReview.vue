@@ -152,7 +152,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 8 of 9</div>
+    <div class="eyebrow mb-3">Step 9 of 10</div>
     <h1 class="mb-4">Review and install.</h1>
     <p class="text-foreground mb-8">
       Here's what Aurora will do. Nothing has been written yet.

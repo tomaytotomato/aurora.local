@@ -65,7 +65,7 @@ class CurrentUserServiceTests {
   void currentUserId_resolves_via_admin_repo() {
     AdminUserRepo repo = Mockito.mock(AdminUserRepo.class);
     Mockito.when(repo.findByUsername("bruce")).thenReturn(Optional.of(
-        new AdminUser(42L, "bruce", "$argon2id$…", "UTC", "2026-01-01T00:00:00Z")));
+        new AdminUser(42L, "bruce", "$argon2id$…", "UTC", "2026-01-01T00:00:00Z", com.tomaytotomato.aurora.domain.Role.ADMIN)));
     setPrincipal("bruce");
     assertEquals(Optional.of(42L), new CurrentUserService(repo).currentUserId());
   }

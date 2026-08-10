@@ -11,16 +11,48 @@
 //   • session.authenticated — set false to land on /login.
 
 import type { Session } from '@/api/auth';
+import type { BackupPolicy, BackupSource, BackupStatus, Snapshot } from '@/api/backup';
+import type { Disk, Parity, Pool } from '@/api/disks';
+import type { JobStatus } from '@/api/jobs';
+import type { PackageNetwork, VhostProtection } from '@/api/network';
+import type { NotificationChannel, NotificationDelivery } from '@/api/notifications';
 import type { OnboardingDraft } from '@/api/onboarding';
+import type { CustomStack } from '@/api/custom';
+import type { PackageResources } from '@/api/packages';
+import type { ProxyRoute } from '@/api/proxy';
+import type { PackageUpdate } from '@/api/updates';
 import type { OpenVpnClient, OpenVpnConfig, VpnConfig, VpnPeer } from '@/api/vpn';
-import type { User } from '@/api/users';
+import type { UserSummary } from '@/api/users';
+import { jobScript, type JobScript } from './fixtures/jobs';
 import {
   initialOpenVpnClients,
   initialOpenVpnConfig,
   initialPeers,
   initialVpnConfig,
 } from './fixtures/vpn';
+import { initialUpdates } from './fixtures/updates';
+import {
+  initialPolicy,
+  initialSnapshots,
+  initialSources,
+  initialStatus,
+} from './fixtures/backup';
+import { initialDisks, initialParity, initialPool } from './fixtures/disks';
+import { initialChannels, initialDeliveries } from './fixtures/notifications';
+import { initialProtection } from './fixtures/network';
+import { initialRoutes } from './fixtures/proxy';
+import { initialStacks } from './fixtures/custom';
 import { CURRENT_USER_ID, initialUsers } from './fixtures/users';
+
+/**
+ * A job plus the script it is playing out. `cursor` is how many of the
+ * script's lines have already been emitted, so a stream that reconnects
+ * mid-job replays the tail it missed and then carries on.
+ */
+export interface MockJob extends JobStatus {
+  script: JobScript;
+  cursor: number;
+}
 
 export interface MockState {
   session: Session;
@@ -38,8 +70,45 @@ export interface MockState {
     openVpnClients: OpenVpnClient[];
   };
   /** Admin users. The row whose id === currentUserId is "you". */
-  users: User[];
-  currentUserId: string;
+  users: UserSummary[];
+  currentUserId: number;
+  /** Long-running operations, keyed by job id. Grows as actions are taken. */
+  jobs: Record<string, MockJob>;
+  /** Per-package update availability, keyed by package name. */
+  updates: Record<string, PackageUpdate>;
+  /** Kopia repository state, what it protects, and its history. */
+  backup: {
+    status: BackupStatus;
+    sources: BackupSource[];
+    snapshots: Snapshot[];
+    policy: BackupPolicy;
+  };
+  /** Physical drives, the mergerfs pool, and SnapRAID parity. */
+  disks: {
+    disks: Disk[];
+    pool: Pool;
+    parity: Parity;
+  };
+  /** Where Aurora sends word when something happens, and what it sent. */
+  notifications: {
+    channels: NotificationChannel[];
+    deliveries: NotificationDelivery[];
+  };
+  /** Operator-supplied compose stacks, kept well away from the catalogue. */
+  custom: {
+    stacks: CustomStack[];
+  };
+  /** Caddy vhost routes, both manifest-generated and hand-added. */
+  proxy: {
+    routes: ProxyRoute[];
+  };
+  /** Resource overrides per app, populated on first change. */
+  resources: Record<string, PackageResources>;
+  /** Egress mode per app (populated on first change), and edge protection per vhost. */
+  network: {
+    byPackage: Record<string, PackageNetwork>;
+    protection: VhostProtection[];
+  };
 }
 
 // Default: onboarding DONE, admin logged in. Every dashboard screen and
@@ -55,6 +124,7 @@ export const state: MockState = {
     username: 'admin',
     passkeyEnrolled: false,
     tz: 'Europe/London',
+    role: 'admin',
   },
   onboarding: {
     complete: true,
@@ -79,4 +149,56 @@ export const state: MockState = {
   },
   users: initialUsers(),
   currentUserId: CURRENT_USER_ID,
+  jobs: initialJobs(),
+  updates: initialUpdates(),
+  backup: {
+    status: initialStatus(),
+    sources: initialSources(),
+    snapshots: initialSnapshots(),
+    policy: initialPolicy(),
+  },
+  disks: {
+    disks: initialDisks(),
+    pool: initialPool(),
+    parity: initialParity(),
+  },
+  notifications: {
+    channels: initialChannels(),
+    deliveries: initialDeliveries(),
+  },
+  custom: {
+    stacks: initialStacks(),
+  },
+  proxy: {
+    routes: initialRoutes(),
+  },
+  resources: {},
+  network: {
+    byPackage: {},
+    protection: initialProtection(),
+  },
 };
+
+/**
+ * One already-finished job so the "last update failed" link on the AI
+ * card leads to a real log rather than a 404. Its id matches
+ * `lastUpdateJobId` in the updates fixture.
+ */
+function initialJobs(): Record<string, MockJob> {
+  const script = jobScript('update', 'ai');
+  const failed: MockJob = {
+    id: 'job-update-ai-prior',
+    kind: 'update',
+    target: 'ai',
+    state: 'failed',
+    startedAt: '2026-08-07T21:04:11Z',
+    finishedAt: '2026-08-07T21:04:58Z',
+    exitCode: script.exitCode,
+    failureCode: script.failureCode,
+    failureReason: script.failureReason,
+    tail: [...script.lines],
+    script,
+    cursor: script.lines.length,
+  };
+  return { [failed.id]: failed };
+}

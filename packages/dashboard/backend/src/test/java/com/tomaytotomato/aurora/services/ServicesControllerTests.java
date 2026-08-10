@@ -32,7 +32,8 @@ class ServicesControllerTests {
     return new Package(
         name, name, name + " package", "media",
         List.of(), List.of(), Map.of(), List.of(), Map.of(), List.of(),
-        null, enabled, false);
+        null, enabled, false,
+        com.tomaytotomato.aurora.domain.SsoBlock.DISABLED);
   }
 
   private static MockMvc mvc(PackagesService pkgs, LaunchService launcher) {

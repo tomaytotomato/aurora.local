@@ -6,16 +6,34 @@ import { usePackagesStore } from '@/stores/packages';
 import { useContainerEvents } from '@/composables/useContainerEvents';
 import { ServicesApi } from '@/api/services';
 import { MetricsApi, type MetricBucket } from '@/api/metrics';
+import {
+  BackupApi,
+  backupHeadline,
+  backupPageState,
+  backupTone,
+  daysSinceLastRun,
+  type BackupPolicy,
+  type BackupStatus,
+} from '@/api/backup';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Badge from '@/components/ui/Badge.vue';
-import { Select } from '@/components/ui';
+import { Select, Skeleton } from '@/components/ui';
 import MetricChart from '@/components/MetricChart.vue';
 import { humanBytes, humanUptime, safePercent } from '@/lib/utils';
 import { renderIdentity } from '@/lib/identity';
-import { startBudgetMs, type PackageSummary } from '@/api/packages';
+// startBudgetMs is no longer needed here: the start job's own lifetime is
+// the budget now, rather than a timer racing it. DoneChecklist still uses
+// it for the wizard's per-package polling.
+import { type PackageSummary } from '@/api/packages';
 import { useHealthPill } from '@/composables/useHealthPill';
+import { useUpdatesStore } from '@/stores/updates';
+import { SecurityApi, type SecurityFinding } from '@/api/security';
+import { DisksApi, type Disk, type Parity, type Pool } from '@/api/disks';
+import { buildAttention } from '@/lib/attention';
+import AttentionStrip from '@/components/AttentionStrip.vue';
+import JobLogPanel from '@/components/JobLogPanel.vue';
 import ReachInfo from '@/components/ReachInfo.vue';
 import DoneChecklist from '@/components/onboarding/DoneChecklist.vue';
 
@@ -76,8 +94,81 @@ async function fetchPackages(): Promise<void> {
   }
 }
 
+// ---- backup health --------------------------------------------------
+// The whole point of surfacing this on Overview: nobody logs into Kopia
+// to check, so a schedule that stopped in March goes unnoticed until the
+// day it matters. Gated on the same capability as the /backup nav entry —
+// no capability, no tile, rather than a tile that guesses.
+const backupStatus = ref<BackupStatus | null>(null);
+const backupPolicy = ref<BackupPolicy | null>(null);
+const backupErr = ref(false);
+
+const backupCapable = computed(() => system.info?.capabilities?.backup === true);
+const backupState = computed(() =>
+  backupStatus.value && backupPolicy.value
+    ? backupPageState(backupStatus.value, backupPolicy.value)
+    : null,
+);
+const backupDays = computed(() => (backupStatus.value ? daysSinceLastRun(backupStatus.value) : null));
+
+async function fetchBackup(): Promise<void> {
+  backupErr.value = false;
+  try {
+    const [s, p] = await Promise.all([BackupApi.status(), BackupApi.policy()]);
+    backupStatus.value = s;
+    backupPolicy.value = p;
+  } catch {
+    backupErr.value = true;
+  }
+}
+
+// ---- needs-attention strip ------------------------------------------
+// Every input here is already fetched by some page or other; the strip's
+// only job is to put them in one place so a problem does not depend on
+// the operator happening to visit the right tab. Each fetch is
+// capability-gated and failure-tolerant: a missing input means one fewer
+// row, never an error banner on Overview.
+const updates = useUpdatesStore();
+const findings = ref<SecurityFinding[]>([]);
+const diskState = ref<{ disks: Disk[]; pool: Pool; parity: Parity } | null>(null);
+
+const disksCapable = computed(() => system.info?.capabilities?.disks === true);
+
+async function fetchFindings(): Promise<void> {
+  try {
+    findings.value = await SecurityApi.findings();
+  } catch {
+    findings.value = [];
+  }
+}
+
+async function fetchDisks(): Promise<void> {
+  try {
+    const [disks, pool, parity] = await Promise.all([DisksApi.list(), DisksApi.pool(), DisksApi.parity()]);
+    diskState.value = { disks, pool, parity };
+  } catch {
+    diskState.value = null;
+  }
+}
+
+const attentionItems = computed(() =>
+  buildAttention({
+    updates: updates.list,
+    findings: findings.value,
+    backup: backupStatus.value && backupPolicy.value
+      ? { status: backupStatus.value, policy: backupPolicy.value }
+      : null,
+    disks: diskState.value,
+    system: system.info,
+  }),
+);
+
 onMounted(async () => {
   await Promise.allSettled([fetchSystem(), fetchPackages()]);
+  if (backupCapable.value) void fetchBackup();
+  if (disksCapable.value) void fetchDisks();
+  if (system.info?.capabilities?.securityScanner === true) void fetchFindings();
+  void updates.ensureLoaded();
   // B2-followup (iter-22): metrics fetch fires after system.info lands
   // so capabilities.metrics is up-to-date before the guard runs.
   // iter-24: sparkline fetch fans out in parallel so the pill picks up
@@ -159,23 +250,59 @@ const packagesCount = computed(() => {
 // the media sub-checklist (BL1).
 const { pill: healthPill } = useHealthPill();
 
-// Per-package Start (§2.1 fix). Delegates to POST /api/services/{pkg}/start
-// which returns 202 with a job_id. We refresh the package list on both
-// success and failure so the pill flips to whatever the probe says next.
+// Per-package Start (§2.1). POST /api/services/{pkg}/start returns 202
+// with a job id, and we now stream that job instead of guessing at a
+// delay.
+//
+// What this replaces: a flat `setTimeout(1500)` before re-listing. On a
+// seven-container stack with first-run pulls, that flipped the row back
+// to a Start button long before anything was actually running, which
+// invited a second click and a 409 launch-in-progress. The row now stays
+// "Starting…" until the job itself says otherwise, however long that
+// takes, and the log underneath shows why it is taking that long.
+const startJobId = ref<string | null>(null);
+const startJobPackage = ref<string | null>(null);
+
 async function onStart(name: string): Promise<void> {
   startState.value = { ...startState.value, [name]: 'starting' };
+  startJobId.value = null;
+  startJobPackage.value = name;
   try {
-    await ServicesApi.start(name);
-    // Give the launch a beat to register a container before re-listing.
-    setTimeout(() => {
-      const next = { ...startState.value };
-      delete next[name];
-      startState.value = next;
-      fetchPackages().catch(() => { /* row already in its own state */ });
-    }, 1500);
+    const { job_id } = await ServicesApi.start(name);
+    startJobId.value = job_id;
   } catch {
     startState.value = { ...startState.value, [name]: 'error' };
+    startJobPackage.value = null;
   }
+}
+
+function clearStartState(name: string): void {
+  const next = { ...startState.value };
+  delete next[name];
+  startState.value = next;
+}
+
+function onStartJobSuccess(): void {
+  const name = startJobPackage.value;
+  if (name) clearStartState(name);
+  fetchPackages().catch(() => { /* row already in its own state */ });
+}
+
+function onStartJobFailed(): void {
+  const name = startJobPackage.value;
+  if (name) startState.value = { ...startState.value, [name]: 'error' };
+  fetchPackages().catch(() => { /* row already in its own state */ });
+}
+
+function retryStart(): void {
+  const name = startJobPackage.value;
+  startJobId.value = null;
+  if (name) void onStart(name);
+}
+
+function dismissStartJob(): void {
+  startJobId.value = null;
+  startJobPackage.value = null;
 }
 
 // Sort blocker-first for the Packages card — running last, so the user's
@@ -291,6 +418,11 @@ function pickMetric(key: string): void {
          padding class. Also loosened row `space-y-3` → `space-y-4` on
          the System hydrated block for more air. -->
     <div class="grid grid-cols-6 gap-6 mb-10">
+      <!-- What needs a person, if anything. Full width and first,
+           because everything below it is context and this is the point.
+           Renders nothing on a clean box. -->
+      <AttentionStrip :items="attentionItems" />
+
       <!-- System card.
            iter-dash-polish-2 P3: eyebrow → h3 → subtitle → body anatomy.
            The `uptime` string moved out of the top-right corner into the
@@ -474,7 +606,55 @@ function pickMetric(key: string): void {
               </div>
             </li>
           </ul>
+
+          <!-- Live start log. A first pull of Immich or Ollama runs for
+               minutes; without this the row just sits on "Starting…" and
+               the operator has no way to tell progress from a hang. -->
+          <JobLogPanel
+            v-if="startJobId"
+            :job-id="startJobId"
+            dismissible
+            class="mb-3"
+            @success="onStartJobSuccess"
+            @failed="onStartJobFailed"
+            @retry="retryStart"
+            @dismiss="dismissStartJob"
+          />
+
           <router-link to="/apps" class="text-sm text-muted-foreground">Manage apps →</router-link>
+        </div>
+      </Card>
+
+      <!-- Backup health. Deliberately small: the only job here is to say
+           whether the answer is "fine" or "look at this", and to be
+           impossible to miss when it is the latter. -->
+      <Card v-if="backupCapable" class="col-span-3 p-8" data-card="backup">
+        <h3 class="card-title mb-1">Backup</h3>
+        <p class="card-subtitle mb-4">Kopia</p>
+
+        <div v-if="backupErr" data-state="error" class="text-sm">
+          <p class="text-foreground mb-1">Aurora couldn't read the backup state.</p>
+          <Button variant="secondary" size="sm" class="mt-2" @click="fetchBackup">Try again</Button>
+        </div>
+
+        <div v-else-if="!backupState" data-state="loading">
+          <Skeleton class="h-5 w-32 mb-2" />
+          <Skeleton class="h-4 w-48" />
+        </div>
+
+        <div v-else data-test="backup-tile">
+          <div class="flex items-center gap-2 mb-2">
+            <Badge :tone="backupTone(backupState)">{{ backupState }}</Badge>
+          </div>
+          <p class="text-sm text-foreground mb-1">{{ backupHeadline(backupState, backupDays) }}</p>
+          <p class="text-xs text-muted-foreground mb-3">
+            <template v-if="backupStatus?.uniqueSizeBytes !== null && backupStatus">
+              {{ humanBytes(backupStatus.uniqueSizeBytes) }} stored ·
+              {{ backupStatus.snapshotCount }} snapshots
+            </template>
+            <template v-else>Size unknown.</template>
+          </p>
+          <router-link to="/backup" class="text-sm text-muted-foreground">Backup →</router-link>
         </div>
       </Card>
 

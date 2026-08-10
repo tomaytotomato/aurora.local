@@ -5,6 +5,19 @@ export interface Session {
   username: string | null;
   passkeyEnrolled: boolean;
   tz: string | null;
+  /** Phase D role. `admin | user | guest` when authenticated; null when anonymous. */
+  role: string | null;
+}
+
+/**
+ * Phase D iter-14 (D13). Backend response to POST /auth/logout.
+ * When SSO is enabled and a domain is known, {@code next} carries the
+ * Authelia logout URL so the SPA bounces through it to clear the
+ * shared .{DOMAIN} session cookie. Null when SSO isn't active — the
+ * SPA does its usual local redirect to /login.
+ */
+export interface LogoutResponse {
+  next: string | null;
 }
 
 export const AuthApi = {
@@ -16,8 +29,9 @@ export const AuthApi = {
     const { data } = await http.post<Session>('/auth/login', { username, password });
     return data;
   },
-  async logout(): Promise<void> {
-    await http.post('/auth/logout');
+  async logout(): Promise<LogoutResponse> {
+    const { data } = await http.post<LogoutResponse>('/auth/logout');
+    return data;
   },
   // Passkey enrollment — v0.2 stub.
   async enrollPasskey(): Promise<void> {

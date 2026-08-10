@@ -1,0 +1,44 @@
+# aurora.local / packages/filebrowser
+#
+# A browser-based file manager over the shared storage pool. Samba
+# already covers proper file access from a desktop; this covers the case
+# Samba is bad at — looking at one file from a phone, or from someone
+# else's laptop, without mounting anything.
+#
+# It runs as the same uid/gid as the pool owner so files it creates are
+# not root-owned, which is the usual way this kind of container makes a
+# mess that has to be chown'd out later.
+
+name: aurora-filebrowser
+
+networks:
+  aurora_net:
+    external: true
+
+services:
+  filebrowser:
+    image: filebrowser/filebrowser:v2.31.2
+    container_name: filebrowser
+    restart: unless-stopped
+    networks: [aurora_net]
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      - TZ=${TZ:-Europe/London}
+      - FB_BASEURL=/
+    volumes:
+      # What it serves. The mergerfs pool by default; point this
+      # somewhere else if the box has no pool.
+      - ${STORAGE_ROOT:-/mnt/storage}:/srv
+      # Its own database and settings.
+      - ../../data/filebrowser:/database
+    ports:
+      - "8085:80"
+    mem_limit: 512m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider",
+             "http://localhost:80/health"]
+      start_period: 10s
+      interval: 15s
+      timeout: 3s
+      retries: 3

@@ -9,6 +9,22 @@ export interface SystemCapabilities {
    * the sidebar hides the nav link.
    */
   securityScanner?: boolean;
+  /**
+   * Gates /backup. False until the backend can talk to Kopia's server
+   * API; while false the nav entry hides, on the same principle as
+   * securityScanner — a page that cannot be honest should not be
+   * reachable.
+   */
+  backup?: boolean;
+  /** Gates /disks. False until the backend can read smartctl and the
+   * mergerfs/snapraid state. */
+  disks?: boolean;
+  /** Gates the Notifications card on Settings. */
+  notifications?: boolean;
+  /** Gates the Addresses card on Settings. */
+  proxy?: boolean;
+  /** Gates /apps/custom and its section-nav entry. */
+  customStacks?: boolean;
 }
 
 export interface SystemInfo {
@@ -45,6 +61,35 @@ export interface StateFile {
   profiles: string[];
 }
 
+/**
+ * A portable copy of everything the wizard asked for and everything
+ * configured since. Deliberately excludes secrets: .env values stay on
+ * the box, so this file is safe to keep in a normal backup.
+ *
+ * Dashy's encrypted config backup is the model, minus the encryption,
+ * because there is nothing sensitive left in here once secrets are out.
+ */
+export interface SettingsExport {
+  /** Schema version of this file, so a future import can migrate it. */
+  version: number;
+  exportedAt: string;
+  hostname: string | null;
+  domain: string | null;
+  enabledPackages: string[];
+  profiles: string[];
+  dnsMode: string | null;
+  /** Non-secret preferences: notification channels, backup policy, protection. */
+  settings: Record<string, unknown>;
+}
+
+export interface ImportResult {
+  /** What would change, or did. */
+  applied: string[];
+  skipped: string[];
+  /** True when this was a dry run. */
+  preview: boolean;
+}
+
 export const SystemApi = {
   async info(): Promise<SystemInfo> {
     const { data } = await http.get<SystemInfo>('/system');
@@ -60,6 +105,22 @@ export const SystemApi = {
   },
   async state(): Promise<StateFile> {
     const { data } = await http.get<StateFile>('/system/state');
+    return data;
+  },
+  /** Everything needed to set this box up again, minus the secrets. */
+  async exportSettings(): Promise<SettingsExport> {
+    const { data } = await http.get<SettingsExport>('/system/export');
+    return data;
+  },
+  /**
+   * Apply an exported file. `preview` first is the only sane default —
+   * an import that silently enables nine packages is not something to
+   * discover after the fact.
+   */
+  async importSettings(payload: SettingsExport, preview = true): Promise<ImportResult> {
+    const { data } = await http.post<ImportResult>('/system/import', payload, {
+      params: preview ? { preview: 1 } : {},
+    });
     return data;
   },
 };

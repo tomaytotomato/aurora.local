@@ -9,6 +9,19 @@ Two complementary tools:
 - **Stirling-PDF** — a browser-based PDF Swiss army knife (split,
   merge, sign, redact, watermark, OCR, compress).
 
+## Auth
+
+Paperless honors `Remote-User` when Aurora manages SSO (see `sso:`
+in `manifest.yml`). Signing into Aurora auto-provisions a matching
+Paperless account on first visit — no second login page. The
+seeded `PAPERLESS_ADMIN_USER` stays as the emergency-access
+superuser when Authelia is down.
+
+Stirling-PDF has no user model of its own; it gets edge-gated by
+Authelia when SSO is on and is otherwise open on the LAN.
+
+When SSO is disabled, sign into Paperless with the seeded admin
+from `.env` — same behaviour as before Aurora managed identity.
 ## First-run
 
 1. `cp .env.example .env` and fill in:

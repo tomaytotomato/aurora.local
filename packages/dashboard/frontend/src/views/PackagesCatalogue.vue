@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { useSystemStore } from '@/stores/system';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
+import { useUpdatesStore } from '@/stores/updates';
 import { dockerStructureFor, packageLinks, splitCatalogue, type PackageSummary } from '@/api/packages';
 import { packageLabel } from '@/lib/packageName';
 import Card from '@/components/ui/Card.vue';
@@ -13,7 +15,13 @@ import DockerBadge from '@/components/DockerBadge.vue';
 import SectionNav from '@/components/layout/SectionNav.vue';
 
 const packages = usePackagesStore();
+const updates = useUpdatesStore();
 const router = useRouter();
+
+/** An update badge is a nudge, not a status — absent when we don't know. */
+function hasUpdate(pkg: PackageSummary): boolean {
+  return updates.byPackage[pkg.name]?.state === 'available';
+}
 
 // A failed load used to be swallowed, so the catalogue rendered "No apps"
 // — indistinguishable from a genuinely empty view. Track it so the
@@ -25,7 +33,13 @@ function load(): void {
   packages.fetchList().catch(() => { loadError.value = true; });
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  // Update state is a separate, slower read (it asks registries). It
+  // decorates the cards but never gates them, so it is fired and
+  // forgotten — a failure just means no badges.
+  void updates.ensureLoaded();
+});
 
 // ── Installed / Marketplace — one tab strip, non-core packages only ──
 // Core now lives on its own page (PackagesCore.vue), reached via the
@@ -54,6 +68,21 @@ function badgeText(pkg: PackageSummary): string {
 function openDetail(pkg: PackageSummary): void {
   router.push(`/apps/${pkg.name}`);
 }
+
+// The "Your own" tab only appears when the backend can actually run a
+// custom stack. Ground rule: a page must never be reachable in
+// production while it is still a mock.
+const system = useSystemStore();
+const appsNav = computed(() => {
+  const items = [
+    { to: '/apps/catalogue', label: 'Apps' },
+    { to: '/apps/core', label: 'Core' },
+  ];
+  if (system.info?.capabilities?.customStacks === true) {
+    items.push({ to: '/apps/custom', label: 'Your own' });
+  }
+  return items;
+});
 </script>
 
 <template>
@@ -64,7 +93,7 @@ function openDetail(pkg: PackageSummary): void {
     </div>
 
     <SectionNav
-      :items="[{ to: '/apps/catalogue', label: 'Apps' }, { to: '/apps/core', label: 'Core' }]"
+      :items="appsNav"
       class="mb-6"
     />
 
@@ -116,7 +145,14 @@ function openDetail(pkg: PackageSummary): void {
             <Badge :tone="badgeTone(pkg)">{{ badgeText(pkg) }}</Badge>
           </div>
           <p class="text-sm text-muted-foreground line-clamp-3 mb-4 flex-1">{{ pkg.description }}</p>
-          <DockerBadge :structure="dockerStructureFor(pkg)" />
+          <div class="flex items-center justify-between gap-3">
+            <DockerBadge :structure="dockerStructureFor(pkg)" />
+            <Badge
+              v-if="hasUpdate(pkg)"
+              tone="info"
+              data-test="update-available-badge"
+            >update</Badge>
+          </div>
         </Card>
       </router-link>
     </div>

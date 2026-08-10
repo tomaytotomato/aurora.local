@@ -28,6 +28,7 @@
     <flyway.version>13.0.0</flyway.version>
     <snakeyaml.version>2.6</snakeyaml.version>
     <argon2.version>2.11</argon2.version>
+    <testcontainers.version>1.21.3</testcontainers.version>
   </properties>
 
   <dependencies>
@@ -94,6 +95,18 @@
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
+    <!--
+      TestContainers, for the handful of tests whose job is to check an
+      assumption about a real dependency rather than our own logic. Tagged
+      and excluded from the default run: see the surefire config below.
+    -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.security</groupId>
       <artifactId>spring-security-test</artifactId>
@@ -104,6 +117,20 @@
   <build>
     <finalName>aurora</finalName>
     <plugins>
+      <!--
+        The default `mvn test` run stays fast: fakes only, no containers.
+        Tests tagged `registry` need a container and a reachable registry,
+        so they are excluded here and run by their own CI job with
+        `-Dgroups=registry`. Two suites rather than one slow one.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <excludedGroups>registry</excludedGroups>
+        </configuration>
+      </plugin>
+
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>

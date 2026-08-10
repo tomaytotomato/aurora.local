@@ -156,6 +156,16 @@ export const packageSeeds: Seed[] = [
       readme: '# Photos\n\nImmich backs up your phone camera roll with ML search.',
       vhosts: ['photos.aurora.local'],
       homepageTiles: 1,
+      backup: {
+        paths: ['data/photos/library'],
+        before: [
+          {
+            kind: 'postgres-dump',
+            container: 'immich-postgres',
+            description: 'Dumps the Immich database so the snapshot restores cleanly',
+          },
+        ],
+      },
     },
     env: [
       envVar({ key: 'DB_PASSWORD', secret: true, required: true }),
@@ -335,6 +345,13 @@ export const packageSeeds: Seed[] = [
       readme: '# Documents\n\nPaperless-ngx OCRs and indexes your paperwork; Stirling-PDF\nhandles splits, merges and conversions.',
       vhosts: ['paperless.aurora.local'],
       homepageTiles: 2,
+      // Declares paths but no before-action, even though Paperless keeps
+      // a Postgres database under this path. This is the gap the backup
+      // page warns about, and it is here on purpose.
+      backup: {
+        paths: ['data/documents'],
+        before: [],
+      },
     },
     env: [
       envVar({ key: 'PAPERLESS_ADMIN_PASSWORD', secret: true, required: true }),

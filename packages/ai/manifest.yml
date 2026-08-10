@@ -38,6 +38,15 @@ requires:
   # covered by the pull step's own dedicated poller (see StatusProbe).
   start_budget_seconds: 240
 
+# Ollama will happily use every byte you give it. Left uncapped it can
+# take the box down mid-inference, and on a machine with no swap the OOM
+# killer picks its victim from every process on the host, not just this
+# one. A ceiling turns "the server fell over" into "that model was too
+# big", which is a far more useful thing to be told.
+resources:
+  mem_limit_mb: 10240
+  cpus: 3.0
+
 required_env:
   - WEBUI_SECRET_KEY
 

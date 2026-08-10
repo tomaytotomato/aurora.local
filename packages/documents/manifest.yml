@@ -28,10 +28,35 @@ requires:
   # for stacks of this shape.
   start_budget_seconds: 180
 
+# Paperless runs OCR on every incoming document, which is CPU-bound and
+# will happily saturate the box for minutes at a time.
+resources:
+  mem_limit_mb: 3072
+  cpus: 2.0
+
+backup:
+  paths:
+    - data/documents
+  before:
+    - kind: postgres-dump
+      container: paperless-db
+      description: Dumps the Paperless database so the snapshot restores cleanly
+
 required_env:
   - PAPERLESS_ADMIN_USER
   - PAPERLESS_ADMIN_PASSWORD
   - PAPERLESS_SECRET_KEY
+
+# ---- SSO (Phase D) -------------------------------------------------
+# Paperless-ngx supports PAPERLESS_ENABLE_HTTP_REMOTE_USER=true —
+# Caddy passes Remote-User + Remote-Groups from Authelia, Paperless
+# auto-provisions the account on first visit. Stirling-PDF just gets
+# edge-gated (no user model of its own). min_role: user because a
+# household member should be able to read receipts + shared PDFs.
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: true
 
 post_install_notes: |
   1. Drop PDFs / images into ../../data/documents/paperless/consume/
