@@ -1201,6 +1201,22 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/DismissalRow' }
 
+  /security/hardening:
+    get:
+      tags: [security]
+      summary: Where the three outstanding hardening decisions stand
+      description: >
+        State, not control. Pinning, sops encryption and the socket proxy
+        are each an Ansible run or a script that rewrites files on disk,
+        so there is deliberately no endpoint to perform them from the
+        dashboard.
+      responses:
+        '200':
+          description: Hardening state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HardeningState' }
+
   # ────────────────────────────── audit ───────────────────────────────
   /audit/events:
     get:
@@ -1268,6 +1284,42 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/StateFile' }
+  /system/export:
+    get:
+      tags: [system]
+      summary: A portable copy of how this box is set up
+      description: >
+        Carries no secrets: .env values stay on the box, which is what
+        makes this file safe to keep alongside ordinary backups, and also
+        why an import can never be the whole story.
+      responses:
+        '200':
+          description: Settings.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SettingsExport' }
+  /system/import:
+    post:
+      tags: [system]
+      summary: Apply an exported file
+      parameters:
+        - name: preview
+          in: query
+          description: Dry run. The default in the UI, because an import that silently enables nine packages should not be discovered afterwards.
+          schema: { type: integer, enum: [1] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SettingsExport' }
+      responses:
+        '200':
+          description: What changed, or would.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportResult' }
+        '400': { description: The file came from a different version. }
+
   /system/caddy-root.crt:
     get:
       tags: [system]
@@ -2196,6 +2248,63 @@ components:
         result: { type: string, enum: [ok, failed] }
         error: { type: [string, 'null'] }
 
+    PinningState:
+      type: object
+      required: [total, pinned, unpinned, pinsFileExists, generatedAt]
+      properties:
+        total: { type: integer }
+        pinned: { type: integer }
+        unpinned: { type: array, items: { type: string } }
+        pinsFileExists: { type: boolean }
+        generatedAt: { type: [string, 'null'], format: date-time }
+    SecretsState:
+      type: object
+      required: [encrypted, method, envFiles, encryptedFiles]
+      properties:
+        encrypted: { type: boolean }
+        method: { type: [string, 'null'], enum: [sops-age, null] }
+        envFiles: { type: integer }
+        encryptedFiles: { type: integer }
+    SocketState:
+      type: object
+      required: [proxied, exposedContainers, writable]
+      properties:
+        proxied:
+          type: boolean
+          description: The dashboard talks to a least-privilege proxy rather than the raw socket.
+        exposedContainers: { type: array, items: { type: string } }
+        writable: { type: boolean }
+    HardeningState:
+      type: object
+      required: [pinning, secrets, dockerSocket]
+      properties:
+        pinning: { $ref: '#/components/schemas/PinningState' }
+        secrets: { $ref: '#/components/schemas/SecretsState' }
+        dockerSocket: { $ref: '#/components/schemas/SocketState' }
+    SettingsExport:
+      type: object
+      required: [version, exportedAt, hostname, domain, enabledPackages, profiles, dnsMode, settings]
+      properties:
+        version:
+          type: integer
+          description: Schema version, so a future import can migrate it.
+        exportedAt: { type: string, format: date-time }
+        hostname: { type: [string, 'null'] }
+        domain: { type: [string, 'null'] }
+        enabledPackages: { type: array, items: { type: string } }
+        profiles: { type: array, items: { type: string } }
+        dnsMode: { type: [string, 'null'] }
+        settings:
+          type: object
+          additionalProperties: true
+          description: Non-secret preferences — notification channels, backup policy, edge protection, custom routes.
+    ImportResult:
+      type: object
+      required: [applied, skipped, preview]
+      properties:
+        applied: { type: array, items: { type: string } }
+        skipped: { type: array, items: { type: string } }
+        preview: { type: boolean }
     StackState:
       type: string
       enum: [draft, running, stopped, failed]

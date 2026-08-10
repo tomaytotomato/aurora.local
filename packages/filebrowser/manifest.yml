@@ -1,0 +1,58 @@
+name: filebrowser
+title: Files (FileBrowser)
+description: |
+  A file manager in the browser for the shared storage pool: browse,
+  preview, rename, upload and download without reaching for Samba or
+  SSH. Useful for the "just let me look at that file from my phone"
+  case, which is the one thing a network share is bad at.
+
+category: storage
+
+depends_on:
+  - core
+recommends:
+  - storage
+profiles: {}
+
+ports:
+  - {port: 8085, proto: tcp, description: FileBrowser web UI}
+
+requires:
+  min_ram_mb: 64
+  min_disk_gb: 1
+  host_roles: []
+
+# Small and single-purpose, but it can read and write everything under
+# the pool, so a cap keeps a runaway upload or a recursive index from
+# taking the box with it.
+resources:
+  mem_limit_mb: 512
+  cpus: 1.0
+
+# Its own database records users, shares and settings. The files it
+# manages are the pool's own and are covered by the pool's backup, not
+# by this package's.
+backup:
+  paths:
+    - data/filebrowser
+
+required_env: []
+
+probe:
+  kind: docker
+  container: filebrowser
+  external_url: "http://files.{domain}/"
+
+warnings:
+  - id: filebrowser_full_pool_access
+    if: {always: true}
+    message: 'FileBrowser can read and write everything in the storage pool, including other apps'' data directories. It sits behind Authelia, but anyone who can sign in to Aurora can move or delete any file it can see.'
+
+post_install_notes: |
+  1. Open https://files.$DOMAIN/ — it is behind Authelia, so sign in
+     with your Aurora account first.
+  2. FileBrowser's own default login is admin/admin on first run.
+     Change it immediately: Settings -> User Management.
+  3. It serves /mnt/storage (the mergerfs pool). If you have no pool,
+     edit the bind mount in compose.yml to point somewhere useful.
+  4. Its own database lives under ../../data/filebrowser.

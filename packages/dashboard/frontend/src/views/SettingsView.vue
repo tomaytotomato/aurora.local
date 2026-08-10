@@ -9,6 +9,7 @@ import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import NotificationsCard from '@/components/NotificationsCard.vue';
 import ProxyRoutesCard from '@/components/ProxyRoutesCard.vue';
+import SettingsPortabilityCard from '@/components/SettingsPortabilityCard.vue';
 import {
   Alert,
   AlertDescription,
@@ -249,6 +250,11 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           </TableBody>
         </Table>
       </Card>
+
+      <!-- Export / import. Near the bottom because it is a once-a-year
+           card, but it is the difference between a reinstall costing an
+           evening and costing ten minutes. -->
+      <SettingsPortabilityCard />
 
       <!-- iter-31: audit-log viewer. Consumes GET /api/audit/events
            (iter-30). Kept as an inline card rather than its own route
