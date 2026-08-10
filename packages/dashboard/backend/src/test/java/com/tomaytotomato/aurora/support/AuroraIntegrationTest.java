@@ -3,7 +3,10 @@ package com.tomaytotomato.aurora.support;
 import com.tomaytotomato.aurora.TestDockerConfig;
 import com.tomaytotomato.aurora.services.CommandRunner;
 import org.junit.jupiter.api.BeforeEach;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +29,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Comparator;
+import java.util.List;
 import java.util.stream.Stream;
 
 /**
@@ -101,10 +105,41 @@ public abstract class AuroraIntegrationTest {
   @Autowired
   protected FakeCommandRunner commands;
 
+  @Autowired
+  protected JdbcTemplate jdbcTemplate;
+
+  /**
+   * Tables a test can write to, cleared before each one.
+   *
+   * <p>The in-memory database is shared for the whole JVM so the Spring
+   * context stays cacheable, which means without this a row written by one
+   * test is visible to the next. That is exactly the sort of
+   * ordering-dependent failure that passes alone and fails in the suite,
+   * and it did: an override written by one resources test made the next
+   * one report a ceiling nobody had set.
+   *
+   * <p>Subclasses that need seed data create it in their own
+   * {@code @BeforeEach}, which JUnit runs after this one.
+   */
+  private static final List<String> MUTABLE_TABLES =
+      List.of("settings", "audit_event", "security_dismissal", "metric_sample", "admin_user");
+
   @BeforeEach
   void resetTestWorld() throws IOException {
     mvc = MockMvcBuilders.webAppContextSetup(webContext).apply(springSecurity()).build();
     commands.reset();
+
+    for (String table : MUTABLE_TABLES) {
+      try {
+        jdbcTemplate.update("DELETE FROM " + table);
+      } catch (DataAccessException e) {
+        // A table that does not exist yet is not a reason to fail every
+        // test; the ones that need it will say so loudly enough.
+        LoggerFactory.getLogger(AuroraIntegrationTest.class)
+            .debug("could not clear {}: {}", table, e.getMessage());
+      }
+    }
+
     wipe(REPO_ROOT);
     if (Files.isDirectory(FIXTURE)) {
       copyTree(FIXTURE, REPO_ROOT);
