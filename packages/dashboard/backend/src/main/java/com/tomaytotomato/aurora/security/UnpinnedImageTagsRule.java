@@ -97,7 +97,10 @@ public class UnpinnedImageTagsRule implements SecurityRule {
    * Package-private for tests. Fold the reference into one of three
    * categories.
    */
-  static Verdict classify(String image) {
+  // Public because HardeningService needs the same judgement about a
+  // compose file's image reference that this rule makes about a running
+  // container's. One definition of "pinned", not two.
+  public static Verdict classify(String image) {
     if (image == null) return Verdict.PINNED;
     // Digest present ⇒ pinned. Digest may follow a tag ("postgres:16@sha256:…")
     // or replace it ("postgres@sha256:…").
@@ -115,5 +118,5 @@ public class UnpinnedImageTagsRule implements SecurityRule {
     return Verdict.FLOATING_TAG;
   }
 
-  enum Verdict { PINNED, LATEST_TAG, FLOATING_TAG }
+  public enum Verdict { PINNED, LATEST_TAG, FLOATING_TAG }
 }
