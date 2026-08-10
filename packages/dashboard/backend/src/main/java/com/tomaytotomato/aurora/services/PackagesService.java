@@ -4,6 +4,7 @@ import com.github.dockerjava.api.model.Container;
 import com.tomaytotomato.aurora.config.AuroraProperties;
 import com.tomaytotomato.aurora.domain.Package;
 import com.tomaytotomato.aurora.domain.RepoState;
+import com.tomaytotomato.aurora.domain.SsoBlock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -268,7 +269,8 @@ public class PackagesService {
           strList(m.get("required_env")),
           str(m, "post_install_notes"),
           enabled,
-          effectiveRunning
+          effectiveRunning,
+          SsoBlock.fromManifest(m.get("sso"))
       ));
     } catch (IOException e) {
       log.warn("failed to parse {}: {}", manifest, e.getMessage());

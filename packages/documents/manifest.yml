@@ -47,6 +47,17 @@ required_env:
   - PAPERLESS_ADMIN_PASSWORD
   - PAPERLESS_SECRET_KEY
 
+# ---- SSO (Phase D) -------------------------------------------------
+# Paperless-ngx supports PAPERLESS_ENABLE_HTTP_REMOTE_USER=true —
+# Caddy passes Remote-User + Remote-Groups from Authelia, Paperless
+# auto-provisions the account on first visit. Stirling-PDF just gets
+# edge-gated (no user model of its own). min_role: user because a
+# household member should be able to read receipts + shared PDFs.
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: true
+
 post_install_notes: |
   1. Drop PDFs / images into ../../data/documents/paperless/consume/
      — Paperless watches it and OCRs on ingest.

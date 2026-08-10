@@ -40,7 +40,7 @@ Ship real single sign-on across every Aurora-managed service, backed by Authelia
 - [ ] **D13.** Frontend session-boundary polish — a "Sign out" from Aurora now also destroys the Authelia session; a "Sign out" from any downstream service redirects to Authelia logout then back to Aurora.
 - [ ] **D14.** Audit rows — every user CRUD, every role change, every "propagated to Authelia" event surfaces in the audit log with a diff JSON blob.
 - [ ] **D15.** Tests — backend user CRUD + role guard + Authelia propagator + Flyway migration; frontend User management view + role-gated sidebar + create/edit Dialogs; integration test that sends a real HTTP request to Authelia running in `docker compose --profile e2e`.
-- [ ] **D16.** Docs — `packages/identity/README.md` updated with the new "Aurora manages the users" story; `docs/DASHBOARD_BRIEF.md` §7 (auth) rewritten to describe SSO instead of per-service basic-auth.
+- [x] **D16.** Docs — `packages/identity/README.md` rewritten from hand-edited-yaml walkthrough to Aurora-managed-projection contract (Path A wizard flow + Path B existing-box flow, roles + group cascade table, manifest sso: block spec, session boundary, secrets rotation, emergency access, full Phase D audit-trail table, threat model). `docs/DASHBOARD_BRIEF.md` §7 gains /api/users CRUD + /api/onboarding/sso endpoints; §8 split into 8.1 (Aurora's own auth) + 8.2 (SSO across the box) covering roles, propagation, session boundary, trusted-header hardening, role guard, emergency access. §5 domain model gains Role + SsoBlock rows.
 
 ## Ground rules
 
@@ -76,7 +76,7 @@ Baseline (iter-1, to be recorded):
   - `packages/dashboard/backend/pom.xml` + backend sources
   - `packages/dashboard/Dockerfile`
   - `packages/identity/authelia/` (Authelia config directory)
-- Result: (fill in on completion)
+- Result: **COMPLETE** — 2026-08-03 iter-18. `bash scripts/verify-v03-overnight.sh` in `/home/bruce/aurora-d-wt` (fresh shell, no env vars) → 5/5 green. Backend 479 tests / 0 failures / 0 errors / 0 skipped. Vitest 21 files / 183 tests passed. vue-tsc --noEmit exit 0. Dockerfile static check no warnings. 131 commits on `feat/d-authelia` since baseline `f9c4406`; HEAD `3e3af91` (D16 docs). All D0-D16 checklist items shipped, `logs/ralph-authelia-migration.md` complete.
 
 ## Threat-model notes
 

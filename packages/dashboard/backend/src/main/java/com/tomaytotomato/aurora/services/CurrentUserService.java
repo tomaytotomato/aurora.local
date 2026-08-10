@@ -38,6 +38,19 @@ public class CurrentUserService {
   }
 
   /**
+   * Resolved {@link com.tomaytotomato.aurora.domain.Role} for the
+   * current session. Empty when the request is unauthenticated. Used
+   * by Phase D endpoints to gate mutations behind
+   * {@code role == ADMIN}. Reads from the DB every call so a role
+   * change (e.g. admin demotes themselves via /api/users) takes effect
+   * on the next request without needing a session rotate.
+   */
+  public Optional<com.tomaytotomato.aurora.domain.Role> currentRole() {
+    return currentUsername().flatMap(name ->
+        admins.findByUsername(name).map(com.tomaytotomato.aurora.domain.AdminUser::role));
+  }
+
+  /**
    * Principal username from the SecurityContext. Empty when the request
    * is unauthenticated or the principal is Spring's anonymous marker.
    */

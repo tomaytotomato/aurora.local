@@ -54,6 +54,17 @@ warnings:
     if: { free_disk_gb_below: 10 }
     message: 'Prometheus retains metrics on disk (default 15d). Less than 10 GB free means retention will be short.'
 
+# ---- SSO (Phase D) -------------------------------------------------
+# Grafana + Prometheus + Uptime Kuma all live behind grafana.{DOMAIN}
+# etc. Grafana natively supports auth.proxy (reads Remote-User /
+# Remote-Groups from Caddy); Prometheus + Uptime Kuma just get gated
+# at the edge with min_role: user (everyone authenticated can peek
+# at the dashboards; nobody unauthenticated can).
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: true
+
 post_install_notes: |
   Grafana:    https://grafana.$DOMAIN/    (admin / GRAFANA_ADMIN_PASSWORD)
   Prometheus: https://prometheus.$DOMAIN/ (basic-auth gated in caddy.snippet)

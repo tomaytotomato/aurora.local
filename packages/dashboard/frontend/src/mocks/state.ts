@@ -22,7 +22,7 @@ import type { PackageResources } from '@/api/packages';
 import type { ProxyRoute } from '@/api/proxy';
 import type { PackageUpdate } from '@/api/updates';
 import type { OpenVpnClient, OpenVpnConfig, VpnConfig, VpnPeer } from '@/api/vpn';
-import type { User } from '@/api/users';
+import type { UserSummary } from '@/api/users';
 import { jobScript, type JobScript } from './fixtures/jobs';
 import {
   initialOpenVpnClients,
@@ -70,8 +70,8 @@ export interface MockState {
     openVpnClients: OpenVpnClient[];
   };
   /** Admin users. The row whose id === currentUserId is "you". */
-  users: User[];
-  currentUserId: string;
+  users: UserSummary[];
+  currentUserId: number;
   /** Long-running operations, keyed by job id. Grows as actions are taken. */
   jobs: Record<string, MockJob>;
   /** Per-package update availability, keyed by package name. */
@@ -124,6 +124,7 @@ export const state: MockState = {
     username: 'admin',
     passkeyEnrolled: false,
     tz: 'Europe/London',
+    role: 'admin',
   },
   onboarding: {
     complete: true,

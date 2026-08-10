@@ -17,7 +17,11 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:db/migration/V1__init.sql,classpath:db/migration/V2__security_dismissal.sql,classpath:db/migration/V3__user_roles.sql
+      # Explicit list — spring.sql.init doesn't support globs on its
+      # schema-locations property in Spring Boot 4. Add new V*.sql
+      # migrations here as they land. Order matters: V1 must precede
+      # any table alter that assumes its shape.
+      schema-locations: classpath:db/migration/V1__init.sql,classpath:db/migration/V2__security_dismissal.sql,classpath:db/migration/V3__admin_user_role.sql
       continue-on-error: true    # tolerate 'already exists' on restart until migrations arrive
   mvc:
     problemdetails:

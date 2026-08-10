@@ -48,12 +48,17 @@ public class AuthService {
   }
 
   public Optional<AdminUser> authenticate(String username, String password) {
-    Optional<AdminUser> authenticated = users.findByUsername(username)
+    return users.findByUsername(username)
         .filter(u -> verify(u.passwordHash(), password.toCharArray()));
-    // Stamp the sign-in so the Users page can say when someone was last
-    // here. Without this the column would read "never" for everybody
-    // forever, which is a lie rather than an honest absence.
-    authenticated.ifPresent(u -> users.touchLastLogin(u.id()));
-    return authenticated;
+  }
+
+  /** Look up the DB role for a username; empty when the user is gone. */
+  public Optional<com.tomaytotomato.aurora.domain.Role> roleFor(String username) {
+    return users.findByUsername(username).map(AdminUser::role);
+  }
+
+  /** Look up the DB tz for a username; empty when the user is gone. */
+  public Optional<String> tzFor(String username) {
+    return users.findByUsername(username).map(AdminUser::tz);
   }
 }

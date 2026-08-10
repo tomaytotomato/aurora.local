@@ -1,61 +1,59 @@
-// Admin user management (2026-08-06). Aurora is single-admin at first
-// boot (the onboarding bootstrap), but a homestack is often shared with
-// a partner or housemate, so this manages the small set of people who
-// can sign in and how much each can do.
+// Aurora user management (Phase D iter-10 / D9).
 //
-// Roles are deliberately few and opinionated — three levels, not a
-// permission matrix:
-//   admin    — full control, including managing other users
-//   operator — start/stop apps, edit config, but not manage users
-//   viewer   — read-only dashboards
+// Backs the /users admin-only view. Backend contract:
+//   GET    /api/users            → UserSummary[]
+//   GET    /api/users/{id}       → UserSummary
+//   POST   /api/users            → UserSummary (201)
+//   PUT    /api/users/{id}       → UserSummary  (role and/or password)
+//   DELETE /api/users/{id}       → 204
+//
+// Every endpoint requires role=admin — 401 for anonymous, 403 for
+// authenticated-but-not-admin. The view gates the sidebar link on
+// the session role, so a non-admin never sees these calls fire.
 
 import { http } from './client';
 
-export type UserRole = 'admin' | 'operator' | 'viewer';
+export type Role = 'admin' | 'user' | 'guest';
 
-export interface User {
-  id: string;
+export interface UserSummary {
+  id: number;
   username: string;
-  role: UserRole;
-  /** ISO-8601 UTC. */
+  role: Role;
+  tz: string;
   createdAt: string;
-  /** ISO-8601 UTC; null if they've never signed in. */
-  lastLoginAt: string | null;
-  passkeyEnrolled: boolean;
 }
 
-export interface NewUser {
+export interface CreateUserRequest {
   username: string;
-  role: UserRole;
   password: string;
+  role: Role;
+  tz?: string | null;
 }
 
-export const ROLE_LABELS: Record<UserRole, string> = {
-  admin: 'Admin',
-  operator: 'Operator',
-  viewer: 'Viewer',
-};
-
-export const ROLE_BLURB: Record<UserRole, string> = {
-  admin: 'Full control, including managing users.',
-  operator: 'Start and stop apps, edit config. Cannot manage users.',
-  viewer: 'Read-only. Can look, cannot touch.',
-};
+export interface UpdateUserRequest {
+  role?: Role;
+  password?: string;
+}
 
 export const UsersApi = {
-  async list(): Promise<User[]> {
-    const { data } = await http.get<User[]>('/users');
+  async list(): Promise<UserSummary[]> {
+    const { data } = await http.get<UserSummary[]>('/users');
     return data;
   },
-  async create(body: NewUser): Promise<User> {
-    const { data } = await http.post<User>('/users', body);
+
+  async create(req: CreateUserRequest): Promise<UserSummary> {
+    // toast: false — the form renders its own inline error copy via
+    // humanCopyForError; the global 5xx toast would double-announce.
+    const { data } = await http.post<UserSummary>('/users', req, { toast: false });
     return data;
   },
-  async setRole(id: string, role: UserRole): Promise<User> {
-    const { data } = await http.patch<User>(`/users/${encodeURIComponent(id)}`, { role });
+
+  async update(id: number, req: UpdateUserRequest): Promise<UserSummary> {
+    const { data } = await http.put<UserSummary>(`/users/${id}`, req, { toast: false });
     return data;
   },
-  async remove(id: string): Promise<void> {
-    await http.delete(`/users/${encodeURIComponent(id)}`);
+
+  async remove(id: number): Promise<void> {
+    await http.delete(`/users/${id}`, { toast: false });
   },
 };

@@ -2,6 +2,24 @@
 
 Home Assistant + Mosquitto (MQTT) + Zigbee2MQTT.
 
+## Auth
+
+Home Assistant keeps its own username/password flow and 2FA setup
+because HA's trusted-header integration is fiddly (needs
+`trusted_networks` provider tweaks + IP whitelisting that fights
+Caddy's aurora_net container IP). Aurora's manifest declares
+`sso.trusted_headers: false` for this package.
+
+With SSO on, Authelia gates `https://ha.$DOMAIN/` at the edge — no
+unauthenticated LAN device can reach HA's login page, but once
+you're through Authelia you still type your HA credentials.
+Second factor lives inside HA.
+
+Zigbee2MQTT has no auth at all, so Authelia is its only wall.
+
+With SSO off, everything is as before Phase D: HA login on
+`ha.$DOMAIN`, no gate.
+
 ## Host networking caveat
 
 Home Assistant runs with `network_mode: host`. This is HA's own

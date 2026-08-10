@@ -1358,7 +1358,7 @@ paths:
   /users:
     get:
       tags: [users]
-      summary: List admin users
+      summary: List users
       responses:
         '200':
           description: Users.
@@ -1389,9 +1389,9 @@ paths:
               schema: { $ref: '#/components/schemas/User' }
         '409': { description: Username already taken. }
   /users/{id}:
-    patch:
+    put:
       tags: [users]
-      summary: Update a user's role
+      summary: Update a user's role or password
       parameters: [{ $ref: '#/components/parameters/UserId' }]
       requestBody:
         content:
@@ -2736,14 +2736,18 @@ components:
 
     UserRole:
       type: string
-      enum: [admin, operator, viewer]
+      description: >
+        Phase D's vocabulary. `user` is a regular authenticated identity
+        and `guest` is read-mostly; the DDL default is `user` so a caller
+        that forgets to specify a role cannot accidentally create an
+        admin. Enforced by SQLite triggers, not just application code.
+      enum: [admin, user, guest]
     User:
       type: object
-      required: [id, username, role, createdAt, lastLoginAt, passkeyEnrolled]
+      required: [id, username, role, tz, createdAt]
       properties:
-        id: { type: string }
+        id: { type: integer }
         username: { type: string }
         role: { $ref: '#/components/schemas/UserRole' }
+        tz: { type: string }
         createdAt: { type: string, format: date-time }
-        lastLoginAt: { type: [string, 'null'], format: date-time }
-        passkeyEnrolled: { type: boolean }

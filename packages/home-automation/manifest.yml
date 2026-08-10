@@ -43,6 +43,18 @@ warnings:
     if: { ram_below_mb: 1024 }
     message: 'Home Assistant + Mosquitto (and Zigbee2MQTT under the zigbee profile) want at least 1 GB RAM headroom. Below that, automations get sluggish.'
 
+# ---- SSO (Phase D) -------------------------------------------------
+# Home Assistant has a first-class auth system + trusted_networks
+# option; the trusted-header path is fiddly and easy to misconfigure.
+# For v1 we edge-gate ha.{DOMAIN} with Authelia and let HA's own auth
+# handle the inner session. Zigbee2MQTT (z2m.{DOMAIN}) has no auth
+# at all, so Authelia is the only wall in front of it — min_role:
+# user is the right floor for a household member.
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: false
+
 post_install_notes: |
   1. Home Assistant onboarding wizard: http://<lan-ip>:8123
   2. MQTT broker has no default credentials; create them with:

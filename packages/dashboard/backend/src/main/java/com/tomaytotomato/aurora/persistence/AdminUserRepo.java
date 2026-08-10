@@ -1,6 +1,7 @@
 package com.tomaytotomato.aurora.persistence;
 
 import com.tomaytotomato.aurora.domain.AdminUser;
+import com.tomaytotomato.aurora.domain.Role;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -21,19 +22,17 @@ public class AdminUserRepo {
     this.jdbc = jdbc;
   }
 
-  /** Every column the mapper reads, so the SELECTs stay in step. */
-  private static final String COLUMNS =
-      "id, username, password_hash, tz, created_at, role, last_login_at, passkey_enrolled";
-
   private static final RowMapper<AdminUser> MAPPER = (rs, i) -> new AdminUser(
       rs.getLong("id"),
       rs.getString("username"),
       rs.getString("password_hash"),
       rs.getString("tz"),
       rs.getString("created_at"),
-      rs.getString("role"),
-      rs.getString("last_login_at"),
-      rs.getInt("passkey_enrolled") != 0
+      // Fall back to USER on the extremely unlikely event that a row
+      // predates the V3 migration and the DB default is not applied;
+      // the DB trigger will reject inserts / updates outside the enum
+      // so this fallback exists solely for read paths.
+      Role.fromWireName(rs.getString("role")).orElse(Role.USER)
   );
 
   public long count() {
@@ -41,10 +40,17 @@ public class AdminUserRepo {
     return n == null ? 0L : n;
   }
 
+  /** Count users at a given role. Backs the "must keep at least one admin" invariant. */
+  public long countByRole(Role role) {
+    Long n = jdbc.queryForObject("SELECT COUNT(*) FROM admin_user WHERE role = ?",
+        Long.class, role.wireName());
+    return n == null ? 0L : n;
+  }
+
   public Optional<AdminUser> findByUsername(String username) {
     try {
       return Optional.ofNullable(jdbc.queryForObject(
-          "SELECT " + COLUMNS + " FROM admin_user WHERE username = ?",
+          "SELECT id, username, password_hash, tz, created_at, role FROM admin_user WHERE username = ?",
           MAPPER, username));
     } catch (EmptyResultDataAccessException e) {
       return Optional.empty();
@@ -55,23 +61,26 @@ public class AdminUserRepo {
   public Optional<AdminUser> findFirst() {
     try {
       return Optional.ofNullable(jdbc.queryForObject(
-          "SELECT " + COLUMNS + " FROM admin_user ORDER BY id LIMIT 1",
+          "SELECT id, username, password_hash, tz, created_at, role FROM admin_user ORDER BY id LIMIT 1",
           MAPPER));
     } catch (EmptyResultDataAccessException e) {
       return Optional.empty();
     }
   }
 
-  /**
-   * Create the box's first admin. Kept for the onboarding bootstrap, which
-   * has no notion of roles — the person setting the box up is the admin by
-   * definition.
-   */
-  public long create(String username, String passwordHash, String tz) {
-    return create(username, passwordHash, tz, AdminUser.ROLE_ADMIN);
+  /** Full user list ordered by id (oldest first, matches audit expectations). */
+  public List<AdminUser> findAll() {
+    return jdbc.query(
+        "SELECT id, username, password_hash, tz, created_at, role FROM admin_user ORDER BY id",
+        MAPPER
+    );
   }
 
-  public long create(String username, String passwordHash, String tz, String role) {
+  /**
+   * Create a user with an explicit role. The role goes through the enum
+   * so callers can't smuggle an unknown value past the DB trigger.
+   */
+  public long create(String username, String passwordHash, String tz, Role role) {
     KeyHolder kh = new GeneratedKeyHolder();
     jdbc.update(conn -> {
       PreparedStatement ps = conn.prepareStatement(
@@ -80,55 +89,38 @@ public class AdminUserRepo {
       ps.setString(1, username);
       ps.setString(2, passwordHash);
       ps.setString(3, tz);
-      ps.setString(4, role);
+      ps.setString(4, role.wireName());
       return ps;
     }, kh);
     Number k = kh.getKey();
     return k == null ? -1L : k.longValue();
   }
 
-  /** Everyone, oldest first, so the box's original owner is at the top. */
-  public List<AdminUser> listAll() {
-    return jdbc.query("SELECT " + COLUMNS + " FROM admin_user ORDER BY id", MAPPER);
-  }
-
-  public Optional<AdminUser> findById(long id) {
-    try {
-      return Optional.ofNullable(jdbc.queryForObject(
-          "SELECT " + COLUMNS + " FROM admin_user WHERE id = ?", MAPPER, id));
-    } catch (EmptyResultDataAccessException e) {
-      return Optional.empty();
-    }
-  }
-
-  /** @return true when a row changed */
-  public boolean updateRole(long id, String role) {
-    return jdbc.update("UPDATE admin_user SET role = ? WHERE id = ?", role, id) > 0;
-  }
-
-  /** @return true when a row was removed */
-  public boolean delete(long id) {
-    return jdbc.update("DELETE FROM admin_user WHERE id = ?", id) > 0;
-  }
-
   /**
-   * How many admins exist. The guard against locking everybody out of the
-   * dashboard is built on this, so it counts rows rather than trusting a
-   * cached list.
+   * Backward-compat overload — pre-Phase-D callers created THE admin
+   * without knowing about roles. Preserves the old signature so the
+   * onboarding path and the E2E reset flow keep working without a
+   * churn commit; all new call sites should pass {@link Role} explicitly.
    */
-  public long countAdmins() {
-    Long n = jdbc.queryForObject(
-        "SELECT COUNT(*) FROM admin_user WHERE role = ?", Long.class, AdminUser.ROLE_ADMIN);
-    return n == null ? 0L : n;
+  public long create(String username, String passwordHash, String tz) {
+    return create(username, passwordHash, tz, Role.ADMIN);
   }
 
-  /**
-   * Stamp a successful sign-in. Without this the Users page would show
-   * "never" for everyone forever, which is a lie rather than an absence.
-   */
-  public void touchLastLogin(long id) {
-    jdbc.update("UPDATE admin_user SET last_login_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')"
-        + " WHERE id = ?", id);
+  /** Update the role for a given user id. Enforced by DB triggers. */
+  public int updateRole(long id, Role role) {
+    return jdbc.update("UPDATE admin_user SET role = ? WHERE id = ?",
+        role.wireName(), id);
+  }
+
+  /** Replace the argon2/bcrypt hash for a given user. */
+  public int updatePasswordHash(long id, String passwordHash) {
+    return jdbc.update("UPDATE admin_user SET password_hash = ? WHERE id = ?",
+        passwordHash, id);
+  }
+
+  /** Delete a specific user by id. Callers must guard the last-admin invariant. */
+  public int deleteById(long id) {
+    return jdbc.update("DELETE FROM admin_user WHERE id = ?", id);
   }
 
   /**
