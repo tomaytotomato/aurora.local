@@ -83,6 +83,19 @@ subpackages:
       external_url: http://{lan_ip}:5055/
       auth_treats_401_as_up: true
 
+# Seven containers between them. The cap is generous because transcoding
+# is legitimately hungry; it exists to stop a stuck import loop taking
+# the host with it.
+resources:
+  mem_limit_mb: 4096
+  cpus: 3.0
+
+# The library itself is deliberately not backed up: several terabytes of
+# re-downloadable files is not worth the parity space. Configuration is.
+backup:
+  paths:
+    - data/media/config
+
 required_env: []
 
 probe:

@@ -95,6 +95,51 @@
         }
       }
     },
+    "resources": {
+      "type": "object",
+      "description": "Optional per-container ceilings. A home box has no spare capacity and usually no swap, so one runaway container can take the whole machine down and everything on it with it. Absent means uncapped, which is fine for anything small and well-behaved; it is declared on the packages that have actually caused trouble.",
+      "additionalProperties": false,
+      "properties": {
+        "mem_limit_mb": {
+          "type": "integer",
+          "minimum": 64,
+          "description": "Hard memory ceiling for the package's containers. The kernel kills the container when it exceeds this, which is a far better outcome than the OOM killer picking a victim at random across the whole box."
+        },
+        "cpus": {
+          "type": "number",
+          "minimum": 0.1,
+          "description": "CPU cores this package may use, as a fraction of the host's total. 2.0 means two cores' worth."
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "description": "Which paths this package owns and what must run before they can be snapshotted consistently. See docs/BACKUP_PAGE_DESIGN.md.",
+      "additionalProperties": false,
+      "required": ["paths"],
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "before": {
+          "type": "array",
+          "description": "Actions run before the snapshot. A database directory copied while the server is writing to it is not a backup.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "description"],
+            "properties": {
+              "kind": { "type": "string", "enum": ["postgres-dump", "mysql-dump", "sqlite-backup", "command"] },
+              "description": { "type": "string" },
+              "container": { "type": "string" },
+              "command": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
     "required_env": {
       "type": "array",
       "items": { "type": "string" },

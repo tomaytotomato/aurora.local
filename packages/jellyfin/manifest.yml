@@ -32,6 +32,16 @@ requires:
   # database; give it room before declaring a failure.
   start_budget_seconds: 90
 
+# Transcoding is the whole point of the cap: one 4K remux with no
+# hardware acceleration will use every core the machine has.
+resources:
+  mem_limit_mb: 4096
+  cpus: 3.0
+
+backup:
+  paths:
+    - data/jellyfin/config
+
 required_env: []
 
 # Jellyfin serves an unauthenticated /health that returns "Healthy".

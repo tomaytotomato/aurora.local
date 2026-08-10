@@ -324,6 +324,42 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/JobRef' }
 
+  /packages/{name}/resources:
+    get:
+      tags: [packages]
+      summary: Memory and CPU ceilings, and live usage
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '200':
+          description: Resource state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageResources' }
+    put:
+      tags: [packages]
+      summary: Override the ceilings
+      description: >
+        Null on either field clears the override and restores the
+        manifest default. New limits apply the next time the package
+        restarts.
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memLimitMb, cpus]
+              properties:
+                memLimitMb: { type: [integer, 'null'] }
+                cpus: { type: [number, 'null'] }
+      responses:
+        '200':
+          description: The saved state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageResources' }
+
   # ────────────────────────────── updates ─────────────────────────────
   # Read-only. Applying an update goes through
   # POST /packages/{name}/upgrade, which already exists and already
@@ -1579,6 +1615,26 @@ components:
               oneOf:
                 - { $ref: '#/components/schemas/PackageBackupSpec' }
                 - { type: 'null' }
+    PackageResources:
+      type: object
+      description: >
+        Per-container ceilings for one package. A home box has no spare
+        capacity and usually no swap, so one runaway container takes the
+        whole machine down; a cap means the kernel kills the offender
+        rather than the OOM killer choosing at random.
+      required: [package, defaultMemLimitMb, defaultCpus, memLimitMb, cpus, memUsedMb, cpuPct]
+      properties:
+        package: { type: string }
+        defaultMemLimitMb:
+          type: [integer, 'null']
+          description: From the manifest. Null means the package ships uncapped.
+        defaultCpus: { type: [number, 'null'] }
+        memLimitMb:
+          type: [integer, 'null']
+          description: Operator override. Null means the manifest default applies.
+        cpus: { type: [number, 'null'] }
+        memUsedMb: { type: [integer, 'null'] }
+        cpuPct: { type: [number, 'null'] }
     PackageBackupSpec:
       type: object
       description: >

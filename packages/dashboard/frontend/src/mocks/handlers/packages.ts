@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { state } from '../state';
 import { createJob } from '../jobs';
 import { detailFor, envFor, packageSeeds } from '../fixtures/packages';
+import { resourcesFor } from '../fixtures/resources';
 import { liveSummary, noContent } from './shared';
 
 export const packagesHandlers = [
@@ -45,4 +46,17 @@ export const packagesHandlers = [
   http.post('/api/packages/:name/upgrade', ({ params }) =>
     HttpResponse.json({ jobId: createJob('update', String(params.name)).id }, { status: 202 }),
   ),
+
+  http.get('/api/packages/:name/resources', ({ params }) => {
+    const name = String(params.name);
+    return HttpResponse.json(state.resources[name] ?? resourcesFor(name));
+  }),
+
+  http.put('/api/packages/:name/resources', async ({ params, request }) => {
+    const name = String(params.name);
+    const patch = (await request.json()) as { memLimitMb: number | null; cpus: number | null };
+    const current = state.resources[name] ?? resourcesFor(name);
+    state.resources[name] = { ...current, memLimitMb: patch.memLimitMb, cpus: patch.cpus };
+    return HttpResponse.json(state.resources[name]);
+  }),
 ];

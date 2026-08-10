@@ -26,6 +26,23 @@ requires:
   # warm relaunch. Cold-cache first launch relies on pull step.
   start_budget_seconds: 120
 
+# Immich's machine-learning container loads a model per job and its
+# memory use is spiky rather than steady. Capped so a large import
+# cannot starve everything else on the box.
+resources:
+  mem_limit_mb: 6144
+  cpus: 3.0
+
+# Immich keeps its Postgres under this path. A copy taken while the
+# server is writing is not a restorable backup, hence the dump first.
+backup:
+  paths:
+    - data/photos/library
+  before:
+    - kind: postgres-dump
+      container: immich-postgres
+      description: Dumps the Immich database so the snapshot restores cleanly
+
 required_env:
   - DB_PASSWORD
   - JWT_SECRET

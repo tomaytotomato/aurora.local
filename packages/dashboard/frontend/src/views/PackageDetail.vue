@@ -23,6 +23,8 @@ import Badge from '@/components/ui/Badge.vue';
 import Tabs from '@/components/ui/Tabs.vue';
 import DockerBadge from '@/components/DockerBadge.vue';
 import JobLogPanel from '@/components/JobLogPanel.vue';
+import PackageResourcesCard from '@/components/PackageResourcesCard.vue';
+import PackageImpactPanel from '@/components/PackageImpactPanel.vue';
 import { Alert, AlertDescription, Button, Dialog, Input, Label, Skeleton } from '@/components/ui';
 
 const route = useRoute();
@@ -349,7 +351,18 @@ async function startJob(action: JobAction): Promise<void> {
   }
 }
 
+// Adding an app now goes through a disclosure step. The manifest has
+// always known what it would take — ports, other apps it drags in, host
+// roles — and none of it was shown at the moment it mattered.
+const addConfirm = ref(false);
 const enablePackage = () => startJob('enable');
+function askToAdd(): void {
+  addConfirm.value = true;
+}
+function confirmAdd(): void {
+  addConfirm.value = false;
+  void enablePackage();
+}
 const confirmDisable = () => startJob('disable');
 const upgradePackage = () => startJob('upgrade');
 
@@ -501,7 +514,7 @@ onMounted(async () => {
           size="sm"
           :disabled="actionsLocked"
           data-test="package-add"
-          @click="enablePackage"
+          @click="askToAdd"
         >{{ busy === 'enable' ? 'Adding…' : 'Add app' }}</Button>
       </div>
     </Card>
@@ -669,6 +682,10 @@ onMounted(async () => {
               Backup →
             </router-link>
           </Card>
+
+          <!-- Ceilings against live usage. One runaway container on a
+               box with no swap takes everything down with it. -->
+          <PackageResourcesCard v-if="detail.enabled || isCore" :package="detail.name" />
 
           <Card v-if="minRamMb !== undefined || minDiskGb !== undefined">
             <div class="eyebrow mb-1">Requirements</div>
@@ -883,6 +900,18 @@ onMounted(async () => {
         </Card>
       </div>
     </Tabs>
+
+    <!-- Add confirm: what this will actually do to the box, before you
+         agree to it rather than after. -->
+    <Dialog :open="addConfirm" @update:open="addConfirm = $event">
+      <template #title>Add {{ heading }}?</template>
+      <template #description>Here is what that involves.</template>
+      <PackageImpactPanel v-if="detail" :detail="detail" />
+      <template #footer>
+        <Button variant="secondary" @click="addConfirm = false">Cancel</Button>
+        <Button data-test="confirm-add" @click="confirmAdd">Add it</Button>
+      </template>
+    </Dialog>
 
     <!-- Egress change confirm. Not destructive, but it restarts the app,
          moves its ports and changes what it can reach, so the switch

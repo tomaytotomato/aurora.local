@@ -17,6 +17,7 @@ import type { JobStatus } from '@/api/jobs';
 import type { PackageNetwork, VhostProtection } from '@/api/network';
 import type { NotificationChannel, NotificationDelivery } from '@/api/notifications';
 import type { OnboardingDraft } from '@/api/onboarding';
+import type { PackageResources } from '@/api/packages';
 import type { PackageUpdate } from '@/api/updates';
 import type { OpenVpnClient, OpenVpnConfig, VpnConfig, VpnPeer } from '@/api/vpn';
 import type { User } from '@/api/users';
@@ -89,6 +90,8 @@ export interface MockState {
     channels: NotificationChannel[];
     deliveries: NotificationDelivery[];
   };
+  /** Resource overrides per app, populated on first change. */
+  resources: Record<string, PackageResources>;
   /** Egress mode per app (populated on first change), and edge protection per vhost. */
   network: {
     byPackage: Record<string, PackageNetwork>;
@@ -150,6 +153,7 @@ export const state: MockState = {
     channels: initialChannels(),
     deliveries: initialDeliveries(),
   },
+  resources: {},
   network: {
     byPackage: {},
     protection: initialProtection(),

@@ -28,6 +28,20 @@ requires:
   # for stacks of this shape.
   start_budget_seconds: 180
 
+# Paperless runs OCR on every incoming document, which is CPU-bound and
+# will happily saturate the box for minutes at a time.
+resources:
+  mem_limit_mb: 3072
+  cpus: 2.0
+
+backup:
+  paths:
+    - data/documents
+  before:
+    - kind: postgres-dump
+      container: paperless-db
+      description: Dumps the Paperless database so the snapshot restores cleanly
+
 required_env:
   - PAPERLESS_ADMIN_USER
   - PAPERLESS_ADMIN_PASSWORD

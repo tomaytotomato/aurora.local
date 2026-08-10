@@ -90,6 +90,56 @@ export interface PackageDetail extends PackageSummary {
 }
 
 /**
+ * Per-container ceilings for one package: what the manifest declares,
+ * what the operator has overridden it to, and what it is actually using
+ * right now.
+ *
+ * The reason these exist at all: a home box has no spare capacity and
+ * usually no swap, so one runaway container takes the whole machine down
+ * and everything on it with it. A cap turns "the server fell over" into
+ * "that container hit its limit", which is a far more useful thing to be
+ * told at 11pm.
+ */
+export interface PackageResources {
+  package: string;
+  /** From the manifest. Null means the package ships uncapped. */
+  defaultMemLimitMb: number | null;
+  defaultCpus: number | null;
+  /** Operator override. Null means the manifest default applies. */
+  memLimitMb: number | null;
+  cpus: number | null;
+  /** Live usage across the package's containers. Null when not running. */
+  memUsedMb: number | null;
+  cpuPct: number | null;
+}
+
+/** The ceiling actually in force: override if set, otherwise the manifest. */
+export function effectiveMemLimitMb(r: PackageResources): number | null {
+  return r.memLimitMb ?? r.defaultMemLimitMb;
+}
+
+export function effectiveCpus(r: PackageResources): number | null {
+  return r.cpus ?? r.defaultCpus;
+}
+
+/** True when the operator has moved either value off the manifest default. */
+export function hasResourceOverride(r: PackageResources): boolean {
+  return r.memLimitMb !== null || r.cpus !== null;
+}
+
+/**
+ * How close this package is to its memory ceiling, 0-100, or null when
+ * either figure is missing. Used to colour the bar, and deliberately not
+ * clamped at some arbitrary "danger" threshold — being at 95% of a
+ * generous limit is fine, and the operator can see the numbers.
+ */
+export function memHeadroomPct(r: PackageResources): number | null {
+  const limit = effectiveMemLimitMb(r);
+  if (limit === null || r.memUsedMb === null || limit <= 0) return null;
+  return Math.max(0, Math.min(100, Math.round((r.memUsedMb / limit) * 100)));
+}
+
+/**
  * What every lifecycle verb that produces a log returns. Named here
  * because it matches the `JobRef` schema in openapi.yaml; stream it with
  * `JobsApi.openStream(jobId)`.
@@ -202,6 +252,18 @@ export const PackagesApi = {
   },
   async upgrade(name: string): Promise<JobRef> {
     const { data } = await http.post<JobRef>(`/packages/${name}/upgrade`);
+    return data;
+  },
+  async resources(name: string): Promise<PackageResources> {
+    const { data } = await http.get<PackageResources>(`/packages/${name}/resources`);
+    return data;
+  },
+  /** Null on either field clears the override and restores the manifest default. */
+  async setResources(
+    name: string,
+    patch: { memLimitMb: number | null; cpus: number | null },
+  ): Promise<PackageResources> {
+    const { data } = await http.put<PackageResources>(`/packages/${name}/resources`, patch);
     return data;
   },
 };
