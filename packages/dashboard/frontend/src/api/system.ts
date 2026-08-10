@@ -16,6 +16,9 @@ export interface SystemCapabilities {
    * reachable.
    */
   backup?: boolean;
+  /** Gates /disks. False until the backend can read smartctl and the
+   * mergerfs/snapraid state. */
+  disks?: boolean;
 }
 
 export interface SystemInfo {

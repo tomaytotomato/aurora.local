@@ -13,6 +13,8 @@ const ALL_KINDS: JobKind[] = [
   'restart',
   'backup',
   'restore',
+  'parity-sync',
+  'parity-scrub',
   'deploy',
 ];
 

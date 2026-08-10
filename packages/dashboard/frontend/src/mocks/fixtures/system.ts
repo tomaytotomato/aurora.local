@@ -24,6 +24,7 @@ export const systemInfo: SystemInfo = {
     metrics: true,
     securityScanner: true,
     backup: true,
+    disks: true,
   },
 };
 

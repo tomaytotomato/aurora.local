@@ -19,6 +19,8 @@ export function jobHeadline(kind: JobKind, state: JobState): string {
     restart: ['Restarting…', 'Restarted', "Couldn't restart"],
     backup: ['Backing up…', 'Backup complete', 'Backup failed'],
     restore: ['Restoring…', 'Restore complete', 'Restore failed'],
+    'parity-sync': ['Syncing parity…', 'Parity up to date', 'Parity sync failed'],
+    'parity-scrub': ['Checking parity…', 'Parity verified', 'Parity check failed'],
     deploy: ['Deploying…', 'Deployed', 'Deploy failed'],
   };
   const [running, success, failed] = phrasing[kind] ?? ['Working…', 'Done', "Didn't finish"];

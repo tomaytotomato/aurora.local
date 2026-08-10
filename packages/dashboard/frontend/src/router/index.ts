@@ -62,6 +62,9 @@ const routes: RouteRecordRaw[] = [
       // capabilities.backup; the route itself stays reachable by URL so a
       // bookmark doesn't 404 into the catch-all redirect.
       { path: 'backup', component: () => import('@/views/BackupView.vue') },
+      // Disks (2026-08-08): SMART health, mergerfs pool capacity and
+      // SnapRAID parity freshness. See docs/DISKS_PAGE_DESIGN.md.
+      { path: 'disks', component: () => import('@/views/DisksView.vue') },
       // B3 (v0.3): container log tail. Snapshot only.
       { path: 'containers/:id/logs', component: () => import('@/views/ContainerLogsView.vue') },
       { path: 'security', component: () => import('@/views/SecurityPosture.vue') },

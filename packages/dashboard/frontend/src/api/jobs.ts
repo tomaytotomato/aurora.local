@@ -25,6 +25,8 @@ export type JobKind =
   | 'restart'
   | 'backup'
   | 'restore'
+  | 'parity-sync'
+  | 'parity-scrub'
   | 'deploy';
 
 export type JobState = 'queued' | 'running' | 'success' | 'failed';

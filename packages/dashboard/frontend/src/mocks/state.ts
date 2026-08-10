@@ -12,6 +12,7 @@
 
 import type { Session } from '@/api/auth';
 import type { BackupPolicy, BackupSource, BackupStatus, Snapshot } from '@/api/backup';
+import type { Disk, Parity, Pool } from '@/api/disks';
 import type { JobStatus } from '@/api/jobs';
 import type { OnboardingDraft } from '@/api/onboarding';
 import type { PackageUpdate } from '@/api/updates';
@@ -31,6 +32,7 @@ import {
   initialSources,
   initialStatus,
 } from './fixtures/backup';
+import { initialDisks, initialParity, initialPool } from './fixtures/disks';
 import { CURRENT_USER_ID, initialUsers } from './fixtures/users';
 
 /**
@@ -71,6 +73,12 @@ export interface MockState {
     sources: BackupSource[];
     snapshots: Snapshot[];
     policy: BackupPolicy;
+  };
+  /** Physical drives, the mergerfs pool, and SnapRAID parity. */
+  disks: {
+    disks: Disk[];
+    pool: Pool;
+    parity: Parity;
   };
 }
 
@@ -118,6 +126,11 @@ export const state: MockState = {
     sources: initialSources(),
     snapshots: initialSnapshots(),
     policy: initialPolicy(),
+  },
+  disks: {
+    disks: initialDisks(),
+    pool: initialPool(),
+    parity: initialParity(),
   },
 };
 

@@ -35,6 +35,7 @@ tags:
   - name: updates
   - name: jobs
   - name: backup
+  - name: disks
 
 security:
   - sessionCookie: []
@@ -530,6 +531,79 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/BackupPolicy' }
+
+  # ─────────────────────────────── disks ──────────────────────────────
+  # Read-only, plus the two SnapRAID operations that are safe to run at
+  # any time. Formatting, partitioning and pool membership stay in
+  # group_vars and Ansible on purpose: a UI that can repartition a disk
+  # is a UI that can destroy a library at 11pm.
+  # See docs/DISKS_PAGE_DESIGN.md.
+  /disks:
+    get:
+      tags: [disks]
+      summary: Every physical disk, with its SMART summary
+      responses:
+        '200':
+          description: Disks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Disk' }
+  /disks/pool:
+    get:
+      tags: [disks]
+      summary: The mergerfs pool and its branches
+      responses:
+        '200':
+          description: Pool.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pool' }
+  /disks/parity:
+    get:
+      tags: [disks]
+      summary: SnapRAID parity freshness
+      responses:
+        '200':
+          description: Parity state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Parity' }
+  /disks/parity/sync:
+    post:
+      tags: [disks]
+      summary: Bring parity up to date
+      responses:
+        '202':
+          description: Sync job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+  /disks/parity/scrub:
+    post:
+      tags: [disks]
+      summary: Verify existing parity against the data
+      responses:
+        '202':
+          description: Scrub job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+  /disks/{id}/smart:
+    get:
+      tags: [disks]
+      summary: Full SMART attribute table for one disk
+      parameters:
+        - $ref: '#/components/parameters/DiskId'
+      responses:
+        '200':
+          description: >
+            Attributes, or `supported` false for a drive that has none.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiskSmart' }
+        '404': { description: Unknown disk. }
 
   # ───────────────────────────── services ─────────────────────────────
   /services/status:
@@ -1133,6 +1207,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    DiskId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
 
   schemas:
     Session:
@@ -1331,7 +1410,7 @@ components:
 
     JobKind:
       type: string
-      enum: [enable, disable, update, update-check, start, restart, backup, restore, deploy]
+      enum: [enable, disable, update, update-check, start, restart, backup, restore, parity-sync, parity-scrub, deploy]
     JobState:
       type: string
       enum: [queued, running, success, failed]
@@ -1508,6 +1587,119 @@ components:
           type: integer
           description: Days without a successful snapshot before Aurora calls it stale.
 
+    SmartHealth:
+      type: string
+      description: >
+        What smartctl reports overall. Optimistic by design — a drive can
+        report `passed` while steadily reallocating sectors — so the UI
+        also reads the reallocated and pending counts before calling a
+        disk healthy. `unknown` means the drive exposes no SMART data
+        (USB enclosure, VM), which is not the same as passing.
+      enum: [passed, warning, failing, unknown]
+    DiskRole:
+      type: string
+      enum: [data, parity, system, unassigned]
+    Disk:
+      type: object
+      required: [id, device, model, serial, sizeBytes, role, mountpoint, filesystem, usedBytes, health, temperatureC, powerOnHours, reallocatedSectors, pendingSectors, lastSelfTestAt, lastSelfTestResult]
+      properties:
+        id:
+          type: string
+          description: Stable id, by-id where available so it survives a re-cable.
+        device: { type: string }
+        model: { type: [string, 'null'] }
+        serial: { type: [string, 'null'] }
+        sizeBytes: { type: integer }
+        role: { $ref: '#/components/schemas/DiskRole' }
+        mountpoint: { type: [string, 'null'] }
+        filesystem: { type: [string, 'null'] }
+        usedBytes: { type: [integer, 'null'] }
+        health: { $ref: '#/components/schemas/SmartHealth' }
+        temperatureC: { type: [integer, 'null'] }
+        powerOnHours: { type: [integer, 'null'] }
+        reallocatedSectors: { type: [integer, 'null'] }
+        pendingSectors: { type: [integer, 'null'] }
+        lastSelfTestAt: { type: [string, 'null'], format: date-time }
+        lastSelfTestResult: { type: [string, 'null'] }
+    SmartAttribute:
+      type: object
+      required: [id, name, value, worst, threshold, raw, failedWhen]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        value: { type: integer }
+        worst: { type: integer }
+        threshold: { type: integer }
+        raw: { type: string }
+        failedWhen: { type: [string, 'null'] }
+    DiskSmart:
+      type: object
+      required: [diskId, supported, overall, attributes, collectedAt]
+      properties:
+        diskId: { type: string }
+        supported: { type: boolean }
+        overall: { $ref: '#/components/schemas/SmartHealth' }
+        attributes:
+          type: array
+          items: { $ref: '#/components/schemas/SmartAttribute' }
+        collectedAt: { type: string, format: date-time }
+    PoolBranch:
+      type: object
+      required: [diskId, path, totalBytes, usedBytes]
+      properties:
+        diskId: { type: string }
+        path: { type: string }
+        totalBytes: { type: integer }
+        usedBytes: { type: integer }
+    Pool:
+      type: object
+      required: [configured, mountpoint, totalBytes, usedBytes, branches, createPolicy, minFreeBytes]
+      properties:
+        configured:
+          type: boolean
+          description: False on a single-disk box, which is a valid setup rather than an error.
+        mountpoint: { type: [string, 'null'] }
+        totalBytes: { type: [integer, 'null'] }
+        usedBytes: { type: [integer, 'null'] }
+        branches:
+          type: array
+          items: { $ref: '#/components/schemas/PoolBranch' }
+        createPolicy:
+          type: [string, 'null']
+          description: mergerfs create policy, e.g. 'mfs' (most free space).
+        minFreeBytes:
+          type: [integer, 'null']
+          description: >
+            mergerfs minfreespace. A branch below this has quietly stopped
+            receiving new files, which a pool-wide percentage hides.
+    ParityRunState:
+      type: string
+      description: >
+        `aborted` is distinct from `failed`: the snapraid-runner refuses
+        to sync when deletions exceed snapraid_delete_threshold, which is
+        a deliberate guard rather than a fault. Parity is still not
+        current, and it still needs a person.
+      enum: [ok, failed, aborted, never]
+    Parity:
+      type: object
+      required: [configured, parityDiskIds, lastSyncAt, lastSyncState, lastScrubAt, pendingChanges, deletedSinceSync, deletionThreshold, stalenessWarnDays]
+      properties:
+        configured: { type: boolean }
+        parityDiskIds:
+          type: array
+          items: { type: string }
+        lastSyncAt: { type: [string, 'null'], format: date-time }
+        lastSyncState: { $ref: '#/components/schemas/ParityRunState' }
+        lastScrubAt: { type: [string, 'null'], format: date-time }
+        pendingChanges:
+          type: [integer, 'null']
+          description: Files added or changed since the last sync, and so unprotected.
+        deletedSinceSync: { type: [integer, 'null'] }
+        deletionThreshold:
+          type: [integer, 'null']
+          description: snapraid_delete_threshold from the host role.
+        stalenessWarnDays: { type: integer }
+
     ServiceState:
       type: string
       enum: [running, needs-config, failed, not-started, starting]
@@ -1627,6 +1819,11 @@ components:
           description: >
             Gates /backup. False until the backend can talk to Kopia's
             server API; while false the nav entry hides.
+        disks:
+          type: boolean
+          description: >
+            Gates /disks. False until the backend can read smartctl and
+            the mergerfs/snapraid state.
     SystemInfo:
       type: object
       required: [capabilities]

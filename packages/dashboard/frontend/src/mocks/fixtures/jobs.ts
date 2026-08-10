@@ -164,6 +164,34 @@ export function jobScript(kind: JobKind, target: string | null): JobScript {
         700,
       );
 
+    case 'parity-sync':
+      return ok(
+        [
+          'Loading state from /var/snapraid/snapraid.content',
+          'Comparing against /mnt/disk1, /mnt/disk2',
+          ' 1,842 files added or changed',
+          ' 17 files removed (threshold 200)',
+          'Syncing parity to /mnt/parity1/snapraid.parity',
+          ' 12% completed, 214 GB accessed',
+          ' 58% completed, 1.1 TB accessed',
+          ' 100% completed',
+          'Everything OK',
+        ],
+        800,
+      );
+
+    case 'parity-scrub':
+      return ok(
+        [
+          'Scrubbing 8% of the array, older than 10 days',
+          ' 34% completed',
+          ' 78% completed',
+          ' 100% completed',
+          'No errors detected',
+        ],
+        900,
+      );
+
     case 'deploy':
       return ok(
         [

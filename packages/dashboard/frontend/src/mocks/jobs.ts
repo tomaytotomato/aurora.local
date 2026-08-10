@@ -69,6 +69,22 @@ export function finishJob(job: MockJob): void {
     };
   }
 
+  // A parity sync is the thing the Disks page reports freshness from, so
+  // a successful one has to move it or the page contradicts the log the
+  // operator just watched.
+  if (job.kind === 'parity-sync' && job.state === 'success') {
+    state.disks.parity = {
+      ...state.disks.parity,
+      lastSyncAt: job.finishedAt,
+      lastSyncState: 'ok',
+      pendingChanges: 0,
+      deletedSinceSync: 0,
+    };
+  }
+  if (job.kind === 'parity-scrub' && job.state === 'success') {
+    state.disks.parity = { ...state.disks.parity, lastScrubAt: job.finishedAt };
+  }
+
   // An update that fails leaves the package on its old version and the
   // update still waiting; an update that succeeds clears it. The updates
   // fixture is the thing the cards read, so keep it honest.
