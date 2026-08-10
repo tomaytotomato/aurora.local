@@ -33,8 +33,17 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:db/migration/V1__init.sql,classpath:db/migration/V2__security_dismissal.sql
-      continue-on-error: false
+      schema-locations: classpath:db/migration/V1__init.sql,classpath:db/migration/V2__security_dismissal.sql,classpath:db/migration/V3__user_roles.sql
+      # Matches production, and for the same reason: SQLite has no
+      # ADD COLUMN IF NOT EXISTS, so re-running V3 against a database that
+      # already has the columns fails. The in-memory database is shared
+      # across the whole JVM, so every additional Spring context re-runs
+      # these scripts against it.
+      #
+      # This used to be the flag that hid schema problems. It no longer
+      # can: the integration tests read and write the real columns, so a
+      # migration that silently failed would take a dozen of them down.
+      continue-on-error: true
 aurora:
   repo-path: ${AURORA_TEST_REPO:src/test/resources/fake-repo}
   host-proc-path: /proc

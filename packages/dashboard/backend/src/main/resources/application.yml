@@ -17,7 +17,7 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:db/migration/V1__init.sql,classpath:db/migration/V2__security_dismissal.sql
+      schema-locations: classpath:db/migration/V1__init.sql,classpath:db/migration/V2__security_dismissal.sql,classpath:db/migration/V3__user_roles.sql
       continue-on-error: true    # tolerate 'already exists' on restart until migrations arrive
   mvc:
     problemdetails:

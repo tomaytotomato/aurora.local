@@ -48,7 +48,12 @@ public class AuthService {
   }
 
   public Optional<AdminUser> authenticate(String username, String password) {
-    return users.findByUsername(username)
+    Optional<AdminUser> authenticated = users.findByUsername(username)
         .filter(u -> verify(u.passwordHash(), password.toCharArray()));
+    // Stamp the sign-in so the Users page can say when someone was last
+    // here. Without this the column would read "never" for everybody
+    // forever, which is a lie rather than an honest absence.
+    authenticated.ifPresent(u -> users.touchLastLogin(u.id()));
+    return authenticated;
   }
 }
