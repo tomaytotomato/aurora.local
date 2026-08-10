@@ -45,9 +45,6 @@ public class UpdatesService {
   /** Long enough for a slow registry, short enough not to wedge a check. */
   private static final Duration REGISTRY_TIMEOUT = Duration.ofSeconds(20);
 
-  /** `docker manifest inspect --verbose` prints the digest as a JSON field. */
-  private static final Pattern DIGEST =
-      Pattern.compile("\"digest\"\\s*:\\s*\"(sha256:[0-9a-f]{64})\"");
 
   private final ComposeScanner compose;
   private final CommandRunner commands;
@@ -191,24 +188,45 @@ public class UpdatesService {
   }
 
   /**
-   * The digest the registry currently serves for this reference.
-   * {@code manifest inspect} asks without pulling, which matters: a check
-   * that downloaded gigabytes would be a rather antisocial way to answer
-   * "is there an update".
+   * The digest the registry currently serves for this reference. Asks
+   * without pulling: a check that downloaded gigabytes would be a rather
+   * antisocial way to answer "is there an update".
+   *
+   * <p>Uses {@code buildx imagetools inspect} rather than the more obvious
+   * {@code docker manifest inspect --verbose}, and the reason matters.
+   * Nearly every image in the catalogue is multi-arch, so its tag points
+   * at a manifest <em>list</em>. {@code manifest inspect --verbose} on a
+   * list returns an array of the per-platform manifests, each with its own
+   * {@code digest} — none of which is the list digest. Meanwhile
+   * {@code RepoDigests} on a pulled image holds the list digest. Comparing
+   * the two would never match, and every multi-arch image would report an
+   * update forever.
+   *
+   * <p>{@code imagetools inspect --format '{{.Manifest.Digest}}'} returns
+   * the top-level descriptor digest, which is the one that is comparable.
+   *
+   * <p>Still unverified against a live registry — there was no network on
+   * the machine where this was written. {@code UpdatesRegistryContractTest}
+   * is the tagged test that closes it, and until that has run somewhere
+   * with a registry this method should be treated as informed but
+   * unproven.
    */
   private String remoteDigest(String image) {
     var result = commands.run(null, REGISTRY_TIMEOUT, Map.of(),
-        List.of("docker", "manifest", "inspect", "--verbose", image));
+        List.of("docker", "buildx", "imagetools", "inspect", "--format",
+            "{{.Manifest.Digest}}", image));
     if (!result.ok()) {
-      log.debug("manifest inspect failed for {}: exit {}", image, result.exitCode());
+      log.debug("imagetools inspect failed for {}: exit {}", image, result.exitCode());
       return null;
     }
-    Matcher m = DIGEST.matcher(result.text());
-    return m.find() ? m.group(1) : null;
+    // Anything that is not a bare digest means the command answered in a
+    // shape we did not expect, and "unknown" is the honest response to
+    // that rather than a comparison against a guess.
+    return extractDigest(result.firstLine());
   }
 
   /** Pull a bare digest out of either a digest string or a full reference. */
-  static String extractDigest(String raw) {
+  public static String extractDigest(String raw) {
     if (raw == null || raw.isBlank()) return null;
     Matcher m = Pattern.compile("(sha256:[0-9a-f]{64})").matcher(raw);
     return m.find() ? m.group(1) : null;

@@ -46,13 +46,13 @@ class UpdatesControllerIntegrationTest extends AuroraIntegrationTest {
   /** Both digests match: nothing to do. */
   private void stubUpToDate() {
     commands.stubLines("image inspect", "jellyfin/jellyfin@" + LOCAL);
-    commands.stubLines("manifest inspect", "{ \"digest\": \"" + LOCAL + "\" }");
+    commands.stubLines("imagetools inspect", LOCAL);
   }
 
   /** Registry serves something newer than what is installed. */
   private void stubUpdateAvailable() {
     commands.stubLines("image inspect", "jellyfin/jellyfin@" + LOCAL);
-    commands.stubLines("manifest inspect", "{ \"digest\": \"" + REMOTE + "\" }");
+    commands.stubLines("imagetools inspect", REMOTE);
   }
 
   private void runCheck() throws Exception {
@@ -152,7 +152,7 @@ class UpdatesControllerIntegrationTest extends AuroraIntegrationTest {
       stubUpToDate();
       runCheck();
 
-      assertThat(commands.ran("docker", "manifest", "inspect")).isTrue();
+      assertThat(commands.ran("docker", "buildx", "imagetools", "inspect")).isTrue();
       assertThat(commands.invocations())
           .noneMatch(i -> i.command().contains("docker pull")
               || i.command().contains("docker image pull"));
@@ -163,15 +163,16 @@ class UpdatesControllerIntegrationTest extends AuroraIntegrationTest {
       stubUpToDate();
       runCheck();
 
-      var invocation = commands.firstMatching("manifest inspect");
+      var invocation = commands.firstMatching("imagetools inspect");
       assertThat(invocation.argv()).containsExactly(
-          "docker", "manifest", "inspect", "--verbose", "jellyfin/jellyfin:10.9.6");
+          "docker", "buildx", "imagetools", "inspect", "--format", "{{.Manifest.Digest}}",
+          "jellyfin/jellyfin:10.9.6");
     }
 
     @Test
     void stays_unknown_when_the_registry_cannot_be_reached() throws Exception {
       commands.stubLines("image inspect", "jellyfin/jellyfin@" + LOCAL);
-      commands.stubFailure("manifest inspect", 1, "dial tcp: lookup registry-1.docker.io: no such host");
+      commands.stubFailure("imagetools inspect", 1, "dial tcp: lookup registry-1.docker.io: no such host");
       runCheck();
 
       mvc.perform(get("/api/updates/jellyfin"))
@@ -184,7 +185,7 @@ class UpdatesControllerIntegrationTest extends AuroraIntegrationTest {
     @Test
     void stays_unknown_when_the_image_has_never_been_pulled() throws Exception {
       commands.stubFailure("image inspect", 1, "Error: No such image");
-      commands.stubLines("manifest inspect", "{ \"digest\": \"" + REMOTE + "\" }");
+      commands.stubLines("imagetools inspect", REMOTE);
       runCheck();
 
       mvc.perform(get("/api/updates/jellyfin"))
