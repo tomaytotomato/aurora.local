@@ -10,6 +10,7 @@
 import { authHandlers } from './auth';
 import { backupHandlers } from './backup';
 import { containersHandlers } from './containers';
+import { customHandlers } from './custom';
 import { disksHandlers } from './disks';
 import { jobsHandlers } from './jobs';
 import { networkHandlers } from './network';
@@ -35,6 +36,7 @@ export const handlers = [
   ...jobsHandlers,
   ...backupHandlers,
   ...disksHandlers,
+  ...customHandlers,
   ...notificationsHandlers,
   ...servicesHandlers,
   ...containersHandlers,

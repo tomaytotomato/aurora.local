@@ -77,7 +77,7 @@ function openDetail(pkg: PackageSummary): void {
     </div>
 
     <SectionNav
-      :items="[{ to: '/apps/catalogue', label: 'Apps' }, { to: '/apps/core', label: 'Core' }]"
+      :items="[{ to: '/apps/catalogue', label: 'Apps' }, { to: '/apps/core', label: 'Core' }, { to: '/apps/custom', label: 'Your own' }]"
       class="mb-6"
     />
 

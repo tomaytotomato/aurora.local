@@ -50,6 +50,11 @@ const routes: RouteRecordRaw[] = [
       { path: 'apps', redirect: '/apps/catalogue' },
       { path: 'apps/catalogue', component: () => import('@/views/PackagesCatalogue.vue') },
       { path: 'apps/core', component: () => import('@/views/PackagesCore.vue') },
+      // Your own compose files (2026-08-08). Deliberately a third page
+      // rather than a filter on the catalogue: these are not curated and
+      // must never read as though they were. See
+      // docs/CUSTOM_STACK_DESIGN.md.
+      { path: 'apps/custom', component: () => import('@/views/CustomStacks.vue') },
       { path: 'apps/:name', component: () => import('@/views/PackageDetail.vue') },
       { path: 'packages', redirect: '/apps/catalogue' },
       { path: 'packages/:name', redirect: (to) => `/apps/${to.params.name}` },

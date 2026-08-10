@@ -39,6 +39,7 @@ tags:
   - name: notifications
   - name: network
   - name: proxy
+  - name: custom
 
 security:
   - sessionCookie: []
@@ -903,6 +904,122 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ProxyPreview' }
 
+  # ────────────────────────────── custom ──────────────────────────────
+  # Operator-supplied compose files. The curated catalogue stays the
+  # default and the only recommended path; these are listed separately
+  # everywhere and never enter the dependency graph.
+  # See docs/CUSTOM_STACK_DESIGN.md.
+  /custom/stacks:
+    get:
+      tags: [custom]
+      summary: List custom stacks
+      responses:
+        '200':
+          description: Stacks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CustomStack' }
+    post:
+      tags: [custom]
+      summary: Save a stack without running it
+      description: >
+        Saving and deploying are separate steps. A stack that exists but
+        has never run is a useful state — it is how a draft is kept while
+        the problems are worked out.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, composeYaml]
+              properties:
+                name: { type: string }
+                composeYaml: { type: string }
+      responses:
+        '201':
+          description: The saved stack.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomStack' }
+        '400': { description: The file has blocking problems. }
+  /custom/stacks/validate:
+    post:
+      tags: [custom]
+      summary: Dry run — what the file contains and what Aurora thinks of it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [composeYaml]
+              properties:
+                composeYaml: { type: string }
+      responses:
+        '200':
+          description: Two-tier report.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StackValidation' }
+  /custom/stacks/{id}:
+    put:
+      tags: [custom]
+      summary: Edit a stack
+      parameters:
+        - $ref: '#/components/parameters/StackId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                composeYaml: { type: string }
+      responses:
+        '200':
+          description: The updated stack.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomStack' }
+        '404': { description: Unknown stack. }
+    delete:
+      tags: [custom]
+      summary: Stop and remove a stack
+      parameters:
+        - $ref: '#/components/parameters/StackId'
+      responses:
+        '204': { description: Removed. }
+  /custom/stacks/{id}/deploy:
+    post:
+      tags: [custom]
+      summary: Bring a stack up
+      parameters:
+        - $ref: '#/components/parameters/StackId'
+      responses:
+        '202':
+          description: Deploy job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+        '404': { description: Unknown stack. }
+  /custom/stacks/{id}/stop:
+    post:
+      tags: [custom]
+      summary: Take a stack down
+      parameters:
+        - $ref: '#/components/parameters/StackId'
+      responses:
+        '202':
+          description: Stop job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+        '404': { description: Unknown stack. }
+
   # ───────────────────────────── services ─────────────────────────────
   /services/status:
     get:
@@ -1515,6 +1632,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    StackId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
     RouteId:
       name: id
       in: path
@@ -2074,6 +2196,51 @@ components:
         result: { type: string, enum: [ok, failed] }
         error: { type: [string, 'null'] }
 
+    StackState:
+      type: string
+      enum: [draft, running, stopped, failed]
+    IssueKind:
+      type: string
+      description: >
+        The first five block a deploy; the rest are advisory and state a
+        consequence rather than refusing. The advisory list is the point
+        of the screen — anyone pasting a compose file from a forum post
+        is, statistically, pasting all of them.
+      enum: [parse-error, no-services, port-conflict, name-conflict, privileged-port, unpinned-image, privileged, docker-socket, host-network, no-restart-policy, uncapped]
+    StackIssue:
+      type: object
+      required: [kind, message, service]
+      properties:
+        kind: { $ref: '#/components/schemas/IssueKind' }
+        message: { type: string }
+        service: { type: [string, 'null'] }
+    StackValidation:
+      type: object
+      required: [valid, errors, warnings, services, ports, images, volumes]
+      properties:
+        valid: { type: boolean }
+        errors:
+          type: array
+          items: { $ref: '#/components/schemas/StackIssue' }
+        warnings:
+          type: array
+          items: { $ref: '#/components/schemas/StackIssue' }
+        services: { type: array, items: { type: string } }
+        ports: { type: array, items: { type: integer } }
+        images: { type: array, items: { type: string } }
+        volumes: { type: array, items: { type: string } }
+    CustomStack:
+      type: object
+      required: [id, name, state, composeYaml, createdAt, lastDeployedAt, lastJobId, containers]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        state: { $ref: '#/components/schemas/StackState' }
+        composeYaml: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastDeployedAt: { type: [string, 'null'], format: date-time }
+        lastJobId: { type: [string, 'null'] }
+        containers: { type: array, items: { type: string } }
     ProxyRoute:
       type: object
       required: [id, subdomain, vhost, target, managed, package, createdAt]

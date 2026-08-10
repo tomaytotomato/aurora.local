@@ -17,6 +17,7 @@ import type { JobStatus } from '@/api/jobs';
 import type { PackageNetwork, VhostProtection } from '@/api/network';
 import type { NotificationChannel, NotificationDelivery } from '@/api/notifications';
 import type { OnboardingDraft } from '@/api/onboarding';
+import type { CustomStack } from '@/api/custom';
 import type { PackageResources } from '@/api/packages';
 import type { ProxyRoute } from '@/api/proxy';
 import type { PackageUpdate } from '@/api/updates';
@@ -40,6 +41,7 @@ import { initialDisks, initialParity, initialPool } from './fixtures/disks';
 import { initialChannels, initialDeliveries } from './fixtures/notifications';
 import { initialProtection } from './fixtures/network';
 import { initialRoutes } from './fixtures/proxy';
+import { initialStacks } from './fixtures/custom';
 import { CURRENT_USER_ID, initialUsers } from './fixtures/users';
 
 /**
@@ -91,6 +93,10 @@ export interface MockState {
   notifications: {
     channels: NotificationChannel[];
     deliveries: NotificationDelivery[];
+  };
+  /** Operator-supplied compose stacks, kept well away from the catalogue. */
+  custom: {
+    stacks: CustomStack[];
   };
   /** Caddy vhost routes, both manifest-generated and hand-added. */
   proxy: {
@@ -158,6 +164,9 @@ export const state: MockState = {
   notifications: {
     channels: initialChannels(),
     deliveries: initialDeliveries(),
+  },
+  custom: {
+    stacks: initialStacks(),
   },
   proxy: {
     routes: initialRoutes(),
