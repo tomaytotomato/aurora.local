@@ -8,6 +8,7 @@ import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import NotificationsCard from '@/components/NotificationsCard.vue';
+import ProxyRoutesCard from '@/components/ProxyRoutesCard.vue';
 import {
   Alert,
   AlertDescription,
@@ -165,6 +166,11 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           <div class="flex justify-between"><dt class="text-muted-foreground">Docker</dt><dd class="font-mono">{{ info.dockerVersion }}</dd></div>
         </dl>
       </Card>
+
+      <!-- Reverse-proxy routes. Sits directly above LAN aliases because
+           the two are the same idea at different layers: this one is
+           what Caddy answers to, that one is what the LAN resolves. -->
+      <ProxyRoutesCard />
 
       <!-- LAN discovery (2026-08-03 v0.3.x productionize).
            Publishes one avahi A-record per enabled-package vhost so

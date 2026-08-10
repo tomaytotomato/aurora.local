@@ -38,6 +38,7 @@ tags:
   - name: disks
   - name: notifications
   - name: network
+  - name: proxy
 
 security:
   - sessionCookie: []
@@ -822,6 +823,86 @@ paths:
               schema: { $ref: '#/components/schemas/VhostProtection' }
         '404': { description: Unknown vhost. }
 
+  # ─────────────────────────────── proxy ──────────────────────────────
+  # Exposing a container at a friendly address without hand-editing
+  # caddy.snippet. The file stays the source of truth and stays in git;
+  # Aurora writes a fragment and Caddy's existing --watch reloads. The
+  # preview endpoint exists so the exact fragment can be shown before
+  # anything is written.
+  /proxy/routes:
+    get:
+      tags: [proxy]
+      summary: Every vhost Caddy answers to
+      responses:
+        '200':
+          description: Routes, both manifest-generated and hand-added.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProxyRoute' }
+    post:
+      tags: [proxy]
+      summary: Point a new address at a container
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subdomain, target]
+              properties:
+                subdomain: { type: string }
+                target: { type: string }
+      responses:
+        '201':
+          description: The created route.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProxyRoute' }
+        '409': { description: The name is taken or reserved. }
+  /proxy/routes/{id}:
+    delete:
+      tags: [proxy]
+      summary: Remove a hand-added route
+      parameters:
+        - $ref: '#/components/parameters/RouteId'
+      responses:
+        '204': { description: Removed. }
+        '409': { description: The route comes from a package manifest. }
+  /proxy/targets:
+    get:
+      tags: [proxy]
+      summary: Containers worth pointing an address at
+      responses:
+        '200':
+          description: Targets with the ports they listen on.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProxyTarget' }
+  /proxy/preview:
+    post:
+      tags: [proxy]
+      summary: Dry run — the fragment that would be written, and what it clashes with
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subdomain, target]
+              properties:
+                subdomain: { type: string }
+                target: { type: string }
+      responses:
+        '200':
+          description: Preview.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProxyPreview' }
+
   # ───────────────────────────── services ─────────────────────────────
   /services/status:
     get:
@@ -1434,6 +1515,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    RouteId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
     Vhost:
       name: vhost
       in: path
@@ -1988,6 +2074,57 @@ components:
         result: { type: string, enum: [ok, failed] }
         error: { type: [string, 'null'] }
 
+    ProxyRoute:
+      type: object
+      required: [id, subdomain, vhost, target, managed, package, createdAt]
+      properties:
+        id: { type: string }
+        subdomain:
+          type: string
+          description: Label only — "photos" becomes photos.aurora.local.
+        vhost: { type: string }
+        target:
+          type: string
+          description: Where Caddy forwards to, as container:port.
+        managed:
+          type: boolean
+          description: >
+            Generated from a package manifest, so read-only here.
+            Changing it means changing the package.
+        package: { type: [string, 'null'] }
+        createdAt: { type: [string, 'null'], format: date-time }
+    ProxyTarget:
+      type: object
+      required: [container, ports, package]
+      properties:
+        container: { type: string }
+        ports:
+          type: array
+          items: { type: integer }
+        package: { type: [string, 'null'] }
+    ConflictKind:
+      type: string
+      enum: [vhost-taken, mdns-alias, reserved, target-unreachable]
+    ProxyConflict:
+      type: object
+      required: [kind, message, advisory]
+      properties:
+        kind: { $ref: '#/components/schemas/ConflictKind' }
+        message: { type: string }
+        advisory:
+          type: boolean
+          description: Worth saying, but not a reason to refuse.
+    ProxyPreview:
+      type: object
+      required: [vhost, snippet, conflicts]
+      properties:
+        vhost: { type: string }
+        snippet:
+          type: string
+          description: Exactly what would be appended to caddy.snippet.
+        conflicts:
+          type: array
+          items: { $ref: '#/components/schemas/ProxyConflict' }
     EgressMode:
       type: string
       enum: [direct, vpn]

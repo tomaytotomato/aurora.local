@@ -18,6 +18,7 @@ import type { PackageNetwork, VhostProtection } from '@/api/network';
 import type { NotificationChannel, NotificationDelivery } from '@/api/notifications';
 import type { OnboardingDraft } from '@/api/onboarding';
 import type { PackageResources } from '@/api/packages';
+import type { ProxyRoute } from '@/api/proxy';
 import type { PackageUpdate } from '@/api/updates';
 import type { OpenVpnClient, OpenVpnConfig, VpnConfig, VpnPeer } from '@/api/vpn';
 import type { User } from '@/api/users';
@@ -38,6 +39,7 @@ import {
 import { initialDisks, initialParity, initialPool } from './fixtures/disks';
 import { initialChannels, initialDeliveries } from './fixtures/notifications';
 import { initialProtection } from './fixtures/network';
+import { initialRoutes } from './fixtures/proxy';
 import { CURRENT_USER_ID, initialUsers } from './fixtures/users';
 
 /**
@@ -89,6 +91,10 @@ export interface MockState {
   notifications: {
     channels: NotificationChannel[];
     deliveries: NotificationDelivery[];
+  };
+  /** Caddy vhost routes, both manifest-generated and hand-added. */
+  proxy: {
+    routes: ProxyRoute[];
   };
   /** Resource overrides per app, populated on first change. */
   resources: Record<string, PackageResources>;
@@ -152,6 +158,9 @@ export const state: MockState = {
   notifications: {
     channels: initialChannels(),
     deliveries: initialDeliveries(),
+  },
+  proxy: {
+    routes: initialRoutes(),
   },
   resources: {},
   network: {

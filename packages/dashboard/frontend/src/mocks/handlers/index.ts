@@ -17,6 +17,7 @@ import { notificationsHandlers } from './notifications';
 import { observabilityHandlers } from './observability';
 import { onboardingHandlers } from './onboarding';
 import { packagesHandlers } from './packages';
+import { proxyHandlers } from './proxy';
 import { servicesHandlers } from './services';
 import { systemHandlers } from './system';
 import { updatesHandlers } from './updates';
@@ -29,6 +30,7 @@ export const handlers = [
   ...onboardingHandlers,
   ...packagesHandlers,
   ...networkHandlers,
+  ...proxyHandlers,
   ...updatesHandlers,
   ...jobsHandlers,
   ...backupHandlers,
