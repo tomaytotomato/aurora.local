@@ -6,6 +6,14 @@ import { useUpdatesStore } from '@/stores/updates';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { PackagesApi, dockerStructureFor, isCorePackage, isRemovable, packageLinks } from '@/api/packages';
 import { versionLabel } from '@/api/updates';
+import {
+  NetworkApi,
+  egressLabel,
+  egressTone,
+  tunnelConsequences,
+  untunnelConsequences,
+  type PackageNetwork,
+} from '@/api/network';
 import { buildEnvForm, isEnvFormDirty, validateEnvForm } from '@/lib/envForm';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import { packageLabel, prettyPackageName } from '@/lib/packageName';
@@ -22,7 +30,7 @@ const packages = usePackagesStore();
 const updates = useUpdatesStore();
 
 const err = ref<string | null>(null);
-const activeTab = ref<'overview' | 'config' | 'logs' | 'related'>('overview');
+const activeTab = ref<'overview' | 'config' | 'network' | 'logs' | 'related'>('overview');
 
 const name = computed(() => route.params.name as string);
 const detail = computed(() => packages.byName[name.value]);
@@ -209,12 +217,64 @@ async function saveEnv(): Promise<void> {
   }
 }
 
+// ── Network tab: egress mode ──────────────────────────────────────────
+// Whether this app's traffic leaves through the VPN gateway or the
+// normal WAN route. The mechanism is netns sharing, which is why the
+// switch is safe to offer at all — see docs/SPLIT_TUNNEL.md — but it is
+// still a restart with real consequences, so it goes through a confirm
+// that lists them rather than being a toggle you can knock with an
+// elbow.
+const network = ref<PackageNetwork | null>(null);
+const networkLoading = ref(false);
+const networkErr = ref<string | null>(null);
+const tunnelConfirm = ref(false);
+
+const tunnelled = computed(() => network.value?.mode === 'vpn');
+const consequences = computed(() => {
+  if (!network.value) return [];
+  return tunnelled.value ? untunnelConsequences(network.value) : tunnelConsequences(network.value);
+});
+
+async function loadNetwork(): Promise<void> {
+  if (networkLoading.value) return;
+  networkLoading.value = true;
+  networkErr.value = null;
+  try {
+    network.value = await NetworkApi.get(name.value);
+  } catch (e) {
+    networkErr.value = humanCopyForError(e, { subject: "this app's networking", action: 'load' });
+  } finally {
+    networkLoading.value = false;
+  }
+}
+
+async function confirmEgressChange(): Promise<void> {
+  if (!network.value) return;
+  const next = tunnelled.value ? 'direct' : 'vpn';
+  tunnelConfirm.value = false;
+  try {
+    const { jobId } = await NetworkApi.setMode(name.value, next);
+    activeAction.value = null;
+    activeJobId.value = jobId;
+    jobRunning.value = true;
+  } catch (e) {
+    toast({
+      title: "Couldn't change that",
+      description: humanCopyForError(e, { subject: "this app's networking", action: 'update' }),
+      variant: 'destructive',
+    });
+  }
+}
+
 watch(activeTab, (t) => {
   if (t === 'logs' && !containersLoaded.value && !containersLoading.value) {
     void loadContainers();
   }
   if (t === 'config' && !envLoaded.value && !envLoading.value) {
     void loadEnv();
+  }
+  if (t === 'network' && !network.value && !networkLoading.value) {
+    void loadNetwork();
   }
 });
 
@@ -348,6 +408,9 @@ watch(name, () => {
   activeJobId.value = null;
   activeAction.value = null;
   jobRunning.value = false;
+  network.value = null;
+  networkErr.value = null;
+  if (activeTab.value === 'network') void loadNetwork();
 });
 
 onMounted(async () => {
@@ -470,6 +533,7 @@ onMounted(async () => {
       :tabs="[
         { value: 'overview', label: 'Overview' },
         { value: 'config', label: 'Config' },
+        { value: 'network', label: 'Network' },
         { value: 'logs', label: 'Logs' },
         { value: 'related', label: 'Related' },
       ]"
@@ -675,6 +739,79 @@ onMounted(async () => {
         </Card>
       </div>
 
+      <!-- ── Network ─────────────────────────────────────────────── -->
+      <div v-else-if="activeTab === 'network'">
+        <Card v-if="networkErr" class="p-6" data-state="error" role="alert">
+          <Alert variant="destructive"><AlertDescription>{{ networkErr }}</AlertDescription></Alert>
+          <Button size="sm" variant="secondary" class="mt-3" @click="loadNetwork">Try again</Button>
+        </Card>
+
+        <div v-else-if="!network" class="space-y-3" data-state="loading">
+          <Skeleton class="h-32 w-full" />
+        </div>
+
+        <Card v-else class="p-6" data-test="package-network-card">
+          <div class="flex items-start justify-between gap-6 mb-5">
+            <div>
+              <div class="eyebrow mb-1">Outbound</div>
+              <div class="flex items-center gap-2 mb-2">
+                <h3>{{ egressLabel(network) }}</h3>
+                <Badge :tone="egressTone(network)">{{ network.mode }}</Badge>
+              </div>
+              <p class="text-sm text-muted-foreground max-w-xl">
+                <template v-if="tunnelled">
+                  Traffic from this app leaves through the VPN gateway. The outside world sees
+                  <span class="font-mono">{{ network.egressIp }}</span>
+                  <template v-if="network.egressCountry"> in {{ network.egressCountry }}</template>,
+                  not your home connection.
+                </template>
+                <template v-else>
+                  Traffic from this app leaves over your normal connection, from
+                  <span class="font-mono">{{ network.egressIp }}</span
+                  ><template v-if="network.egressCountry"> in {{ network.egressCountry }}</template>.
+                </template>
+              </p>
+            </div>
+
+            <Button
+              v-if="!network.locked"
+              size="sm"
+              :variant="tunnelled ? 'secondary' : 'primary'"
+              :disabled="actionsLocked"
+              data-test="egress-toggle"
+              @click="tunnelConfirm = true"
+            >{{ tunnelled ? 'Stop tunnelling' : 'Send through the VPN' }}</Button>
+          </div>
+
+          <Alert v-if="network.locked" variant="info" data-test="egress-locked">
+            <AlertDescription>{{ network.lockedReason }}</AlertDescription>
+          </Alert>
+
+          <Alert v-else-if="tunnelled && !network.gatewayHealthy" variant="destructive">
+            <AlertDescription>
+              The gateway is down, which means this app has no network at all right now. That is
+              the kill switch doing its job — nothing is leaking out over your own connection —
+              but the app will not work until the tunnel is back.
+            </AlertDescription>
+          </Alert>
+
+          <dl v-else class="text-sm space-y-2 border-t border-border pt-4">
+            <div class="flex justify-between">
+              <dt class="text-muted-foreground">Gateway</dt>
+              <dd class="font-mono">{{ network.gateway ?? '—' }}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-muted-foreground">Containers affected</dt>
+              <dd class="font-mono text-xs">{{ network.containers.join(', ') }}</dd>
+            </div>
+            <div v-if="network.publishedPorts.length" class="flex justify-between">
+              <dt class="text-muted-foreground">Published ports</dt>
+              <dd class="font-mono text-xs">{{ network.publishedPorts.join(', ') }}</dd>
+            </div>
+          </dl>
+        </Card>
+      </div>
+
       <div v-else-if="activeTab === 'logs'">
         <!--
           B3-followup (iter-16): honest per-package containers list.
@@ -746,6 +883,28 @@ onMounted(async () => {
         </Card>
       </div>
     </Tabs>
+
+    <!-- Egress change confirm. Not destructive, but it restarts the app,
+         moves its ports and changes what it can reach, so the switch
+         states its consequences rather than being a toggle you can knock
+         with an elbow. -->
+    <Dialog :open="tunnelConfirm" @update:open="tunnelConfirm = $event">
+      <template #title>
+        {{ tunnelled ? `Stop tunnelling ${heading}?` : `Send ${heading} through the VPN?` }}
+      </template>
+      <template #description>
+        <span>Here is what changes:</span>
+      </template>
+      <ul class="list-disc pl-5 space-y-1.5 text-sm" data-test="egress-consequences">
+        <li v-for="line in consequences" :key="line">{{ line }}</li>
+      </ul>
+      <template #footer>
+        <Button variant="secondary" @click="tunnelConfirm = false">Cancel</Button>
+        <Button data-test="egress-confirm" @click="confirmEgressChange">
+          {{ tunnelled ? 'Stop tunnelling' : 'Tunnel it' }}
+        </Button>
+      </template>
+    </Dialog>
 
     <!-- Remove confirm — destructive, so it gets a dialog rather than a
          one-click button (same pattern as VpnView's rotate-key confirm). -->

@@ -23,6 +23,7 @@ import Card from '@/components/ui/Card.vue';
 import { Alert, AlertDescription, Select, Skeleton } from '@/components/ui';
 import Badge from '@/components/ui/Badge.vue';
 import Button from '@/components/ui/Button.vue';
+import EdgeProtectionCard from '@/components/EdgeProtectionCard.vue';
 
 const system = useSystemStore();
 
@@ -407,5 +408,10 @@ const counts = computed(() => {
         </div>
       </div>
     </div>
+
+    <!-- Edge protection. Findings above are things Aurora noticed; this
+         is the one control on the page that changes what the outside
+         world can actually do. -->
+    <EdgeProtectionCard class="mt-6" />
   </section>
 </template>

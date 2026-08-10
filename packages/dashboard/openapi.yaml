@@ -37,6 +37,7 @@ tags:
   - name: backup
   - name: disks
   - name: notifications
+  - name: network
 
 security:
   - sessionCookie: []
@@ -702,6 +703,89 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/NotificationDelivery' }
 
+  # ────────────────────────────── network ─────────────────────────────
+  # Outbound: which apps egress through the VPN gateway. The mechanism is
+  # container network-namespace sharing (network_mode: service:gluetun),
+  # chosen over host-level policy routing precisely because it is safe to
+  # flip from a UI without rewriting the host's routing table. See
+  # docs/SPLIT_TUNNEL.md.
+  #
+  # Inbound: rate limiting, geo-blocking and bot filtering in Caddy in
+  # front of anything exposed past the LAN.
+  /packages/{name}/network:
+    get:
+      tags: [network]
+      summary: How this app's traffic leaves the box
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '200':
+          description: Egress state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageNetwork' }
+    put:
+      tags: [network]
+      summary: Move this app on or off the VPN gateway
+      description: >
+        Rewrites the app's network_mode, moves its published ports onto
+        the gateway, re-points its Caddy vhost, and restarts it. Returns a
+        job because containers go down and come back.
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { $ref: '#/components/schemas/EgressMode' }
+      responses:
+        '202':
+          description: Restart job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+        '409':
+          description: >
+            This app's egress cannot be changed — it is the gateway
+            itself, or it has to answer on the LAN directly.
+  /protection:
+    get:
+      tags: [network]
+      summary: What sits in front of each vhost
+      responses:
+        '200':
+          description: One row per vhost.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/VhostProtection' }
+  /protection/{vhost}:
+    put:
+      tags: [network]
+      summary: Change the protection on one vhost
+      parameters:
+        - $ref: '#/components/parameters/Vhost'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rateLimit: { $ref: '#/components/schemas/RateLimit' }
+                geoBlock: { $ref: '#/components/schemas/GeoBlock' }
+                botDetection: { type: boolean }
+      responses:
+        '200':
+          description: The updated row.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VhostProtection' }
+        '404': { description: Unknown vhost. }
+
   # ───────────────────────────── services ─────────────────────────────
   /services/status:
     get:
@@ -1314,6 +1398,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    Vhost:
+      name: vhost
+      in: path
+      required: true
+      schema: { type: string }
 
   schemas:
     Session:
@@ -1842,6 +1931,71 @@ components:
         sentAt: { type: string, format: date-time }
         result: { type: string, enum: [ok, failed] }
         error: { type: [string, 'null'] }
+
+    EgressMode:
+      type: string
+      enum: [direct, vpn]
+    PackageNetwork:
+      type: object
+      required: [package, mode, gateway, locked, lockedReason, containers, publishedPorts, egressIp, egressCountry, gatewayHealthy]
+      properties:
+        package: { type: string }
+        mode: { $ref: '#/components/schemas/EgressMode' }
+        gateway:
+          type: [string, 'null']
+          description: Gateway container whose network namespace this app would share.
+        locked: { type: boolean }
+        lockedReason: { type: [string, 'null'] }
+        containers:
+          type: array
+          items: { type: string }
+          description: Containers that restart when the mode changes.
+        publishedPorts:
+          type: array
+          items: { type: integer }
+          description: >
+            Host ports this app publishes. A namespaced app cannot publish
+            its own ports, so these move onto the gateway when tunnelled.
+        egressIp: { type: [string, 'null'] }
+        egressCountry: { type: [string, 'null'] }
+        gatewayHealthy:
+          type: boolean
+          description: >
+            A tunnelled app has no network at all while the gateway is
+            down. That is the kill switch, and it is deliberate.
+    RateLimit:
+      type: object
+      required: [enabled, requestsPerMinute]
+      properties:
+        enabled: { type: boolean }
+        requestsPerMinute: { type: integer }
+    GeoBlock:
+      type: object
+      required: [enabled, allowCountries]
+      properties:
+        enabled: { type: boolean }
+        allowCountries:
+          type: array
+          items: { type: string }
+          description: ISO-3166 alpha-2 allow-list. Empty with enabled true blocks everything.
+    VhostProtection:
+      type: object
+      required: [vhost, package, publiclyResolvable, authelia, rateLimit, geoBlock, botDetection, blocked24h, lastBlockedAt]
+      properties:
+        vhost: { type: string }
+        package: { type: string }
+        publiclyResolvable:
+          type: boolean
+          description: >
+            Resolves from outside the LAN. Protection defaults on for
+            these and stays off for LAN-only names, because rate-limiting
+            your own laptop is pure downside.
+        authelia: { type: boolean }
+        rateLimit: { $ref: '#/components/schemas/RateLimit' }
+        geoBlock: { $ref: '#/components/schemas/GeoBlock' }
+        botDetection: { type: boolean }
+        blocked24h: { type: integer }
+        lastBlockedAt: { type: [string, 'null'], format: date-time }
 
     ServiceState:
       type: string

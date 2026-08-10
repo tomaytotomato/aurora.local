@@ -14,6 +14,7 @@ import type { Session } from '@/api/auth';
 import type { BackupPolicy, BackupSource, BackupStatus, Snapshot } from '@/api/backup';
 import type { Disk, Parity, Pool } from '@/api/disks';
 import type { JobStatus } from '@/api/jobs';
+import type { PackageNetwork, VhostProtection } from '@/api/network';
 import type { NotificationChannel, NotificationDelivery } from '@/api/notifications';
 import type { OnboardingDraft } from '@/api/onboarding';
 import type { PackageUpdate } from '@/api/updates';
@@ -35,6 +36,7 @@ import {
 } from './fixtures/backup';
 import { initialDisks, initialParity, initialPool } from './fixtures/disks';
 import { initialChannels, initialDeliveries } from './fixtures/notifications';
+import { initialProtection } from './fixtures/network';
 import { CURRENT_USER_ID, initialUsers } from './fixtures/users';
 
 /**
@@ -86,6 +88,11 @@ export interface MockState {
   notifications: {
     channels: NotificationChannel[];
     deliveries: NotificationDelivery[];
+  };
+  /** Egress mode per app (populated on first change), and edge protection per vhost. */
+  network: {
+    byPackage: Record<string, PackageNetwork>;
+    protection: VhostProtection[];
   };
 }
 
@@ -142,6 +149,10 @@ export const state: MockState = {
   notifications: {
     channels: initialChannels(),
     deliveries: initialDeliveries(),
+  },
+  network: {
+    byPackage: {},
+    protection: initialProtection(),
   },
 };
 
