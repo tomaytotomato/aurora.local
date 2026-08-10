@@ -93,6 +93,13 @@ public class LaunchService {
    */
   private final com.tomaytotomato.aurora.services.CurrentUserService currentUser;
 
+  /**
+   * The single seam for running anything outside the JVM. Defaulted in the
+   * pre-seam constructors so the existing suites, which stage a real
+   * up.sh on disk and run it, keep exercising the real thing.
+   */
+  private final CommandRunner commands;
+
   private final Map<String, Job> jobs = new ConcurrentHashMap<>();
   private final AtomicReference<String> activeJobId = new AtomicReference<>(null);
 
@@ -120,13 +127,20 @@ public class LaunchService {
     this(props, audit, packages, null);
   }
 
-  @Autowired
   public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
                        com.tomaytotomato.aurora.services.CurrentUserService currentUser) {
+    this(props, audit, packages, currentUser, new ProcessCommandRunner());
+  }
+
+  @Autowired
+  public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
+                       com.tomaytotomato.aurora.services.CurrentUserService currentUser,
+                       CommandRunner commands) {
     this.props = props;
     this.audit = audit;
     this.packages = packages;
     this.currentUser = currentUser;
+    this.commands = commands;
     // Fires every 15s. Cheap; iterates active job's emitters only.
     heartbeat.scheduleAtFixedRate(this::sendHeartbeats, 15, 15, TimeUnit.SECONDS);
   }
@@ -234,29 +248,17 @@ public class LaunchService {
     cmd.add(upSh.toString());
     cmd.addAll(job.packages);
 
-    ProcessBuilder pb = new ProcessBuilder(cmd)
-        .directory(repo.toFile())
-        .redirectErrorStream(true); // merge stderr → stdout; script's log_step already tags
-    pb.environment().put("AURORA_LAUNCHED_BY", "aurora-dashboard");
-
-    Process proc;
+    // Through the shared seam rather than a second ProcessBuilder: stderr
+    // is merged there too, so the script's own log_step tagging still
+    // reads in order.
     try {
-      proc = pb.start();
-    } catch (IOException e) {
-      finish(job, State.FAILED, -1, "could not start bash: " + e.getMessage());
-      return;
-    }
-
-    try (BufferedReader r = new BufferedReader(
-        new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
-      String line;
-      while ((line = r.readLine()) != null) {
-        onLine(job, line);
-      }
-      int exit = proc.waitFor();
+      int exit = commands.stream(repo, Map.of("AURORA_LAUNCHED_BY", "aurora-dashboard"),
+          cmd, line -> onLine(job, line));
       finish(job, exit == 0 ? State.SUCCESS : State.FAILED, exit,
           exit == 0 ? null : "up.sh exited " + exit);
-    } catch (IOException | InterruptedException e) {
+    } catch (IOException e) {
+      finish(job, State.FAILED, -1, "could not start bash: " + e.getMessage());
+    } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       finish(job, State.FAILED, -1, "reader interrupted: " + e.getMessage());
     }
