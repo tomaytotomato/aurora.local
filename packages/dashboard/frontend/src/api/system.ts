@@ -19,6 +19,12 @@ export interface SystemCapabilities {
   /** Gates /disks. False until the backend can read smartctl and the
    * mergerfs/snapraid state. */
   disks?: boolean;
+  /** Gates the Notifications card on Settings. */
+  notifications?: boolean;
+  /** Gates the Addresses card on Settings. */
+  proxy?: boolean;
+  /** Gates /apps/custom and its section-nav entry. */
+  customStacks?: boolean;
 }
 
 export interface SystemInfo {

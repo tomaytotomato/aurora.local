@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useSystemStore } from '@/stores/system';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
@@ -67,6 +68,21 @@ function badgeText(pkg: PackageSummary): string {
 function openDetail(pkg: PackageSummary): void {
   router.push(`/apps/${pkg.name}`);
 }
+
+// The "Your own" tab only appears when the backend can actually run a
+// custom stack. Ground rule: a page must never be reachable in
+// production while it is still a mock.
+const system = useSystemStore();
+const appsNav = computed(() => {
+  const items = [
+    { to: '/apps/catalogue', label: 'Apps' },
+    { to: '/apps/core', label: 'Core' },
+  ];
+  if (system.info?.capabilities?.customStacks === true) {
+    items.push({ to: '/apps/custom', label: 'Your own' });
+  }
+  return items;
+});
 </script>
 
 <template>
@@ -77,7 +93,7 @@ function openDetail(pkg: PackageSummary): void {
     </div>
 
     <SectionNav
-      :items="[{ to: '/apps/catalogue', label: 'Apps' }, { to: '/apps/core', label: 'Core' }, { to: '/apps/custom', label: 'Your own' }]"
+      :items="appsNav"
       class="mb-6"
     />
 

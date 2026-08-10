@@ -25,6 +25,9 @@ export const systemInfo: SystemInfo = {
     securityScanner: true,
     backup: true,
     disks: true,
+    notifications: true,
+    proxy: true,
+    customStacks: true,
   },
 };
 

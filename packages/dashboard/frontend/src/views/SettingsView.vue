@@ -154,7 +154,7 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
       <!-- Notifications. Sits high on the page on purpose: it is the
            only card here that changes whether you find out about a
            problem at all. -->
-      <NotificationsCard />
+      <NotificationsCard v-if="info?.capabilities?.notifications" />
 
       <Card v-if="info" class="p-8">
         <h3 class="card-title mb-1">System</h3>
@@ -171,7 +171,7 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
       <!-- Reverse-proxy routes. Sits directly above LAN aliases because
            the two are the same idea at different layers: this one is
            what Caddy answers to, that one is what the LAN resolves. -->
-      <ProxyRoutesCard />
+      <ProxyRoutesCard v-if="info?.capabilities?.proxy" />
 
       <!-- LAN discovery (2026-08-03 v0.3.x productionize).
            Publishes one avahi A-record per enabled-package vhost so
