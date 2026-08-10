@@ -12,6 +12,7 @@ import { backupHandlers } from './backup';
 import { containersHandlers } from './containers';
 import { disksHandlers } from './disks';
 import { jobsHandlers } from './jobs';
+import { notificationsHandlers } from './notifications';
 import { observabilityHandlers } from './observability';
 import { onboardingHandlers } from './onboarding';
 import { packagesHandlers } from './packages';
@@ -30,6 +31,7 @@ export const handlers = [
   ...jobsHandlers,
   ...backupHandlers,
   ...disksHandlers,
+  ...notificationsHandlers,
   ...servicesHandlers,
   ...containersHandlers,
   ...observabilityHandlers,

@@ -36,6 +36,7 @@ tags:
   - name: jobs
   - name: backup
   - name: disks
+  - name: notifications
 
 security:
   - sessionCookie: []
@@ -604,6 +605,102 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DiskSmart' }
         '404': { description: Unknown disk. }
+
+  # ────────────────────────── notifications ───────────────────────────
+  # Aurora detects service failures, security findings, backup failures
+  # and drive trouble already, and until now told nobody. Email is
+  # deliberately not a channel kind: a working MTA on a home box is a
+  # multi-hour yak shave that ends in a spam folder.
+  /notifications/channels:
+    get:
+      tags: [notifications]
+      summary: Configured notification channels
+      responses:
+        '200':
+          description: Channels.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NotificationChannel' }
+    post:
+      tags: [notifications]
+      summary: Add a channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChannelDraft' }
+      responses:
+        '201':
+          description: The created channel.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationChannel' }
+  /notifications/channels/{id}:
+    patch:
+      tags: [notifications]
+      summary: Change a channel, or mute it
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/ChannelDraft' }
+                - type: object
+                  properties:
+                    enabled: { type: boolean }
+      responses:
+        '200':
+          description: The updated channel.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationChannel' }
+        '404': { description: Unknown channel. }
+    delete:
+      tags: [notifications]
+      summary: Remove a channel
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '204': { description: Removed. }
+  /notifications/channels/{id}/test:
+    post:
+      tags: [notifications]
+      summary: Send a test message now
+      description: >
+        Reports what actually happened rather than acknowledging the
+        attempt. A channel that has silently stopped working is worse
+        than no channel, because you believe you are covered.
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '200':
+          description: Delivery outcome.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [result, error]
+                properties:
+                  result: { type: string, enum: [ok, failed] }
+                  error: { type: [string, 'null'] }
+        '404': { description: Unknown channel. }
+  /notifications/history:
+    get:
+      tags: [notifications]
+      summary: What Aurora has sent, newest first
+      responses:
+        '200':
+          description: Deliveries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NotificationDelivery' }
 
   # ───────────────────────────── services ─────────────────────────────
   /services/status:
@@ -1212,6 +1309,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    ChannelId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
 
   schemas:
     Session:
@@ -1699,6 +1801,47 @@ components:
           type: [integer, 'null']
           description: snapraid_delete_threshold from the host role.
         stalenessWarnDays: { type: integer }
+
+    ChannelKind:
+      type: string
+      enum: [ntfy, discord, webhook]
+    NotifyEvent:
+      type: string
+      enum: [service-down, security-finding, backup-failed, backup-stale, disk-health, update-available, job-failed]
+    ChannelDraft:
+      type: object
+      required: [kind, name, target, events]
+      properties:
+        kind: { $ref: '#/components/schemas/ChannelKind' }
+        name: { type: string }
+        target:
+          type: string
+          description: ntfy topic URL, Discord webhook URL, or any POST target.
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/NotifyEvent' }
+    NotificationChannel:
+      allOf:
+        - { $ref: '#/components/schemas/ChannelDraft' }
+        - type: object
+          required: [id, enabled, lastSentAt, lastResult, lastError]
+          properties:
+            id: { type: string }
+            enabled: { type: boolean }
+            lastSentAt: { type: [string, 'null'], format: date-time }
+            lastResult: { type: [string, 'null'], enum: [ok, failed, null] }
+            lastError: { type: [string, 'null'] }
+    NotificationDelivery:
+      type: object
+      required: [id, channelId, event, subject, sentAt, result, error]
+      properties:
+        id: { type: string }
+        channelId: { type: string }
+        event: { $ref: '#/components/schemas/NotifyEvent' }
+        subject: { type: string }
+        sentAt: { type: string, format: date-time }
+        result: { type: string, enum: [ok, failed] }
+        error: { type: [string, 'null'] }
 
     ServiceState:
       type: string

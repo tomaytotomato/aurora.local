@@ -7,6 +7,7 @@ import { humanCopyForError } from '@/lib/http-error-copy';
 import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
+import NotificationsCard from '@/components/NotificationsCard.vue';
 import {
   Alert,
   AlertDescription,
@@ -147,6 +148,11 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           <AlertDescription>Passkey sign-in isn't set up on this box yet.</AlertDescription>
         </Alert>
       </Card>
+
+      <!-- Notifications. Sits high on the page on purpose: it is the
+           only card here that changes whether you find out about a
+           problem at all. -->
+      <NotificationsCard />
 
       <Card v-if="info" class="p-8">
         <h3 class="card-title mb-1">System</h3>

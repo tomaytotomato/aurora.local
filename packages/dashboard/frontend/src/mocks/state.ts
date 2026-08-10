@@ -14,6 +14,7 @@ import type { Session } from '@/api/auth';
 import type { BackupPolicy, BackupSource, BackupStatus, Snapshot } from '@/api/backup';
 import type { Disk, Parity, Pool } from '@/api/disks';
 import type { JobStatus } from '@/api/jobs';
+import type { NotificationChannel, NotificationDelivery } from '@/api/notifications';
 import type { OnboardingDraft } from '@/api/onboarding';
 import type { PackageUpdate } from '@/api/updates';
 import type { OpenVpnClient, OpenVpnConfig, VpnConfig, VpnPeer } from '@/api/vpn';
@@ -33,6 +34,7 @@ import {
   initialStatus,
 } from './fixtures/backup';
 import { initialDisks, initialParity, initialPool } from './fixtures/disks';
+import { initialChannels, initialDeliveries } from './fixtures/notifications';
 import { CURRENT_USER_ID, initialUsers } from './fixtures/users';
 
 /**
@@ -79,6 +81,11 @@ export interface MockState {
     disks: Disk[];
     pool: Pool;
     parity: Parity;
+  };
+  /** Where Aurora sends word when something happens, and what it sent. */
+  notifications: {
+    channels: NotificationChannel[];
+    deliveries: NotificationDelivery[];
   };
 }
 
@@ -131,6 +138,10 @@ export const state: MockState = {
     disks: initialDisks(),
     pool: initialPool(),
     parity: initialParity(),
+  },
+  notifications: {
+    channels: initialChannels(),
+    deliveries: initialDeliveries(),
   },
 };
 
