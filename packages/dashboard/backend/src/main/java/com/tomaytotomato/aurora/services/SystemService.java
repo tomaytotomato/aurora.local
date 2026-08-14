@@ -92,6 +92,13 @@ public class SystemService {
     // consumes GET /api/security/findings instead of rendering the
     // 'lands with M4' empty state, and the sidebar reveals /security.
     capabilities.put("securityScanner", true);
+    // All 13 /vpn/* paths are implemented (VpnController/OpenVpnController)
+    // against real SQLite, so the sidebar can reveal /vpn. One documented
+    // exception: GET /vpn/peers/{id}/config and .../qrcode return 409 for
+    // any peer after its creation response — a peer's private key is
+    // never persisted, so there is nothing to rebuild a working file
+    // from a second time. See dev/notes/vpn-progress.md.
+    capabilities.put("vpn", true);
     out.put("capabilities", capabilities);
     return out;
   }
