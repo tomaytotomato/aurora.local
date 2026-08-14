@@ -53,3 +53,14 @@ snapraid_sync_oncalendar: "*-*-* 03:30:00"
 snapraid_scrub_enabled: true
 snapraid_scrub_percent: 8
 snapraid_scrub_older_than: 10
+
+# ---- dashboard /disks page ----
+# The runner (and the on-demand helper below) write a small JSON summary
+# after every run, so the dashboard can show parity state without the
+# container needing snapraid privileges itself. See
+# packages/dashboard/docs/DISKS_PAGE_DESIGN.md.
+snapraid_parity_state_path: "{{ home_local_root | default('/home/' + (home_user | default('bruce')) + '/aurora.local') }}/packages/dashboard/state/parity.json"
+
+# Days after which the dashboard calls parity stale. Matches the "3-day
+# threshold" used in the frontend's own mock fixtures.
+snapraid_staleness_warn_days: 3
