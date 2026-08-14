@@ -55,11 +55,13 @@ public class DisksService {
   private static final String PARITY_STATE_RELATIVE_PATH = "packages/dashboard/state/parity.json";
 
   private final AuroraProperties props;
-  private final ObjectMapper mapper;
+  // Not Spring-managed: this codebase has no shared ObjectMapper bean
+  // (nothing else in it needs one), and standing one up as a bean purely
+  // for this one class would be a bigger change than reading two files.
+  private final ObjectMapper mapper = new ObjectMapper();
 
-  public DisksService(AuroraProperties props, ObjectMapper mapper) {
+  public DisksService(AuroraProperties props) {
     this.props = props;
-    this.mapper = mapper;
   }
 
   public List<Disk> list() {
