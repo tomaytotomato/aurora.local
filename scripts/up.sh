@@ -128,8 +128,10 @@ done
 # Merge per-package .env into shell env so ${VAR} substitution works
 # across multi-file compose invocations.
 for ef in "${env_files[@]}"; do
-  # shellcheck disable=SC1090,SC1091
-  set -a; . "$ef"; set +a
+  set -a
+  # shellcheck source=/dev/null
+  . "$ef"
+  set +a
 done
 
 # Auto-detect the docker group's gid so core/homepage can read
