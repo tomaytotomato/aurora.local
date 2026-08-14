@@ -28,6 +28,7 @@
     <flyway.version>13.0.0</flyway.version>
     <snakeyaml.version>2.6</snakeyaml.version>
     <argon2.version>2.11</argon2.version>
+    <zxing.version>3.5.3</zxing.version>
     <testcontainers.version>1.21.3</testcontainers.version>
   </properties>
 
@@ -88,6 +89,18 @@
       <artifactId>argon2-jvm</artifactId>
       <version>${argon2.version}</version>
       <optional>true</optional>
+    </dependency>
+
+    <!--
+      QR encoding only (com.google.zxing:core), not the javase module —
+      that pulls in an AWT-based image writer we don't need. VpnService
+      builds the PNG bytes itself via BitMatrix + java.awt.image /
+      ImageIO, both part of the JDK already.
+    -->
+    <dependency>
+      <groupId>com.google.zxing</groupId>
+      <artifactId>core</artifactId>
+      <version>${zxing.version}</version>
     </dependency>
 
     <dependency>
