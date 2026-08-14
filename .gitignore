@@ -58,6 +58,10 @@ packages/*/pins.env
 # pi-subagents scratch
 .pi-subagents/
 
+# Agent worktrees are created inside the repo and would otherwise show up
+# as untracked, one bad `git add .` away from being committed.
+.claude/
+
 # ---- root npm scripts ----
 # The root package.json has no dependencies, so an install here produces
 # nothing worth keeping. Ignored so a stray `npm install` at the root does
