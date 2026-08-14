@@ -168,15 +168,19 @@ else
   BLOB=$(mktemp)
   echo "$INDEX" > "$BLOB"
   seen=" "
-  for pass in 1 2; do
-    for chunk in $(grep -oE '/?assets/[A-Za-z0-9._-]+\.(js|css)' "$BLOB" | sed 's|^assets/|/assets/|' | sort -u); do
+  # Read chunk paths via process substitution rather than a pipe: a pipe
+  # would run the while-read body in a subshell, and the $seen mutations
+  # below would vanish as soon as the loop ended (losing the whole point
+  # of the second pass finding dynamically-imported chunks).
+  for _ in 1 2; do
+    while IFS= read -r chunk; do
       case "$seen" in *" $chunk "*) continue;; esac
       _c "$LIVE$chunk" >> "$BLOB" 2>/dev/null || true
       seen="$seen$chunk "
-    done
+    done < <(grep -oE '/?assets/[A-Za-z0-9._-]+\.(js|css)' "$BLOB" | sed 's|^assets/|/assets/|' | sort -u)
   done
   size=$(wc -c <"$BLOB" | tr -d ' ')
-  chunk_count=$(printf '%s\n' $seen | grep -c '^/assets/' || true)
+  chunk_count=$(printf '%s\n' "$seen" | tr ' ' '\n' | grep -c '^/assets/' || true)
   info "aggregated bundle: ${size} bytes across index + ${chunk_count} chunks"
 
   # 4.1 B2: no aurora.aurora.local anywhere.

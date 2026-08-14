@@ -114,8 +114,10 @@ render_pins() {
   for p in "$@"; do
     pins="$REPO/packages/$p/pins.env"
     if [[ -f "$pins" ]]; then
-      # shellcheck disable=SC1090
-      set -a; . "$pins"; set +a
+      set -a
+      # shellcheck source=/dev/null
+      . "$pins"
+      set +a
       log_info "loaded pinned digests from $p/pins.env"
     fi
   done
