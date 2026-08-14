@@ -111,19 +111,45 @@ deliberately reports null: wiring the sampler per package is its own
 piece of work. Null renders as the ceiling with no usage bar, which is
 honest rather than broken.
 
-## 7. VPN setup — **status pending**
+## 7. VPN setup — **implemented, untested on hardware**
 
-The 13 `/vpn/*` paths were specified months ago and had no controller as
-of last night; implementing them was the largest piece of overnight work.
-Check whether the capability flag is on before promising anyone a demo.
+All 13 `/vpn/*` endpoints now have a backend and the capability flag is
+on, so the page will appear. 578 backend tests pass, 35 of them new.
+Nothing has run against a real WireGuard interface.
+
+Keys are generated with the JDK's own X25519 generator rather than
+`wg genkey`, because the command seam deliberately does not pipe stdin.
+
+### The one thing to know before you demo this
+
+**A peer's private key is shown exactly once, when you create the peer,
+and is never stored.** So:
+
+- Create the peer, and scan the QR code there and then on the phone.
+- If you close that dialog, the config and QR are gone. `GET
+  /vpn/peers/{id}/config` and `.../qrcode` return 409 with a message
+  saying so. The only recovery is to delete the peer and add it again.
+
+That is the safer reading of two things in tension: the design doc shows
+persistent Download and QR actions per peer, but also says never to store
+a peer's private key. Storing it (encrypted) is the alternative and is
+what tools like wg-easy do. Worth deciding deliberately rather than
+inheriting; it is not hard to change later.
+
+### Assumptions baked in, worth checking on the day
+
+- Peer DNS is always `1.1.1.1`. It is not wired to the Privacy package's
+  AdGuard address, so VPN clients will not use your own DNS filtering.
+- The split-tunnel LAN range is guessed as a `/24` off the detected LAN
+  IP. If your home network is not a `/24`, fix this before relying on it.
+- `reachable` always reports `null`; there is no external reachability
+  probe, so the UI cannot tell you whether the endpoint is actually
+  reachable from outside.
 
 The design, already decided: egress split-tunnel via a reusable container
 gateway that apps opt into by sharing its network namespace. Chosen over
 host-level policy routing because netns sharing is the only approach safe
 to toggle from a UI without rewriting host routes.
-
-If the flag is off, the page will not appear at all. That is deliberate:
-a hidden surface beats a broken one in front of an audience.
 
 ## What will not work tomorrow, whatever happens
 
