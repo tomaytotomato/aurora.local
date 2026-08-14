@@ -92,6 +92,15 @@ public class SystemService {
     // consumes GET /api/security/findings instead of rendering the
     // 'lands with M4' empty state, and the sidebar reveals /security.
     capabilities.put("securityScanner", true);
+    // Proxy domain (Addresses card): ProxyController/ProxyService ship
+    // real managed-route discovery + hand-added route CRUD against a real
+    // caddy.snippet fragment, so the gate flips true rather than hiding a
+    // working page.
+    capabilities.put("proxy", true);
+    // Notifications domain (Notifications card): NotificationsController/
+    // NotificationsService ship real channel CRUD and an honest test-send
+    // over outbound HTTP, so this gate flips true too.
+    capabilities.put("notifications", true);
     // DisksController + DisksService ship reading host/roles/smartd + snapraid's
     // state files; true regardless of whether those roles are enabled on this
     // box, since every endpoint degrades to honest defaults (no-pool, never

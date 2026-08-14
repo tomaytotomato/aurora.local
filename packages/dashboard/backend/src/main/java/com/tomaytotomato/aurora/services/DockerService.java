@@ -109,6 +109,63 @@ public class DockerService {
     public boolean isExited() { return "exited".equalsIgnoreCase(state) || "dead".equalsIgnoreCase(state); }
   }
 
+  /**
+   * Trimmed view of a running container for {@code /api/proxy/targets}:
+   * name, the ports it listens on, and the package that owns it (if any).
+   */
+  public record ContainerSummary(String name, List<Integer> ports, String pkg) {}
+
+  /**
+   * Every aurora-managed container worth pointing an address at, with the
+   * ports it exposes and (best-effort) the package that owns it. Package
+   * attribution reuses the same {@code com.docker.compose.project.config_files}
+   * label parsing as {@code PackagesService.runningPackageNames()} — a
+   * container not launched from a {@code packages/<name>/} compose file
+   * (or with no labels at all) simply gets a {@code null} package.
+   */
+  public List<ContainerSummary> listContainerSummaries() {
+    List<ContainerSummary> out = new ArrayList<>();
+    for (Container c : listProjectContainers()) {
+      String name = primaryName(c);
+      if (name == null) continue;
+      out.add(new ContainerSummary(name, ports(c), packageLabel(c)));
+    }
+    return out;
+  }
+
+  private static String primaryName(Container c) {
+    String[] names = c.getNames();
+    if (names == null || names.length == 0) return null;
+    String n = names[0];
+    return n.startsWith("/") ? n.substring(1) : n;
+  }
+
+  private static List<Integer> ports(Container c) {
+    var raw = c.getPorts();
+    if (raw == null) return List.of();
+    List<Integer> out = new ArrayList<>();
+    for (var p : raw) {
+      Integer priv = p.getPrivatePort();
+      if (priv != null && !out.contains(priv)) out.add(priv);
+    }
+    out.sort(null);
+    return out;
+  }
+
+  private static String packageLabel(Container c) {
+    if (c.getLabels() == null) return null;
+    String cfg = c.getLabels().get("com.docker.compose.project.config_files");
+    if (cfg == null) return null;
+    for (String seg : cfg.split(",")) {
+      int i = seg.indexOf("/packages/");
+      if (i < 0) continue;
+      String rest = seg.substring(i + "/packages/".length());
+      int slash = rest.indexOf('/');
+      if (slash > 0) return rest.substring(0, slash);
+    }
+    return null;
+  }
+
   public Optional<String> version() {
     try {
       var v = docker.versionCmd().exec();

@@ -102,6 +102,19 @@ public class CaddySnippetService {
       "^(\\s*)(https?://[A-Za-z0-9][A-Za-z0-9.\\-]*\\{\\$DOMAIN}(?:[^{]*)?)\\{\\s*$"
   );
 
+  /**
+   * Filename {@link com.tomaytotomato.aurora.services.ProxyService} writes
+   * hand-added routes into, inside this service's own {@link #snippetDir()}.
+   *
+   * <p>This service otherwise treats itself as the sole owner of that
+   * directory and prunes anything it doesn't recognise (see {@link
+   * #pruneStale}) — without this one carve-out, a hand-added route would
+   * be deleted by the next scheduled reconcile, at most 60 seconds after
+   * being written. ProxyService, not this class, is responsible for the
+   * file's contents; this class only agrees never to remove it.
+   */
+  public static final String CUSTOM_ROUTES_FILENAME = "custom-routes.caddy";
+
   private final PackagesService packages;
   private final AuroraProperties props;
 
@@ -245,7 +258,9 @@ public class CaddySnippetService {
     List<Path> stale = new ArrayList<>();
     try (DirectoryStream<Path> s = Files.newDirectoryStream(outDir, "*.caddy")) {
       for (Path p : s) {
-        if (!keep.contains(p.getFileName().toString())) stale.add(p);
+        String name = p.getFileName().toString();
+        if (keep.contains(name) || CUSTOM_ROUTES_FILENAME.equals(name)) continue;
+        stale.add(p);
       }
     }
     for (Path p : stale) {
