@@ -1,0 +1,70 @@
+# Lima VM definition for the aurora.local testbed.
+#
+# Debian 12 rather than Ubuntu, because bootstrap.sh is apt-based and
+# host/site.yml describes itself as Debian-family. Ubuntu diverges on
+# netplan, snap-packaged Docker and AppArmor defaults, which would make
+# the testbed lie about things that matter.
+#
+# Started by dev/testbed/up.sh. Not intended to be run by hand, though
+# `limactl start --name=aurora dev/testbed/lima.yaml` works if you want to.
+
+base: template://debian-12
+
+# Apple's Virtualization.framework. Native arm64, no emulation.
+vmType: vz
+
+cpus: 4
+memory: "6GiB"
+disk: "40GiB"
+
+# The macOS home directory, read-only. up.sh rsyncs the repo out of here
+# into the VM rather than bind-mounting it writable, so a test run cannot
+# dirty the real working tree. bootstrap.sh writes inventory.ini,
+# group_vars/all.yml, .env files and state into the repo it is given; that
+# repo should be a copy.
+mounts:
+  - location: "~"
+    writable: false
+
+# 80 and 443 are remapped because macOS will not let a non-root process
+# bind privileged ports on the host side.
+portForwards:
+  - guestPort: 8090
+    hostPort: 8090
+  - guestPort: 80
+    hostPort: 8080
+  - guestPort: 443
+    hostPort: 8443
+
+provision:
+  # The target user is `bruce` because group_vars/all.yml pins
+  # home_user: bruce and home_local_root: /home/bruce/aurora.local.
+  # Lima's own user is named after the macOS account (bruce.taylor), and
+  # the dot would not match, so the testbed creates the real thing.
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+
+      hostnamectl set-hostname aurora
+
+      apt-get update -qq
+      apt-get install -y -qq rsync sudo curl ca-certificates git
+
+      if ! id bruce >/dev/null 2>&1; then
+        useradd --create-home --shell /bin/bash bruce
+      fi
+
+      # bootstrap.sh calls ansible-playbook with -K, which prompts for a
+      # become password whatever sudo is configured to do. up.sh feeds it
+      # an empty line; NOPASSWD is what makes that harmless.
+      printf 'bruce ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/aurora-bruce
+      chmod 0440 /etc/sudoers.d/aurora-bruce
+
+probes:
+  - description: "user bruce exists and sudo is configured"
+    script: |
+      #!/bin/bash
+      set -eu
+      timeout 60s bash -c 'until id bruce >/dev/null 2>&1; do sleep 1; done'
+    hint: "Provisioning did not create the bruce user. Check `limactl shell aurora sudo journalctl -u cloud-final`."
