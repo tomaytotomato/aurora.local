@@ -46,7 +46,11 @@ probe:
 warnings:
   - id: filebrowser_full_pool_access
     if: {always: true}
-    message: 'FileBrowser can read and write everything in the storage pool, including other apps'' data directories. It sits behind Authelia, but anyone who can sign in to Aurora can move or delete any file it can see.'
+    message: >-
+      FileBrowser can read and write everything in the storage pool,
+      including other apps' data directories. It sits behind Authelia,
+      but anyone who can sign in to Aurora can move or delete any file
+      it can see.
 
 post_install_notes: |
   1. Open https://files.$DOMAIN/ — it is behind Authelia, so sign in
