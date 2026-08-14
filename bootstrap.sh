@@ -346,8 +346,36 @@ _run_host_bootstrap() {
   fi
   local inv="$REPO/inventory.ini"
   [[ -f "$inv" ]] || inv="$REPO/inventory.example.ini"
+  # Limit to the host _write_configs actually named in the inventory.
+  # site.yml targets the home_servers group, so a --limit of "localhost"
+  # intersected to nothing and ansible refused to run any role at all.
+  # Same expression as _write_configs so the two cannot drift apart.
+  local target="${HOSTNAME:-$(hostname -s)}"
   ( cd "$REPO" && ansible-playbook -i "$inv" host/site.yml \
-      --connection=local --limit localhost -K )
+      --connection=local --limit "$target" -K )
+}
+
+# The docker role has just added the user to the docker group, but this
+# shell's group set was fixed when it started, so docker.sock is still
+# refused for the rest of the run. sg re-runs up.sh with the group
+# applied, rather than failing and telling the operator to log out and
+# back in halfway through their first install.
+_up_with_docker_group() {
+  local me="${USER:-$(id -un)}"
+
+  if docker info >/dev/null 2>&1; then
+    "$REPO/scripts/up.sh" "$@"
+    return
+  fi
+
+  if command -v sg >/dev/null 2>&1 && getent group docker | grep -qw "$me"; then
+    log_info "applying new docker group membership for this run"
+    sg docker -c "$(printf '%q ' "$REPO/scripts/up.sh" "$@")"
+    return
+  fi
+
+  # Not a group problem. Let up.sh fail with its own diagnostics.
+  "$REPO/scripts/up.sh" "$@"
 }
 
 _run_up() {
@@ -364,7 +392,7 @@ _run_up() {
     printf '   - %s (%s)\n' "$p" "$(manifest_get title "$p")" >&2
   done
 
-  "$REPO/scripts/up.sh" "${full[@]}"
+  _up_with_docker_group "${full[@]}"
 
   log_step "post-install notes"
   for p in "${full[@]}"; do

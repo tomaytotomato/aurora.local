@@ -1,0 +1,14 @@
+---
+# Docker's apt repository names architectures the Debian way (amd64,
+# arm64, armhf). ansible_architecture reports the kernel's names
+# (x86_64, aarch64, armv7l). The two only coincide by accident.
+#
+# Looked up rather than string-replaced so an unmapped architecture fails
+# loudly with an undefined-variable error, instead of quietly producing a
+# repo line that matches no packages and surfacing three tasks later as
+# "No package matching 'docker-ce' is available".
+docker_apt_arch_map:
+  x86_64: amd64
+  aarch64: arm64
+  armv7l: armhf
+  aarch64_be: arm64

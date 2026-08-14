@@ -16,7 +16,13 @@ volumes:
 services:
   aurora:
     build:
-      context: .
+      # Not "." — up.sh invokes compose with several -f files, and compose
+      # resolves relative paths against the first one's directory, not each
+      # file's own. A bare "." therefore pointed at whichever package sorted
+      # first and the build failed with an empty context. "../dashboard" is
+      # level-invariant from any packages/*/ directory, the same trick the
+      # ../../data volume paths already rely on.
+      context: ../dashboard
       dockerfile: Dockerfile
     image: aurora-dashboard:${AURORA_VERSION:-0.1.0}
     pull_policy: never
