@@ -65,8 +65,13 @@ RUN apk add --no-cache bash docker-cli docker-cli-compose avahi-tools bind-tools
 #
 # Pin: v4.44.3 (2025-09, stable, matches manifest.sh gate).
 # Arch: TARGETARCH resolves to amd64/arm64 under BuildKit; falls back to
-# amd64 for legacy `docker build` (Optiplex target).
-ARG TARGETARCH=amd64
+# amd64 for legacy `docker build` (Optiplex target) via the ${:-} below.
+#
+# Declared WITHOUT a default on purpose. TARGETARCH is a predefined build
+# arg that BuildKit injects; giving it a default shadows that value, so
+# the build silently produced an amd64 image on every host, arm64
+# included, and the resulting yq binary would not execute.
+ARG TARGETARCH
 ARG YQ_VERSION=v4.44.3
 RUN set -eux; \
     case "${TARGETARCH:-amd64}" in \
