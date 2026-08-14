@@ -125,6 +125,18 @@ for p in "${pkgs[@]}"; do
   [[ -f "$env_real" ]] && env_files+=("$env_real")
 done
 
+# A freshly-seeded .env has every secret blank (that's what .env.example
+# ships). Several services (Authelia, Paperless, Kopia, ...) treat an
+# empty required secret as fatal and refuse to start, so a first "up"
+# would otherwise crash on exactly the files this loop just created.
+# rotate-secrets.sh already knows how to tell a secret-shaped key from
+# a config value; run it in --apply mode so first boot gets a real
+# secret instead of a startup crash.
+if [[ -x "$REPO/scripts/rotate-secrets.sh" ]]; then
+  log_step "generating secrets for any newly-seeded .env files"
+  "$REPO/scripts/rotate-secrets.sh" --apply || true
+fi
+
 # Merge per-package .env into shell env so ${VAR} substitution works
 # across multi-file compose invocations.
 for ef in "${env_files[@]}"; do
