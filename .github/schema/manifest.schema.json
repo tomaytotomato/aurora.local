@@ -140,6 +140,32 @@
         }
       }
     },
+    "sso": {
+      "type": "object",
+      "description": "How Authelia should treat the package's vhosts. Absent block means SSO stays off (the service manages its own auth or is intentionally open on the LAN). See SsoBlock.java for the parser this mirrors.",
+      "additionalProperties": false,
+      "properties": {
+        "protect": {
+          "type": "boolean",
+          "description": "When true, Aurora's Caddy snippet renderer gates the package's vhosts behind Authelia forward-auth."
+        },
+        "min_role": {
+          "type": "string",
+          "enum": ["admin", "user", "guest"],
+          "description": "The least-privileged role that may reach the vhost. Unknown or missing values fall back to 'user' at runtime."
+        },
+        "trusted_headers": {
+          "type": "boolean",
+          "description": "True when the service reads Remote-User/Remote-Groups/Remote-Email headers Caddy injects and auto-provisions the account from them. False when Authelia only gates the front door and the service keeps its own login page."
+        },
+        "disable_env": {
+          "type": "array",
+          "description": "Env-var names in the package's .env to blank when SSO is enabled, neutralising internal auth for services that would otherwise show a second login page after Authelia already granted access.",
+          "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "uniqueItems": true
+        }
+      }
+    },
     "required_env": {
       "type": "array",
       "items": { "type": "string" },
