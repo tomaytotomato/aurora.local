@@ -58,6 +58,13 @@ packages/*/pins.env
 # pi-subagents scratch
 .pi-subagents/
 
+# ---- root npm scripts ----
+# The root package.json has no dependencies, so an install here produces
+# nothing worth keeping. Ignored so a stray `npm install` at the root does
+# not leave untracked clutter behind.
+/node_modules/
+/package-lock.json
+
 # ---- aurora dashboard E2E ----
 packages/dashboard/e2e/node_modules/
 packages/dashboard/e2e/test-results/

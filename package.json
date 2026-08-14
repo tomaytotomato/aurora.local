@@ -1,0 +1,15 @@
+{
+  "name": "aurora",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Root manifest for aurora.local. It declares no dependencies of its own; every script forwards to packages/dashboard/frontend so the common commands work from the repo root.",
+  "scripts": {
+    "dev": "npm --prefix packages/dashboard/frontend run dev",
+    "dev:mock": "npm --prefix packages/dashboard/frontend run dev:mock",
+    "dev:mocks": "npm run dev:mock",
+    "build": "npm --prefix packages/dashboard/frontend run build",
+    "typecheck": "npm --prefix packages/dashboard/frontend run typecheck",
+    "test:unit": "npm --prefix packages/dashboard/frontend run test:unit",
+    "setup": "npm --prefix packages/dashboard/frontend install"
+  }
+}
