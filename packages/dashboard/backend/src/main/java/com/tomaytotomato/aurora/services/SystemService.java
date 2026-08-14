@@ -92,6 +92,11 @@ public class SystemService {
     // consumes GET /api/security/findings instead of rendering the
     // 'lands with M4' empty state, and the sidebar reveals /security.
     capabilities.put("securityScanner", true);
+    // Proxy domain (Addresses card): ProxyController/ProxyService ship
+    // real managed-route discovery + hand-added route CRUD against a real
+    // caddy.snippet fragment, so the gate flips true rather than hiding a
+    // working page.
+    capabilities.put("proxy", true);
     out.put("capabilities", capabilities);
     return out;
   }

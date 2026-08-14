@@ -3,6 +3,7 @@ package com.tomaytotomato.aurora.services;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.ListContainersCmd;
 import com.github.dockerjava.api.model.Container;
+import com.github.dockerjava.api.model.ContainerPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -11,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -126,5 +128,58 @@ class DockerServiceTests {
     List<Container> out = new DockerService(docker).listProjectContainers();
     assertEquals(1, out.size());
     assertEquals("/silverbullet", out.get(0).getNames()[0]);
+  }
+
+  // ─── listContainerSummaries() — feeds /api/proxy/targets ────────────────
+
+  private Container containerWithPorts(String name, List<Integer> privatePorts, Map<String, String> labels) {
+    Container c = Mockito.mock(Container.class);
+    Mockito.when(c.getNames()).thenReturn(new String[] {"/" + name});
+    Mockito.when(c.getLabels()).thenReturn(labels);
+    ContainerPort[] ports = privatePorts.stream().map(p -> {
+      ContainerPort cp = Mockito.mock(ContainerPort.class);
+      Mockito.when(cp.getPrivatePort()).thenReturn(p);
+      return cp;
+    }).toArray(ContainerPort[]::new);
+    Mockito.when(c.getPorts()).thenReturn(ports);
+    return c;
+  }
+
+  @Test
+  void listContainerSummaries_reportsPortsAndOwningPackage() {
+    Map<String, String> labels = labels("aurora-notes");
+    labels.put("com.docker.compose.project.config_files", "/repo/packages/notes/compose.yml");
+    Container silverbullet = containerWithPorts("silverbullet", List.of(3000), labels);
+    Mockito.when(cmd.exec()).thenReturn(List.of(silverbullet));
+
+    List<DockerService.ContainerSummary> out = new DockerService(docker).listContainerSummaries();
+
+    assertThat(out).hasSize(1);
+    assertThat(out.get(0).name()).isEqualTo("silverbullet");
+    assertThat(out.get(0).ports()).containsExactly(3000);
+    assertThat(out.get(0).pkg()).isEqualTo("notes");
+  }
+
+  @Test
+  void listContainerSummaries_reportsNullPackageWhenLabelIsMissing() {
+    Container bareRun = containerWithPorts("calibre-web", List.of(8083), labels("aurora"));
+    Mockito.when(cmd.exec()).thenReturn(List.of(bareRun));
+
+    List<DockerService.ContainerSummary> out = new DockerService(docker).listContainerSummaries();
+
+    assertThat(out).hasSize(1);
+    assertThat(out.get(0).pkg()).isNull();
+  }
+
+  @Test
+  void listContainerSummaries_dedupesAndSortsPorts() {
+    Map<String, String> labels = labels("aurora-jellyfin");
+    labels.put("com.docker.compose.project.config_files", "/repo/packages/jellyfin/compose.yml");
+    Container jellyfin = containerWithPorts("jellyfin", List.of(8920, 8096, 8096), labels);
+    Mockito.when(cmd.exec()).thenReturn(List.of(jellyfin));
+
+    List<DockerService.ContainerSummary> out = new DockerService(docker).listContainerSummaries();
+
+    assertThat(out.get(0).ports()).containsExactly(8096, 8920);
   }
 }
