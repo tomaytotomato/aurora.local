@@ -7,11 +7,66 @@
 # whole point: a data disk that failed to mount looks like a mass
 # deletion, and syncing it would bake the loss into parity, destroying
 # your ability to recover. Better to alert and let a human look.
+#
+# Also writes packages/dashboard/state/parity.json after every run, so
+# the dashboard can show SnapRAID state without needing host privileges
+# itself. See packages/dashboard/docs/DISKS_PAGE_DESIGN.md. This is also
+# invoked on demand (unchanged, same guard) by aurora-parity-action's
+# "sync" branch when an operator clicks "Sync parity now".
 
 set -uo pipefail
 
 DELETE_THRESHOLD={{ snapraid_delete_threshold }}
+STATE_FILE="{{ snapraid_parity_state_path }}"
+STALENESS_WARN_DAYS={{ snapraid_staleness_warn_days }}
+
 log() { printf '%s snapraid-runner: %s\n' "$(date -Is)" "$*"; }
+
+# Writes the full state, preserving lastScrubAt from any previous run
+# unless this run scrubbed too (see the scrub block below, which patches
+# it in afterwards).
+#   $1 = lastSyncState ("ok" | "failed" | "aborted")
+#   $2 = 1 to stamp lastSyncAt = now, 0 to leave it as it was
+#   $3 = pendingChanges (files added/updated since last sync)
+#   $4 = deletedSinceSync
+write_state() {
+  local state="$1" stamp_sync="$2" pending="${3:-null}" deleted="${4:-null}"
+  mkdir -p "$(dirname "$STATE_FILE")"
+  local now; now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  local prev_sync_at="null" prev_scrub_at="null"
+  if [[ -f "$STATE_FILE" ]]; then
+    prev_sync_at="$(jq -c '.lastSyncAt // null' "$STATE_FILE" 2>/dev/null || echo null)"
+    prev_scrub_at="$(jq -c '.lastScrubAt // null' "$STATE_FILE" 2>/dev/null || echo null)"
+  fi
+  local sync_at="$prev_sync_at"
+  [[ "$stamp_sync" == "1" ]] && sync_at="\"$now\""
+  jq -n \
+    --arg collectedAt "$now" \
+    --arg state "$state" \
+    --argjson lastSyncAt "$sync_at" \
+    --argjson lastScrubAt "$prev_scrub_at" \
+    --argjson pendingChanges "$pending" \
+    --argjson deletedSinceSync "$deleted" \
+    --argjson deletionThreshold "$DELETE_THRESHOLD" \
+    --argjson stalenessWarnDays "$STALENESS_WARN_DAYS" \
+    '{
+      collectedAt: $collectedAt,
+      lastSyncAt: $lastSyncAt,
+      lastSyncState: $state,
+      lastScrubAt: $lastScrubAt,
+      pendingChanges: $pendingChanges,
+      deletedSinceSync: $deletedSinceSync,
+      deletionThreshold: $deletionThreshold,
+      stalenessWarnDays: $stalenessWarnDays
+    }' > "${STATE_FILE}.tmp" && mv -f "${STATE_FILE}.tmp" "$STATE_FILE"
+}
+
+stamp_scrub_now() {
+  [[ -f "$STATE_FILE" ]] || return 0
+  local now; now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  jq --arg now "$now" '.lastScrubAt = $now | .collectedAt = $now' "$STATE_FILE" > "${STATE_FILE}.tmp" \
+    && mv -f "${STATE_FILE}.tmp" "$STATE_FILE"
+}
 
 log "diff"
 diff_out="$(snapraid diff 2>&1)"
@@ -21,31 +76,46 @@ printf '%s\n' "$diff_out"
 # rc 0 = no changes, 2 = changes present, anything else = error.
 if [[ $diff_rc -ne 0 && $diff_rc -ne 2 ]]; then
   log "diff failed (rc=$diff_rc); aborting without sync"
+  write_state failed 0 null null
   exit "$diff_rc"
 fi
 
 removed="$(printf '%s\n' "$diff_out" | awk '$2 == "removed" {print $1; exit}')"
 removed="${removed:-0}"
+added="$(printf '%s\n' "$diff_out" | awk '$2 == "added" {print $1; exit}')"
+added="${added:-0}"
+updated="$(printf '%s\n' "$diff_out" | awk '$2 == "updated" {print $1; exit}')"
+updated="${updated:-0}"
+pending=$(( added + updated ))
 log "removed since last sync: $removed (threshold $DELETE_THRESHOLD)"
 
 if (( removed > DELETE_THRESHOLD )); then
   log "ABORT: $removed removals exceed threshold $DELETE_THRESHOLD."
   log "A disk may have failed to mount. Investigate, then run"
   log "'snapraid sync' by hand once you are sure the deletions are real."
+  write_state aborted 0 "$pending" "$removed"
   exit 1
 fi
 
 if [[ $diff_rc -eq 0 ]]; then
   log "no changes; nothing to sync"
+  write_state ok 0 "$pending" "$removed"
 else
   log "sync"
-  snapraid sync || { log "sync failed (rc=$?)"; exit 1; }
+  if ! snapraid sync; then
+    rc=$?
+    log "sync failed (rc=$rc)"
+    write_state failed 0 "$pending" "$removed"
+    exit 1
+  fi
+  write_state ok 1 0 0
 fi
 
 {% if snapraid_scrub_enabled %}
 log "scrub {{ snapraid_scrub_percent }}% older than {{ snapraid_scrub_older_than }}d"
 snapraid scrub -p {{ snapraid_scrub_percent }} -o {{ snapraid_scrub_older_than }} \
   || log "scrub reported issues (rc=$?) — check the log"
+stamp_scrub_now
 {% endif %}
 
 log "done"

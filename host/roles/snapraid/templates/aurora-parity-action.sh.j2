@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# On-demand SnapRAID actions for the Aurora dashboard's "Sync parity now"
+# button and its scrub action. Managed by host/roles/snapraid.
+#
+# This is the one script the dashboard's unprivileged container is
+# allow-listed to run for parity actions (via CommandRunner, fixed argv,
+# no shell interpolation of anything the operator supplied — there is
+# nothing to supply; the only input is which of two fixed subcommands).
+#
+#   sync  — re-runs the same guarded nightly runner, so an impatient
+#           click at 11pm gets the same deletion-threshold protection as
+#           the 3:30am timer. No logic duplicated here on purpose.
+#   scrub — runs snapraid scrub directly; safe to run at any time since
+#           it only verifies existing parity against the data, and
+#           stamps lastScrubAt in the same state file the runner writes.
+#
+# Usage: aurora-parity-action <sync|scrub>
+
+set -uo pipefail
+
+ACTION="${1:-}"
+STATE_FILE="{{ snapraid_parity_state_path }}"
+
+log() { printf '%s aurora-parity-action: %s\n' "$(date -Is)" "$*"; }
+
+case "$ACTION" in
+  sync)
+    exec /usr/local/bin/snapraid-runner
+    ;;
+  scrub)
+    log "scrub {{ snapraid_scrub_percent }}% older than {{ snapraid_scrub_older_than }}d"
+    scrub_rc=0
+    snapraid scrub -p {{ snapraid_scrub_percent }} -o {{ snapraid_scrub_older_than }} || scrub_rc=$?
+    if [[ $scrub_rc -ne 0 ]]; then
+      log "scrub reported issues (rc=$scrub_rc) — check the log"
+    fi
+
+    mkdir -p "$(dirname "$STATE_FILE")"
+    now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    if [[ -f "$STATE_FILE" ]]; then
+      jq --arg now "$now" '.lastScrubAt = $now | .collectedAt = $now' "$STATE_FILE" > "${STATE_FILE}.tmp" \
+        && mv -f "${STATE_FILE}.tmp" "$STATE_FILE"
+    else
+      # First-ever run before any sync has happened: an honest "never
+      # synced, but just scrubbed" rather than manufacturing a sync we
+      # never did.
+      jq -n --arg now "$now" '{
+        collectedAt: $now, lastSyncAt: null, lastSyncState: "never",
+        lastScrubAt: $now, pendingChanges: null, deletedSinceSync: null,
+        deletionThreshold: {{ snapraid_delete_threshold }},
+        stalenessWarnDays: {{ snapraid_staleness_warn_days }}
+      }' > "$STATE_FILE"
+    fi
+    log "done"
+    exit "$scrub_rc"
+    ;;
+  *)
+    echo "usage: aurora-parity-action <sync|scrub>" >&2
+    exit 2
+    ;;
+esac

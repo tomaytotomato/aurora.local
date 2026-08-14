@@ -7,6 +7,7 @@ import com.tomaytotomato.aurora.persistence.NotificationDeliveryRepo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -64,6 +65,10 @@ public class NotificationsService {
   private final NotificationDeliveryRepo deliveries;
   private final HttpClient http;
 
+  // Marked explicitly because the test-visible three-arg constructor below
+  // makes the choice ambiguous, and Spring falls back to looking for a
+  // default constructor rather than picking one.
+  @Autowired
   public NotificationsService(NotificationChannelRepo channels, NotificationDeliveryRepo deliveries) {
     this(channels, deliveries, HttpClient.newBuilder()
         .connectTimeout(CONNECT_TIMEOUT)

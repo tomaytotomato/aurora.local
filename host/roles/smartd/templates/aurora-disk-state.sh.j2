@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Collects disk facts + SMART data for the Aurora dashboard's /disks page.
+# Managed by host/roles/smartd. The dashboard container is unprivileged and
+# cannot run smartctl itself, so this writes a small JSON file it reads
+# instead. See packages/dashboard/docs/DISKS_PAGE_DESIGN.md.
+#
+# Read-only: every command below is a read (smartctl -a, lsblk, df).
+# Never touches a disk beyond issuing those reads.
+
+set -uo pipefail
+
+OUT="{{ smartd_disk_state_path }}"
+TMP="${OUT}.tmp"
+
+log() { printf '%s aurora-disk-state: %s\n' "$(date -Is)" "$*" >&2; }
+
+if ! command -v smartctl >/dev/null 2>&1; then
+  log "smartctl not found; nothing to collect"
+  exit 0
+fi
+if ! command -v jq >/dev/null 2>&1; then
+  log "jq not found; nothing to collect"
+  exit 0
+fi
+
+mkdir -p "$(dirname "$OUT")"
+
+# Which mounted paths belong to the mergerfs pool / a snapraid parity disk.
+# Read from the other roles' own variables rather than duplicating config;
+# this script never writes to those roles, only reads their defaults.
+DATA_MOUNTS_JSON='{{ mergerfs_branches | default([]) | to_json }}'
+PARITY_DIRS_JSON='{{ (snapraid_parity_files | default([])) | map("dirname") | list | to_json }}'
+POOL_CONFIGURED={{ (mergerfs_enabled | default(false)) | lower }}
+POOL_MOUNTPOINT="{{ mergerfs_mountpoint | default('/mnt/storage') }}"
+POOL_CREATE_POLICY="{{ disk_pool_create_policy }}"
+POOL_MIN_FREE_BYTES={{ disk_pool_min_free_bytes }}
+
+role_for_mount() {
+  local mp="$1"
+  if [[ -z "$mp" ]]; then echo unassigned; return; fi
+  if [[ "$mp" == "/" ]]; then echo system; return; fi
+  if jq -e --arg m "$mp" 'any(.[]?; . == $m)' >/dev/null 2>&1 <<<"$DATA_MOUNTS_JSON"; then
+    echo data; return
+  fi
+  if jq -e --arg m "$mp" 'any(.[]?; . == $m)' >/dev/null 2>&1 <<<"$PARITY_DIRS_JSON"; then
+    echo parity; return
+  fi
+  echo unassigned
+}
+
+disks_json="[]"
+
+while IFS= read -r name; do
+  dev="/dev/${name}"
+  [[ -b "$dev" ]] || continue
+
+  # Stable id: prefer /dev/disk/by-id so it survives a re-cable; fall
+  # back to the kernel name (sda, sdb, ...) when no by-id link exists.
+  id="$name"
+  if [[ -d /dev/disk/by-id ]]; then
+    for link in /dev/disk/by-id/*; do
+      [[ -e "$link" ]] || continue
+      if [[ "$(readlink -f "$link")" == "$dev" ]]; then
+        id="$(basename "$link")"
+        break
+      fi
+    done
+  fi
+
+  size_bytes="$(lsblk -bndo SIZE "$dev" 2>/dev/null | head -n1)"
+  size_bytes="${size_bytes:-0}"
+
+  # First mounted partition (or the disk itself for a directly-mounted
+  # whole-disk filesystem) — most homelab data disks are a single
+  # partition, and this is a homelab tool.
+  mountpoint="$(lsblk -lnpo MOUNTPOINT "$dev" 2>/dev/null | grep -v '^$' | head -n1 || true)"
+  fstype="$(lsblk -lnpo FSTYPE "$dev" 2>/dev/null | grep -v '^$' | head -n1 || true)"
+
+  used_bytes="null"
+  if [[ -n "$mountpoint" ]]; then
+    u="$(df -B1 --output=used "$mountpoint" 2>/dev/null | tail -n1 | tr -d ' ')"
+    [[ -n "$u" ]] && used_bytes="$u"
+  fi
+
+  role="$(role_for_mount "${mountpoint:-}")"
+
+  # smartctl's exit code is a bitmask of health/attribute warnings, not a
+  # plain success flag — a perfectly readable drive with any history of
+  # SMART errors returns non-zero. Whether we got usable JSON is judged
+  # on the JSON itself, never on that exit code.
+  smart_json='{"supported": false}'
+  smart_out="$(smartctl -a -j -n standby "$dev" 2>/dev/null)"
+  if [[ -n "$smart_out" ]] && printf '%s' "$smart_out" | jq -e 'has("smart_status")' >/dev/null 2>&1; then
+    smart_json="$(printf '%s' "$smart_out" | jq '{
+      supported: true,
+      smart_status: (.smart_status // {"passed": null}),
+      power_on_time: (.power_on_time // null),
+      temperature: (.temperature // null),
+      model_name: (.model_name // null),
+      serial_number: (.serial_number // null),
+      ata_smart_attributes: (.ata_smart_attributes // null),
+      ata_smart_self_test_log: (.ata_smart_self_test_log // null)
+    }')"
+
+    # smartctl's self-test log carries lifetime_hours (power-on hours at
+    # test time), never a wall-clock date. Approximate one from the
+    # current power-on-hours delta, assuming continuous power since —
+    # reasonable for a box that does not aggressively sleep its disks.
+    poweron_hours="$(printf '%s' "$smart_json" | jq -r '.power_on_time.hours // empty')"
+    test_lifetime="$(printf '%s' "$smart_json" | jq -r '.ata_smart_self_test_log.standard.table[0].lifetime_hours // empty')"
+    if [[ -n "$poweron_hours" && -n "$test_lifetime" ]]; then
+      hours_ago=$(( poweron_hours - test_lifetime ))
+      (( hours_ago < 0 )) && hours_ago=0
+      computed_at="$(date -u -d "@$(( $(date -u +%s) - hours_ago * 3600 ))" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
+      if [[ -n "$computed_at" ]]; then
+        smart_json="$(printf '%s' "$smart_json" | jq --arg at "$computed_at" \
+          '.ata_smart_self_test_log.standard.table[0].computed_at = $at')"
+      fi
+    fi
+  fi
+
+  model="$(printf '%s' "$smart_json" | jq -r '.model_name // empty')"
+  serial="$(printf '%s' "$smart_json" | jq -r '.serial_number // empty')"
+  [[ -z "$model" ]] && model="$(lsblk -ndo MODEL "$dev" 2>/dev/null | sed 's/[[:space:]]*$//')"
+  [[ -z "$serial" ]] && serial="$(lsblk -ndo SERIAL "$dev" 2>/dev/null)"
+
+  disk_entry="$(jq -n \
+    --arg id "$id" \
+    --arg device "$dev" \
+    --arg model "${model:-}" \
+    --arg serial "${serial:-}" \
+    --argjson sizeBytes "$size_bytes" \
+    --arg role "$role" \
+    --arg mountpoint "${mountpoint:-}" \
+    --arg filesystem "${fstype:-}" \
+    --argjson usedBytes "${used_bytes:-null}" \
+    --argjson smart "$smart_json" \
+    '{
+      id: $id, device: $device,
+      model: (if $model == "" then null else $model end),
+      serial: (if $serial == "" then null else $serial end),
+      sizeBytes: $sizeBytes,
+      role: $role,
+      mountpoint: (if $mountpoint == "" then null else $mountpoint end),
+      filesystem: (if $filesystem == "" then null else $filesystem end),
+      usedBytes: $usedBytes,
+      smart: $smart
+    }')"
+
+  disks_json="$(jq -c --argjson d "$disk_entry" '. + [$d]' <<<"$disks_json")"
+done < <(lsblk -ndo NAME,TYPE | awk '$2=="disk"{print $1}')
+
+jq -n \
+  --arg collectedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --argjson disks "$disks_json" \
+  --argjson poolConfigured "$POOL_CONFIGURED" \
+  --arg poolMountpoint "$POOL_MOUNTPOINT" \
+  --arg poolCreatePolicy "$POOL_CREATE_POLICY" \
+  --argjson poolMinFreeBytes "$POOL_MIN_FREE_BYTES" \
+  '{
+    collectedAt: $collectedAt,
+    disks: $disks,
+    pool: {
+      configured: $poolConfigured,
+      mountpoint: $poolMountpoint,
+      createPolicy: $poolCreatePolicy,
+      minFreeBytes: $poolMinFreeBytes
+    }
+  }' > "$TMP" && mv -f "$TMP" "$OUT"
+
+log "wrote $OUT ($(jq '.disks | length' "$OUT") disks)"

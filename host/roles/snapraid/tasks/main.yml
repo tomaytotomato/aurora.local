@@ -14,6 +14,19 @@
     name: snapraid
     state: present
 
+- name: Install jq (for the parity state file)
+  ansible.builtin.apt:
+    name: jq
+    state: present
+
+- name: Ensure the dashboard state directory exists
+  ansible.builtin.file:
+    path: "{{ snapraid_parity_state_path | dirname }}"
+    state: directory
+    owner: "{{ home_user | default('bruce') }}"
+    group: "{{ home_user | default('bruce') }}"
+    mode: "0755"
+
 # Default content layout: one index on the host, plus one on every data
 # disk, so the index survives the loss of any single disk.
 - name: Derive default content files when none given
@@ -49,6 +62,14 @@
   ansible.builtin.template:
     src: snapraid-runner.sh.j2
     dest: /usr/local/bin/snapraid-runner
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the on-demand parity-action helper (dashboard "Sync now" / scrub)
+  ansible.builtin.template:
+    src: aurora-parity-action.sh.j2
+    dest: /usr/local/bin/aurora-parity-action
     owner: root
     group: root
     mode: "0755"

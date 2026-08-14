@@ -123,7 +123,8 @@ public abstract class AuroraIntegrationTest {
    */
   private static final List<String> MUTABLE_TABLES =
       List.of("settings", "audit_event", "security_dismissal", "metric_sample", "admin_user",
-          "proxy_route", "notification_channel", "notification_delivery");
+          "proxy_route", "notification_channel", "notification_delivery",
+          "vpn_config", "vpn_peer", "vpn_openvpn_config", "vpn_openvpn_client");
 
   @BeforeEach
   void resetTestWorld() throws IOException {
