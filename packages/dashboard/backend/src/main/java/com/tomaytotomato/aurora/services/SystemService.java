@@ -97,6 +97,10 @@ public class SystemService {
     // caddy.snippet fragment, so the gate flips true rather than hiding a
     // working page.
     capabilities.put("proxy", true);
+    // Notifications domain (Notifications card): NotificationsController/
+    // NotificationsService ship real channel CRUD and an honest test-send
+    // over outbound HTTP, so this gate flips true too.
+    capabilities.put("notifications", true);
     out.put("capabilities", capabilities);
     return out;
   }

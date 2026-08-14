@@ -33,7 +33,7 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:db/migration/V1__init.sql,classpath:db/migration/V2__security_dismissal.sql,classpath:db/migration/V3__admin_user_role.sql,classpath:db/migration/V4__proxy_routes.sql
+      schema-locations: classpath:db/migration/V1__init.sql,classpath:db/migration/V2__security_dismissal.sql,classpath:db/migration/V3__admin_user_role.sql,classpath:db/migration/V4__proxy_routes.sql,classpath:db/migration/V5__notifications.sql
       # Matches production, and for the same reason: SQLite has no
       # ADD COLUMN IF NOT EXISTS, so re-running V3 against a database that
       # already has the columns fails. The in-memory database is shared

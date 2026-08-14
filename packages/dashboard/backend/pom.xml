@@ -29,6 +29,7 @@
     <snakeyaml.version>2.6</snakeyaml.version>
     <argon2.version>2.11</argon2.version>
     <testcontainers.version>1.21.3</testcontainers.version>
+    <wiremock.version>3.9.1</wiremock.version>
   </properties>
 
   <dependencies>
@@ -110,6 +111,22 @@
     <dependency>
       <groupId>org.springframework.security</groupId>
       <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!--
+      Notifications domain: NotificationsService makes real outbound HTTP
+      calls (ntfy / Discord webhook / generic webhook). WireMock stands in
+      for those targets in tests rather than mocking HttpClient, so the
+      whole request/response cycle — including a genuinely unreachable
+      port and a genuine timeout — is exercised. wiremock-standalone
+      bundles its own shaded Jetty + Jackson (avoids clashing with Spring
+      Boot's own Jackson) and JUnit 5 support (WireMockExtension).
+    -->
+    <dependency>
+      <groupId>org.wiremock</groupId>
+      <artifactId>wiremock-standalone</artifactId>
+      <version>${wiremock.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
