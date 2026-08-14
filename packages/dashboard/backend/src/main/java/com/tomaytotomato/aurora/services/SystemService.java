@@ -92,6 +92,11 @@ public class SystemService {
     // consumes GET /api/security/findings instead of rendering the
     // 'lands with M4' empty state, and the sidebar reveals /security.
     capabilities.put("securityScanner", true);
+    // DisksController + DisksService ship reading host/roles/smartd + snapraid's
+    // state files; true regardless of whether those roles are enabled on this
+    // box, since every endpoint degrades to honest defaults (no-pool, never
+    // synced) rather than 500ing when the files are absent.
+    capabilities.put("disks", true);
     out.put("capabilities", capabilities);
     return out;
   }
