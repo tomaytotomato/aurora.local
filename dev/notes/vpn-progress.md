@@ -100,3 +100,52 @@ wire *shape*, not these values):
 Next: controller integration tests (`VpnControllerIntegrationTest`,
 `OpenVpnControllerIntegrationTest`) covering the five honest-state
 scenarios, then the capability flag flip.
+
+## 2026-08-14 — done: 578 tests, capability flag on
+
+Wrote `VpnControllerIntegrationTest` (24 tests) and
+`OpenVpnControllerIntegrationTest` (8 tests) against
+`AuroraIntegrationTest`'s real SQLite + `FakeCommandRunner`.
+
+Hit one real bug while wiring the tests up: `V4__vpn.sql` existed but
+nothing ran it. This backend doesn't actually use Flyway (`spring.flyway.
+enabled: false` — the comment says SQLite dialect support isn't in
+Flyway 13 community yet) despite the `V*__name.sql` filenames; the
+real mechanism is `spring.sql.init.schema-locations`, an explicit
+comma-separated file list, duplicated in both
+`src/main/resources/application.yml` and, separately, in
+`src/test/resources/application.yml` (the test one shadows the main
+one rather than merging with it — same classpath location, test-classes
+wins). Every `vpn_config`/`vpn_peer` query failed with "no such table"
+until I added `V4__vpn.sql` to *both* lists. Worth flagging because
+it's an easy thing to miss again on the next domain: adding a new
+migration file is not enough on its own here.
+
+Also caught a good false positive while writing the private-key-
+hygiene test: attaching a Logback appender to the *root* logger at
+`Level.ALL` made the test fail — not because Aurora logged the key,
+but because Spring MVC's own message-converter logging ("Writing
+[...]") dumps the full response body at DEBUG when its own logger is
+that verbose. Scoped the appender to the `com.tomaytotomato.aurora`
+logger at its real configured level (matches `application.yml`'s
+`DEBUG` for that package, `INFO` elsewhere) instead, which is the
+honest test of what the brief actually asked: does *our* code log one.
+
+Final state:
+- All 13 `/vpn/*` paths implemented and covered.
+- `mvn test`: 578 tests (543 baseline + 3 `WireGuardKeysTests` + 24
+  `VpnControllerIntegrationTest` + 8 `OpenVpnControllerIntegrationTest`),
+  0 failures.
+- `OpenApiConformanceTest` green; the "not yet implemented" count fell
+  by exactly 13.
+- `SystemService.info().capabilities.vpn` flipped to `true` — the
+  domain is genuinely served, not stubbed. The peer re-download gap is
+  a security decision (see the 409 entries above), not an unfinished
+  endpoint, so it doesn't block the flag.
+
+What I'd want a reviewer to look at hardest: the peer-secret-retention
+decision (409 on repeat config/qrcode downloads) and the two
+assumptions flagged in the previous entry (default DNS, guessed LAN
+CIDR for split-tunnel). Everything else follows the existing
+codebase's own patterns closely enough that it should read as
+unsurprising.
