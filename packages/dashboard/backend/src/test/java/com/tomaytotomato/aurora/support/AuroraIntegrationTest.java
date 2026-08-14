@@ -122,7 +122,8 @@ public abstract class AuroraIntegrationTest {
    * {@code @BeforeEach}, which JUnit runs after this one.
    */
   private static final List<String> MUTABLE_TABLES =
-      List.of("settings", "audit_event", "security_dismissal", "metric_sample", "admin_user");
+      List.of("settings", "audit_event", "security_dismissal", "metric_sample", "admin_user",
+          "vpn_config", "vpn_peer", "vpn_openvpn_config", "vpn_openvpn_client");
 
   @BeforeEach
   void resetTestWorld() throws IOException {
