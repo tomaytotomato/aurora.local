@@ -126,6 +126,7 @@ regulation:
 # Local SQLite. Encrypted at rest with AUTHELIA_STORAGE_ENCRYPTION_KEY
 # (managed by IdentitySecretsService — see D3).
 storage:
+  encryption_key: '{{ env "AUTHELIA_STORAGE_ENCRYPTION_KEY" }}'
   local:
     path: /data/db.sqlite3
 
