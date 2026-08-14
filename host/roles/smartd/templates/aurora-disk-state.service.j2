@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Collect disk + SMART state for the Aurora dashboard
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/aurora-disk-state
+Nice=10
+IOSchedulingClass=idle

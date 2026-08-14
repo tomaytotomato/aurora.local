@@ -13,3 +13,27 @@ smartd_long_test: "L/../../6/03"
 # Where to send alerts. Empty = log to syslog only (no MTA needed).
 # Set to an address only if the host has a working local mailer.
 smartd_notify_email: ""
+
+# ---- disk-state collector (dashboard /disks) ----
+# smartd itself only watches for alerts; it never dumps structured SMART
+# data anywhere. This adds a second, independent timer that runs smartctl
+# across every disk and writes a small JSON file the aurora-dashboard
+# container (unprivileged, no smartctl access of its own) reads. See
+# packages/dashboard/docs/DISKS_PAGE_DESIGN.md.
+smartd_disk_state_enabled: true
+
+# Where the repo lives on the host. Mirrors group_vars' home_local_root
+# default so this works out of the box; override alongside it if you
+# changed that.
+smartd_disk_state_path: "{{ home_local_root | default('/home/' + (home_user | default('bruce')) + '/aurora.local') }}/packages/dashboard/state/disks.json"
+
+# How often to re-collect. SMART attributes barely move hour to hour;
+# this just bounds how stale `collectedAt` can be.
+smartd_disk_state_oncalendar: "*:0/15"
+
+# Mirrors mergerfs's own `category.create` + `minfreespace` mount options
+# (host/roles/mergerfs/defaults). Not read from there directly — Ansible
+# role boundaries stay one-directional here — so keep these two in sync
+# by hand if you change mergerfs_options.
+disk_pool_create_policy: "mfs"
+disk_pool_min_free_bytes: 21474836480  # 20G

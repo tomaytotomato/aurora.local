@@ -48,6 +48,11 @@ packages/identity/authelia/users_database.yml
 # Written by scripts/pin.sh --apply; sourced by scripts/lib/render.sh.
 packages/*/pins.env
 
+# ---- disks state ----
+# Written on a timer by host/roles/smartd + host/roles/snapraid; read by
+# DisksService. Real host output, never checked in.
+packages/dashboard/state/
+
 # ---- misc ----
 .DS_Store
 *.swp

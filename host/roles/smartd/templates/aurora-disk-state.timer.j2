@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Run the Aurora disk-state collector on a timer
+
+[Timer]
+OnCalendar={{ smartd_disk_state_oncalendar }}
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target
