@@ -1,0 +1,13 @@
+name: storage
+title: Storage
+description: fixture
+category: storage
+depends_on: [core]
+recommends: []
+profiles: {}
+ports: []
+requires:
+  min_ram_mb: 256
+  host_roles: []
+required_env: []
+post_install_notes: ""

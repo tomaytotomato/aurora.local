@@ -314,6 +314,26 @@ paths:
     post:
       tags: [packages]
       summary: Stop and disable a package
+      description: >
+        Uninstall: stops the package's containers and removes it from
+        .state.yml's enabled[]. Reversible only by installing again.
+        Data under data/<name> is left on disk.
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '202':
+          description: Job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+  /packages/{name}/stop:
+    post:
+      tags: [packages]
+      summary: Stop a package without uninstalling it
+      description: >
+        Disable: stops the package's containers but leaves it enrolled in
+        .state.yml's enabled[], so a plain Start brings it back with no
+        reinstall. The counterpart to /enable and /disable, which both
+        change enrolment as well as run state.
       parameters: [{ $ref: '#/components/parameters/PkgName' }]
       responses:
         '202':
@@ -2032,7 +2052,7 @@ components:
 
     JobKind:
       type: string
-      enum: [enable, disable, update, update-check, start, restart, backup, restore, parity-sync, parity-scrub, deploy]
+      enum: [enable, disable, stop, update, update-check, start, restart, backup, restore, parity-sync, parity-scrub, deploy]
     JobState:
       type: string
       enum: [queued, running, success, failed]

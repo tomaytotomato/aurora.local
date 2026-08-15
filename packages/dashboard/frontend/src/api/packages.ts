@@ -239,10 +239,21 @@ export const PackagesApi = {
   async setEnv(name: string, vars: Record<string, string>): Promise<void> {
     await http.put(`/packages/${name}/env`, vars);
   },
+  /** Install: enrol the package and start it. */
   async enable(name: string): Promise<JobRef> {
     const { data } = await http.post<JobRef>(`/packages/${name}/enable`);
     return data;
   },
+  /**
+   * Disable: stop the package's containers but leave it enrolled, so a
+   * plain Start brings it back with no reinstall. Distinct from
+   * `disable()` below, which un-enrols as well as stopping.
+   */
+  async stop(name: string): Promise<JobRef> {
+    const { data } = await http.post<JobRef>(`/packages/${name}/stop`);
+    return data;
+  },
+  /** Uninstall: stop the package's containers and un-enrol it. Data under data/<name> is preserved. */
   async disable(name: string): Promise<JobRef> {
     const { data } = await http.post<JobRef>(`/packages/${name}/disable`);
     return data;
