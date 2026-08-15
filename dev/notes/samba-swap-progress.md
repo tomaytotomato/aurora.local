@@ -126,3 +126,46 @@ Not yet done at this point in the log: the testbed proof (clean
 install, mount a share, read/write a file, confirm host Avahi
 untouched, check the other `storage` service — MiniDLNA — still works).
 See the next entry below for that.
+
+## Testbed proof
+
+Clean rebuild: `./dev/testbed/up.sh destroy`, then
+`AURORA_TESTBED_PACKAGES="core dashboard storage" ./dev/testbed/up.sh
+all`. First attempt at this was run backgrounded and the session
+stalled waiting on it, losing track of whether it finished — corrected
+by re-running with active foreground polling instead (short `sleep`
+plus a status check each time, so the session never goes fully idle).
+
+Once the install chain finished, `docker ps` in the VM:
+
+```
+caddy  Up About a minute (healthy)  caddy:2-alpine
+minidlna  Up About a minute (healthy)  vladgh/minidlna:latest
+aurora  Up About a minute (healthy)  aurora-dashboard:0.1.0
+samba  Up About a minute (healthy)  dockurr/samba:latest
+```
+
+All four containers reached `healthy`. `samba` took about a minute to
+flip from `health: starting` to `healthy` — its built-in health check
+is `smbclient -L` against itself, and its own log confirms there is
+exactly **one** share:
+
+```
+$ docker inspect samba --format '{{json .State.Health}}' | python3 -m json.tool
+{
+    "Status": "healthy",
+    "FailingStreak": 0,
+    "Log": [
+        {
+            "Output": "\n\tSharename       Type      Comment\n\t---------       ----      -------\n\tmedia           Disk      Shared\n\tIPC$            IPC       IPC Service (samba)\nSMB1 disabled -- no workgroup available\n"
+        }
+    ]
+}
+```
+
+This confirms the "one share" reading of the old `dperson/samba`
+config directly against the running container, not just against the
+compose file: `media` is the only `Disk` share exported (`IPC$` is
+Samba's own internal service, not a data share). The env-var swap was
+sufficient — no share was dropped, and no mounted `smb.conf` was
+needed.
