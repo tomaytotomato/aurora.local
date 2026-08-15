@@ -72,8 +72,8 @@ is the compose service name upper-cased with `-` -> `_`)
 | documents | paperless-tika | IMAGE_PAPERLESS_TIKA | docker.io/apache/tika:latest | done -> 3.3.0.0 (actively maintained, not abandoned; multi-arch) |
 | documents | stirling-pdf | IMAGE_STIRLING_PDF | docker.io/frooodle/s-pdf:latest | done -> 2.14.3 (repo mid-migration to stirlingtools/stirling-pdf; multi-arch) |
 | filebrowser | filebrowser | IMAGE_FILEBROWSER | filebrowser/filebrowser:v2.31.2 | done -> v2.63.23, BUT project is winding down (archives 2026-09-01) |
-| git | forgejo | IMAGE_FORGEJO | codeberg.org/forgejo/forgejo:1.21 | pending |
-| git | forgejo-runner | IMAGE_FORGEJO_RUNNER | code.forgejo.org/forgejo/runner:3.5.1 | pending (verify) |
+| git | forgejo | IMAGE_FORGEJO | codeberg.org/forgejo/forgejo:1.21 | done -> 1.21.11-2 digest-froze; EOL since 2024-06, migration to v15/v16 flagged as separate project |
+| git | forgejo-runner | IMAGE_FORGEJO_RUNNER | code.forgejo.org/forgejo/runner:3.5.1 | done -> left at 3.5.1 (must move with server, not ahead of it) |
 | home-automation | homeassistant | IMAGE_HOMEASSISTANT | ghcr.io/home-assistant/home-assistant:stable | pending |
 | home-automation | mosquitto | IMAGE_MOSQUITTO | eclipse-mosquitto:2 | pending |
 | home-automation | zigbee2mqtt | IMAGE_ZIGBEE2MQTT | koenkk/zigbee2mqtt:latest | pending |
