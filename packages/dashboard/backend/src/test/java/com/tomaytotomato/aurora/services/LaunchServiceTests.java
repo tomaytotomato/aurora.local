@@ -2,6 +2,7 @@ package com.tomaytotomato.aurora.services;
 
 import com.tomaytotomato.aurora.config.AuroraProperties;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
+import com.tomaytotomato.aurora.support.FakeCommandRunner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
@@ -67,6 +68,32 @@ class LaunchServiceTests {
     List<String> tail = (List<String>) status.get("tail");
     assertTrue(tail.stream().anyMatch(s -> s.contains("hello from up")));
     assertTrue(tail.stream().anyMatch(s -> s.contains("core healthy")));
+  }
+
+  /**
+   * The self-recreation guard in up.sh only fires because this env var
+   * actually reaches the process — see scripts/up.sh's "Self-recreation
+   * guard" section. This pins the seam from the Java side so a future
+   * refactor of {@link #run} can't silently drop it while the shell-side
+   * fix keeps looking correct in isolation.
+   */
+  @Test
+  void run_sets_launched_by_marker_and_passes_packages_as_argv(@TempDir Path repo) throws Exception {
+    Path scripts = repo.resolve("scripts");
+    Files.createDirectories(scripts);
+    Path upSh = scripts.resolve("up.sh");
+    Files.writeString(upSh, "#!/usr/bin/env bash\nexit 0\n");
+
+    var fake = new FakeCommandRunner();
+    var svc = new LaunchService(props(repo), Mockito.mock(AuditEventRepo.class), null, null, fake);
+
+    LaunchService.Job job = svc.startLaunch(List.of("core", "media"));
+    awaitTerminal(job);
+    assertEquals(LaunchService.State.SUCCESS, job.state);
+
+    var invocation = fake.lastInvocation();
+    assertEquals(List.of("bash", upSh.toString(), "core", "media"), invocation.argv());
+    assertEquals("aurora-dashboard", invocation.env().get("AURORA_LAUNCHED_BY"));
   }
 
   @Test

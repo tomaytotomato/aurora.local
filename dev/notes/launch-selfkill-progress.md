@@ -62,14 +62,33 @@ six containers `Created` and none `Started`, plus a stray renamed
   (`AURORA_INVOKED_BY=aurora-dashboard`) for the same purpose, but its
   only current caller is `DisksController` for SnapRAID parity
   sync/scrub — unrelated to compose. `UpdatesService` only reads image
-  digests; it never re-runs `update.sh`/`up.sh`. Flagging this because
-  when package enable/disable or "apply update" gets wired up to a real
-  `up.sh`/`down.sh` invocation, whoever does it needs to reuse this same
-  guard (and ideally settle on one marker name — having both
-  `AURORA_LAUNCHED_BY` and `AURORA_INVOKED_BY` mean "the dashboard
-  invoked this from inside itself" is exactly the kind of inconsistency
-  that lets this bug come back under a third name).
+  digests; it never re-runs `update.sh`/`up.sh`.
 - `scripts/update.sh` is just `exec ./scripts/up.sh "$@"` — `exec`
   preserves the calling process's environment, so once `up.sh` honours
-  `AURORA_LAUNCHED_BY`, `update.sh` does too with no separate change
-  needed, for whenever it is called in-container.
+  the markers, `update.sh` does too with no separate change needed, for
+  whenever it is called in-container.
+
+## Update: two markers, one guard (flagged by the parallel seam audit)
+
+The audit running alongside this fix caught exactly the loose end noted
+above before it shipped: `AURORA_LAUNCHED_BY` (LaunchService) and
+`AURORA_INVOKED_BY` (JobService.submitCommand) are two independently
+invented names for the identical fact — "this process is running inside
+the dashboard's own container." A guard that only recognised one of them
+would look correct today (only `LaunchService` calls `up.sh` right now)
+and then quietly fail to protect whichever in-container job gets wired
+up to `up.sh`/`down.sh` next under the other name.
+
+Decided to converge the *shell-side check*, not the Java-side names:
+`up.sh` and `down.sh` now treat `AURORA_LAUNCHED_BY=aurora-dashboard` OR
+`AURORA_INVOKED_BY=aurora-dashboard` as the same trigger, with a comment
+in both scripts explaining why two names exist and which Java class sets
+each. Renaming one of the Java-side markers to match the other was
+rejected: `AURORA_INVOKED_BY` is JobService's generic marker for every
+kind of in-container job (backup, restore, parity sync/scrub, and
+eventually enable/disable/update), and calling a SnapRAID scrub a
+"launch" would be the wrong word for what's happening. Added a matching
+regression test (`JobsControllerIntegrationTest`, "tags the environment
+so a shelled-out script knows it is self invoked") pinning that
+`AURORA_INVOKED_BY` reaches the command runner, alongside the existing
+one for `AURORA_LAUNCHED_BY` in `LaunchServiceTests`.
