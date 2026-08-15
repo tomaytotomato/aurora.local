@@ -3,6 +3,7 @@ package com.tomaytotomato.aurora.support;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion.VersionFlag;
@@ -43,9 +44,9 @@ import java.util.Set;
  *       union style rather than the 3.0 {@code nullable: true} flag.</li>
  *   <li><b>Extra properties the spec never mentions</b> — rejected, at
  *       the root of the body and (for a list response) at the shape of
- *       each item. See {@link OpenApiSpec#validationSchemaFor} for why
- *       that check stops at one level rather than recursing everywhere.
- *       This is the strictness that would have caught the
+ *       each item. See {@link OpenApiSpec#validationSchemaFor(JsonNode)}
+ *       for why that check stops at one level rather than recursing
+ *       everywhere. This is the strictness that would have caught the
  *       {@code PackagesController} bug even if, hypothetically, it had
  *       kept every required field present alongside the wrapper.</li>
  *   <li><b>A schema explicitly marked permissive</b> (an
@@ -78,21 +79,27 @@ import java.util.Set;
  * drift, not a general-purpose spec linter, and enforcing format would
  * risk failing on a value that is a perfectly good timestamp just not
  * bit-for-bit the dialect the validator prefers.
+ *
+ * <h2>Known, reported, out-of-scope gaps</h2>
+ *
+ * openapi.yaml is out of bounds for this piece of work — it belongs to a
+ * separate, concurrent change — so the handful of genuine violations this
+ * check found while it was being built are reported, not fixed (see
+ * {@code dev/notes/api-contract-testing-progress.md}). Each is carved out
+ * as narrowly as possible: a single named field on a single named
+ * operation, never "stop checking this endpoint". A registry entry
+ * silencing an operation wholesale would have silenced this class's own
+ * proof that it works — see the progress log entry for how that nearly
+ * happened here.
  */
 public final class OpenApiConformance implements ResultMatcher {
 
   private static final JsonSchemaFactory FACTORY = JsonSchemaFactory.getInstance(VersionFlag.V202012);
 
   /**
-   * A specific, named field that a request body sends and the backend
-   * reads, but openapi.yaml's requestBody schema for that operation does
-   * not mention. Stripped from the instance before validation so the rest
-   * of the body still gets full checking; not a blanket exemption for the
-   * operation.
-   *
-   * <p>openapi.yaml is out of bounds for this piece of work — it belongs
-   * to a separate, concurrent change — so this is reported rather than
-   * fixed. See {@code dev/notes/api-contract-testing-progress.md}.
+   * A specific, named field a request body sends and the backend reads,
+   * but the requestBody schema for that operation does not mention.
+   * Stripped from the instance before validation.
    *
    * <p>{@code POST /onboarding/admin} sends {@code tz} (the box's
    * timezone, read by {@code OnboardingService.createInitialAdmin}) but
@@ -104,53 +111,91 @@ public final class OpenApiConformance implements ResultMatcher {
   );
 
   /**
-   * An operation + direction where the spec's schema is a structurally
-   * wrong fit for what the backend actually and reasonably does — not a
-   * one-field typo, so not something {@link #KNOWN_UNDOCUMENTED_REQUEST_FIELDS}
-   * can express. Logged loudly (stderr, visible in CI output) rather than
-   * silently accepted, but does not fail the build: openapi.yaml is out of
-   * bounds here, and each of these needs an authoring decision this piece
-   * of work is not positioned to make unilaterally. See
-   * {@code dev/notes/api-contract-testing-progress.md} for the report to
-   * the owner.
+   * A specific, named field a response body sends that the response
+   * schema for that operation does not mention. Stripped from the
+   * instance before validation — the same trick as
+   * {@link #KNOWN_UNDOCUMENTED_REQUEST_FIELDS}, just in the other
+   * direction.
+   *
+   * <p>{@code GET /packages/{name} -> 200} (and {@code GET /packages},
+   * which returns the same domain record and would show the identical
+   * gap the moment anything tests it): the {@code Package} record
+   * serialises {@code recommends}, {@code profiles}, {@code requiredEnv},
+   * {@code postInstallNotes} and {@code sso}, none of which
+   * {@code PackageSummary}/{@code PackageDetail} document. Every one of
+   * them is read by the frontend elsewhere ({@code sso} gates the SSO
+   * badge), so trimming the backend response is not a safe unilateral
+   * call — this needs someone to decide whether the fields get
+   * documented or the wire shape gets a dedicated view model.
+   */
+  private static final Map<String, Set<String>> KNOWN_UNDOCUMENTED_RESPONSE_FIELDS = Map.of(
+      "GET /packages/{name} -> 200", Set.of("recommends", "profiles", "requiredEnv", "postInstallNotes", "sso")
+  );
+
+  /**
+   * A specific, named response field that comes back {@code null} in a
+   * legitimate case the spec's schema does not allow for (typed as a
+   * plain, non-nullable value). The {@code null} is replaced with a
+   * placeholder of the same JSON type before validation, so the rest of
+   * the object still gets full checking — including its own
+   * {@code required}, so a response that dropped the field entirely
+   * still fails.
+   *
+   * <p>{@code GET /disks/{id}/smart -> 200}: {@code DiskSmart.collectedAt}
+   * is a required plain {@code string}, but a disk with no SMART support
+   * has nothing to collect and the backend correctly answers
+   * {@code collectedAt: null} rather than 404ing the whole resource.
+   */
+  private static final Map<String, Set<String>> KNOWN_NULLABLE_RESPONSE_FIELDS = Map.of(
+      "GET /disks/{id}/smart -> 200", Set.of("collectedAt")
+  );
+
+  /**
+   * An operation whose requestBody schema requires fields the operation
+   * does not actually need — reused wholesale from a stricter sibling
+   * schema rather than authored for this operation. The named fields are
+   * dropped from the named {@code $defs} schema's own {@code required}
+   * list for this validation only (see
+   * {@link OpenApiSpec#validationSchemaFor(JsonNode, Map)}); everything
+   * else about the schema, including types, enums and any field that
+   * <em>is</em> present, is still checked in full.
    *
    * <ul>
-   *   <li>{@code REQUEST PATCH /notifications/channels/{id}} — the
-   *       requestBody is an {@code allOf} of the full {@code ChannelDraft}
-   *       (which requires {@code kind, name, target, events}), but the
-   *       operation is a partial update ("Change a channel, or mute it")
-   *       and the backend correctly accepts e.g. {@code {"enabled": false}}
-   *       alone.</li>
-   *   <li>{@code REQUEST POST /system/import} — the requestBody is
+   *   <li>{@code PATCH /notifications/channels/{id}} — requestBody is an
+   *       {@code allOf} of the full {@code ChannelDraft} (requires
+   *       {@code kind, name, target, events}), but the operation is a
+   *       partial update ("Change a channel, or mute it") and the backend
+   *       correctly accepts e.g. {@code {"enabled": false}} alone.</li>
+   *   <li>{@code POST /system/import} — requestBody is
    *       {@code SettingsExport}, the same schema as the export response,
-   *       requiring {@code exportedAt, hostname, domain, profiles, dnsMode,
-   *       settings}. {@code SettingsPortabilityController.importSettings}
+   *       requiring {@code exportedAt, hostname, domain, profiles,
+   *       dnsMode, settings}. {@code SettingsPortabilityController.importSettings}
    *       only ever reads {@code version}, {@code enabledPackages} and
-   *       {@code domain} from the payload — everything else is genuinely
-   *       optional in practice.</li>
-   *   <li>{@code RESPONSE GET /disks/{id}/smart -> 200} — {@code DiskSmart.collectedAt}
-   *       is typed as a required plain {@code string}, but a disk with no
-   *       SMART support has nothing to collect and the backend correctly
-   *       answers {@code collectedAt: null} rather than 404ing the whole
-   *       resource.</li>
-   *   <li>{@code RESPONSE GET /packages/{name} -> 200} — the domain record
-   *       {@code Package} (also returned as-is by {@code GET /packages},
-   *       so the same gap applies there, just with no test hitting it yet
-   *       to surface it) serialises {@code recommends}, {@code profiles},
-   *       {@code requiredEnv}, {@code postInstallNotes} and {@code sso},
-   *       none of which {@code PackageSummary}/{@code PackageDetail}
-   *       document. Every one of them is read by the frontend elsewhere
-   *       ({@code sso} in particular gates the SSO badge), so trimming the
-   *       backend response is not a safe unilateral call either — this
-   *       needs someone to decide whether the fields get documented or
-   *       the wire shape gets a dedicated view model.</li>
+   *       {@code domain} — everything else is genuinely optional in
+   *       practice.</li>
    * </ul>
    */
-  private static final Set<String> KNOWN_GAPS = Set.of(
-      "REQUEST PATCH /notifications/channels/{id}",
-      "REQUEST POST /system/import",
-      "RESPONSE GET /disks/{id}/smart -> 200",
-      "RESPONSE GET /packages/{name} -> 200"
+  private static final Map<String, Map<String, Set<String>>> KNOWN_RELAXED_REQUIRED = Map.of(
+      "PATCH /notifications/channels/{id}", Map.of("ChannelDraft", Set.of("kind", "name", "target", "events")),
+      "POST /system/import", Map.of("SettingsExport",
+          Set.of("exportedAt", "hostname", "domain", "profiles", "dnsMode", "settings"))
+  );
+
+  /**
+   * The same {@code POST /system/import} gap as {@link #KNOWN_RELAXED_REQUIRED},
+   * a different symptom: {@code SettingsExport.enabledPackages} is typed
+   * {@code items: {type: string}}, but
+   * {@code SettingsPortabilityControllerIntegrationTest.ignores_junk_in_the_package_list_rather_than_writing_it}
+   * deliberately sends {@code ["core", null, "", 42]} to pin that the
+   * backend filters exactly this junk out rather than 400ing
+   * ({@code if (o instanceof String s && !s.isBlank())} in
+   * {@code SettingsPortabilityController.importSettings}). Non-string
+   * entries are dropped from the named array field(s) before validation
+   * here too — mirroring what the backend actually does with them, not
+   * inventing new leniency.
+   */
+  private static final Map<String, Set<String>> KNOWN_JUNK_TOLERANT_ARRAY_FIELDS = Map.of(
+      "POST /system/import", Set.of("enabledPackages")
   );
 
   private final ObjectMapper mapper = new ObjectMapper();
@@ -194,16 +239,12 @@ public final class OpenApiConformance implements ResultMatcher {
     if (schema.isEmpty()) return;
 
     String template = spec.templateFor(method, path).orElse(path);
-    JsonNode instance = mapper.readTree(body);
-    Set<String> known = KNOWN_UNDOCUMENTED_REQUEST_FIELDS.get(method + " " + template);
-    if (known != null && instance instanceof ObjectNode obj) {
-      ObjectNode copy = obj.deepCopy();
-      known.forEach(copy::remove);
-      instance = copy;
-    }
+    String key = method + " " + template;
+    JsonNode instance = strip(mapper.readTree(body), KNOWN_UNDOCUMENTED_REQUEST_FIELDS.get(key));
+    instance = dropNonStringArrayEntries(instance, KNOWN_JUNK_TOLERANT_ARRAY_FIELDS.get(key));
+    Map<String, Set<String>> relax = KNOWN_RELAXED_REQUIRED.getOrDefault(key, Map.of());
 
-    validate(schema.get(), instance, body, "REQUEST " + method + " " + template,
-        "request body for " + method + " " + path);
+    validate(schema.get(), instance, relax, body, "request body for " + method + " " + path);
   }
 
   private void checkResponse(String method, String path, MockHttpServletResponse response, int status) throws Exception {
@@ -214,24 +255,56 @@ public final class OpenApiConformance implements ResultMatcher {
     if (schema.isEmpty()) return;
 
     String template = spec.templateFor(method, path).orElse(path);
-    validate(schema.get(), mapper.readTree(body), body, "RESPONSE " + method + " " + template + " -> " + status,
-        "response body for " + method + " " + path + " -> " + status);
+    String key = method + " " + template + " -> " + status;
+    JsonNode instance = strip(mapper.readTree(body), KNOWN_UNDOCUMENTED_RESPONSE_FIELDS.get(key));
+    instance = nullToPlaceholder(instance, KNOWN_NULLABLE_RESPONSE_FIELDS.get(key));
+
+    validate(schema.get(), instance, Map.of(), body, "response body for " + method + " " + path + " -> " + status);
   }
 
-  private void validate(JsonNode rawSchema, JsonNode instance, byte[] originalBody, String gapKey, String description) {
-    JsonNode validationSchema = spec.validationSchemaFor(rawSchema);
+  private void validate(JsonNode rawSchema, JsonNode instance, Map<String, Set<String>> relaxRequired,
+      byte[] originalBody, String description) {
+    JsonNode validationSchema = spec.validationSchemaFor(rawSchema, relaxRequired);
     JsonSchema schema = FACTORY.getSchema(validationSchema);
     Set<ValidationMessage> problems = schema.validate(instance);
     if (problems.isEmpty()) return;
 
-    String message = "openapi.yaml conformance failure — %s does not match its documented schema:\n%s\nactual body:\n%s\n"
-        .formatted(description, formatProblems(problems), new String(originalBody, StandardCharsets.UTF_8));
+    throw new AssertionError(
+        "openapi.yaml conformance failure — %s does not match its documented schema:\n%s\nactual body:\n%s\n"
+            .formatted(description, formatProblems(problems), new String(originalBody, StandardCharsets.UTF_8)));
+  }
 
-    if (KNOWN_GAPS.contains(gapKey)) {
-      System.err.println("[openapi conformance — known gap, see dev/notes/api-contract-testing-progress.md]\n" + message);
-      return;
+  private JsonNode strip(JsonNode instance, Set<String> fields) {
+    if (fields == null || !(instance instanceof ObjectNode obj)) return instance;
+    ObjectNode copy = obj.deepCopy();
+    fields.forEach(copy::remove);
+    return copy;
+  }
+
+  private JsonNode dropNonStringArrayEntries(JsonNode instance, Set<String> fields) {
+    if (fields == null || !(instance instanceof ObjectNode obj)) return instance;
+    ObjectNode copy = obj.deepCopy();
+    for (String field : fields) {
+      if (copy.path(field) instanceof com.fasterxml.jackson.databind.node.ArrayNode array) {
+        com.fasterxml.jackson.databind.node.ArrayNode kept = mapper.createArrayNode();
+        array.forEach(n -> {
+          if (n.isTextual()) kept.add(n);
+        });
+        copy.set(field, kept);
+      }
     }
-    throw new AssertionError(message);
+    return copy;
+  }
+
+  private JsonNode nullToPlaceholder(JsonNode instance, Set<String> fields) {
+    if (fields == null || !(instance instanceof ObjectNode obj)) return instance;
+    ObjectNode copy = obj.deepCopy();
+    for (String field : fields) {
+      if (copy.path(field).isNull()) {
+        copy.set(field, TextNode.valueOf("(known-nullable-placeholder)"));
+      }
+    }
+    return copy;
   }
 
   private static String formatProblems(Set<ValidationMessage> problems) {

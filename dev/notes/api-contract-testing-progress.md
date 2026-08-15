@@ -135,8 +135,13 @@ every run (`KNOWN_GAPS`), never just swallowed.
    domain, profiles, dnsMode, settings`.
    `SettingsPortabilityController.importSettings` only ever reads
    `version`, `enabledPackages` and `domain` — everything else is
-   genuinely optional in practice. Needs a dedicated, more honest
-   `ImportRequest` schema.
+   genuinely optional in practice. The same reused-too-strict schema also
+   types `enabledPackages` as `items: {type: string}`, but the controller
+   deliberately tolerates junk in that array
+   (`if (o instanceof String s && !s.isBlank())`) and a test pins exactly
+   that (`ignores_junk_in_the_package_list_rather_than_writing_it`, body
+   `["core", null, "", 42]`). Needs a dedicated, more honest
+   `ImportRequest` schema throughout, not just the required list.
 4. **`GET /disks/{id}/smart -> 200`'s `collectedAt` is a required plain
    `string`**, but a disk with no SMART support has nothing to collect
    and the backend correctly answers `collectedAt: null` rather than
@@ -195,3 +200,87 @@ automatically with no changes needed on this side.
 warnings (unchanged set — the new lifecycle endpoints introduced no new
 drift). Confirms the mechanism composes with concurrent work rather
 than needing to be re-taught anything.
+
+### 2026-08-15 — found a hole in my own known-gaps design, fixed it, then ran the acceptance demonstration
+
+Went to reintroduce `PackagesController.get()`'s old `{package,
+env_example}` wrapper to prove the mechanism catches it (the whole
+point of this piece of work) and it **passed** — silently. Cause: the
+first cut of the "known gap" registry (`KNOWN_GAPS`, a
+`Set<String>` of `"RESPONSE GET /packages/{name} -> 200"` etc.) was
+keyed by **operation**, not by the specific violation. It existed to
+tolerate `Package` serialising five undocumented fields
+(`recommends`/`profiles`/`requiredEnv`/`postInstallNotes`/`sso`); once
+that operation was in the set, *any* problem on it — including the
+wrapper — was logged and waved through. Exactly the failure mode the
+brief warned about: "a validator that passes everything is worse than
+none."
+
+Replaced the whole-operation registry with field- and schema-precise
+ones, each doing the smallest transform that neutralises exactly the
+catalogued gap and nothing else:
+
+- `KNOWN_UNDOCUMENTED_REQUEST_FIELDS` / `KNOWN_UNDOCUMENTED_RESPONSE_FIELDS`
+  — strip a named field from a copy of the instance before validating
+  (already had the request-side version for `tz`; added the
+  response-side twin for the `Package` fields).
+- `KNOWN_NULLABLE_RESPONSE_FIELDS` — replace a `null` in a named field
+  with a placeholder of the same JSON type before validating (disks
+  `collectedAt`), so a response that dropped the field outright still
+  fails its `required` check.
+- `KNOWN_RELAXED_REQUIRED` — new overload
+  `OpenApiSpec.validationSchemaFor(rawSchema, Map<schemaName, fieldsToRelax>)`
+  that deep-copies just the named `$defs` entries and strips the named
+  fields from *that schema's own* `required` array before building the
+  validation document (notifications `PATCH`, system `import`) — scoped
+  to one named schema so it can't quietly loosen an unrelated one that
+  happens to require a field with the same name.
+- `KNOWN_JUNK_TOLERANT_ARRAY_FIELDS` — drop non-string entries from a
+  named array field before validating, mirroring exactly what
+  `SettingsPortabilityController.importSettings` itself does with them.
+  Precision paid off immediately: turning on the relaxed-required
+  version alone (without this) surfaced a *sixth* real, previously
+  hidden violation — `ignores_junk_in_the_package_list_rather_than_writing_it`
+  sends `["core", null, "", 42]` for `enabledPackages`
+  (`items: {type: string}`), which the whole-operation registry had
+  also been silently swallowing. Folded into finding #3 above rather
+  than counted separately — same root cause (`SettingsExport` reused
+  as a stricter-than-reality requestBody).
+
+No entry now silences more than the one thing it names. `mvn test`:
+747 tests, 0 failures — same as before, but for the right reason this
+time. The known gaps no longer print a stderr warning (the previous
+version did); precision made that less necessary; the javadoc on each
+registry plus this log are the discoverability path instead.
+
+**Acceptance-criterion demonstration.** Temporarily changed
+`PackagesController.get()` back to
+`Map.of("package", p, "env_example", "")`, ran
+`PackagesControllerIntegrationTest` alone:
+
+```
+openapi.yaml conformance failure — response body for GET /packages/notes -> 200 does not match its documented schema:
+  - $: required property 'name' not found
+  - $: required property 'category' not found
+  - $: required property 'description' not found
+  - $: required property 'enabled' not found
+  - $: required property 'running' not found
+  - $: property 'env_example' is not evaluated and the schema does not allow unevaluated properties
+  - $: property 'package' is not evaluated and the schema does not allow unevaluated properties
+	at com.tomaytotomato.aurora.support.OpenApiConformance.validate(...)
+	at com.tomaytotomato.aurora.support.OpenApiConformance.checkResponse(...)
+	at com.tomaytotomato.aurora.support.OpenApiConformance.match(...)
+	at org.springframework.test.web.servlet.MockMvc.applyDefaultResultActions(...)
+```
+
+The failure is thrown from `OpenApiConformance.validate`, reached via
+`MockMvc.applyDefaultResultActions` — the automatic path, before the
+test's own explicit `jsonPath` assertions even run. Reverted the
+controller with `git checkout --`; `mvn test` back to 747/0.
+
+Final state for this piece of work: mechanism landed, composes with
+concurrent branches, demonstrably catches the motivating bug via the
+automatic path (not the hand-written one), five (now six, same three
+findings) genuine gaps catalogued precisely rather than silently
+accepted or over-broadly suppressed. Write-up for the calling agent
+next.

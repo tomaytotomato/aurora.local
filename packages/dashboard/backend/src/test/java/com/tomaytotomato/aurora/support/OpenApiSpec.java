@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * A queryable, ref-resolved view of {@code openapi.yaml}, built once and
@@ -152,11 +153,45 @@ final class OpenApiSpec {
    * "nothing undocumented" check at that depth.
    */
   JsonNode validationSchemaFor(JsonNode rawSchema) {
+    return validationSchemaFor(rawSchema, Map.of());
+  }
+
+  /**
+   * As {@link #validationSchemaFor(JsonNode)}, but first drops the named
+   * fields from the {@code required} list of specific named {@code $defs}
+   * entries (e.g. {@code {"ChannelDraft": {"kind", "name"}}}). Used only
+   * for the handful of catalogued, reported gaps in
+   * {@link OpenApiConformance#KNOWN_RELAXED_REQUIRED} where the spec's
+   * schema is a stricter fit than the operation actually is — never for
+   * new checking, always scoped to one named schema at a time so it
+   * cannot quietly loosen an unrelated schema that happens to require a
+   * field with the same name.
+   */
+  JsonNode validationSchemaFor(JsonNode rawSchema, Map<String, Set<String>> relaxRequiredBySchemaName) {
+    JsonNode defsForThisCall = defs;
+    if (!relaxRequiredBySchemaName.isEmpty()) {
+      ObjectNode defsCopy = defs.deepCopy();
+      relaxRequiredBySchemaName.forEach((schemaName, fields) -> {
+        JsonNode target = defsCopy.get(schemaName);
+        if (target instanceof ObjectNode obj && obj.get("required") instanceof ArrayNode required) {
+          ArrayNode kept = mapper.createArrayNode();
+          required.forEach(n -> {
+            if (!fields.contains(n.asText())) kept.add(n);
+          });
+          obj.set("required", kept);
+        }
+      });
+      defsForThisCall = defsCopy;
+    }
+    return validationSchemaFor(rawSchema, defsForThisCall);
+  }
+
+  private JsonNode validationSchemaFor(JsonNode rawSchema, JsonNode defsForThisCall) {
     ObjectNode root = mapper.createObjectNode();
     root.put("$schema", "https://json-schema.org/draft/2020-12/schema");
-    root.set("$defs", defs);
+    root.set("$defs", defsForThisCall);
 
-    JsonNode resolved = resolveOneRefHop(rawSchema);
+    JsonNode resolved = resolveOneRefHop(rawSchema, defsForThisCall);
     JsonNode items = resolved.path("items");
     boolean isArray = isArrayTyped(resolved) || !items.isMissingNode();
 
@@ -164,7 +199,7 @@ final class OpenApiSpec {
     allOf.add(rawSchema.deepCopy());
 
     if (isArray) {
-      if (!items.isMissingNode() && !hasOwnAdditionalProperties(resolveOneRefHop(items))) {
+      if (!items.isMissingNode() && !hasOwnAdditionalProperties(resolveOneRefHop(items, defsForThisCall))) {
         ObjectNode itemsConstraint = mapper.createObjectNode();
         ObjectNode itemsShape = mapper.createObjectNode();
         ArrayNode itemsAllOf = itemsShape.putArray("allOf");
@@ -182,14 +217,14 @@ final class OpenApiSpec {
 
   // ------------------------------------------------------------------
 
-  /** Follows a single, bare {@code {"$ref": "..."}} hop into {@code $defs}, for shape sniffing only. */
-  private JsonNode resolveOneRefHop(JsonNode node) {
+  /** Follows a single, bare {@code {"$ref": "..."}} hop into {@code defsForThisCall}, for shape sniffing only. */
+  private JsonNode resolveOneRefHop(JsonNode node, JsonNode defsForThisCall) {
     JsonNode current = node;
     int hops = 0;
     while (current.has("$ref") && current.size() == 1 && hops++ < 10) {
       String ref = current.get("$ref").asText();
       String name = ref.substring(ref.lastIndexOf('/') + 1);
-      JsonNode next = defs.get(name);
+      JsonNode next = defsForThisCall.get(name);
       if (next == null) break;
       current = next;
     }
