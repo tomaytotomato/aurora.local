@@ -68,3 +68,75 @@ package would render under it (same computed derives both). The Core tab
 always has at least `core` itself, since `core` always ships. No package can
 disappear: every catalogue package is either mandatory (renders in Core) or
 not (renders in its own category) — never neither.
+
+## Done
+
+- `packages/dashboard/frontend/src/lib/packageName.ts` — added `categoryLabel`
+  (alias of `prettyPackageName`).
+- `packages/dashboard/frontend/src/views/PackagesCatalogue.vue`,
+  `PackagesCore.vue` — eyebrow now prints `categoryLabel(pkg.category)`
+  instead of the raw slug.
+- `packages/dashboard/frontend/src/views/onboarding/OnboardingPackages.vue`:
+  - Removed the hardcoded `fallback` catalogue. `catalogue` is now
+    `packages.list` directly (no re-shaping, so `title` survives).
+  - Added `loadError` + `load()`, mirroring `PackagesCatalogue.vue` /
+    `PackagesCore.vue`'s existing loading/retry pattern: a skeleton while the
+    fetch is in flight, an `Alert` with a "Try again" button if it fails.
+    Stale cached data (if the store already had a list from an earlier visit
+    in the same session) stays on screen under a failed-refresh banner rather
+    than being blanked.
+  - `categories`/`filtered` now group by `isMandatory()` (i.e.
+    `isCorePackage()`) first, raw `category` second — see plan above. Tab
+    labels go through the same `categoryLabel` as the catalogue/core pages.
+- Added `packages/dashboard/frontend/src/lib/packageName.spec.ts` (9 tests)
+  and `packages/dashboard/frontend/src/views/onboarding/OnboardingPackages.spec.ts`
+  (8 tests): Core-tab grouping, no Identity/Auth tab, no empty tab, identity
+  can't vanish from every tab, title-over-slug, skeleton-not-fallback on slow
+  fetch, error+retry-not-fallback on failed fetch.
+- Test count: 457 → 474 (43 → 45 files). `npm run typecheck` clean throughout.
+
+## Deliberately left separate
+
+- **The card markup itself.** The picker's card is a `role="checkbox"`
+  button (single control, locked/mandatory via `aria-disabled`) because
+  selecting/deselecting before install is fundamentally a different
+  interaction from the catalogue's card, which is a navigation link to
+  `PackageDetail.vue` (owned by another agent, not touched here) or an
+  external link out to source/docs. Forcing these onto one component would
+  need a "am I a checkbox or a link" prop and would make the simpler screen
+  (the catalogue) carry complexity that exists only for the picker's benefit.
+  Badge treatment, category labelling and the mandatory/"core" concept are
+  shared; the interactive shell is not.
+- **`mocks/fixtures/packages.ts`** — a third hand-written copy of package
+  metadata, used only by MSW for dev/tests. Left alone: its purpose (a
+  deterministic, richer fixture set with `enabled`/`running` states and
+  READMEs for local dev without a backend) is different from the picker's
+  fallback (a resilience measure for a slow real backend), and merging them
+  would make the mock data less controllable for its own tests. Flagged in
+  the report as a third source of hand-maintained package copy, not touched.
+
+## Backend check (read-only — no backend files changed)
+
+Dispatched a read-only investigation of `packages/dashboard/backend`:
+- No duplication: `PackagesController` (`GET /packages`) and
+  `OnboardingController`/`OnboardingService` (`GET /onboarding`, `GET
+  /onboarding/plan`) all read through the same injected `PackagesService`,
+  which parses `packages/*/manifest.yml` once. There is no second
+  onboarding-specific catalogue endpoint and no second manifest-parsing code
+  path.
+- No shape overlap to collapse: `OnboardingDraft`/`PlanWire` only ever carry
+  package *names* (`enabled_packages: string[]`, `packages_to_enable:
+  string[]`, …); the richer `name`/`category`/`description`/`title` shape is
+  served solely by `GET /packages`. The frontend genuinely needs both calls.
+- **Real finding, not fixed (reported only):** the backend has no concept of
+  `identity` or `storage` being mandatory. `OnboardingService` only ever
+  force-adds the single package literally named `core`
+  (`OnboardingService.java`, around lines 570–593). The frontend's
+  `isCorePackage()` / `CORE_PACKAGES` set (`core`, `identity`, `storage`) is
+  a frontend-only policy — the backend would not stop `identity` or
+  `storage` being disabled via a direct API call. This is a pre-existing
+  model disagreement, not something task 2 introduced (this change makes the
+  picker's *tab grouping* agree with `isCorePackage()`, which was already the
+  UI-lock authority before this change); flagging it because "drive the
+  grouping from isCorePackage()" only strengthens a frontend rule that the
+  backend doesn't itself enforce.
