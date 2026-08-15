@@ -101,8 +101,11 @@ Replaced with a list of the key *names* that changed, never values.
 - [x] Fixed the pre-existing secret-value leak in `--apply`'s diff output.
 - [x] `shellcheck -x -S style -e SC1091` clean via the `koalaman/
       shellcheck:stable` image.
-- [ ] Backend integration coverage for `IdentitySecretsService` (real
-      Spring context, real SQLite, `AuroraIntegrationTest` harness).
-- [ ] `mvn test` green (684 existing + new).
-- [ ] Documentation correction: `packages/identity/README.md` overstates
-      the rotate endpoint as already wired.
+- [x] Backend integration coverage for `IdentitySecretsService` (real
+      Spring context, real SQLite `audit_event`, `AuroraIntegrationTest`
+      harness): `IdentitySecretsServiceIntegrationTest`, 8 tests.
+- [x] `mvn test` green — 692/692 (684 existing + 8 new).
+- [x] Documentation correction: `packages/identity/README.md`'s "Secrets
+      rotation" section no longer claims a `POST /api/identity/secrets/
+      rotate` endpoint exists — it doesn't, `rotateSecrets()` is
+      unit/integration-tested but not wired to any controller.

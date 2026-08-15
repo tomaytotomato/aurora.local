@@ -128,10 +128,16 @@ matcher (see the reusable `(authelia)` snippet in `caddy.snippet`).
 
 ## Secrets rotation
 
-`POST /api/identity/secrets/rotate` (admin-role only, wired via the
-`IdentitySecretsService`) regenerates all three Authelia secrets +
-records a `identity.secrets.rotate` audit row. Sessions in flight all
-invalidate; users bounce to Authelia login on their next request.
+`IdentitySecretsService.rotateSecrets()` regenerates all three Authelia
+secrets and records an `identity.secrets.rotate` audit row (integration
+tests cover this against a real audit table). It is not yet wired to an
+HTTP endpoint, so today the only way to actually trigger a rotation is
+`./scripts/rotate-secrets.sh --apply` from the host — this also
+recreates Authelia's container if it's currently running, since Docker
+Compose only resolves `${AUTHELIA_JWT_SECRET}`-style env vars once, at
+container-create time, and a `restart` alone would leave the running
+process on the old secret. Sessions in flight all invalidate; users
+bounce to Authelia login on their next request.
 
 ## Emergency access
 
