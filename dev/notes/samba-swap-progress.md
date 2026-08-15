@@ -218,3 +218,121 @@ aurora samba swap round-trip proof - dockurr/samba
 
 Authentication, write, and read are all proven against the real
 container, not assumed from a directory listing.
+
+### Avahi untouched, and MiniDLNA still works
+
+First attempt at this stalled the session: a long install was
+backgrounded and then the session just waited on the notification
+without checking in, and that attempt did not survive (a mid-flight
+check by the coordinator found no containers running). Corrected by
+re-running each `up.sh` sub-step (`create`, `sync`, `install`)
+separately and checking in with a short, active `docker ps` poll
+rather than going idle.
+
+Rebuilt clean with `AURORA_TESTBED_PACKAGES="core dashboard identity
+storage"` (identity added specifically so there is a real published
+mDNS alias to test against — `core`/`dashboard`/`storage` alone
+declare no vhost, so `MdnsAliasService`'s reconcile legitimately has
+nothing to publish with just those three). All five containers reached
+healthy:
+
+```
+caddy  Up About a minute (healthy)
+minidlna  Up About a minute (healthy)
+aurora  Up About a minute (healthy)
+authelia  Up About a minute (healthy)
+samba  Up About a minute (healthy)
+```
+
+Host avahi, before and after the swap — active and still holding UDP
+5353:
+
+```
+$ systemctl is-active avahi-daemon
+active
+$ sudo ss -lunp | grep 5353
+UNCONN 0 0 0.0.0.0:5353 0.0.0.0:* users:(("avahi-daemon",pid=16745,fd=12))
+UNCONN 0 0 0.0.0.0:5353 0.0.0.0:* users:(("systemd-resolve",pid=641,fd=24))
+UNCONN 0 0    [::]:5353    [::]:* users:(("systemd-resolve",pid=641,fd=25))
+UNCONN 0 0    [::]:5353    [::]:* users:(("avahi-daemon",pid=16745,fd=13))
+```
+
+`MdnsAliasService` publishing and resolving correctly — identity's
+`caddy.snippet` declares `auth.{$DOMAIN}`, and the running `aurora`
+container has an `avahi-publish` process for it:
+
+```
+$ docker exec aurora ps aux | grep avahi-publish
+   46 aurora    0:00 /usr/bin/avahi-publish -a -R auth.aurora.local 192.168.5.15
+$ avahi-resolve -n auth.aurora.local
+auth.aurora.local	192.168.5.15
+```
+
+That resolution happens entirely through the host's own avahi-daemon —
+`dockurr/samba` runs no mDNS responder of its own to interfere with
+it, which is the whole reason it was chosen over `servercontainers/
+samba` (bundles Avahi + wsdd2).
+
+MiniDLNA, the other service in the `storage` package, alongside samba:
+
+```
+$ curl -s -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:8200/
+HTTP 200
+$ docker logs minidlna
+minidlna.c:1182: warn: HTTP listening on port 8200
+scanner.c:731: warn: Scanning /media
+scanner.c:820: warn: Scanning /media finished (0 files)!
+```
+
+(0 files is expected — the roundtrip proof file above isn't a media
+type MiniDLNA indexes, and the test box has no real media library.)
+
+## Answers to the two questions this decides on
+
+**How many shares does `storage` actually define, and did the env vars
+cover them?** Exactly one (`media`) — confirmed three separate ways:
+reading the old `-s` flag, the running container's own health-check
+log (`smbclient -L` against itself), and an authenticated `smbclient
+-L` from outside the container. `dockurr/samba`'s env-var scheme
+(`NAME`/`USER`/`PASS`/`UID`/`GID`/`RW`) covers this exactly. No share
+was dropped; no mounted `smb.conf` was needed.
+
+**What happens to a box that already has the old image's shares and
+data?** Nothing happens to the data. The host-side bind mount
+(`/home/bruce/media`) is unchanged by this swap — only the path
+*inside* the container moved (`/media` → `/storage`), which is
+invisible outside the container. `UID`/`GID` stay `1000`/`1000`, so
+on-disk ownership is unchanged. The client-visible share name stays
+`media` (`NAME=media` was chosen deliberately to match), so existing
+saved shortcuts (`smb://aurora.local/media`) keep working. The
+practical requirement for an existing box: `docker compose pull &&
+docker compose up -d` for the `storage` package picks up the new
+image and reuses the same bind mount — no data migration step needed.
+
+## What a reviewer should check hardest
+
+- That `RW=true` really means the same thing as the old `readonly=no`
+  flag (it does — confirmed by writing a file over SMB above), and
+  that nobody depended on the dropped port 139 (NetBIOS) for a legacy
+  Windows client that needs SMB1/NetBIOS name resolution rather than
+  DNS/mDNS — this box's clients resolve `aurora.local` via mDNS or
+  Caddy already, so NetBIOS was redundant here, but that's an
+  assumption worth a second look for anyone with older hardware on
+  the LAN.
+- That `manifest.yml`'s `post_install_notes` was previously wrong
+  (claimed read-only/guest when the compose flags always said
+  read-write/authenticated) — this change fixes the text to match
+  reality, but it's worth checking no other doc or the dashboard's
+  onboarding copy repeats the old, incorrect claim.
+- `packages/storage/.env.example` was not read or touched — the
+  sandbox denies Bash/Read on any `.env*` file in this worktree. It
+  almost certainly only documents `SAMBA_USER`/`SAMBA_PASS`, which are
+  unchanged by this swap, but a reviewer with access to read it should
+  confirm it doesn't reference anything `dperson`-specific (e.g. the
+  old `-s`/`-u` flag syntax in a comment).
+- The firewall role (`host/roles/firewall/defaults/main.yml`) still
+  opens ports 139 (tcp) and 137/138 (udp) for Samba; this swap did not
+  touch that file (shared across packages, out of scope here), so
+  those ports are now open but unused. Not a security regression
+  (still LAN-only per the role's own scoping), just a tidy-up left for
+  whoever next touches that file.
