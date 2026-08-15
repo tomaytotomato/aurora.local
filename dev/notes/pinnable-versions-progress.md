@@ -93,7 +93,7 @@ is the compose service name upper-cased with `-` -> `_`)
 | monitoring | node-exporter | IMAGE_NODE_EXPORTER | prom/node-exporter:latest | pending |
 | monitoring | cadvisor | IMAGE_CADVISOR | gcr.io/cadvisor/cadvisor:latest | pending |
 | monitoring | uptime-kuma | IMAGE_UPTIME_KUMA | louislam/uptime-kuma:1 | pending |
-| notes | silverbullet | IMAGE_SILVERBULLET | ghcr.io/silverbulletmd/silverbullet:latest | pending |
+| notes | silverbullet | IMAGE_SILVERBULLET | ghcr.io/silverbulletmd/silverbullet:latest | done -> 2.10.0 (:latest already drifted from it; multi-arch) |
 | photos | immich-server | (IMMICH_VERSION) | ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release} | pending — already parameterised via .env, not a hardcoded tag |
 | photos | immich-ml | (IMMICH_VERSION) | ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release} | pending — must match immich-server exactly |
 | photos | immich-redis | IMAGE_IMMICH_REDIS | docker.io/redis:6.2-alpine | pending |
