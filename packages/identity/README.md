@@ -94,7 +94,7 @@ sso:
   `CaddySnippetService` (see D6).
 - `trusted_headers: true` → service reads `Remote-User` / `Remote-Groups`
   / `Remote-Email` from Caddy's forward-auth response and auto-provisions
-  the account. Grafana + Paperless + Forgejo do this today.
+  the account. Grafana + Paperless do this today.
 - `disable_env` → Aurora blanks these keys in `packages/<name>/.env`
   when SSO enable fires. Prevents services like SilverBullet from
   showing a second login page after Authelia already granted access.
@@ -123,7 +123,7 @@ matcher (see the reusable `(authelia)` snippet in `caddy.snippet`).
 - **Aurora logout bounces through Authelia's `/logout`** so the shared
   cookie is cleared server-side (D13). Otherwise a shared-computer
   next-user could walk into `notes.aurora.local` without a login prompt.
-- Grafana / Paperless / Forgejo sign-outs redirect to Authelia's
+- Grafana / Paperless sign-outs redirect to Authelia's
   `/logout` too (env vars in their compose files).
 
 ## Secrets rotation
@@ -148,8 +148,6 @@ an emergency-access fallback for when Authelia is down:
   `packages/monitoring/.env`.
 - **Paperless**: `PAPERLESS_ADMIN_USER` / `PAPERLESS_ADMIN_PASSWORD` in
   `packages/documents/.env`.
-- **Forgejo**: `FORGEJO_ADMIN_USER` / `FORGEJO_ADMIN_PASSWORD` in
-  `packages/git/.env`.
 - **Home Assistant**: HA's own account model always applies. Authelia
   edge-gates HA but doesn't replace its inner auth.
 

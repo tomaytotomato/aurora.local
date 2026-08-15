@@ -511,7 +511,7 @@ Non-negotiable defaults for the Aurora dashboard:
 
 Aurora is the source of truth for users + roles. Every service on the
 box trusts Authelia's forward-auth at Caddy for their front door;
-auto-provisioned services (Grafana, Paperless, Forgejo) also trust the
+auto-provisioned services (Grafana, Paperless) also trust the
 `Remote-User` header for internal account state.
 
 **Roles.** Three tiers, deliberately narrow so a homelab operator's
@@ -540,7 +540,7 @@ stay silent so the audit log doesn't flood.
 Authelia's sits on `.{$DOMAIN}` so it federates across every subdomain.
 Aurora sign-out returns `{next: "https://auth.{$DOMAIN}/logout?rd=…"}`
 so the SPA bounces through Authelia to clear the shared cookie server-side.
-Grafana + Forgejo + Paperless sign-outs redirect through Authelia's
+Grafana + Paperless sign-outs redirect through Authelia's
 logout too so `auth_proxy` / `reverse_proxy_auth` don't immediately
 re-sign the user back in on the next request.
 
@@ -560,10 +560,9 @@ next request without needing a session rotate. 401 for unauthenticated,
 level in `UsersControllerTests`.
 
 **Emergency access.** Each package Aurora migrated in D12 keeps its
-local super-admin (`GRAFANA_ADMIN_PASSWORD`, `PAPERLESS_ADMIN_PASSWORD`,
-`FORGEJO_ADMIN_PASSWORD`) as an emergency-access fallback for when
-Authelia is down. Direct-container access bypasses Caddy (and
-therefore Authelia).
+local super-admin (`GRAFANA_ADMIN_PASSWORD`, `PAPERLESS_ADMIN_PASSWORD`)
+as an emergency-access fallback for when Authelia is down.
+Direct-container access bypasses Caddy (and therefore Authelia).
 
 ---
 
