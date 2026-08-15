@@ -298,8 +298,21 @@
   /* Content column.
      iter-3 padding audit: bumped padding-inline 2rem → 2.5rem so pages
      don't feel flush against the sidebar on narrower displays where
-     margin-inline: auto has no room to breathe. */
+     margin-inline: auto has no room to breathe.
+
+     `width: 100%` (app-detail-controls): AppShell.vue's `.content` div
+     is a flex item of `main` (`flex flex-col`), not a plain block. A
+     flex item's cross-axis `margin: auto` takes priority over
+     `align-items: stretch` per the flexbox spec, so with `width: auto`
+     this box was sizing itself to fit its own content (shrink-to-fit)
+     instead of filling the column up to max-width. In practice that
+     meant PackageDetail's page frame visibly resized between tabs —
+     wide on Overview's two-column grid, narrower on Config's single
+     form — because each tab's content dictated the page width. An
+     explicit width bypasses the auto-margin/stretch interaction so the
+     column reliably fills its parent before max-width caps it. */
   .content {
+    width: 100%;
     max-width: var(--content-max);
     margin-inline: auto;
     padding-inline: 2.5rem;
