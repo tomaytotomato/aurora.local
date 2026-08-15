@@ -39,7 +39,32 @@ top level.
 
 Investigating next.
 
-## Fault 3 — page width jumps between tabs
+## Fault 3 — page width jumps between tabs (DONE, CSS)
+
+Root cause: `.content` (the page column in `AppShell.vue`, applied via
+`<div class="content py-10 flex-1">`) is a flex item of `main`
+(`flex flex-col`), not a plain block box. `.content`'s own rule sets
+`max-width` + `margin-inline: auto` with no explicit `width`. Per the
+flexbox spec, an auto margin on the cross axis (horizontal, since `main`
+is a column flex container) takes priority over `align-items: stretch`
+— so the box fell back to shrink-to-fit sizing based on its own content
+instead of filling the column up to `max-width`. Overview's two-column
+grid is wider content than Config's single form, so the whole page frame
+visibly resized when switching tabs.
+
+Confirmed with a Playwright script driving the real dev server
+(`VITE_USE_MOCKS=1 vite`) against `/apps/media`: before the fix,
+`.content`'s measured width was 913.5px on Overview vs 693.4px on
+Config (viewport 1440px); patching in `width: 100%` made both read
+1080px. Applied that as the actual fix in `main.css`'s `.content` rule.
+
+No jsdom regression test added for this one — jsdom doesn't run a real
+layout engine, so `getBoundingClientRect`/computed widths aren't
+meaningful there. Verified empirically instead (see above); the fix
+itself is one line plus a comment recording the reasoning so it isn't
+undone by accident.
+
+## Fault 4 — control panel (Install/Disable/Start/Uninstall + status light)
 
 Investigating next.
 
