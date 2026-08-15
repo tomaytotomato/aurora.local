@@ -100,8 +100,8 @@ is the compose service name upper-cased with `-` -> `_`)
 | photos | immich-postgres | IMAGE_IMMICH_POSTGRES | docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0 | pending |
 | privacy | adguard | IMAGE_ADGUARD | adguard/adguardhome:latest | pending |
 | privacy | gluetun | IMAGE_GLUETUN | qmcgaw/gluetun:latest | pending |
-| storage | samba | IMAGE_SAMBA | dperson/samba:latest | pending |
-| storage | minidlna | IMAGE_MINIDLNA | vladgh/minidlna:latest | pending |
+| storage | samba | IMAGE_SAMBA | dperson/samba:latest | done -> NO SAFE PIN (abandoned ~5yr, digest-froze latest instead) |
+| storage | minidlna | IMAGE_MINIDLNA | vladgh/minidlna:latest | done -> 1.3.10 (multi-arch incl. arm64) |
 
 ## Key findings from reading existing infrastructure before designing anything
 
