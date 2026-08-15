@@ -176,8 +176,22 @@ about to prove it catches the historical bug next, then confirm the
 full suite is still green.
 
 Not yet done: the acceptance-criterion demonstration (reintroduce the
-`{package, env_example}` wrapper, show the new test fails, revert),
-merging current `main` (the coordinator flagged `feat/package-lifecycle-
-endpoints` landed new `/packages/*` endpoints — install/stop/uninstall —
-since this branch started, and the suite is now expected at 745 tests),
-and the final write-up.
+`{package, env_example}` wrapper, show the new test fails, revert), and
+the final write-up.
+
+### 2026-08-15 — merged main + feat/package-lifecycle-endpoints
+
+Coordinator flagged that `feat/package-lifecycle-endpoints` (install/
+stop/uninstall on packages) landed since this branch started and was
+not yet in `main`. Merged `origin/main` (clean, no conflicts — mostly
+unrelated pins/docs work), then `origin/feat/package-lifecycle-
+endpoints` directly (also clean — it branched from the same commit this
+work did, so no shared history to reconcile). That branch adds its own
+`PackagesLifecycleControllerIntegrationTest` extending
+`AuroraIntegrationTest`, so it picks up `OpenApiConformance`
+automatically with no changes needed on this side.
+
+`mvn test` after both merges: 747 tests, 0 failures, 8 known-gap
+warnings (unchanged set — the new lifecycle endpoints introduced no new
+drift). Confirms the mechanism composes with concurrent work rather
+than needing to be re-taught anything.
