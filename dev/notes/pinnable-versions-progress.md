@@ -88,11 +88,11 @@ is the compose service name upper-cased with `-` -> `_`)
 | media | rdtclient | IMAGE_RDTCLIENT | rogerfar/rdtclient:latest | done -> 2.0.142 (GH Releases page stale, Docker tags active; multi-arch) |
 | media | qbittorrent | IMAGE_QBITTORRENT | lscr.io/linuxserver/qbittorrent:latest | done -> 5.2.3 (5d old, multi-arch) |
 | memos | memos | IMAGE_MEMOS | neosmemo/memos:stable | done -> 0.30.0 (multi-arch) |
-| monitoring | prometheus | IMAGE_PROMETHEUS | prom/prometheus:latest | pending |
-| monitoring | grafana | IMAGE_GRAFANA | grafana/grafana:latest | pending |
-| monitoring | node-exporter | IMAGE_NODE_EXPORTER | prom/node-exporter:latest | pending |
-| monitoring | cadvisor | IMAGE_CADVISOR | gcr.io/cadvisor/cadvisor:latest | pending |
-| monitoring | uptime-kuma | IMAGE_UPTIME_KUMA | louislam/uptime-kuma:1 | pending |
+| monitoring | prometheus | IMAGE_PROMETHEUS | prom/prometheus:latest | done -> v3.13.2 (multi-arch) |
+| monitoring | grafana | IMAGE_GRAFANA | grafana/grafana:latest | done -> 13.1.3 (multi-arch) |
+| monitoring | node-exporter | IMAGE_NODE_EXPORTER | prom/node-exporter:latest | done -> v1.12.1 (multi-arch) |
+| monitoring | cadvisor | IMAGE_CADVISOR | gcr.io/cadvisor/cadvisor:latest | done -> v0.55.1; gcr.io registry deprecated/frozen, real latest (v0.60.5) only on ghcr.io |
+| monitoring | uptime-kuma | IMAGE_UPTIME_KUMA | louislam/uptime-kuma:1 | done -> 1.23.17 (final 1.x; project now on 2.x) |
 | notes | silverbullet | IMAGE_SILVERBULLET | ghcr.io/silverbulletmd/silverbullet:latest | done -> 2.10.0 (:latest already drifted from it; multi-arch) |
 | photos | immich-server | (IMMICH_VERSION) | ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release} | pending — already parameterised via .env, not a hardcoded tag |
 | photos | immich-ml | (IMMICH_VERSION) | ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release} | pending — must match immich-server exactly |
