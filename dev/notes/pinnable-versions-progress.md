@@ -146,3 +146,84 @@ is the compose service name upper-cased with `-` -> `_`)
    including `linux/amd64` and `linux/arm64/v8`). `docker manifest inspect --verbose`
    deliberately avoided per the task brief (per-platform digests, not the
    `RepoDigests` value).
+
+## Status: complete
+
+All 17 non-template, non-dashboard packages have a `pins.env.example`.
+`dashboard` is exempt (Aurora's own image; see `UnpinnedImageTagsRule`
+javadoc) and carries no file. Every tag recorded above was verified to
+exist with `docker buildx imagetools inspect` before being written down;
+none were guessed.
+
+### No safe pin at all
+
+- **`dperson/samba`** (storage) — no release in ~5 years, no semver
+  tags, only stale arch-named tags. Digest-froze `:latest` rather than
+  inventing a version. The owner should consider a maintained
+  alternative image as a separate decision.
+
+### Deprecated/frozen image or registry, current image kept but flagged
+
+- **`gcr.io/cadvisor/cadvisor`** (monitoring) — registry frozen at
+  v0.55.1 since the project moved to `ghcr.io/google/cadvisor` (now
+  v0.60.5) around v0.53.0. Confirmed by probing gcr.io directly.
+- **`docker.io/frooodle/s-pdf`** (documents) — mid-migration to
+  `stirlingtools/stirling-pdf`; still receiving parallel pushes today
+  (9 days old at check time) but will stop eventually.
+- **`docker.io/tensorchord/pgvecto-rs`** (photos) — the exact image
+  Immich's own docs say to replace with `ghcr.io/immich-app/postgres`
+  + VectorChord. A database-engine migration, not a version bump.
+- **`docker.io/redis:6.2-alpine`** (photos, immich-redis only) — Redis 6
+  reached EOL 2025-08-31; Immich's own compose template has moved to
+  `valkey/valkey:8`.
+- **`filebrowser/filebrowser`** (filebrowser) — the project itself is
+  winding down, archiving 2026-09-01, no releases after. Recommended
+  the final release (v2.63.23) over the currently-pinned v2.31.2, but
+  flagged the large jump for the operator to test.
+
+### Breaking major-version cliffs — pinned to current major, not latest
+
+- **`codeberg.org/forgejo/forgejo`** (git) — the single biggest finding
+  in the task. `1.21` (semver-internal v6.0) has been dead since June
+  2024; current stable is v16.0.2, nine major bumps on. Digest-froze
+  `1.21.11-2` (no regression from today) and flagged the v15
+  LTS/v16 migration as a deliberate, separate project — not performed
+  here. Left `forgejo-runner` at its current `3.5.1` to match, since
+  runner v8+ enforces workflow-schema validation the old server was
+  never built to expect.
+- **`louislam/uptime-kuma`** (monitoring) — `:1` resolves to 1.23.17,
+  the final 1.x release; the project has moved on to an actively
+  developed 2.x line. Pinned to 1.23.17 rather than 2.x.
+
+### Not abandoned after all (checked, turned out fine)
+
+- `apache/tika`, `kopia/kopia`, `ghcr.io/seerr-team/seerr`,
+  `ghcr.io/flaresolverr/flaresolverr` and `rogerfar/rdtclient` all
+  looked like plausible "ships only latest / abandoned" candidates
+  going in. All five turned out to be actively maintained with a real
+  version to pin — rdtclient's GitHub Releases page is misleadingly
+  stale (shows 2023) even though its Docker tags are pushed monthly, so
+  that one is worth a specific callout for whoever reviews this.
+
+### Images with no multi-arch problem (all 40+ verified images support
+both linux/amd64 and linux/arm64/v8, so the Optiplex/Pi split is not a
+blocker anywhere in the catalogue)
+
+### What a reviewer should check hardest
+
+1. The Forgejo finding (`packages/git/pins.env.example`) — biggest
+   scope, biggest risk if misread as "just bump the tag."
+2. The `HardeningService.pinning()` root-`pins.env` bug — not fixed
+   here, but it means adopting this data will not move the dashboard's
+   own security score until that Java path is corrected separately.
+3. `scripts/pin.sh --refresh`'s tag-discarding `resolve_digest()` — if
+   the owner ever runs `--refresh` after adopting these `.example`
+   files as real `pins.env`, it will overwrite the tag-carrying format
+   with a bare-digest one, silently losing the human-readable tag this
+   work added. The script needs a small change to agree with this data
+   before the two are used together.
+4. The Immich pair (photos) — two separate deprecated-image findings in
+   one package, easy to skim past.
+5. Anything marked "actively maintained after all" — worth a second
+   look since it corrects an initial hypothesis rather than confirming
+   one.
