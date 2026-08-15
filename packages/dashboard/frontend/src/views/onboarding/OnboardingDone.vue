@@ -57,11 +57,43 @@ function writeStoredJob(job: StoredJob | null): void {
   } catch { /* private-mode etc; not fatal */ }
 }
 
-const canGoToDashboard = computed(() => {
-  // No packages to start? User can leave immediately.
-  if (toStart.value.length === 0) return true;
-  return launchState.value === 'success';
-});
+// Iter-3 §2a.ii / BBND onboarding-409: onboarding is not "complete" until the
+// stack has actually launched (or there was nothing to launch), so gate the
+// dashboard CTA on an explicit flag rather than inferring it from
+// `launchState` alone. Inferring it let a user click through before the
+// POST /onboarding/complete call underneath `finishOnboarding()` had
+// resolved, racing the router guard's stale `store.draft.complete`.
+const onboardingCommitted = ref(false);
+
+const canGoToDashboard = computed(() => onboardingCommitted.value);
+
+/**
+ * Commit onboarding once there is nothing left that could still fail:
+ * either the launch stream reported success, or there were no packages to
+ * start in the first place. This is deliberately the *only* place
+ * POST /onboarding/complete is called — see OnboardingReview.vue and
+ * dev/notes/onboarding-409-progress.md for why it can no longer happen
+ * before the launch. A failed or cancelled launch never reaches here, so
+ * onboarding stays incomplete and the backend guard keeps letting the user
+ * retry `startServices()`.
+ */
+async function finishOnboarding(): Promise<void> {
+  try {
+    await OnboardingApi.complete();
+  } catch (e) {
+    // A 409 here means the server already considers onboarding complete
+    // (e.g. a previous attempt's response was lost after the flag had
+    // already flipped) — nothing to do. Any other error is logged but not
+    // fatal: the stack is already up, so we don't strand the user on this
+    // bookkeeping call. A stale flag heals itself on the next full reload,
+    // which re-hydrates from server truth and would correctly send an
+    // actually-incomplete onboarding back through the wizard.
+    // eslint-disable-next-line no-console
+    console.warn('onboarding /complete failed', e);
+  }
+  store.markOnboardingComplete();
+  onboardingCommitted.value = true;
+}
 
 async function startServices(): Promise<void> {
   starting.value = true;
@@ -78,9 +110,10 @@ async function startServices(): Promise<void> {
   }
 }
 
-function onLaunchSuccess(): void {
-  launchState.value = 'success';
+async function onLaunchSuccess(): Promise<void> {
   writeStoredJob(null);
+  await finishOnboarding();
+  launchState.value = 'success';
 }
 
 function onLaunchFailed(reason: string): void {
@@ -119,15 +152,27 @@ onMounted(async () => {
   } catch { /* fine — ReachInfo just skips the row it lacks */ }
 
   const stored = readStoredJob();
-  if (!stored) return;
+  if (!stored) {
+    // Nothing was ever launched (or it already finished and the stored job
+    // was cleared) and there's nothing left to start — commit now so a
+    // refresh here doesn't leave `complete` stuck false. Safe to call
+    // repeatedly: finishOnboarding() treats an already-complete backend as
+    // success.
+    if (toStart.value.length === 0) await finishOnboarding();
+    return;
+  }
   try {
     const snapshot = await OnboardingApi.getLaunchStatus(stored.jobId);
     if (snapshot.state === 'running') {
       launchJobId.value = stored.jobId;
       launchState.value = 'running';
     } else if (snapshot.state === 'success') {
-      launchState.value = 'success';
+      // The launch finished while we were away (or the tab was closed
+      // right as it succeeded, before onLaunchSuccess got to run). Commit
+      // now rather than leaving the user stuck on a stale `complete=false`.
       writeStoredJob(null);
+      await finishOnboarding();
+      launchState.value = 'success';
     } else {
       // failed or unknown — surface the reason if we have one, then let the
       // user retry.

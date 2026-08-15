@@ -68,12 +68,27 @@ cmd_sync() {
   # so the source path is identical on both sides. node_modules and build
   # output are excluded: 207MB of the repo is node_modules alone, and the
   # VM builds its own.
+  #
+  # The second group matters more than it looks. Everything Aurora
+  # generates at runtime is gitignored, so it exists in the VM and not in
+  # the source, and --delete will therefore destroy it on the next sync:
+  # per-package .env files (including their generated secrets), .state.yml,
+  # the inventory bootstrap.sh wrote, the disk-state files the host roles
+  # collect, and data/ — which is every application's bind-mounted
+  # persistent storage. Deleting that on a testbed costs a rebuild. The
+  # same command pointed at a real box would take the photo library with
+  # it.
   limactl shell "$VM" -- sudo install -d -o bruce -g bruce "$GUEST_REPO"
   limactl shell "$VM" -- sudo rsync -a --delete \
     --exclude 'node_modules/' \
     --exclude 'target/' \
     --exclude 'dist/' \
     --exclude '.claude/worktrees/' \
+    --exclude '.env' \
+    --exclude '.state.yml' \
+    --exclude 'inventory.ini' \
+    --exclude 'data/' \
+    --exclude 'packages/dashboard/state/' \
     --chown=bruce:bruce \
     "$REPO/" "$GUEST_REPO/"
   ok "synced $(as_bruce "du -sh $GUEST_REPO | cut -f1")"

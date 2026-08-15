@@ -151,11 +151,18 @@ function goTo(id: (typeof STEPS)[number]): void {
 .rail :deep(.progress-fill)  { background: rgba(255, 255, 255, 0.85); }
 
 /* -- Content card: warm off-white glass over the photo -------------- */
+/* The 94% alpha is what makes this read as glass over the photo, so the
+   colour has to carry an alpha channel. color-mix lets it do that while
+   still coming from the theme token: hardcoding rgba(250, 249, 246) was
+   the light-mode value, so under [data-theme="dark"] the card stayed
+   near-white while --color-foreground flipped to #f5f4ef and every
+   heading, paragraph and dd inside it turned white-on-white. The border
+   had the same problem in reverse. */
 .content-card {
-  background: rgba(250, 249, 246, 0.94);
+  background: color-mix(in srgb, var(--color-background) 94%, transparent);
   backdrop-filter: blur(20px) saturate(120%);
   -webkit-backdrop-filter: blur(20px) saturate(120%);
-  border: 1px solid rgba(20, 18, 15, 0.06);
+  border: 1px solid var(--color-border);
   border-radius: 16px;
   box-shadow:
     0 1px 2px rgba(20, 18, 15, 0.06),

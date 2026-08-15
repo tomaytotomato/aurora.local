@@ -2,8 +2,8 @@ name: core
 title: Core (dashboard + reverse proxy)
 description: |
   Always on. Caddy is the single entry point on :80/:443 and fans out
-  to every other package on subdomains under $DOMAIN. Homepage
-  is the dashboard aggregating status from every enabled package.
+  to every other package on subdomains under $DOMAIN. Aurora
+  (packages/dashboard) is the dashboard, reachable at the apex domain.
 
 category: core
 
@@ -30,5 +30,5 @@ probe:
 post_install_notes: |
   Install Caddy's root CA on client devices for green padlocks:
     ./scripts/get-caddy-root-cert.sh
-  Homepage will be reachable on http://<hostname>.local/ and
+  Aurora will be reachable on http://<hostname>.local/ and
   http://$DOMAIN/.

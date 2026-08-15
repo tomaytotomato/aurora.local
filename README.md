@@ -66,7 +66,7 @@ Current packages:
 
 | Package         | Category         | What                                                                       |
 |-----------------|------------------|----------------------------------------------------------------------------|
-| core            | core             | Caddy (HTTPS + reverse proxy) + Homepage dashboard                         |
+| core            | core             | Caddy (HTTPS + reverse proxy). Aurora (`packages/dashboard`) is the dashboard |
 | privacy         | privacy          | AdGuard Home (LAN DNS) + Gluetun (VPN sidecar)                             |
 | media           | media            | Sonarr, Radarr, Bazarr, Prowlarr, Seerr, RDTClient, SABnzbd, qBittorrent |
 | storage         | storage          | Samba + MiniDLNA                                                           |
