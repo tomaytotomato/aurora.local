@@ -154,6 +154,22 @@ public class AutheliaService {
     Path target = usersDbPath();
     try {
       List<AdminUser> all = users.findAll();
+      if (all.isEmpty()) {
+        // Authelia's file-based auth backend refuses to start at all
+        // on an empty users: {} block ("users: non zero value
+        // required") — not a graceful "nobody can log in", a fatal
+        // crash loop. This is the normal state for the window between
+        // "identity is enabled" and "the onboarding wizard created the
+        // first admin", which every fresh install now passes through
+        // since identity became mandatory. Leave whatever's already on
+        // disk alone (the seeded users_database.example.yml placeholder,
+        // or an earlier real projection) rather than overwrite something
+        // Authelia can boot from with something it can't. The next real
+        // UserChangedEvent.CREATE reprojects for real.
+        log.info("authelia projector: no admin users yet, skipping write "
+            + "(reason={}) — an empty users_database.yml stops Authelia starting", reason);
+        return 0;
+      }
       Files.createDirectories(target.getParent());
       String yaml = renderYaml(all);
       atomicWrite(target, yaml);
