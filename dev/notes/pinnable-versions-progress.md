@@ -65,12 +65,12 @@ is the compose service name upper-cased with `-` -> `_`)
 | dev | code-server | IMAGE_CODE_SERVER | lscr.io/linuxserver/code-server:latest | pending |
 | dev | postgres | IMAGE_POSTGRES | postgres:16-alpine | pending |
 | dev | redis | IMAGE_REDIS | redis:7-alpine | pending |
-| documents | paperless | IMAGE_PAPERLESS | ghcr.io/paperless-ngx/paperless-ngx:latest | pending |
-| documents | paperless-postgres | IMAGE_PAPERLESS_POSTGRES | docker.io/library/postgres:16-alpine | pending |
-| documents | paperless-redis | IMAGE_PAPERLESS_REDIS | docker.io/library/redis:7-alpine | pending |
-| documents | paperless-gotenberg | IMAGE_PAPERLESS_GOTENBERG | docker.io/gotenberg/gotenberg:8 | pending |
-| documents | paperless-tika | IMAGE_PAPERLESS_TIKA | docker.io/apache/tika:latest | pending |
-| documents | stirling-pdf | IMAGE_STIRLING_PDF | docker.io/frooodle/s-pdf:latest | pending |
+| documents | paperless | IMAGE_PAPERLESS | ghcr.io/paperless-ngx/paperless-ngx:latest | done -> 3.0.5 (2.x->3.x breaking change noted; multi-arch) |
+| documents | paperless-postgres | IMAGE_PAPERLESS_POSTGRES | docker.io/library/postgres:16-alpine | done -> 16.15-alpine3.24 (multi-arch) |
+| documents | paperless-redis | IMAGE_PAPERLESS_REDIS | docker.io/library/redis:7-alpine | done -> 7.4.10-alpine (redis 8 licence note; multi-arch) |
+| documents | paperless-gotenberg | IMAGE_PAPERLESS_GOTENBERG | docker.io/gotenberg/gotenberg:8 | done -> 8.30.0 (multi-arch) |
+| documents | paperless-tika | IMAGE_PAPERLESS_TIKA | docker.io/apache/tika:latest | done -> 3.3.0.0 (actively maintained, not abandoned; multi-arch) |
+| documents | stirling-pdf | IMAGE_STIRLING_PDF | docker.io/frooodle/s-pdf:latest | done -> 2.14.3 (repo mid-migration to stirlingtools/stirling-pdf; multi-arch) |
 | filebrowser | filebrowser | IMAGE_FILEBROWSER | filebrowser/filebrowser:v2.31.2 | pending (verify) |
 | git | forgejo | IMAGE_FORGEJO | codeberg.org/forgejo/forgejo:1.21 | pending |
 | git | forgejo-runner | IMAGE_FORGEJO_RUNNER | code.forgejo.org/forgejo/runner:3.5.1 | pending (verify) |
