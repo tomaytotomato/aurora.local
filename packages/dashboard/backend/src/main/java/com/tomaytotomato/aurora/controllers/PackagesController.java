@@ -8,9 +8,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/packages")
@@ -27,15 +25,22 @@ public class PackagesController {
     return packages.list();
   }
 
+  /**
+   * Package detail. openapi.yaml's {@code PackageDetail} schema is a flat
+   * object (an extension of {@code PackageSummary}) — this used to wrap
+   * {@link Package} inside {@code {package, env_example}}, which meant
+   * every field the frontend reads (name, enabled, running, category…)
+   * came back {@code undefined}. On the app detail page that showed up as
+   * core packages reading DISABLED with a nonsensical "Add app" button:
+   * {@code isCorePackage()} looks up {@code p.name}, and a name that is
+   * always undefined never matches. {@code env_example} was dead weight —
+   * nothing on the frontend ever read it; env values come from the
+   * separate {@code /packages/{name}/env} endpoint.
+   */
   @GetMapping("/{name}")
-  public ResponseEntity<Map<String, Object>> get(@PathVariable String name) {
+  public ResponseEntity<Package> get(@PathVariable String name) {
     return packages.find(name)
-        .map(pkg -> {
-          Map<String, Object> body = new HashMap<>();
-          body.put("package", pkg);
-          body.put("env_example", packages.readEnvExample(name).orElse(""));
-          return ResponseEntity.ok(body);
-        })
+        .map(ResponseEntity::ok)
         .orElseGet(() -> ResponseEntity.notFound().build());
   }
 }
