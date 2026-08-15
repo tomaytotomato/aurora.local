@@ -62,16 +62,16 @@ is the compose service name upper-cased with `-` -> `_`)
 | backup | kopia | IMAGE_KOPIA | kopia/kopia:latest | pending |
 | core | caddy | IMAGE_CADDY | caddy:2-alpine | done -> 2.11.4-alpine (multi-arch incl. arm64) |
 | dashboard | aurora | (exempt) | aurora-dashboard:${AURORA_VERSION:-0.1.0} | exempt — Aurora's own image, see UnpinnedImageTagsRule javadoc |
-| dev | code-server | IMAGE_CODE_SERVER | lscr.io/linuxserver/code-server:latest | pending |
-| dev | postgres | IMAGE_POSTGRES | postgres:16-alpine | pending |
-| dev | redis | IMAGE_REDIS | redis:7-alpine | pending |
+| dev | code-server | IMAGE_CODE_SERVER | lscr.io/linuxserver/code-server:latest | done -> 4.132.0 (multi-arch) |
+| dev | postgres | IMAGE_POSTGRES | postgres:16-alpine | done -> 16.15-alpine3.24 (multi-arch) |
+| dev | redis | IMAGE_REDIS | redis:7-alpine | done -> 7.4.10-alpine (multi-arch) |
 | documents | paperless | IMAGE_PAPERLESS | ghcr.io/paperless-ngx/paperless-ngx:latest | done -> 3.0.5 (2.x->3.x breaking change noted; multi-arch) |
 | documents | paperless-postgres | IMAGE_PAPERLESS_POSTGRES | docker.io/library/postgres:16-alpine | done -> 16.15-alpine3.24 (multi-arch) |
 | documents | paperless-redis | IMAGE_PAPERLESS_REDIS | docker.io/library/redis:7-alpine | done -> 7.4.10-alpine (redis 8 licence note; multi-arch) |
 | documents | paperless-gotenberg | IMAGE_PAPERLESS_GOTENBERG | docker.io/gotenberg/gotenberg:8 | done -> 8.30.0 (multi-arch) |
 | documents | paperless-tika | IMAGE_PAPERLESS_TIKA | docker.io/apache/tika:latest | done -> 3.3.0.0 (actively maintained, not abandoned; multi-arch) |
 | documents | stirling-pdf | IMAGE_STIRLING_PDF | docker.io/frooodle/s-pdf:latest | done -> 2.14.3 (repo mid-migration to stirlingtools/stirling-pdf; multi-arch) |
-| filebrowser | filebrowser | IMAGE_FILEBROWSER | filebrowser/filebrowser:v2.31.2 | pending (verify) |
+| filebrowser | filebrowser | IMAGE_FILEBROWSER | filebrowser/filebrowser:v2.31.2 | done -> v2.63.23, BUT project is winding down (archives 2026-09-01) |
 | git | forgejo | IMAGE_FORGEJO | codeberg.org/forgejo/forgejo:1.21 | pending |
 | git | forgejo-runner | IMAGE_FORGEJO_RUNNER | code.forgejo.org/forgejo/runner:3.5.1 | pending (verify) |
 | home-automation | homeassistant | IMAGE_HOMEASSISTANT | ghcr.io/home-assistant/home-assistant:stable | pending |
