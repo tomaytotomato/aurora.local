@@ -28,11 +28,18 @@ interface LocalAdmin {
   savedAcknowledged: boolean;
 }
 
+// 'packages' removed (2026-08-15): the interactive package picker step is
+// gone. A first run installs the mandatory set (see
+// MANDATORY_FIRST_RUN_PACKAGES in api/packages.ts) with nothing to choose;
+// everything else is added afterwards from the Apps catalogue, which now
+// has a real Install/Start/Disable/Uninstall control panel behind it. This
+// list is the single source of truth for the step count shown throughout
+// the wizard (see stepEyebrow below) — do not hardcode "Step N of M" text
+// in an individual view.
 export const STEPS: OnboardingStepId[] = [
   'welcome',
   'admin',
   'domain',
-  'packages',
   'sso',
   'secrets',
   'dns',
@@ -45,7 +52,6 @@ export const STEP_LABELS: Record<OnboardingStepId, string> = {
   welcome: 'Welcome',
   admin: 'Admin account',
   domain: 'Hostname & domain',
-  packages: 'Packages',
   sso: 'Single sign-on',
   secrets: 'Secrets',
   dns: 'DNS story',
@@ -72,7 +78,6 @@ const DRAFT_KEY = 'aurora.onboarding.draft';
 
 interface Draft {
   domain?: string;
-  enabled_packages?: string[];
   dns_mode?: DnsMode;
 }
 
@@ -113,9 +118,6 @@ export const useOnboardingStore = defineStore('onboarding', () => {
   // Form fields. Hydrated from server, backed by sessionStorage draft.
   const draftInit = loadDraft();
   const domain = ref<string>(draftInit.domain ?? 'aurora.local');
-  const selectedPackages = ref<string[]>(
-    draftInit.enabled_packages ?? ['core', 'privacy', 'storage'],
-  );
   const dnsMode = ref<DnsMode | null>(draftInit.dns_mode ?? null);
 
   // Server-authoritative snapshot. Populated by hydrate(). Router guard
@@ -131,6 +133,13 @@ export const useOnboardingStore = defineStore('onboarding', () => {
   const stepIndex = computed(() => STEPS.indexOf(currentStep.value));
   const progress = computed(() => (stepIndex.value / (STEPS.length - 1)) * 100);
 
+  /**
+   * "Step N of M" for the eyebrow at the top of every wizard view. Derived
+   * from STEPS so the count agrees everywhere without five hardcoded
+   * copies drifting out of sync when a step is added or removed.
+   */
+  const stepEyebrow = computed(() => `Step ${stepIndex.value + 1} of ${STEPS.length}`);
+
   /** Backwards-compat alias so the router guard can read the same shape. */
   const status = computed(() =>
     draft.value
@@ -142,14 +151,9 @@ export const useOnboardingStore = defineStore('onboarding', () => {
       : null,
   );
 
-  // sessionStorage autosave: any change to domain/packages/dns writes a draft
-  // so a refresh mid-typing doesn't lose the input.
+  // sessionStorage autosave: any change to domain/dns writes a draft so a
+  // refresh mid-typing doesn't lose the input.
   watch(domain, (v) => saveDraft({ ...loadDraft(), domain: v }));
-  watch(
-    selectedPackages,
-    (v) => saveDraft({ ...loadDraft(), enabled_packages: [...v] }),
-    { deep: true },
-  );
   watch(dnsMode, (v) => {
     const d = loadDraft();
     if (v == null) delete d.dns_mode;
@@ -158,9 +162,12 @@ export const useOnboardingStore = defineStore('onboarding', () => {
   });
 
   /**
-   * One-shot hydration from the server. Populates domain / packages /
-   * dns_mode / admin.username / completed[] from server truth. Never
-   * touches currentStep — the URL owns that.
+   * One-shot hydration from the server. Populates domain / dns_mode /
+   * admin.username / completed[] from server truth. `enabled_packages`
+   * is read straight off `draft` by callers that need it (there is no
+   * local mirror to keep in sync now that no picker writes to one) —
+   * see draft.enabled_packages. Never touches currentStep — the URL
+   * owns that.
    */
   async function hydrate(): Promise<OnboardingDraft> {
     const d = await OnboardingApi.get();
@@ -169,9 +176,6 @@ export const useOnboardingStore = defineStore('onboarding', () => {
 
     // Field prefill: server wins if present, else keep sessionStorage draft.
     if (d.domain) domain.value = d.domain;
-    if (d.enabled_packages && d.enabled_packages.length > 0) {
-      selectedPackages.value = [...d.enabled_packages];
-    }
     if (d.dns_mode) dnsMode.value = d.dns_mode;
 
     // Admin: server knows the username but never the password. Preserve any
@@ -240,23 +244,6 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     return null;
   }
 
-  function selectPreset(preset: 'safe' | 'media' | 'cloud'): void {
-    if (preset === 'safe') {
-      selectedPackages.value = ['core', 'privacy', 'storage'];
-    } else if (preset === 'media') {
-      selectedPackages.value = ['core', 'privacy', 'media', 'storage'];
-    } else {
-      selectedPackages.value = ['core', 'privacy', 'storage', 'photos', 'documents', 'notes', 'backup'];
-    }
-  }
-
-  function togglePackage(name: string): void {
-    const s = new Set(selectedPackages.value);
-    if (s.has(name)) s.delete(name);
-    else s.add(name);
-    selectedPackages.value = [...s];
-  }
-
   /**
    * PATCH a subset of the draft to the server. On success, refreshes the
    * cached draft snapshot and clears the corresponding sessionStorage keys
@@ -265,6 +252,11 @@ export const useOnboardingStore = defineStore('onboarding', () => {
    * Callers that want a silent local-only advance (dev with no backend) can
    * catch and ignore — but the store still updates its local mirror before
    * throwing so the wizard flow keeps moving.
+   *
+   * `enabled_packages` has no dedicated local ref (there is no picker left
+   * to keep in sync) — callers that need the current set read
+   * `draft.value.enabled_packages`, which this refreshes from the server's
+   * response below.
    */
   async function patchDraft(fields: {
     domain?: string;
@@ -274,7 +266,6 @@ export const useOnboardingStore = defineStore('onboarding', () => {
   }): Promise<void> {
     // Optimistic local update — the sessionStorage watchers pick these up.
     if (fields.domain !== undefined) domain.value = fields.domain;
-    if (fields.enabled_packages !== undefined) selectedPackages.value = [...fields.enabled_packages];
     if (fields.dns_mode !== undefined) dnsMode.value = fields.dns_mode;
 
     try {
@@ -282,7 +273,6 @@ export const useOnboardingStore = defineStore('onboarding', () => {
       // Server has these values now — the sessionStorage draft was a
       // pre-submit safety net. Drop the keys we just persisted.
       if (fields.domain !== undefined) clearDraftKey('domain');
-      if (fields.enabled_packages !== undefined) clearDraftKey('enabled_packages');
       if (fields.dns_mode !== undefined) clearDraftKey('dns_mode');
     } catch (e) {
       // Soft-fail so the wizard flow completes even if the backend is
@@ -317,7 +307,6 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     completed,
     admin,
     domain,
-    selectedPackages,
     dnsMode,
     draft,
     env,
@@ -326,6 +315,7 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     // Computed
     stepIndex,
     progress,
+    stepEyebrow,
     status,
     // Actions
     goTo,
@@ -335,8 +325,6 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     hydrate,
     fetchEnv,
     syncFromRoute,
-    selectPreset,
-    togglePackage,
     patchDraft,
     clearAllDrafts,
     markOnboardingComplete,

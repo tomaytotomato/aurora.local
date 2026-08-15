@@ -158,11 +158,25 @@ export interface JobRef {
  * than a category rule. A backend `core` manifest flag can supersede this
  * later; until then the frontend owns the list.
  */
-const CORE_PACKAGES: ReadonlySet<string> = new Set(['core', 'identity', 'storage']);
+const CORE_PACKAGE_NAMES = ['core', 'identity', 'storage'] as const;
+const CORE_PACKAGES: ReadonlySet<string> = new Set(CORE_PACKAGE_NAMES);
 
 export function isCorePackage(p: Pick<PackageSummary, 'name'>): boolean {
   return CORE_PACKAGES.has(p.name);
 }
+
+/**
+ * What a first-run box gets with no interactive package picker (the
+ * onboarding wizard's Packages step was removed — see OnboardingDomain.vue):
+ * every core package except `identity`, whose enablement stays a deliberate
+ * yes/no asked by the onboarding SSO step rather than forced on — see
+ * OnboardingSso.vue. Used to seed `.state.yml`'s enabled[] once, early in
+ * the wizard; the backend's `OnboardingService#install()` force-adds the
+ * same names again as a belt-and-braces safety net if a step gets skipped
+ * via the sidebar.
+ */
+export const MANDATORY_FIRST_RUN_PACKAGES: readonly string[] =
+  CORE_PACKAGE_NAMES.filter((n) => n !== 'identity');
 
 /** Only non-core packages can be enabled/disabled from the dashboard. */
 export function isRemovable(p: Pick<PackageSummary, 'name'>): boolean {

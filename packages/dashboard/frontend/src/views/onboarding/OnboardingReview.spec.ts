@@ -47,7 +47,7 @@ async function mountReview() {
   setActivePinia(pinia);
   const store = useOnboardingStore();
   store.hydrated = true; // skip the hydrate() network call
-  store.selectedPackages = ['core'];
+  store.draft = DRAFT;
   store.domain = 'aurora.local';
 
   const router = createRouter({

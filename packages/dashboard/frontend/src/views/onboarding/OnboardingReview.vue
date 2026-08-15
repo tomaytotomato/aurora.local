@@ -36,12 +36,12 @@ onMounted(async () => {
 
 // Source of truth for the "packages" row on the summary card. Never derive
 // from plan alone: if /plan fails the packages column would blank out even
-// though the user made a selection. Prefer the plan (server truth) when
-// present, fall back to the local store.
+// though the mandatory set was already enabled. Prefer the plan (server
+// truth) when present, fall back to the draft's own enabled_packages.
 const packagesToShow = computed<string[]>(() => {
   const fromPlan = plan.value?.packagesToEnable ?? [];
   if (fromPlan.length > 0) return fromPlan;
-  return store.selectedPackages ?? [];
+  return store.draft?.enabled_packages ?? [];
 });
 
 // Same pattern for vhosts: prefer plan, fall back to a naive derivation
@@ -67,14 +67,17 @@ async function install(): Promise<void> {
   // non-empty within 3s of the Install click. error-recovery.spec.ts asserts.
   logLines.value = ['Aurora is starting your services…'];
   try {
-    // Belt & braces: PATCH the final selection one more time in case the
-    // user jumped straight to review via the sidebar without hitting
-    // Continue on packages/dns.
-    logLines.value.push('› Persisting draft selection…');
-    await store.patchDraft({
-      enabled_packages: store.selectedPackages,
-      step: 'done',
-    });
+    // Mark the resume-hint as done in case the user jumped straight to
+    // Review via the sidebar. Deliberately does NOT re-send
+    // enabled_packages here: unlike the old picker step, there is no
+    // local selection to reconfirm, and blindly resending a baseline list
+    // would silently clobber whatever the SSO step already decided about
+    // `identity` (and its secrets) if this ran after that. The mandatory
+    // baseline was already PATCHed once on Domain, and
+    // OnboardingService#install() (called below) force-adds it again as
+    // its own belt-and-braces if that step got skipped too.
+    logLines.value.push('› Finalising the wizard draft…');
+    await store.patchDraft({ step: 'done' });
     logLines.value.push('  ok');
 
     // Apply. Server writes .state.yml + .env, reports diff vs. running set.
@@ -156,7 +159,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 9 of 10</div>
+    <div class="eyebrow mb-3">{{ store.stepEyebrow }}</div>
     <h1 class="mb-4">Review and install.</h1>
     <p class="text-foreground mb-8">
       Here's what Aurora will do. Nothing has been written yet.
