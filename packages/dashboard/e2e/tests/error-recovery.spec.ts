@@ -83,7 +83,7 @@ test('done page: any failed package exposes a Retry action', async ({ page }) =>
         dns_mode: 'adguard',
         admin_username: 'aurora',
         bootstrap_mode: 'fresh',
-        completed: ['welcome', 'admin', 'domain', 'packages', 'secrets', 'tls', 'review', 'install'],
+        completed: ['welcome', 'admin', 'domain', 'sso', 'secrets', 'tls', 'review', 'install'],
       }),
     });
   });

@@ -2,15 +2,18 @@ import { test } from '@playwright/test';
 import { expect } from '../fixtures/ux-matchers';
 
 /**
- * Sarah persona happy-path: walks Welcome → Admin → Domain → Packages →
+ * Sarah persona happy-path: walks Welcome → Admin → Domain → SSO →
  * Secrets → DNS → TLS → Review → Done using recommended defaults and
  * minimal typing. Cites UX_SPEC.md §2 (the 30-minute journey) throughout.
  *
  * The wizard step order in this file matches the router (§Spec header):
- *   Welcome → Admin → Domain → Packages → Secrets → DNS → TLS → Review → Done
- * The prompt requested "Welcome → TLS → Domain → DNS → …" — that ordering
- * does not exist in the app; we follow the router-defined order so the
- * test can actually walk the flow.
+ *   Welcome → Admin → Domain → SSO → Secrets → DNS → TLS → Review → Done
+ * The interactive package-picker step (Packages) was removed 2026-08-15:
+ * a first run installs the mandatory set only (core, identity if SSO is
+ * accepted, storage) and everything else is added afterwards from the
+ * Apps catalogue. The prompt requested "Welcome → TLS → Domain → DNS → …"
+ * — that ordering does not exist in the app; we follow the router-defined
+ * order so the test can actually walk the flow.
  */
 
 test.describe('wizard happy path (Sarah persona)', () => {
@@ -22,7 +25,7 @@ test.describe('wizard happy path (Sarah persona)', () => {
     await request.post('/api/onboarding/reset').catch(() => {});
     await page.goto('/');
     // Redirect should send a fresh box to /onboarding/welcome.
-    await page.waitForURL(/\/onboarding\/(welcome|admin|domain|packages|secrets|dns|tls|review|done)/, {
+    await page.waitForURL(/\/onboarding\/(welcome|admin|domain|sso|secrets|dns|tls|review|done)/, {
       timeout: 10_000,
     });
   });
@@ -66,37 +69,16 @@ test.describe('wizard happy path (Sarah persona)', () => {
   });
 
   /** UX_SPEC §3.4 D1 + D5: domain prefilled aurora.local, continue advances. */
-  test('domain step prefilled with aurora.local and advances to /packages', async ({ page }) => {
+  test('domain step prefilled with aurora.local and advances to /sso', async ({ page }) => {
     await page.goto('/onboarding/domain');
     const input = page.locator('input[name="domain"], input#domain, [data-field="domain"] input').first();
     await expect(input).toHaveValue(/aurora\.local/);
     const cta = page.locator('button[data-cta="primary"]:visible').first();
     await cta.click();
-    await page.waitForURL(/\/onboarding\/packages/, { timeout: 5_000 });
-  });
-
-  /** UX_SPEC §3.5 P1: three presets with exact labels. */
-  test('packages step exposes three preset buttons with exact labels', async ({ page }) => {
-    await page.goto('/onboarding/packages');
-    await expect(page.getByRole('button', { name: /^Safe default$/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Media server$/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Personal cloud$/ })).toBeVisible();
-  });
-
-  /** UX_SPEC §3.5 P2: core is always selected + disabled. */
-  test('packages step: core is locked-on', async ({ page }) => {
-    await page.goto('/onboarding/packages');
-    const core = page.locator('[data-package="core"] input[type="checkbox"]').first();
-    await expect(core).toBeChecked();
-    await expect(core).toBeDisabled();
-  });
-
-  /** UX_SPEC §3.5 P5: continue label matches /^Continue with \d+ packages?$/. */
-  test('packages continue label mirrors selection count', async ({ page }) => {
-    await page.goto('/onboarding/packages');
-    const cta = page.locator('button[data-cta="primary"]:visible').first();
-    const label = (await cta.innerText()).trim();
-    expect(label).toMatch(/^Continue with \d+ packages?$/);
+    // The interactive package-picker step is gone (2026-08-15) — domain
+    // now hands off straight to the SSO step, which is where identity's
+    // enablement (opt-in, not forced) is decided.
+    await page.waitForURL(/\/onboarding\/sso/, { timeout: 5_000 });
   });
 
   /** UX_SPEC §3.6 S1: secrets screen names the count from GET /plan. */

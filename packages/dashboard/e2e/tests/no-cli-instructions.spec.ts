@@ -15,7 +15,7 @@ const WIZARD_STEPS = [
   '/onboarding/welcome',
   '/onboarding/admin',
   '/onboarding/domain',
-  '/onboarding/packages',
+  '/onboarding/sso',
   '/onboarding/secrets',
   '/onboarding/dns',
   '/onboarding/tls',
