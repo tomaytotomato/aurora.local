@@ -17,6 +17,18 @@ never executed anywhere; **absent** means there is no backend behind it.
   `group_vars/all.yml`, so the account should be `bruce` unless you edit
   that first. A mismatch here fails late and confusingly.
 - SSH access from the laptop, or a keyboard and monitor on the box.
+- **Check the user's UID before you start:**
+
+      id -u
+
+  If that is not `1000`, edit `AURORA_UID` in `packages/dashboard/.env`
+  to match before bringing the dashboard up. `DOCKER_GID` is detected
+  automatically by `up.sh`; `AURORA_UID` is not, and is hardcoded to
+  `1000` in `.env.example`. Get it wrong and every write the dashboard
+  makes to the repo (`.state.yml`, per-package `.env` files, Caddy
+  snippets) fails with a permission error that the wizard cannot explain.
+  Debian's first user is normally 1000, so this usually passes, but it
+  costs one command to be sure.
 - The box is amd64. Two of the bugs fixed yesterday only bite on ARM, so
   they will not appear, but the fixes are harmless either way.
 
