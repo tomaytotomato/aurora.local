@@ -75,7 +75,6 @@ Current packages:
 | photos          | productivity     | Immich                                                                     |
 | documents       | productivity     | Paperless-ngx + Stirling-PDF                                               |
 | notes           | productivity     | SilverBullet                                                               |
-| git             | dev              | Forgejo + forgejo-runner CI                                                |
 | dev             | dev              | code-server + Postgres 16 + Redis 7                                        |
 | ai              | ai               | Ollama + Open-WebUI (CPU default, `--gpu` opt-in NVIDIA)                   |
 | home-automation | home-automation  | Home Assistant + Mosquitto + Zigbee2MQTT (`--zigbee`)                      |

@@ -66,6 +66,83 @@ Before this can be scoped, three things need answering:
 
 Left deliberately vague here rather than guessed at.
 
+## Removed packages
+
+### git (Forgejo)
+
+Removed from the catalogue on 2026-08-15. `packages/git` pinned
+`codeberg.org/forgejo/forgejo:1.21`, which turned out to be dead: no
+`1.21.x` tag has been published since 1.21.11-2 on 2024-06-13. Forgejo
+changed its versioning scheme in 2024 (the old `1.21` line became
+semver `v6.0`, and `v7.0` onward is the current fork-proper numbering),
+so the gap between what was pinned and current stable (v16.0.2) is nine
+major versions, each of which may carry breaking changes under
+Forgejo's own semver contract. Two years with no security fix on a
+package that hosts source code was judged too big a risk to carry
+forward, so the package is gone rather than patched in place.
+
+Removed: `packages/git/` (compose, manifest, caddy snippet, homepage
+fragment, README, `.env.example`, `pins.env.example`), the `git`
+row from the root README's package table, the Forgejo node from the
+layered-view diagram in `docs/ARCHITECTURE.md`, and every prose mention
+of Forgejo in `docs/DASHBOARD_BRIEF.md` and `packages/identity/README.md`
++ `packages/identity/caddy.snippet` (it was one of the three services
+using Authelia's trusted-header auth, alongside Grafana and Paperless).
+Dashboard mock fixtures (`packages.ts`, `proxy.ts`, `backup.ts`,
+`hardening.ts`) had their Forgejo/`git`-package entries removed or
+re-pointed at a still-real package so the demo data doesn't reference
+something that no longer exists. No other package's manifest named
+`git` in `depends_on` or `recommends`, so no dangling dependency was
+left behind.
+
+Deliberately left alone: `docs/history/RALPH_TASK_D_AUTHELIA.md` and
+`docs/history/PHASE_D_HANDOVER.md`, which record what Phase D actually
+did at the time (Forgejo was a real target then); rewriting history
+docs to erase a since-removed package would misrepresent what happened.
+Also left: a handful of prose mentions of "Forgejo" in backend/frontend
+code comments (`SsoBlock.java`, `AutheliaCaddySnippetInvariantsTests.java`,
+a backend test fixture `caddy.snippet`, `OnboardingSso.vue`) that list
+it alongside Grafana/Paperless as an example of trusted-header auth —
+these are inert prose, not manifest or dependency declarations, and
+sit in files under active work by other agents on this branch set.
+
+**A box that already has `git` installed** keeps running exactly as
+before — removing a package from the catalogue does not touch a
+running box. Forgejo and its runner keep serving on `:3080`/`:2222`
+under the operator's own `docker compose` project, and `.state.yml`
+still lists `git` as enabled. What breaks: the next `./scripts/up.sh`
+or `./scripts/down.sh` (with no explicit package args, or any
+invocation that includes `git`) calls `manifest_resolve_deps` /
+checks for `packages/git/compose.yml`, and both die immediately —
+`scripts/lib/manifest.sh` and `down.sh` check the file exists before
+anything else runs, rather than skipping a package they can't find.
+Every other enabled package on that box stops being manageable through
+either script until the dangling `git` entry is cleared from
+`.state.yml`. Awkwardly, the normal cleanup path (`bootstrap.sh remove
+git`) itself calls `down.sh git`, which needs the very
+`packages/git/compose.yml` that pulling this change deletes — so the
+one command designed to remove a package cleanly cannot run once the
+package's files are gone. An existing operator needs to sequence this
+by hand: run `bootstrap.sh remove git` (or `./scripts/down.sh git`)
+**before** pulling a repo state where `packages/git/` no longer
+exists, so it can still stop the containers and clear `.state.yml`
+properly. Anyone who has already pulled past that point needs to stop
+the `forgejo` / `forgejo-runner` containers directly with `docker rm
+-f`, and hand-edit `.state.yml` to drop the `git` line, before
+`up.sh`/`down.sh` will work again. No automated migration is provided
+here — a `remove`/re-`add`-under-a-new-name flow does not exist yet
+for a package whose replacement hasn't been chosen, and the data under
+`data/git/` is left untouched either way, ready to migrate once a
+replacement is picked.
+
+**Needs a replacement chosen before this can be re-added.** Candidates
+worth a proper look when that happens: Gitea (Forgejo's upstream,
+still actively released and tagged), a newer Forgejo pin if the
+project decides the fork is still the right call, or moving git
+hosting off-box entirely (GitHub/Codeberg-hosted, no local package).
+Not evaluated here — this entry exists so nobody re-adds the same dead
+pin without knowing why it was pulled.
+
 ## Decided against
 
 ### Self-hosted Obsidian
