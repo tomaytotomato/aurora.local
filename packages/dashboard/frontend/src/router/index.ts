@@ -17,7 +17,10 @@ const routes: RouteRecordRaw[] = [
       { path: 'welcome', component: () => import('@/views/onboarding/OnboardingWelcome.vue') },
       { path: 'admin', component: () => import('@/views/onboarding/OnboardingAdmin.vue') },
       { path: 'domain', component: () => import('@/views/onboarding/OnboardingDomain.vue') },
-      { path: 'packages', component: () => import('@/views/onboarding/OnboardingPackages.vue') },
+      // 'packages' removed (2026-08-15): the interactive package-picker
+      // step is gone — first-run installs the mandatory set only (see
+      // MANDATORY_FIRST_RUN_PACKAGES in api/packages.ts) and everything
+      // else is added afterwards from the Apps catalogue.
       { path: 'sso', component: () => import('@/views/onboarding/OnboardingSso.vue') },
       { path: 'secrets', component: () => import('@/views/onboarding/OnboardingSecrets.vue') },
       { path: 'dns', component: () => import('@/views/onboarding/OnboardingDns.vue') },

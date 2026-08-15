@@ -36,9 +36,10 @@ const submitting = ref(false);
 const error = ref<string | null>(null);
 
 // Reflect the current draft state — a returning visitor who already
-// completed this step sees the box in the shape they left it.
+// completed this step sees the box in the shape they left it. Reads off
+// the server-truth draft (there is no local picker selection any more).
 const alreadyEnabled = computed(() =>
-  store.selectedPackages.includes('identity'),
+  store.draft?.enabled_packages?.includes('identity') ?? false,
 );
 if (alreadyEnabled.value) enableSso.value = true;
 
@@ -70,7 +71,7 @@ async function proceed(): Promise<void> {
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 5 of 10</div>
+    <div class="eyebrow mb-3">{{ store.stepEyebrow }}</div>
     <h1 class="mb-4">One password for every service.</h1>
     <p class="text-foreground mb-6 max-w-3xl">
       Aurora can manage a single login page that gates every service

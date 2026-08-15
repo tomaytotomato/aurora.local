@@ -27,7 +27,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 7 of 10</div>
+    <div class="eyebrow mb-3">{{ store.stepEyebrow }}</div>
     <h1 class="mb-4">Route DNS.</h1>
     <p class="text-foreground mb-8">
       Devices on your LAN need to know how to reach

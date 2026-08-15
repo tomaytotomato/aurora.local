@@ -13,7 +13,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 6 of 10</div>
+    <div class="eyebrow mb-3">{{ store.stepEyebrow }}</div>
     <h1 class="mb-4">Configure secrets.</h1>
     <p class="text-foreground mb-8">
       Some apps need secrets like passwords or API keys. Aurora fills in strong
@@ -33,7 +33,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       <div class="eyebrow mb-2">Selected packages</div>
       <div class="flex flex-wrap gap-2">
         <span
-          v-for="p in store.selectedPackages"
+          v-for="p in (store.draft?.enabled_packages ?? [])"
           :key="p"
           class="font-mono text-xs px-2 py-1 rounded border border-border bg-card"
         >{{ p }}</span>

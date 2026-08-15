@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
+import { MANDATORY_FIRST_RUN_PACKAGES } from '@/api/packages';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
@@ -24,7 +25,20 @@ async function proceed(): Promise<void> {
     err.value = 'That doesn\'t look like a valid domain.';
     return;
   }
-  await store.patchDraft({ domain: domain.value, step: 'packages' });
+  // Seed .state.yml's enabled[] with the mandatory baseline here — this is
+  // the job the interactive package-picker step used to do (it PATCHed
+  // enabled_packages right before handing off to the SSO step). `identity`
+  // is deliberately left out: the very next step (SSO) decides whether
+  // Authelia is enabled, generates its secrets, and neutralises other
+  // packages' internal auth — none of that should be pre-empted here.
+  // OnboardingService#install() force-adds the same baseline again later
+  // as a belt-and-braces safety net if this step gets skipped via the
+  // sidebar.
+  await store.patchDraft({
+    domain: domain.value,
+    enabled_packages: [...MANDATORY_FIRST_RUN_PACKAGES],
+    step: 'sso',
+  });
   store.next();
   router.push(`/onboarding/${store.currentStep}`);
 }
@@ -32,7 +46,7 @@ async function proceed(): Promise<void> {
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 3 of 10</div>
+    <div class="eyebrow mb-3">{{ store.stepEyebrow }}</div>
     <h1 class="mb-4">Pick your domain.</h1>
     <p class="text-foreground mb-8">
       Aurora and every package it manages live under one domain. The default,

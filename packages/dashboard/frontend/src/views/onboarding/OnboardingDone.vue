@@ -14,10 +14,10 @@ const store = useOnboardingStore();
 const router = useRouter();
 
 // Packages Aurora will bring up. `packages_to_start` is populated by the
-// install() call on Review; if the user reloaded, fall back to the store's
-// selection so the CTA still makes sense.
+// install() call on Review; if the user reloaded, fall back to the
+// draft's own enabled_packages so the CTA still makes sense.
 const toStart = computed<string[]>(() =>
-  store.installResult?.packages_to_start ?? store.selectedPackages ?? [],
+  store.installResult?.packages_to_start ?? store.draft?.enabled_packages ?? [],
 );
 
 const launchJobId = ref<string | null>(null);
@@ -190,10 +190,12 @@ onMounted(async () => {
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 10 of 10</div>
+    <div class="eyebrow mb-3">{{ store.stepEyebrow }}</div>
     <h1 class="mb-4">You're set.</h1>
     <p class="text-foreground mb-8">
-      Aurora is configured. Bring your services online, then head to the dashboard.
+      Aurora is configured with the essentials. Bring your services online, then
+      head to the dashboard — add media, cloud storage, or anything else from the
+      Apps catalogue whenever you're ready.
     </p>
 
     <!-- Bring your services online -->
@@ -241,8 +243,20 @@ onMounted(async () => {
     <DoneChecklist
       v-if="launchState !== 'running'"
       :enabled-packages="toStart"
-      class="mb-10"
+      class="mb-6"
     />
+
+    <!-- 2026-08-15: replaces the old package-picker step. First-run only
+         ever installs the mandatory set; everything else — media, cloud
+         storage, whatever else the box is for — is added afterwards from
+         the catalogue, which now has real Install/Start/Disable/Uninstall
+         controls behind it. -->
+    <p class="text-sm text-muted-foreground mb-10">
+      Want more? Add apps any time from the
+      <router-link to="/apps/catalogue" class="text-foreground underline underline-offset-2">
+        Apps catalogue
+      </router-link>.
+    </p>
 
     <!-- iter-3 P1a: how to reach the box — mDNS host + LAN IP with copy
          buttons. The LAN IP is the always-works fallback for browsers

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 // Aurora's single-component API (`v-model` + `tabs` array + default slot
 // for panels) is preserved. Used both as tabs-with-panels (PackageDetail,
 // VpnView, OnboardingDns — pass a default slot) and as a page-level filter
-// strip (PackagesCatalogue, OnboardingPackages — no slot; the filtered content
+// strip (PackagesCatalogue — no slot; the filtered content
 // lives below the component). The two hand-rolled filter strips were
 // folded onto this so there is one keyboard-accessible implementation.
 //
