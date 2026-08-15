@@ -92,3 +92,89 @@ regression test (`JobsControllerIntegrationTest`, "tags the environment
 so a shelled-out script knows it is self invoked") pinning that
 `AURORA_INVOKED_BY` reaches the command runner, alongside the existing
 one for `AURORA_LAUNCHED_BY` in `LaunchServiceTests`.
+
+## Backend suite
+
+`mvn clean test` (Java 25, `JENV_VERSION=25.0.3 jenv exec mvn ...` — this
+machine's jenv default is 21, and `JAVA_HOME=...` alone did not override
+it because jenv shims ignore that variable unless a `.java-version` file
+or `JENV_VERSION` is set) — 669/669 green, `BUILD SUCCESS`. One transient
+"class file version 69.0" failure along the way turned out to be
+self-inflicted: an accidental `.java-version` file briefly left the
+worktree root (from a wrong `jenv local` invocation) meant one run
+compiled and ran everything under 25, and after I deleted it a
+subsequent run picked up jenv's global 21 default for the surefire fork
+while `target/test-classes` still had a Java-25-compiled class file
+sitting in it — `mvn clean test` under a consistently pinned JDK cleared
+it. Not a defect in the fix; noted here so it isn't mistaken for one.
+
+## Testbed verification
+
+VM already had a partial reproduction of the bug sitting on it: `aurora`
+up and healthy, `caddy`/`samba`/`minidlna`/`authelia` up, `adguard`
+stuck `Created`, and a stray `3501e49e8a57_aurora` container (its name
+literally the id of the still-running `aurora` container prefixed onto
+`_aurora` — compose's rename-then-remove dance, interrupted). Removed
+the stray container by hand (`docker rm`) — a one-off manual cleanup, as
+decided above; `up.sh` does not do this automatically.
+
+Wrote `.state.yml` with `enabled: [core, dashboard, identity, storage,
+privacy]` to match what was actually running. `up.sh sync` had already
+wiped every package's `.env` (they're gitignored and the Mac source
+never had them, so `rsync --delete` removed the VM's copies) — a
+reasonable stand-in for "the install step rewrote .env", since the next
+`up.sh` run reseeds every `.env` from `.env.example` and
+`rotate-secrets.sh --apply` generates fresh secrets for all of them.
+
+Reproduced the exact LaunchService seam by `docker exec`-ing into the
+running `aurora` container (not running the script from the VM host —
+the bug only exists because the process is a descendant of the
+container being recreated) and running:
+
+    docker exec aurora bash -c 'cd /home/bruce/aurora.local && \
+      AURORA_LAUNCHED_BY=aurora-dashboard bash scripts/up.sh \
+      core dashboard identity storage privacy'
+
+First run: exit 0, log showed `self-launch guard: excluding dashboard's
+own service(s) [aurora] from 'up -d'`, `aurora` never appeared in the
+Recreate/Recreated/Starting list, and `docker inspect aurora`'s
+`Created`/`State.StartedAt` were byte-for-byte identical before and
+after. `authelia` started crash-looping afterwards on a config error
+(`identity_validation.reset_password.jwt_secret` / `storage.encryption_key`
+required) — a pre-existing identity-package secret-templating gap
+unrelated to this fix (the freshly rotated `AUTHELIA_*` secrets aren't
+reaching `configuration.yml`); flagging it, not fixing it here.
+
+Ran it again after manually forcing a real pending diff (changed
+`AURORA_SESSION_SECRET` in `packages/dashboard/.env`, confirmed with
+`docker compose up -d --dry-run aurora` that compose genuinely wanted to
+recreate it). The guarded run still left `aurora`'s `Created` timestamp
+untouched — even though this particular run then hit an unrelated,
+pre-existing failure of its own (`adguard` couldn't bind
+`0.0.0.0:53/tcp`; Debian's `systemd-resolved` already listens on port 53
+— nothing to do with this fix) and exited 1. `aurora` was never a target
+of that `up -d` either way, so it survived a real pending recreate *and*
+a real failure elsewhere in the same invocation without being touched,
+and no stray `*_aurora` container was created this time.
+
+Confirmed the opposite is also true — the guard doesn't fire when it
+shouldn't: ran `scripts/up.sh core dashboard identity storage` directly
+on the VM host (not `docker exec`, no `AURORA_LAUNCHED_BY`) after forcing
+another `AURORA_SESSION_SECRET` change. This time `aurora`'s `Created`
+timestamp changed (new container, "1 second ago"), exactly like the old
+unguarded behaviour, proving `bootstrap.sh add`/an operator SSH'd into
+the box still gets a full, correct recreate when one is actually needed.
+
+Also exercised `down.sh`'s guard directly (nothing calls it in-container
+yet, so this was the only way to prove it): `docker exec`'d
+`AURORA_LAUNCHED_BY=aurora-dashboard bash scripts/down.sh core dashboard
+identity storage` — log showed the same guard message, `caddy`/`samba`/
+`authelia`/`minidlna` stopped and were removed, `aurora` was never
+targeted and stayed up throughout (`Created` timestamp unchanged, exit
+0).
+
+Left the VM with `core dashboard identity storage` back up
+(`./scripts/up.sh core dashboard identity storage` from the host) and
+`./dev/testbed/up.sh verify` green (dashboard 8090 → 200, caddy 80 →
+200). `authelia` is still crash-looping on the pre-existing config gap
+above — not a regression from this change, and not fixed as part of it.
