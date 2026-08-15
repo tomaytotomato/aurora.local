@@ -125,6 +125,42 @@ for p in "${pkgs[@]}"; do
   [[ -f "$env_real" ]] && env_files+=("$env_real")
 done
 
+# --------------------------------------------------------------------
+# Dashboard orphan guard
+# --------------------------------------------------------------------
+# .state.yml can omit "dashboard" entirely (none of the onboarding
+# wizard's presets add it — a frontend bug tracked separately), so
+# `pkgs` above may not include it even though the dashboard's own
+# container is what is running on this box right now, quite possibly
+# running this very script. If dashboard's compose.yml were left out of
+# the -f list, `docker compose up -d --remove-orphans` below would see a
+# running "aurora" container with no matching service in the merged
+# config and delete it as an orphan — the mirror image of the
+# self-recreation bug the guard further down already handles.
+#
+# Force the file in whenever it exists and the dashboard is genuinely
+# installed. "Installed" is judged by packages/dashboard/.env existing,
+# the same signal every other package's seeding above relies on: forcing
+# in an uninstalled dashboard's compose file would swap this crash for
+# another, since AURORA_SESSION_SECRET is a hard requirement
+# (`:?set in packages/dashboard/.env`) and every docker compose
+# invocation below — pull, config, up — would abort before doing
+# anything. On a box where the dashboard never ran, there is no
+# container for --remove-orphans to mistakenly reap, so leaving it out
+# entirely is correct there.
+dashboard_compose="$REPO/packages/dashboard/compose.yml"
+dashboard_env="$REPO/packages/dashboard/.env"
+dashboard_requested=0
+[[ " ${pkgs[*]} " == *" dashboard "* ]] && dashboard_requested=1
+
+dashboard_forced=0
+if [[ $dashboard_requested -eq 0 ]] && [[ -f "$dashboard_compose" ]] && [[ -f "$dashboard_env" ]]; then
+  files+=(-f "$dashboard_compose")
+  env_files+=("$dashboard_env")
+  dashboard_forced=1
+  log_step "dashboard is installed but not in the enabled set; including its compose file so --remove-orphans can't reap its running container"
+fi
+
 # A freshly-seeded .env has every secret blank (that's what .env.example
 # ships). Several services (Authelia, Paperless, Kopia, ...) treat an
 # empty required secret as fatal and refuse to start, so a first "up"
@@ -194,11 +230,31 @@ self_launch_marker=0
 # dashboard's own instead of no arguments. Compose then only creates,
 # recreates or starts those services; the dashboard's own container is
 # never touched, regardless of whether its config changed.
+#
+# Two independent reasons land us in that same "exclude the dashboard's
+# own services" spot, so one flag covers both:
+#   - dashboard_forced: the dashboard orphan guard above pulled its
+#     compose file in purely so --remove-orphans doesn't reap it, even
+#     though nobody asked for the dashboard as part of this launch.
+#     Never start or recreate it in that case, self-launched or not.
+#   - self_launch_marker + dashboard genuinely requested: the existing
+#     self-recreation guard — don't recreate the container this process
+#     is running in mid-launch.
+# A host operator explicitly bringing the dashboard up, not running from
+# inside its own container, hits neither condition and gets ordinary
+# recreate semantics, same as before.
+restrict_dashboard_services=0
+if [[ $dashboard_forced -eq 1 ]]; then
+  restrict_dashboard_services=1
+elif [[ $self_launch_marker -eq 1 ]] && [[ $dashboard_requested -eq 1 ]]; then
+  restrict_dashboard_services=1
+fi
+
 up_target_services=()
 self_launch=0
-if [[ $self_launch_marker -eq 1 ]] && [[ " ${pkgs[*]} " == *" dashboard "* ]]; then
+if [[ $restrict_dashboard_services -eq 1 ]]; then
   self_launch=1
-  self_compose="$REPO/packages/dashboard/compose.yml"
+  self_compose="$dashboard_compose"
   mapfile -t self_services < <(docker compose -f "$self_compose" config --services)
   mapfile -t all_services  < <(docker compose -p aurora "${files[@]}" config --services)
   for svc in "${all_services[@]}"; do
@@ -206,17 +262,24 @@ if [[ $self_launch_marker -eq 1 ]] && [[ " ${pkgs[*]} " == *" dashboard "* ]]; t
     for s in "${self_services[@]}"; do [[ "$svc" == "$s" ]] && is_self=1 && break; done
     [[ $is_self -eq 0 ]] && up_target_services+=("$svc")
   done
-  log_step "self-launch guard: excluding dashboard's own service(s) [${self_services[*]}] from 'up -d' (invoked from inside its own container)"
+  if [[ $dashboard_forced -eq 1 ]]; then
+    log_step "excluding dashboard's own service(s) [${self_services[*]}] from 'up -d' (installed but not part of this launch)"
+  else
+    log_step "self-launch guard: excluding dashboard's own service(s) [${self_services[*]}] from 'up -d' (invoked from inside its own container)"
+  fi
 
   # A recreate interrupted this way leaves compose's rename-then-remove
   # dance half-done: the old container is renamed out of the way but
   # never cleaned up. That's debris, not a blocker — the name is free
   # again for the next recreate — and an install script auto-removing
   # containers on every run is a worse failure mode than leaving one
-  # around, so we only surface it.
-  mapfile -t stray_containers < <(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E '_aurora$' || true)
-  if [[ ${#stray_containers[@]} -gt 0 ]]; then
-    log_warn "found stray renamed container(s) from a previous interrupted recreate: ${stray_containers[*]} (safe to 'docker rm' once you've confirmed nothing needs them)"
+  # around, so we only surface it. Only relevant when a recreate could
+  # actually have been interrupted, i.e. the self-launch marker fired.
+  if [[ $self_launch_marker -eq 1 ]]; then
+    mapfile -t stray_containers < <(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E '_aurora$' || true)
+    if [[ ${#stray_containers[@]} -gt 0 ]]; then
+      log_warn "found stray renamed container(s) from a previous interrupted recreate: ${stray_containers[*]} (safe to 'docker rm' once you've confirmed nothing needs them)"
+    fi
   fi
 fi
 
@@ -228,6 +291,8 @@ docker compose -p aurora "${files[@]}" pull
 if [[ $self_launch -eq 1 ]]; then
   if [[ ${#up_target_services[@]} -gt 0 ]]; then
     docker compose -p aurora "${files[@]}" up -d --remove-orphans "${up_target_services[@]}"
+  elif [[ $dashboard_forced -eq 1 ]]; then
+    log_info "dashboard is the only compose file in play and it isn't part of this launch; skipping 'up -d'"
   else
     log_info "self-launch guard: nothing besides the dashboard itself to bring up; skipping 'up -d'"
   fi
