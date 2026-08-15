@@ -2,6 +2,7 @@ package com.tomaytotomato.aurora.support;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.networknt.schema.JsonSchema;
@@ -285,8 +286,8 @@ public final class OpenApiConformance implements ResultMatcher {
     if (fields == null || !(instance instanceof ObjectNode obj)) return instance;
     ObjectNode copy = obj.deepCopy();
     for (String field : fields) {
-      if (copy.path(field) instanceof com.fasterxml.jackson.databind.node.ArrayNode array) {
-        com.fasterxml.jackson.databind.node.ArrayNode kept = mapper.createArrayNode();
+      if (copy.path(field) instanceof ArrayNode array) {
+        ArrayNode kept = mapper.createArrayNode();
         array.forEach(n -> {
           if (n.isTextual()) kept.add(n);
         });
