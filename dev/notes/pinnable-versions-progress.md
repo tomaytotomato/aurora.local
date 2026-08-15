@@ -74,9 +74,9 @@ is the compose service name upper-cased with `-` -> `_`)
 | filebrowser | filebrowser | IMAGE_FILEBROWSER | filebrowser/filebrowser:v2.31.2 | done -> v2.63.23, BUT project is winding down (archives 2026-09-01) |
 | git | forgejo | IMAGE_FORGEJO | codeberg.org/forgejo/forgejo:1.21 | done -> 1.21.11-2 digest-froze; EOL since 2024-06, migration to v15/v16 flagged as separate project |
 | git | forgejo-runner | IMAGE_FORGEJO_RUNNER | code.forgejo.org/forgejo/runner:3.5.1 | done -> left at 3.5.1 (must move with server, not ahead of it) |
-| home-automation | homeassistant | IMAGE_HOMEASSISTANT | ghcr.io/home-assistant/home-assistant:stable | pending |
-| home-automation | mosquitto | IMAGE_MOSQUITTO | eclipse-mosquitto:2 | pending |
-| home-automation | zigbee2mqtt | IMAGE_ZIGBEE2MQTT | koenkk/zigbee2mqtt:latest | pending |
+| home-automation | homeassistant | IMAGE_HOMEASSISTANT | ghcr.io/home-assistant/home-assistant:stable | done -> 2026.8.1 (multi-arch) |
+| home-automation | mosquitto | IMAGE_MOSQUITTO | eclipse-mosquitto:2 | done -> 2.1.2-alpine (multi-arch) |
+| home-automation | zigbee2mqtt | IMAGE_ZIGBEE2MQTT | koenkk/zigbee2mqtt:latest | done -> 2.13.0 (multi-arch incl. arm64) |
 | identity | authelia | IMAGE_AUTHELIA | authelia/authelia:latest | done -> 4.39.20 (multi-arch incl. arm64) |
 | jellyfin | jellyfin | IMAGE_JELLYFIN | lscr.io/linuxserver/jellyfin:latest | pending |
 | media | sonarr | IMAGE_SONARR | lscr.io/linuxserver/sonarr:latest | done -> 4.0.19 (8d old, multi-arch) |
