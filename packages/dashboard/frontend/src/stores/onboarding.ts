@@ -299,6 +299,18 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     } catch { /* ignore */ }
   }
 
+  /**
+   * Reflect a successful (or already-complete) POST /onboarding/complete
+   * locally. The router guard reads `status.complete` off `draft`, but
+   * `draft` is only ever populated by `hydrate()`, which the guard calls
+   * once per SPA lifetime. Without this, `draft.complete` stays stale
+   * `false` for the rest of the session and navigating to '/' after a
+   * successful launch would bounce the user straight back into the wizard.
+   */
+  function markOnboardingComplete(): void {
+    if (draft.value) draft.value.complete = true;
+  }
+
   return {
     // State
     currentStep,
@@ -327,5 +339,6 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     togglePackage,
     patchDraft,
     clearAllDrafts,
+    markOnboardingComplete,
   };
 });
