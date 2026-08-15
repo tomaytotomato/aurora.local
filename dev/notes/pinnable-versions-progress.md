@@ -56,10 +56,10 @@ is the compose service name upper-cased with `-` -> `_`)
 
 | pkg | service | env var | current ref | status |
 |---|---|---|---|---|
-| ai | ollama-cpu | IMAGE_OLLAMA_CPU | ollama/ollama:latest | pending |
-| ai | ollama-gpu | IMAGE_OLLAMA_GPU | ollama/ollama:latest | pending |
-| ai | open-webui | IMAGE_OPEN_WEBUI | ghcr.io/open-webui/open-webui:main | pending |
-| backup | kopia | IMAGE_KOPIA | kopia/kopia:latest | pending |
+| ai | ollama-cpu | IMAGE_OLLAMA_CPU | ollama/ollama:latest | done -> 0.32.5 (multi-arch) |
+| ai | ollama-gpu | IMAGE_OLLAMA_GPU | ollama/ollama:latest | done -> 0.32.5 (multi-arch) |
+| ai | open-webui | IMAGE_OPEN_WEBUI | ghcr.io/open-webui/open-webui:main | done -> v0.11.0 (:main is explicitly not recommended by upstream; multi-arch) |
+| backup | kopia | IMAGE_KOPIA | kopia/kopia:latest | done -> 0.23.1 (actively maintained; multi-arch) |
 | core | caddy | IMAGE_CADDY | caddy:2-alpine | done -> 2.11.4-alpine (multi-arch incl. arm64) |
 | dashboard | aurora | (exempt) | aurora-dashboard:${AURORA_VERSION:-0.1.0} | exempt — Aurora's own image, see UnpinnedImageTagsRule javadoc |
 | dev | code-server | IMAGE_CODE_SERVER | lscr.io/linuxserver/code-server:latest | done -> 4.132.0 (multi-arch) |
