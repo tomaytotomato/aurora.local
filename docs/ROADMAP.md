@@ -39,6 +39,16 @@ Resource note: with Mongo alongside it, this is not a small package. The
 `resources:` block should be honest about that before it goes in the
 catalogue.
 
+### draw.io
+
+A single `jgraph/drawio` container behind Caddy. Genuinely small: one
+image, no persistence worth speaking of (diagrams live wherever you save
+them), an `sso:` block, and a vhost.
+
+Deferred only on timing. New packages are new install risk, and it was
+raised on the day the alpha goes onto physical hardware. Worth picking up
+once the box is proven.
+
 ### pi.dev agentic tools
 
 Wanted, and currently underspecified. The repo gitignores
@@ -55,6 +65,21 @@ Before this can be scoped, three things need answering:
 - Is it single-user or does it sit behind Authelia with the rest?
 
 Left deliberately vague here rather than guessed at.
+
+## Decided against
+
+### Self-hosted Obsidian
+
+Raised and rejected. Obsidian is a desktop application, so hosting it
+means one of two awkward things: running CouchDB purely as a sync backend
+for the LiveSync plugin, or running the real app inside a container behind
+a web desktop, which is a remote desktop in a browser tab and poor on a
+phone.
+
+The catalogue already has `notes` (SilverBullet), which is a web-native
+markdown notebook, needs no client install, and already carries an `sso:`
+block. That is the answer for now. Revisit only if something SilverBullet
+genuinely cannot do turns up.
 
 ## Owed infrastructure, unchanged
 
