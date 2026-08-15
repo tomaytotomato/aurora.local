@@ -55,11 +55,41 @@ if ! grep -q AURORA_SESSION_SECRET "$REPO_SCRATCH/packages/dashboard/.env" 2>/de
     >> "$REPO_SCRATCH/packages/dashboard/.env"
 fi
 
+# Docker Compose's built-in .env loading resolves against the *first*
+# -f file's directory (packages/dashboard/ in the real repo, since
+# compose.yml is never read from the scratch copy — only bind-mounted
+# via AURORA_REPO_PATH_HOST below), not $REPO_SCRATCH. The line seeded
+# above therefore never reaches compose's interpolation of
+# ${AURORA_SESSION_SECRET:?...} unless it's also exported into this
+# script's own process environment, exactly as scripts/up.sh does for
+# every package .env before shelling out to compose.
+# shellcheck disable=SC1091
+set -a
+. "$REPO_SCRATCH/packages/dashboard/.env"
+set +a
+
+# getent is Linux-only; this script also runs directly on a developer's
+# Mac per the README ("cd packages/dashboard/e2e && ./scripts/reset-aurora-e2e.sh").
+# dscl is macOS's equivalent group lookup; fall back to Debian's usual
+# docker gid (999) if neither is available.
+DOCKER_GID=""
+if command -v getent >/dev/null 2>&1; then
+  DOCKER_GID="$(getent group docker | cut -d: -f3 || true)"
+elif command -v dscl >/dev/null 2>&1; then
+  # Docker Desktop on macOS doesn't create a host "docker" group at all
+  # (there's no docker.sock permission problem to solve — the daemon
+  # runs in Docker Desktop's own VM), so this lookup is expected to find
+  # nothing on a Mac; `|| true` keeps `set -e` from treating that as
+  # fatal and falls through to the default below.
+  DOCKER_GID="$(dscl . -read /Groups/docker PrimaryGroupID 2>/dev/null | awk '{print $2}' || true)"
+fi
+DOCKER_GID="${DOCKER_GID:-999}"
+
 log "starting isolated aurora on :$HOST_PORT (project=$PROJECT)..."
 AURORA_UID="$(id -u)" \
 AURORA_HOST_PORT="$HOST_PORT" \
 AURORA_REPO_PATH_HOST="$REPO_SCRATCH" \
-DOCKER_GID="$(getent group docker | cut -d: -f3 || echo 999)" \
+DOCKER_GID="$DOCKER_GID" \
 docker compose -p "$PROJECT" \
   -f "$DASHBOARD_DIR/compose.yml" \
   -f "$SCRIPT_DIR/compose.e2e.yml" \

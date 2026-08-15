@@ -1,6 +1,6 @@
 import { chromium, request, type FullConfig } from '@playwright/test';
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -22,6 +22,21 @@ import path from 'node:path';
  * Skipped-reset mode (`AURORA_E2E_SKIP_RESET=1`) still tries to re-seed
  * the auth cookie against whatever is already up, so iterating on a
  * single spec against a warm box doesn't lose the session.
+ *
+ * Real-box mode (`AURORA_E2E_FRESH_BOX=1`) is for running against a
+ * target that has no reset endpoint at all — a testbed VM running the
+ * real install chain, not the isolated aurora-e2e compose project.
+ * `/api/onboarding/reset` is gated on `AURORA_E2E=1` server-side and a
+ * real box never sets that, so once this file's own seedAuthFixture()
+ * creates an admin and marks onboarding complete, nothing in the suite
+ * can ever undo it — the box is one-shot. This mode skips seeding
+ * entirely (no admin created, no /complete call) and writes an empty,
+ * unauthenticated storage state instead, so the wizard specs can walk
+ * a genuinely fresh box exactly once. Every other spec that expects
+ * the authed fixture will self-skip (they already do — see
+ * `onboardingComplete()` guards in dashboard-home-polish.spec.ts and
+ * friends) until a later run re-points at a box that has since been
+ * onboarded normally.
  */
 
 const BASE_URL = process.env.AURORA_E2E_BASE_URL ?? 'http://localhost:8091';
@@ -86,14 +101,24 @@ async function seedAuthFixture(): Promise<void> {
 }
 
 export default async function globalSetup(_config: FullConfig): Promise<void> {
-  if (process.env.AURORA_E2E_SKIP_RESET !== '1') {
+  const freshBox = process.env.AURORA_E2E_FRESH_BOX === '1';
+
+  if (process.env.AURORA_E2E_SKIP_RESET !== '1' && !freshBox) {
     const script = path.resolve(__dirname, 'scripts/reset-aurora-e2e.sh');
     console.log(`[e2e] running ${script}`);
     execSync(`bash ${script}`, { stdio: 'inherit' });
   } else {
-    console.log('[e2e] AURORA_E2E_SKIP_RESET=1 → skipping reset-aurora-e2e.sh');
+    console.log('[e2e] AURORA_E2E_SKIP_RESET=1 or AURORA_E2E_FRESH_BOX=1 → skipping reset-aurora-e2e.sh');
   }
 
   await waitFor(BASE_URL);
+
+  if (freshBox) {
+    console.log('[e2e] AURORA_E2E_FRESH_BOX=1 → leaving the box untouched; writing an empty (pre-auth) storage state');
+    if (!existsSync(path.dirname(STATE_FILE))) mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+    writeFileSync(STATE_FILE, JSON.stringify({ cookies: [], origins: [] }, null, 2));
+    return;
+  }
+
   await seedAuthFixture();
 }

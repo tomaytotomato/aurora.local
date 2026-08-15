@@ -3,3 +3,7 @@ test-results/
 playwright-report/
 results/*.tmp
 results/*-artifacts/
+
+# Generated at runtime by global-setup.ts (real session cookie for
+# whatever box the suite last ran against) — never a source file.
+fixtures/authed-state.json
