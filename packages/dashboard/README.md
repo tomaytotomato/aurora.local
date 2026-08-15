@@ -16,8 +16,6 @@ other `packages/`; enabled the same way (`./bootstrap.sh add dashboard`).
 
 ## What it isn't
 
-- Not a Homepage replacement. Homepage stays at `aurora.local`.
-  Aurora lives at `admin.aurora.local`.
 - Not multi-user. One admin per box.
 - Not a metrics stack. `packages/monitoring` (Prometheus + Grafana)
   is the answer for that.
@@ -53,8 +51,7 @@ packages/dashboard/
   compose.yml        aurora service, bind mounts, aurora_data volume
   manifest.yml       aurora.local package contract
   .env.example       AURORA_SESSION_SECRET (must be replaced)
-  caddy.snippet      admin.$DOMAIN vhost
-  homepage.yml       one tile on Homepage
+  caddy.snippet      empty — Aurora is served at the apex vhost in packages/core
   backend/           Spring Boot 4 (Java 25)
   frontend/          Vue 3.5 + Vite 8 + shadcn-vue
 ```

@@ -2,9 +2,8 @@
 
 Vue 3.5 · Vite 8 · TypeScript strict · Tailwind 4 · shadcn-vue conventions.
 
-Aurora is the admin plane for [`aurora.local`](../../../README.md).
-Homepage is the tile grid your household sees at the root domain; this is the
-fuse box.
+Aurora is the dashboard for [`aurora.local`](../../../README.md) — the
+single landing page at the root domain, and the fuse box behind it.
 
 ## Layout
 

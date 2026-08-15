@@ -64,10 +64,9 @@ but taken more seriously.
    trust root. This is where aurora already beats the consumer NAS
    distributions.
 3. **Platform** (the `core` and `identity` packages). Caddy terminates
-   TLS with an internal CA and reverse-proxies every service; Homepage
-   gives a landing dashboard; Authelia provides single sign-on and 2FA
-   by forward-auth, so you log in once and every downstream app trusts
-   the session.
+   TLS with an internal CA and reverse-proxies every service; Authelia
+   provides single sign-on and 2FA by forward-auth, so you log in once
+   and every downstream app trusts the session.
 4. **Control plane** (the `dashboard` package: a Spring Boot backend and
    a Vue SPA served from one `aurora.jar`). This is the management brain.
    It owns the docker socket, the repo, the state file, and a small
