@@ -5,6 +5,7 @@ import { usePackagesStore } from '@/stores/packages';
 import { useUpdatesStore } from '@/stores/updates';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { PackagesApi, dockerStructureFor, isCorePackage, isRemovable, packageLinks } from '@/api/packages';
+import { ServicesApi } from '@/api/services';
 import { versionLabel } from '@/api/updates';
 import {
   NetworkApi,
@@ -17,11 +18,14 @@ import {
 import { buildEnvForm, isEnvFormDirty, validateEnvForm } from '@/lib/envForm';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import { packageLabel, prettyPackageName } from '@/lib/packageName';
+import { deriveStatusLight, packageActionSlots, type PackageAction } from '@/lib/packageLifecycle';
+import { useServiceStatusStream } from '@/composables/useServiceStatusStream';
 import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Tabs from '@/components/ui/Tabs.vue';
 import DockerBadge from '@/components/DockerBadge.vue';
+import StatusLight from '@/components/StatusLight.vue';
 import JobLogPanel from '@/components/JobLogPanel.vue';
 import PackageResourcesCard from '@/components/PackageResourcesCard.vue';
 import PackageImpactPanel from '@/components/PackageImpactPanel.vue';
@@ -42,6 +46,33 @@ const heading = computed(() =>
 
 const isCore = computed(() => (detail.value ? isCorePackage(detail.value) : false));
 const removable = computed(() => (detail.value ? isRemovable(detail.value) : false));
+
+// ── Control panel: status light + gated actions ───────────────────────
+// /services/status carries the richer per-package probe (running /
+// starting / failed / needs-config / not-started) that the plain
+// enabled+running booleans on PackageDetail can't distinguish. SSE with
+// a poll fallback, same composable the Done checklist and dashboard
+// home already use.
+const statusStream = useServiceStatusStream();
+const probe = computed(() => statusStream.data.value?.services.find((s) => s.package === name.value));
+const lightState = computed(() =>
+  deriveStatusLight({
+    loaded: !!detail.value,
+    enabled: detail.value?.enabled ?? false,
+    running: detail.value?.running ?? false,
+    probeState: probe.value?.state,
+  }),
+);
+const actionSlots = computed(() =>
+  packageActionSlots({
+    isCore: isCore.value,
+    enabled: detail.value?.enabled ?? false,
+    running: detail.value?.running ?? false,
+  }),
+);
+function actionSlot(action: PackageAction) {
+  return actionSlots.value.find((s) => s.action === action)!;
+}
 const structure = computed(() => (detail.value ? dockerStructureFor(detail.value) : 'container'));
 // Core apps live on their own page now; send the back link to whichever
 // one the operator actually came from.
@@ -296,15 +327,20 @@ function cleanName(names: string[] | undefined): string {
 }
 
 // ── Lifecycle actions ──────────────────────────────────────────────────
-// Core packages only ever get restart/upgrade; add/remove is gated by
-// `removable` both here and in the template (belt + braces — the button
-// simply doesn't render for core, but the handlers double-check too).
-// Add, remove and update all return a job id and stream their log into
-// the panel below the action bar, rather than reporting "started" in a
+// Core packages only ever get restart/upgrade; install/start/uninstall
+// are gated by `actionSlot(...)` both here and in the template (belt +
+// braces — the button simply doesn't render or is disabled for an
+// invalid state, but the handlers double-check too). Install, uninstall,
+// start and update all return a job id and stream their log into the
+// panel below the control card, rather than reporting "started" in a
 // toast and going quiet. Restart stays a plain 204: it is over in
 // seconds and has nothing worth watching.
-type Busy = 'enable' | 'disable' | 'restart' | 'upgrade' | null;
-type JobAction = 'enable' | 'disable' | 'upgrade';
+//
+// 'disable' (stop a running app without uninstalling it) has no backend
+// endpoint — see lib/packageLifecycle.ts — so it is not a JobAction here.
+// The button renders visible-but-disabled with its reason.
+type Busy = 'enable' | 'uninstall' | 'restart' | 'upgrade' | 'start' | null;
+type JobAction = 'enable' | 'uninstall' | 'upgrade' | 'start';
 const busy = ref<Busy>(null);
 const removeOpen = ref(false);
 const activeJobId = ref<string | null>(null);
@@ -319,22 +355,31 @@ async function refreshAfterLifecycle(): Promise<void> {
 }
 
 const FAILURE_COPY: Record<JobAction, { title: string; subject: string; action: string }> = {
-  enable: { title: "Couldn't add the app", subject: 'this app', action: 'enable' },
-  disable: { title: "Couldn't remove the app", subject: 'this app', action: 'remove' },
+  enable: { title: "Couldn't install the app", subject: 'this app', action: 'install' },
+  uninstall: { title: "Couldn't uninstall the app", subject: 'this app', action: 'uninstall' },
   upgrade: { title: "Couldn't update the app", subject: 'this app', action: 'update' },
+  start: { title: "Couldn't start the app", subject: 'this app', action: 'start' },
 };
 
 async function startJob(action: JobAction): Promise<void> {
   if (!detail.value) return;
-  if (action === 'disable' && !removable.value) return;
+  if (action === 'uninstall' && !removable.value) return;
   busy.value = action;
   try {
-    const call = {
-      enable: PackagesApi.enable,
-      disable: PackagesApi.disable,
-      upgrade: PackagesApi.upgrade,
-    }[action];
-    const { jobId } = await call(detail.value.name);
+    let jobId: string;
+    if (action === 'start') {
+      // POST /services/{package}/start replies with job_id (snake_case,
+      // matching the wider services.ts shape), not the jobId camelCase
+      // the packages.ts lifecycle verbs return.
+      jobId = (await ServicesApi.start(detail.value.name)).job_id;
+    } else {
+      const call = {
+        enable: PackagesApi.enable,
+        uninstall: PackagesApi.disable,
+        upgrade: PackagesApi.upgrade,
+      }[action];
+      jobId = (await call(detail.value.name)).jobId;
+    }
     activeAction.value = action;
     activeJobId.value = jobId;
     jobRunning.value = true;
@@ -347,11 +392,11 @@ async function startJob(action: JobAction): Promise<void> {
     });
   } finally {
     busy.value = null;
-    if (action === 'disable') removeOpen.value = false;
+    if (action === 'uninstall') removeOpen.value = false;
   }
 }
 
-// Adding an app now goes through a disclosure step. The manifest has
+// Installing an app now goes through a disclosure step. The manifest has
 // always known what it would take — ports, other apps it drags in, host
 // roles — and none of it was shown at the moment it mattered.
 const addConfirm = ref(false);
@@ -363,8 +408,9 @@ function confirmAdd(): void {
   addConfirm.value = false;
   void enablePackage();
 }
-const confirmDisable = () => startJob('disable');
+const confirmDisable = () => startJob('uninstall');
 const upgradePackage = () => startJob('upgrade');
+const startPackage = () => startJob('start');
 
 async function restartPackage(): Promise<void> {
   if (!detail.value) return;
@@ -380,9 +426,10 @@ async function restartPackage(): Promise<void> {
 }
 
 const SUCCESS_COPY: Record<JobAction, (n: string) => { title: string; description: string }> = {
-  enable: (n) => ({ title: 'Added', description: `${n} is up and running.` }),
-  disable: (n) => ({ title: 'Removed', description: `${n} has been stopped and removed. Its data is still on disk.` }),
+  enable: (n) => ({ title: 'Installed', description: `${n} is up and running.` }),
+  uninstall: (n) => ({ title: 'Uninstalled', description: `${n} has been stopped and removed. Its data is still on disk.` }),
   upgrade: (n) => ({ title: 'Updated', description: `${n} is running the latest version.` }),
+  start: (n) => ({ title: 'Started', description: `${n} is up and running.` }),
 };
 
 async function onJobSuccess(): Promise<void> {
@@ -426,8 +473,19 @@ watch(name, () => {
   if (activeTab.value === 'network') void loadNetwork();
 });
 
-onMounted(async () => {
-  void updates.ensureLoaded();
+/**
+ * Fetch this package's detail. Shared by onMounted and the `name`
+ * watcher below — Vue Router reuses the PackageDetail instance when only
+ * the `:name` param changes (going from /apps/media to /apps/identity
+ * via a link, or browser back/forward between two app pages never
+ * remounts the component), so onMounted alone only ever fires once. Without
+ * this watcher, `detail` kept pointing at the previous app's data (or
+ * nothing, if this was the first ever fetch) after such a navigation —
+ * the whole page, including the control panel, silently went stale until
+ * a full reload.
+ */
+async function loadDetail(): Promise<void> {
+  err.value = null;
   try {
     await packages.fetchOne(name.value);
   } catch (e) {
@@ -436,6 +494,15 @@ onMounted(async () => {
       action: 'load',
     });
   }
+}
+
+watch(name, () => {
+  void loadDetail();
+});
+
+onMounted(async () => {
+  void updates.ensureLoaded();
+  await loadDetail();
 });
 </script>
 
@@ -445,9 +512,7 @@ onMounted(async () => {
       <router-link :to="backTo" class="text-xs text-white/70 no-underline hover:text-white">{{ backLabel }}</router-link>
       <div class="flex items-baseline gap-3 mt-4">
         <h1>{{ heading }}</h1>
-        <Badge v-if="detail" :tone="detail.enabled ? 'ok' : 'neutral'" class="bg-card">
-          {{ detail.enabled ? (detail.running ? 'running' : 'stopped') : 'disabled' }}
-        </Badge>
+        <StatusLight :state="lightState" class="bg-card" />
         <Badge v-if="isCore" tone="info" class="bg-card">core</Badge>
       </div>
       <p v-if="detail" class="mt-2">{{ detail.description }}</p>
@@ -464,59 +529,103 @@ onMounted(async () => {
       <Alert variant="destructive"><AlertDescription>{{ err }}</AlertDescription></Alert>
     </Card>
 
-    <!-- Lifecycle action bar. Core apps never see add/remove — only the
-         non-core branch offers it, and confirmDisable() double-checks
-         `removable` regardless. -->
-    <Card v-if="detail" class="p-5 mb-6 flex flex-wrap items-center justify-between gap-4" data-card="package-actions">
-      <div class="flex items-center gap-3 flex-wrap">
-        <DockerBadge :structure="structure" />
-        <p class="text-xs text-muted-foreground">
-          {{ isCore ? "Always on — can't be removed." : (detail.enabled ? 'Enabled on this box.' : 'Not currently running.') }}
-        </p>
-        <template v-if="links.length">
-          <span class="text-muted-foreground text-xs">·</span>
-          <a
-            v-for="link in links"
-            :key="link.label"
-            :href="link.url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-xs text-muted-foreground no-underline hover:text-foreground hover:underline"
-          >{{ link.label }} ↗</a>
-        </template>
+    <!-- Control panel skeleton: shown for the same window the Card below
+         is absent (before the first GET /packages/{name} resolves), so
+         landing on the page reads as "loading" rather than as nothing at
+         all. Same data-state vocabulary as the tab panels below. -->
+    <Card v-if="!detail && !err" class="p-5 mb-6" data-state="loading" data-test="package-actions-skeleton">
+      <div class="flex items-center justify-between gap-4">
+        <Skeleton class="h-5 w-40" />
+        <Skeleton class="h-8 w-56" />
       </div>
-      <div class="flex items-center gap-2">
-        <template v-if="isCore || detail.enabled">
-          <Button size="sm" variant="secondary" :disabled="actionsLocked" data-test="package-restart" @click="restartPackage">
-            {{ busy === 'restart' ? 'Restarting…' : 'Restart' }}
-          </Button>
-          <!-- Primary only when there is genuinely something to install;
-               otherwise updating is a maintenance action, not the thing
-               the page is inviting you to do. -->
+    </Card>
+
+    <!-- Control panel. Core apps get none of install/start/disable/
+         uninstall — `actionSlot(...).visible` is false for all four when
+         isCore, and the copy below explains why instead of just hiding
+         them silently. Which of the remaining three are visible depends
+         on enabled/running (see lib/packageLifecycle.ts); confirmDisable()
+         double-checks `removable` regardless as a second guard. -->
+    <Card v-else-if="detail" class="p-5 mb-6" data-card="package-actions">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3 flex-wrap">
+          <DockerBadge :structure="structure" />
+          <p class="text-xs text-muted-foreground">
+            {{ isCore ? "Always on — can't be added, started, stopped, or removed from here."
+              : (detail.enabled ? (detail.running ? 'Enabled and running.' : 'Enabled, not currently running.') : 'Not installed.') }}
+          </p>
+          <template v-if="links.length">
+            <span class="text-muted-foreground text-xs">·</span>
+            <a
+              v-for="link in links"
+              :key="link.label"
+              :href="link.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-xs text-muted-foreground no-underline hover:text-foreground hover:underline"
+            >{{ link.label }} ↗</a>
+          </template>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <template v-if="isCore || detail.enabled">
+            <Button size="sm" variant="secondary" :disabled="actionsLocked" data-test="package-restart" @click="restartPackage">
+              {{ busy === 'restart' ? 'Restarting…' : 'Restart' }}
+            </Button>
+            <!-- Primary only when there is genuinely something to install;
+                 otherwise updating is a maintenance action, not the thing
+                 the page is inviting you to do. -->
+            <Button
+              size="sm"
+              :variant="updateAvailable ? 'primary' : 'secondary'"
+              :disabled="actionsLocked"
+              data-test="package-upgrade"
+              @click="upgradePackage"
+            >{{ busy === 'upgrade' ? 'Updating…' : (updateAvailable ? 'Update' : 'Check and update') }}</Button>
+          </template>
+
           <Button
+            v-if="actionSlot('install').visible"
             size="sm"
-            :variant="updateAvailable ? 'primary' : 'secondary'"
             :disabled="actionsLocked"
-            data-test="package-upgrade"
-            @click="upgradePackage"
-          >{{ busy === 'upgrade' ? 'Updating…' : (updateAvailable ? 'Update' : 'Check and update') }}</Button>
-        </template>
-        <Button
-          v-if="removable && detail.enabled"
-          size="sm"
-          variant="danger"
-          :disabled="actionsLocked"
-          data-test="package-remove"
-          @click="removeOpen = true"
-        >Remove</Button>
-        <Button
-          v-else-if="removable"
-          size="sm"
-          :disabled="actionsLocked"
-          data-test="package-add"
-          @click="askToAdd"
-        >{{ busy === 'enable' ? 'Adding…' : 'Add app' }}</Button>
+            data-test="action-install"
+            @click="askToAdd"
+          >{{ busy === 'enable' ? 'Installing…' : 'Install' }}</Button>
+
+          <Button
+            v-if="actionSlot('start').visible"
+            size="sm"
+            variant="primary"
+            :disabled="actionsLocked"
+            data-test="action-start"
+            @click="startPackage"
+          >{{ busy === 'start' ? 'Starting…' : 'Start' }}</Button>
+
+          <Button
+            v-if="actionSlot('disable').visible"
+            size="sm"
+            variant="secondary"
+            disabled
+            :title="actionSlot('disable').reason"
+            data-test="action-disable"
+          >Disable</Button>
+
+          <Button
+            v-if="actionSlot('uninstall').visible"
+            size="sm"
+            variant="danger"
+            :disabled="actionsLocked || !actionSlot('uninstall').enabled"
+            data-test="action-uninstall"
+            @click="removeOpen = true"
+          >Uninstall</Button>
+        </div>
       </div>
+      <!-- Disable has no backing endpoint yet (see lib/packageLifecycle.ts);
+           the button above is disabled rather than hidden or wired to the
+           wrong verb, and this line says why in the operator's own words
+           rather than only living in a title="" tooltip. -->
+      <p v-if="actionSlot('disable').visible" class="text-xs text-muted-foreground mt-3" data-test="action-disable-reason">
+        {{ actionSlot('disable').reason }}
+      </p>
     </Card>
 
     <!-- Live log for whichever of add / remove / update is in flight.
@@ -901,15 +1010,15 @@ onMounted(async () => {
       </div>
     </Tabs>
 
-    <!-- Add confirm: what this will actually do to the box, before you
+    <!-- Install confirm: what this will actually do to the box, before you
          agree to it rather than after. -->
     <Dialog :open="addConfirm" @update:open="addConfirm = $event">
-      <template #title>Add {{ heading }}?</template>
+      <template #title>Install {{ heading }}?</template>
       <template #description>Here is what that involves.</template>
       <PackageImpactPanel v-if="detail" :detail="detail" />
       <template #footer>
         <Button variant="secondary" @click="addConfirm = false">Cancel</Button>
-        <Button data-test="confirm-add" @click="confirmAdd">Add it</Button>
+        <Button data-test="confirm-install" @click="confirmAdd">Install it</Button>
       </template>
     </Dialog>
 
@@ -935,18 +1044,18 @@ onMounted(async () => {
       </template>
     </Dialog>
 
-    <!-- Remove confirm — destructive, so it gets a dialog rather than a
+    <!-- Uninstall confirm — destructive, so it gets a dialog rather than a
          one-click button (same pattern as VpnView's rotate-key confirm). -->
     <Dialog :open="removeOpen" @update:open="removeOpen = $event">
-      <template #title>Remove {{ heading }}?</template>
+      <template #title>Uninstall {{ heading }}?</template>
       <template #description>
         This stops and removes its containers. Its data stays on disk unless you also
         clear its volumes by hand.
       </template>
       <template #footer>
         <Button variant="secondary" @click="removeOpen = false">Cancel</Button>
-        <Button variant="danger" :disabled="busy === 'disable'" data-test="confirm-remove" @click="confirmDisable">
-          {{ busy === 'disable' ? 'Removing…' : 'Remove' }}
+        <Button variant="danger" :disabled="busy === 'uninstall'" data-test="confirm-uninstall" @click="confirmDisable">
+          {{ busy === 'uninstall' ? 'Uninstalling…' : 'Uninstall' }}
         </Button>
       </template>
     </Dialog>
