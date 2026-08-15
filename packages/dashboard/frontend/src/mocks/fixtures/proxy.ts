@@ -45,7 +45,6 @@ export function initialTargets(): ProxyTarget[] {
     { container: 'jellyfin', ports: [8096, 8920], package: 'jellyfin' },
     { container: 'grafana', ports: [3000], package: 'monitoring' },
     { container: 'prometheus', ports: [9090], package: 'monitoring' },
-    { container: 'forgejo', ports: [3000], package: 'git' },
     { container: 'ollama', ports: [11434], package: 'ai' },
     { container: 'open-webui', ports: [8080], package: 'ai' },
     { container: 'kopia', ports: [51515], package: 'backup' },

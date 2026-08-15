@@ -55,11 +55,10 @@ graph TB
             MO2[grafana]
             MO3[uptime-kuma]
         end
-        subgraph More["+9 others"]
+        subgraph More["+8 others"]
             Photos[photos<br/>Immich]
             Docs[documents<br/>Paperless]
             Notes[notes<br/>SilverBullet]
-            Git[git<br/>Forgejo]
             Dev[dev<br/>code-server]
             AI[ai<br/>Ollama]
             HA[home-automation<br/>HomeAssistant]

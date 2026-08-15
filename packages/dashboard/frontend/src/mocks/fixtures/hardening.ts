@@ -33,7 +33,7 @@ export function initialHardening(): HardeningState {
     },
     dockerSocket: {
       proxied: false,
-      exposedContainers: ['aurora-dashboard', 'forgejo-runner'],
+      exposedContainers: ['aurora-dashboard'],
       writable: true,
     },
   };

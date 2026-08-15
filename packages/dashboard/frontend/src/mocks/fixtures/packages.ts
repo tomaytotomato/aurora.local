@@ -173,27 +173,6 @@ export const packageSeeds: Seed[] = [
   },
   {
     summary: {
-      name: 'git',
-      title: 'Git',
-      category: 'dev',
-      description: 'Forgejo + CI runner.',
-      enabled: false,
-      running: false,
-      requires: { start_budget_seconds: 60, min_ram_mb: 512, min_disk_gb: 5 },
-      ports: [{ host: 3002, container: 3000 }],
-      dependsOn: ['core'],
-      sourceUrl: 'https://codeberg.org/forgejo/forgejo',
-      homepageUrl: 'https://forgejo.org',
-    },
-    detail: {
-      readme: '# Git\n\nForgejo git forge with a bundled Actions runner.',
-      vhosts: ['git.aurora.local'],
-      homepageTiles: 1,
-    },
-    env: [],
-  },
-  {
-    summary: {
       name: 'ai',
       title: 'AI',
       category: 'ai',

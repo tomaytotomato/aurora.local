@@ -123,9 +123,9 @@ export function initialSources(): BackupSource[] {
       needsConsistencyAction: false,
     },
     {
-      id: 'src-git',
-      path: '/data/git',
-      package: 'git',
+      id: 'src-filebrowser',
+      path: '/data/filebrowser',
+      package: 'filebrowser',
       enabled: true,
       // One source that failed last night while the rest succeeded: the
       // page must not call this "protected".
