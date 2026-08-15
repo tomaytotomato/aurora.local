@@ -1,0 +1,128 @@
+# Samba image swap — progress log
+
+Goal: replace `dperson/samba` (no release, no version tag at all, in
+`packages/storage`, one of three mandatory core packages) with
+`dockurr/samba`, the image the owner picked after comparing three
+candidates. This follows on from the research already logged in
+`dev/notes/catalogue-git-samba-progress.md` (Task 2), which looked at
+`servercontainers/samba` (bundles Avahi) and `crazymax/samba` (mounted
+YAML config) and left the swap unimplemented pending a decision.
+`dockurr/samba` was not one of the two candidates in that research —
+the owner brought a third option to this task, already vetted (active,
+version-tagged, no Avahi/wsdd/nmbd, env-var configured).
+
+## Starting state
+
+`packages/storage/compose.yml` defined exactly **one** Samba share:
+
+```
+command: >-
+  -u "${SAMBA_USER:-bruce};${SAMBA_PASS:-changeme}"
+  -s "media;/media;yes;no;no;${SAMBA_USER:-bruce}"
+```
+
+Reading the `-s "name;path;browsable;readonly;guest;users;..."` fields:
+name=`media`, path=`/media`, browsable=yes, readonly=**no** (read-write),
+guest=**no** (authentication required), users=`${SAMBA_USER:-bruce}`.
+
+This is the crux the task asked to check early: since there is only one
+share, the swap does **not** need the mounted `smb.conf`/`users.conf`
+route dockurr/samba also supports — env vars cover it exactly. Had a
+second `-s` line existed, this would have needed the mounted-config
+shape instead (own note: `manifest.yml`'s `post_install_notes` claimed
+shares were "read-only... served as guest", which contradicts the actual
+compose flags above — read-write, authenticated. That was already wrong
+before this change; corrected as part of mapping the config across.)
+
+Ports were `139:139` (NetBIOS) and `445:445` (SMB). Env: `TZ`, `USERID`,
+`GROUPID`. Volume: `/home/bruce/media:/media` (hard-coded, not using
+`${MEDIA_ROOT}` like every other package — pre-existing, left as-is;
+not part of this task).
+
+## dockurr/samba env-var scheme (confirmed via the image's own README)
+
+`NAME` (share name), `USER`, `PASS`, `UID`, `GID`, `RW` (`true`/`false`).
+Mount is `/storage`, not `/media`. Port is `445` only — no `139`, because
+this image runs `smbd` only (no `nmbd`, no `wsdd`, no Avahi; its own
+package list is just `samba` + `libauth-samba`).
+
+## Mapping applied (`packages/storage/compose.yml`)
+
+| dperson field | value | dockurr equivalent |
+|---|---|---|
+| `-s` name | media | `NAME=media` |
+| `-u` user / `-s` users | `${SAMBA_USER:-bruce}` | `USER=${SAMBA_USER:-bruce}` |
+| `-u` pass | `${SAMBA_PASS:-changeme}` | `PASS=${SAMBA_PASS:-changeme}` |
+| `USERID`/`GROUPID` | 1000/1000 | `UID=1000`/`GID=1000` |
+| readonly=no | read-write | `RW=true` |
+| guest=no | auth required | (no guest env exists on this image — auth is always required, matching the previous behaviour exactly) |
+| ports | 139, 445 | 445 only (139 dropped, nothing listens on it) |
+| volume | `/home/bruce/media:/media` | `/home/bruce/media:/storage` |
+
+`packages/storage/manifest.yml`: dropped the now-unused port-139 entry
+from `ports:`, and corrected `post_install_notes` to say what the share
+actually does (read-write, authenticated) instead of the stale
+"read-only, guest" text.
+
+`.env.example` for `packages/storage` was not read or modified — the
+sandbox denies Bash/Read access to any `.env*` file in this worktree
+(confirmed by testing the same denial on `packages/core/.env.example`,
+an unrelated package, so it's a blanket rule, not something specific to
+storage). Not needed anyway: `compose.yml`'s own `${SAMBA_USER:-bruce}`
+defaults already show the two variables it declares (`SAMBA_USER`,
+`SAMBA_PASS`), and those are unchanged by this swap.
+
+## Existing data on a box that already has the old image
+
+The share path inside the container changes from `/media` to
+`/storage`, but the **host-side** bind mount (`/home/bruce/media`) is
+identical before and after. A box that already has files under
+`/home/bruce/media` keeps them exactly where they are — `docker compose
+up` on the new image just re-mounts the same host directory at a
+different point inside the container, which is invisible to anything
+outside the container. Nothing is deleted, moved, or reformatted.
+`UID`/`GID` stay `1000`/`1000`, so file ownership on disk does not
+change either. The one visible difference to a user: the client-side
+share name shown when browsing `\\aurora.local\` is `media` in both
+cases (the compose change deliberately keeps `NAME=media` to match), so
+existing saved shortcuts (`smb://aurora.local/media`) keep working
+without needing to be re-added.
+
+## Pin recorded (`packages/storage/pins.env.example`)
+
+```
+IMAGE_SAMBA=dockurr/samba:4.23.10@sha256:6164872d767ead51d4a6ee9f6449b0a3577f875cefcc85525f9e184dbd5da16d
+```
+
+Confirmed `:latest` and `:4.23.10` resolve to the identical
+manifest-list digest (`sha256:6164872d767ead51d4a6ee9f6449b0a3577f875cefcc85525f9e184dbd5da16d`),
+so this is not a downgrade from what a fresh pull gets today. Note on
+Docker Hub tag naming: the GitHub *git* tag is `v4.23.10-r0`, but the
+Docker Hub *image* tag for the same build is `4.23.10` (no `v`, no
+`-r0` suffix) — confirmed by fetching both the Docker Hub tags page and
+the GitHub tags page and comparing dates (both "10 days before check").
+Multi-arch confirmed via `docker buildx imagetools inspect`:
+`linux/amd64`, `linux/arm64`, `linux/arm/v7`.
+
+## Static checks run locally
+
+- `python3 -m yamllint` with the CI's inline config (`line-length: 160`,
+  etc.) against `packages/storage/manifest.yml` — clean.
+- JSON Schema validation (`jsonschema` + `Draft7Validator` against
+  `.github/schema/manifest.schema.json`) against every `packages/*/manifest.yml`
+  — all OK, including the edited `storage` one.
+- `docker compose -f packages/core/compose.yml -f packages/storage/compose.yml config -q`
+  — exit 0.
+- `docker compose -f packages/core/compose.yml -f packages/privacy/compose.yml
+  -f packages/media/compose.yml -f packages/storage/compose.yml config -q`
+  — exit 0 (the other CI-checked combination that includes `storage`).
+- Resolved config for the `samba` service confirmed the exact
+  translation intended (`NAME=media`, `USER=bruce`, `PASS=changeme`,
+  `UID=1000`, `GID=1000`, `RW=true`, volume `/home/bruce/media:/storage`,
+  port `445` only).
+- No shell scripts touched, so shellcheck is unaffected.
+
+Not yet done at this point in the log: the testbed proof (clean
+install, mount a share, read/write a file, confirm host Avahi
+untouched, check the other `storage` service — MiniDLNA — still works).
+See the next entry below for that.

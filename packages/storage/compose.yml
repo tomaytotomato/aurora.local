@@ -12,24 +12,34 @@ networks:
 
 services:
   samba:
-    image: dperson/samba:latest
+    image: dockurr/samba:latest
     container_name: samba
     restart: unless-stopped
     networks: [aurora_net]
     ports:
-      - "139:139"
       - "445:445"
+    # dockurr/samba is env-var configured for a single share (NAME/USER/
+    # PASS/RW/UID/GID). That covers this package exactly, because storage
+    # only ever defined one share ("media") — dperson/samba's repeatable
+    # `-s` scheme was never actually exercised beyond one entry. A second
+    # share would need the image's mounted smb.conf/users.conf route
+    # instead; see dev/notes/samba-swap-progress.md.
+    #
+    # No nmbd/wsdd/Avahi in this image (its only two installed packages
+    # are samba and libauth-samba) — the host's own avahi-daemon handles
+    # mDNS for aurora.local, and a container-side responder would have
+    # fought it for UDP 5353. That is why port 139 (NetBIOS) is dropped
+    # here too: this image runs smbd only, so nothing listens on it.
     environment:
       - TZ=${TZ:-Europe/London}
-      - USERID=1000
-      - GROUPID=1000
-    # Args passed to the entrypoint. Each -s adds a share.
-    #   -s "name;path;browsable;readonly;guest;users;admins;writelist;comment"
-    command: >-
-      -u "${SAMBA_USER:-bruce};${SAMBA_PASS:-changeme}"
-      -s "media;/media;yes;no;no;${SAMBA_USER:-bruce}"
+      - NAME=media
+      - USER=${SAMBA_USER:-bruce}
+      - PASS=${SAMBA_PASS:-changeme}
+      - UID=1000
+      - GID=1000
+      - RW=true
     volumes:
-      - /home/bruce/media:/media
+      - /home/bruce/media:/storage
 
   minidlna:
     image: vladgh/minidlna:latest
