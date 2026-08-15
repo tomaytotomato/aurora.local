@@ -13,7 +13,6 @@ recommends: []
 profiles: {}
 
 ports:
-  - {port: 139,  proto: tcp, description: Samba NetBIOS}
   - {port: 445,  proto: tcp, description: Samba SMB}
   - {port: 8200, proto: tcp, description: MiniDLNA HTTP/UPnP}
   - {port: 1900, proto: udp, description: MiniDLNA SSDP}
@@ -32,5 +31,5 @@ probe:
   external_url: smb://{lan_ip}/
 
 post_install_notes: |
-  Samba shares are read-only by default and served as guest. Edit
-  packages/storage/.env to add authenticated users or read-write shares.
+  The "media" share is read-write and requires the SAMBA_USER/SAMBA_PASS
+  credentials set in packages/storage/.env — it is not served as guest.
