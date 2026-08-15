@@ -1,6 +1,7 @@
 package com.tomaytotomato.aurora.services;
 
 import com.tomaytotomato.aurora.config.AuroraProperties;
+import com.tomaytotomato.aurora.domain.Package;
 import com.tomaytotomato.aurora.persistence.AdminUserRepo;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.persistence.SettingsRepo;
@@ -330,6 +331,222 @@ public class OnboardingService {
   }
 
   // ------------------------------------------------------------------
+  // Dependency resolution (manifest depends_on / recommends)
+  //
+  // scripts/up.sh never installs exactly the packages the wizard asked
+  // for: manifest_resolve_deps (scripts/lib/manifest.sh) pulls in every
+  // hard depends_on transitively before docker compose ever sees the
+  // list, dies on a dependency cycle, and dies again if a dependency
+  // names a package with no manifest. Before this, plan() only knew
+  // about two hand-hardcoded pairs (media/privacy, adguard-dns/privacy)
+  // and never walked depends_on at all, so the Review screen could show
+  // a smaller package set than up.sh was actually about to install.
+  // The resolver below mirrors the shell routine so the preview and the
+  // real installer never disagree.
+  // ------------------------------------------------------------------
+
+  /**
+   * Result of walking {@code depends_on} for a requested package selection.
+   *
+   * @param resolved             {@code requested} plus every hard dependency
+   *                             pulled in transitively, dependency-first
+   *                             (a dependency always appears before the
+   *                             package that needed it — same order
+   *                             {@code manifest_resolve_deps} produces).
+   * @param addedDependencies    names present in {@code resolved} that were
+   *                             not in the original request: the ones
+   *                             Aurora is turning on automatically.
+   * @param requiredBy           added dependency name -&gt; names of the
+   *                             packages whose {@code depends_on} pulled it
+   *                             in. Drives the "X needs Y" copy.
+   * @param danglingDependencies {@code "pkg -> missing"} entries where
+   *                             {@code pkg} depends on a name with no
+   *                             manifest at all. Always a manifest bug.
+   * @param cycles               each detected dependency loop as an ordered
+   *                             path back to its own start (e.g.
+   *                             {@code [a, b, a]}). Also always a bug.
+   */
+  record DependencyResolution(
+      List<String> resolved,
+      List<String> addedDependencies,
+      java.util.Map<String, List<String>> requiredBy,
+      List<String> danglingDependencies,
+      List<List<String>> cycles
+  ) {}
+
+  /**
+   * Walk {@code depends_on} from every name in {@code requested}. A plain
+   * visited-set walk would never terminate on a genuine cycle, so this
+   * uses the standard white/gray/black colouring: a gray node revisited
+   * mid-walk is a cycle (recorded, not thrown — one broken pair shouldn't
+   * crash the whole plan), and a dependency name absent from {@code byName}
+   * is recorded as dangling rather than silently skipped.
+   */
+  DependencyResolution resolveDependencies(List<String> requested,
+                                           java.util.Map<String, Package> byName) {
+    var requestedOrder = new java.util.LinkedHashSet<>(requested);
+    var resolved = new java.util.LinkedHashSet<String>();
+    var dangling = new java.util.LinkedHashSet<String>();
+    var cycles = new ArrayList<List<String>>();
+    var color = new java.util.HashMap<String, Integer>(); // 1 = visiting (gray), 2 = done (black)
+    var path = new ArrayList<String>();
+
+    for (String root : requestedOrder) {
+      walkDependsOn(root, byName, resolved, dangling, cycles, color, path);
+    }
+
+    // Anything caught up in a cycle is reported by the cycle message alone —
+    // it's not a safe "Aurora will just turn this on for you" auto-add,
+    // it's half of a manifest bug, so don't also list it as one.
+    var cycleNodes = new java.util.HashSet<String>();
+    for (var cycle : cycles) cycleNodes.addAll(cycle);
+
+    var addedDependencies = new ArrayList<String>();
+    for (String name : resolved) {
+      if (!requestedOrder.contains(name) && !cycleNodes.contains(name)) addedDependencies.add(name);
+    }
+
+    var requiredBy = new java.util.LinkedHashMap<String, List<String>>();
+    for (String name : resolved) {
+      Package pkg = byName.get(name);
+      if (pkg == null) continue;
+      for (String dep : pkg.dependsOn()) {
+        if (addedDependencies.contains(dep)) {
+          requiredBy.computeIfAbsent(dep, k -> new ArrayList<>()).add(name);
+        }
+      }
+    }
+
+    return new DependencyResolution(new ArrayList<>(resolved), addedDependencies,
+        requiredBy, new ArrayList<>(dangling), cycles);
+  }
+
+  private void walkDependsOn(String name, java.util.Map<String, Package> byName,
+                             java.util.LinkedHashSet<String> resolved,
+                             java.util.LinkedHashSet<String> dangling,
+                             List<List<String>> cycles,
+                             java.util.Map<String, Integer> color,
+                             List<String> path) {
+    Integer state = color.get(name);
+    if (state != null && state == 2) return; // already fully resolved
+    if (state != null && state == 1) {
+      int idx = path.indexOf(name);
+      var cycle = new ArrayList<>(path.subList(idx, path.size()));
+      cycle.add(name);
+      cycles.add(cycle);
+      return;
+    }
+    Package pkg = byName.get(name);
+    if (pkg == null) return; // unknown package name; caller-side validation's job
+
+    color.put(name, 1);
+    path.add(name);
+    for (String dep : pkg.dependsOn()) {
+      if (!byName.containsKey(dep)) {
+        dangling.add(name + " -> " + dep);
+        continue;
+      }
+      walkDependsOn(dep, byName, resolved, dangling, cycles, color, path);
+    }
+    path.remove(path.size() - 1);
+    color.put(name, 2);
+    resolved.add(name);
+  }
+
+  /**
+   * Plain-English copy for the auto-added hard dependencies and any
+   * manifest bugs {@link #resolveDependencies} turned up. Per
+   * docs/UX_SPEC.md P4 every line is a full sentence ending in
+   * punctuation and never carries an internal rule-id token.
+   *
+   * <p>{@code core} is skipped in the auto-add loop on purpose: the two
+   * dedicated core messages in {@link #plan(List)} already tell that
+   * story, so a third generic line would just repeat it.
+   */
+  List<String> dependencyWarnings(DependencyResolution resolution) {
+    var out = new ArrayList<String>();
+
+    for (String added : resolution.addedDependencies()) {
+      if ("core".equals(added)) continue;
+      var requesters = resolution.requiredBy().getOrDefault(added, List.of());
+      out.add(prettyPackageName(added) + " is needed by " + joinPretty(requesters)
+          + " but is not selected — Aurora will turn it on for you.");
+    }
+
+    for (String edge : resolution.danglingDependencies()) {
+      String[] parts = edge.split(" -> ", 2);
+      String from = prettyPackageName(parts[0]);
+      out.add(from + " depends on a package called '" + parts[1] + "', but no such package exists. "
+          + "That's a bug in " + from + "'s manifest, not something you did — installing will fail until it's fixed.");
+    }
+
+    for (var cycle : resolution.cycles()) {
+      var names = cycle.stream().map(this::prettyPackageName).toList();
+      out.add("Aurora can't work out how to install " + String.join(" → ", names)
+          + " — they depend on each other in a loop. That's a bug in their manifests, "
+          + "not something you did — installing will fail until it's fixed.");
+    }
+
+    return out;
+  }
+
+  /**
+   * Advisory copy for {@code recommends} entries missing from the final
+   * resolved set. Never phrased as an error: the install proceeds fine
+   * without them, it's just a suggestion.
+   */
+  List<String> recommendsWarnings(List<String> resolvedEnabled,
+                                  java.util.Map<String, Package> byName) {
+    var present = new java.util.LinkedHashSet<>(resolvedEnabled);
+    var out = new ArrayList<String>();
+    for (String name : resolvedEnabled) {
+      Package pkg = byName.get(name);
+      if (pkg == null) continue;
+      for (String rec : pkg.recommends()) {
+        if (!present.contains(rec)) {
+          out.add(prettyPackageName(name) + " works best alongside " + prettyPackageName(rec)
+              + ", which is not selected. It will still work without it, but you may want to add it later.");
+        }
+      }
+    }
+    return out;
+  }
+
+  private String joinPretty(List<String> names) {
+    if (names.isEmpty()) return "another package";
+    var pretty = names.stream().map(this::prettyPackageName).toList();
+    if (pretty.size() == 1) return pretty.get(0);
+    return String.join(", ", pretty.subList(0, pretty.size() - 1)) + " and " + pretty.get(pretty.size() - 1);
+  }
+
+  private static final java.util.Map<String, String> NAME_ACRONYMS = java.util.Map.of(
+      "ai", "AI", "vpn", "VPN", "tls", "TLS", "dns", "DNS", "dlna", "DLNA", "smb", "SMB");
+
+  /**
+   * Turn a package slug into the same readable label the frontend shows on
+   * its badge chips ({@code frontend/src/lib/packageName.ts::prettyPackageName}),
+   * so a warning that names "Identity" and a pill that reads "Identity" are
+   * obviously the same package.
+   */
+  String prettyPackageName(String slug) {
+    if (slug == null || slug.isBlank()) return "";
+    String[] words = slug.split("-");
+    var out = new StringBuilder();
+    for (int i = 0; i < words.length; i++) {
+      if (i > 0) out.append(' ');
+      String w = words[i];
+      String acronym = NAME_ACRONYMS.get(w.toLowerCase());
+      out.append(acronym != null ? acronym : capitalize(w));
+    }
+    return out.toString();
+  }
+
+  private static String capitalize(String w) {
+    if (w.isEmpty()) return w;
+    return Character.toUpperCase(w.charAt(0)) + w.substring(1);
+  }
+
+  // ------------------------------------------------------------------
   // Install
   // ------------------------------------------------------------------
 
@@ -353,14 +570,42 @@ public class OnboardingService {
     // 1. Force core on. Anything relying on ".enabled contains 'core'" is
     // guaranteed to hold after this call.
     var state = stateFiles.readState();
-    var enabled = new java.util.ArrayList<>(state.enabled() == null ? List.of() : state.enabled());
-    if (!enabled.contains("core")) {
-      enabled.add(0, "core");
-      stateFiles.writeEnabled(enabled);
+    var requested = new java.util.ArrayList<>(state.enabled() == null ? List.of() : state.enabled());
+    boolean hadCore = requested.contains("core");
+    if (!hadCore) requested.add(0, "core");
+
+    // 1b. Resolve the rest of the hard-dependency closure exactly the way
+    // scripts/up.sh's manifest_resolve_deps would, and persist THAT set —
+    // not the raw request — so .state.yml (and therefore what /launch
+    // hands to up.sh) always matches what /plan already told the user
+    // would happen.
+    var allPackages = packages.list();
+    var byName = new java.util.LinkedHashMap<String, Package>();
+    for (var p : allPackages) byName.put(p.name(), p);
+    var resolution = resolveDependencies(requested, byName);
+    var enabledOrder = new java.util.LinkedHashSet<String>(requested);
+    enabledOrder.addAll(resolution.resolved());
+    var enabled = new java.util.ArrayList<>(enabledOrder);
+
+    if (!hadCore) {
       applied.add("Added core to enabled_packages (was missing; core is required).");
     } else {
       applied.add("core is enabled.");
     }
+    for (String added : resolution.addedDependencies()) {
+      if ("core".equals(added)) continue;
+      var requesters = resolution.requiredBy().getOrDefault(added, List.of());
+      applied.add("Added " + prettyPackageName(added) + " to enabled_packages ("
+          + joinPretty(requesters) + " requires it).");
+    }
+    for (String warning : dependencyWarnings(resolution)) {
+      // Cycles/dangling deps mean up.sh's own resolver will refuse to
+      // install at all; surface that in the applied log rather than
+      // burying it, even though this endpoint doesn't abort the request.
+      applied.add(warning);
+    }
+
+    stateFiles.writeEnabled(enabled);
     applied.add("Wrote .state.yml with " + enabled.size() + " package"
         + (enabled.size() == 1 ? "" : "s") + ".");
     applied.add("Wrote packages/core/.env DOMAIN=" + (state.domain() == null ? "aurora.local" : state.domain()) + ".");
@@ -406,12 +651,26 @@ public class OnboardingService {
    */
   public java.util.Map<String, Object> plan(List<String> enabledOverride) {
     var state = stateFiles.readState();
-    List<String> enabled = enabledOverride != null
+    List<String> requested = enabledOverride != null
         ? enabledOverride
         : (state.enabled() == null ? List.of() : state.enabled());
     String domain = state.domain();
 
-    var enabledManifests = packages.list().stream()
+    var allPackages = packages.list();
+    var byName = new java.util.LinkedHashMap<String, Package>();
+    for (var p : allPackages) byName.put(p.name(), p);
+
+    // Resolve depends_on into the same closure scripts/up.sh would arrive
+    // at via manifest_resolve_deps, so this preview never promises fewer
+    // packages than install actually brings up. `enabled` below is that
+    // resolved set — the user's own order first, then anything Aurora is
+    // adding on their behalf.
+    var resolution = resolveDependencies(requested, byName);
+    var enabledOrder = new java.util.LinkedHashSet<String>(requested);
+    enabledOrder.addAll(resolution.resolved());
+    List<String> enabled = new ArrayList<>(enabledOrder);
+
+    var enabledManifests = allPackages.stream()
         .filter(p -> enabled.contains(p.name()))
         .toList();
 
@@ -454,11 +713,8 @@ public class OnboardingService {
       }
     }
 
-    // Warnings: light static checks. Real posture engine ships in v0.2.
+    // Warnings: light static checks, plus the manifest-derived ones below.
     var warnings = new java.util.ArrayList<String>();
-    if (enabled.contains("media") && !enabled.contains("privacy")) {
-      warnings.add("media selected without privacy — torrent traffic will not route through Gluetun VPN.");
-    }
     String dns = dnsMode().orElse(null);
     if ("adguard".equals(dns) && !enabled.contains("privacy")) {
       warnings.add("DNS mode is 'adguard' but the privacy package (which provides AdGuard Home) is not selected.");
@@ -466,11 +722,19 @@ public class OnboardingService {
     if (domain == null || domain.isBlank()) {
       warnings.add("Domain not set — vhosts cannot be rendered until you complete step 3.");
     }
-    if (enabled.isEmpty()) {
+    if (requested.isEmpty()) {
       warnings.add("No packages selected. Core is required and will be forced on at install.");
-    } else if (!enabled.contains("core")) {
+    } else if (!requested.contains("core")) {
       warnings.add("Core is not in the enabled set but is required — it will be added at install.");
     }
+
+    // depends_on / recommends, walked from the manifests rather than
+    // hand-hardcoded pairs (this used to be a single "media without
+    // privacy" string comparison, which is why nothing else was ever
+    // caught). Hard deps were already folded into `enabled` above;
+    // these two calls turn that resolution into the copy the wizard shows.
+    warnings.addAll(dependencyWarnings(resolution));
+    warnings.addAll(recommendsWarnings(enabled, byName));
 
     // Manifest-driven resource warnings. Snapshot the host once and
     // evaluate each enabled package's declared warnings against it.
