@@ -1,19 +1,33 @@
 ###############################################################
 # Authelia users database — EXAMPLE                            #
 #                                                              #
-# 1. Copy this file to data/identity/authelia/users_database.yml
-# 2. Generate a real argon2id hash:                            #
+# scripts/lib/render.sh's render_identity_seed copies this file #
+# to data/identity/authelia/users_database.yml automatically on #
+# any install with identity enabled, before Aurora has created  #
+# an admin user of its own — this is what lets Authelia boot on #
+# a genuinely fresh install with zero manual steps.             #
+#                                                              #
+# The password below is the literal string "changeme", hashed. #
+# It exists purely so Authelia's file backend has a schema-    #
+# valid, non-empty users database to start from — Authelia     #
+# refuses to start at all on an empty or malformed one (that's  #
+# what a placeholder string here used to do). It is NOT meant   #
+# to be a real login: complete Aurora's onboarding wizard to    #
+# create a real admin, which AutheliaService then projects over #
+# this file automatically (see AutheliaService.reconcile). If   #
+# you'd rather set a real password by hand instead:             #
+# 1. Generate a real argon2id hash:                             #
 #      docker run --rm authelia/authelia:latest \              #
 #        authelia crypto hash generate argon2 --password 'pw'  #
-# 3. Paste the $argon2id$... string as `password:` below.      #
-# 4. Restart authelia:  docker restart authelia                #
+# 2. Paste the $argon2id$... string as `password:` below.       #
+# 3. Restart authelia:  docker restart authelia                 #
 ###############################################################
 
 users:
   admin:
     displayname: 'Admin'
-    # REPLACE with a real hash from `authelia crypto hash generate argon2`.
-    password: '$argon2id$v=19$m=65536,t=3,p=4$REPLACE_ME_WITH_REAL_HASH'
+    # "changeme" — see the header above before relying on this login.
+    password: '$argon2id$v=19$m=65536,t=3,p=4$USijA7OqhOvRJt8TenjtIw$gLDH47pDuRaKcSZ6xHoe9YpfT+JrG3MRZD2UNyjVU+o'
     email: admin@aurora.local
     groups:
       - admins
