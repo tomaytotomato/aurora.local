@@ -8,33 +8,35 @@ Authelia SSO + 2FA (TOTP / WebAuthn) fronting Caddy.
 
 ### Path A — through the Aurora wizard (recommended)
 
-If you're doing a fresh install:
+Authelia is core infrastructure, not an optional app — `identity` is
+locked on in **Step 4 of 9 — Pick your packages**, alongside `core` and
+`storage`, the same way Caddy is. There's no separate SSO step to opt
+into any more; once you confirm your package selection, Aurora:
 
-1. Walk the Aurora onboarding wizard at `http://aurora.local/onboarding`.
-2. On **Step 5 of 10 — Single sign-on for services**, tick "Turn on single sign-on".
-3. On the SAME click, Aurora will:
-   - add `identity` to the enabled packages list;
-   - generate `AUTHELIA_JWT_SECRET`, `AUTHELIA_SESSION_SECRET`,
-     `AUTHELIA_STORAGE_ENCRYPTION_KEY` (32 random bytes each) and write
-     them to `packages/identity/.env` with 0600 perms;
-   - blank any `disable_env` keys in other packages (e.g. `SB_USER` in
-     `packages/notes/.env`) so services run internal-auth-less behind
-     Authelia's forward-auth;
-   - render `data/caddy/snippets/<pkg>.caddy` with `import authelia`
-     injected inside every vhost whose manifest declares
-     `sso.protect: true`.
-4. Continue through the wizard. On **Done**, `./scripts/up.sh` brings
-   Authelia + Caddy + your selected packages up together.
+- adds `identity` to the enabled packages list (already there, since
+  it's mandatory, but this is idempotent);
+- generates `AUTHELIA_JWT_SECRET`, `AUTHELIA_SESSION_SECRET`,
+  `AUTHELIA_STORAGE_ENCRYPTION_KEY` (32 random bytes each) and writes
+  them to `packages/identity/.env` with 0600 perms;
+- blanks any `disable_env` keys in other packages (e.g. `SB_USER` in
+  `packages/notes/.env`) so services run internal-auth-less behind
+  Authelia's forward-auth;
+- renders `data/caddy/snippets/<pkg>.caddy` with `import authelia`
+  injected inside every vhost whose manifest declares
+  `sso.protect: true`.
 
-### Path B — enabling identity on an existing box
+Continue through the wizard. On **Done**, `./scripts/up.sh` brings
+Authelia + Caddy + your selected packages up together.
 
-If your box is already running and you want to add SSO:
+### Path B — re-running the secrets/snippet setup by hand
 
-1. Enable the identity package from the Aurora dashboard: **Packages →
-   identity → Enable**, or `POST /api/onboarding/sso {"enable": true}`.
-2. Aurora runs the same secrets + snippet + env-neutralise steps as
-   Path A.
-3. `./scripts/up.sh` (or Aurora's restart controls) brings Authelia up.
+Identity can't be disabled from the wizard or the Packages page any
+more, but if secrets ever need regenerating (e.g. after a manual
+`.state.yml` edit), the same step Path A runs automatically can still
+be triggered directly: `POST /api/onboarding/sso {"enable": true}`
+during onboarding, or from the Aurora dashboard once it's up.
+`./scripts/up.sh` (or Aurora's restart controls) brings Authelia up
+afterwards.
 
 ### First TOTP enrolment
 

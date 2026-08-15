@@ -114,7 +114,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 2 of 10</div>
+    <div class="eyebrow mb-3">Step 2 of 9</div>
     <h1 class="mb-4">Create your admin account.</h1>
 
     <!-- Branch A: admin already exists. Show what we know, offer no form. -->

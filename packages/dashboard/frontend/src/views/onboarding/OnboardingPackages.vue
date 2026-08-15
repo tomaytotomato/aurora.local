@@ -162,6 +162,21 @@ async function proceed(): Promise<void> {
     enabled_packages: store.selectedPackages,
     step: 'secrets',
   });
+  // Authelia is mandatory infrastructure now, not an opt-in choice, so
+  // there's no dedicated SSO step left for the operator to confirm it on
+  // (see stores/onboarding.ts STEPS — 'sso' was removed). Generate its
+  // secrets and wire forward-auth here instead, once the final package
+  // selection is known — same endpoint the old dedicated step used to
+  // call on explicit opt-in. Non-fatal on failure for the same reason
+  // patchDraft's own failures are: the wizard must still complete even
+  // if the backend hiccups, and this call is idempotent to retry later
+  // from Packages → identity → Enable.
+  try {
+    await OnboardingApi.setSso({ enable: true });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('automatic SSO/identity setup failed; retry from Packages later', e);
+  }
   store.next();
   router.push(`/onboarding/${store.currentStep}`);
 }
@@ -169,7 +184,7 @@ async function proceed(): Promise<void> {
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 4 of 10</div>
+    <div class="eyebrow mb-3">Step 4 of 9</div>
     <h1 class="mb-4">Pick your packages.</h1>
     <p class="text-foreground mb-6">
       Each app comes with sensible defaults. You can add or remove any of them

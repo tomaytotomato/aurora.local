@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { useOnboardingStore } from '@/stores/onboarding';
+import { STEPS, useOnboardingStore } from '@/stores/onboarding';
 
 import AppShell from '@/components/layout/AppShell.vue';
 import OnboardingShell from '@/components/layout/OnboardingShell.vue';
@@ -18,7 +18,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'admin', component: () => import('@/views/onboarding/OnboardingAdmin.vue') },
       { path: 'domain', component: () => import('@/views/onboarding/OnboardingDomain.vue') },
       { path: 'packages', component: () => import('@/views/onboarding/OnboardingPackages.vue') },
-      { path: 'sso', component: () => import('@/views/onboarding/OnboardingSso.vue') },
       { path: 'secrets', component: () => import('@/views/onboarding/OnboardingSecrets.vue') },
       { path: 'dns', component: () => import('@/views/onboarding/OnboardingDns.vue') },
       { path: 'tls', component: () => import('@/views/onboarding/OnboardingTls.vue') },
@@ -118,8 +117,14 @@ router.beforeEach(async (to) => {
     // Allow /login too in case an admin was half-created and needs recovery.
     if (to.path === '/login') return true;
     // Resume where the server thinks the user left off, not always /welcome.
-    const step = onboarding.status?.step ?? 'welcome';
-    return { path: `/onboarding/${step}` };
+    // Fall back to 'welcome' for any step the current build doesn't
+    // recognise — e.g. a draft persisted before the 'sso' step was
+    // removed — rather than resuming to a route that no longer exists
+    // and bouncing straight back here (STEPS is the router's own list of
+    // valid children, so this can't drift from what's actually routed).
+    const step = onboarding.status?.step;
+    const target = step && STEPS.includes(step) ? step : 'welcome';
+    return { path: `/onboarding/${target}` };
   }
 
   // Onboarding done. Normal auth flow.

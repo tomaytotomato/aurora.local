@@ -118,6 +118,23 @@ export const onboardingHandlers = [
       return () => clearInterval(timer);
     }),
   ),
+  // Identity/Authelia is mandatory now (see OnboardingPackages.vue), so
+  // this fires on every packages-step submission rather than only when
+  // the (now-removed) dedicated SSO step opted in. Mirrors the real
+  // endpoint's contract: idempotently adds 'identity' to enabled[].
+  http.post('/api/onboarding/sso', async ({ request }) => {
+    const { enable } = (await request.json()) as { enable: boolean };
+    if (enable) {
+      if (!state.onboarding.enabled_packages.includes('identity')) {
+        state.onboarding.enabled_packages = [...state.onboarding.enabled_packages, 'identity'];
+      }
+      state.enabled.add('identity');
+    } else {
+      state.onboarding.enabled_packages = state.onboarding.enabled_packages.filter((p) => p !== 'identity');
+      state.enabled.delete('identity');
+    }
+    return HttpResponse.json({ enabled: enable, packages: [...state.enabled] });
+  }),
   http.post('/api/onboarding/complete', () => {
     state.onboarding.complete = true;
     state.onboarding.bootstrap_mode = false;

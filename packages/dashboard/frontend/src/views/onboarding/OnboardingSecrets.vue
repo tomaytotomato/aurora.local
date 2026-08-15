@@ -13,7 +13,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 6 of 10</div>
+    <div class="eyebrow mb-3">Step 5 of 9</div>
     <h1 class="mb-4">Configure secrets.</h1>
     <p class="text-foreground mb-8">
       Some apps need secrets like passwords or API keys. Aurora fills in strong

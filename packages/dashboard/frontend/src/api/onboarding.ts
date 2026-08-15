@@ -11,12 +11,17 @@ import { http } from './client';
 // The legacy POST /domain and POST /packages routes still exist on the
 // server for one release; new code uses PATCH.
 
+// 'sso' was a step id here (Phase D iter-11); removed along with the
+// dedicated SSO step (see stores/onboarding.ts STEPS). Identity is
+// mandatory now, configured automatically rather than opted into on its
+// own page. A stale persisted draft from before this change could still
+// report step: 'sso' — the router guard falls back to 'welcome' for any
+// step string outside this union rather than assuming it's still valid.
 export type OnboardingStepId =
   | 'welcome'
   | 'admin'
   | 'domain'
   | 'packages'
-  | 'sso'
   | 'secrets'
   | 'dns'
   | 'tls'

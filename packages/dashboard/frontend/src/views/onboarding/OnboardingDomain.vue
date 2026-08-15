@@ -32,7 +32,7 @@ async function proceed(): Promise<void> {
 
 <template>
   <div>
-    <div class="eyebrow mb-3">Step 3 of 10</div>
+    <div class="eyebrow mb-3">Step 3 of 9</div>
     <h1 class="mb-4">Pick your domain.</h1>
     <p class="text-foreground mb-8">
       Aurora and every package it manages live under one domain. The default,

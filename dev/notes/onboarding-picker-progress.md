@@ -67,7 +67,7 @@ Reusing `Badge` (`tone="info"`) with the text `core`, matching the
 exact convention already used on `PackageDetail.vue` (`<Badge v-if=
 "isCore" tone="info">core</Badge>`) rather than inventing a new pill.
 
-## Change 2: core in the picker, locked not hidden
+### Change 2: core in the picker, locked not hidden
 
 A parallel UX audit landed three more findings in the same file while
 this was in flight; folded in rather than deferred, per the
@@ -115,3 +115,87 @@ to what actually gets installed.
 this change.
 
 Commit: "frontend: lock core packages in the picker instead of hiding them".
+
+### Change 3: Authelia is core, the Auth step goes
+
+`isCorePackage()` already included `identity` (see change 2), so the
+mechanical part of "make identity mandatory, hidden/locked in the
+picker by the same mechanism as core" was already done as a side
+effect of switching the picker onto that helper. What was left: the
+now-orphaned SSO step.
+
+**Decision: removed the dedicated `sso` step entirely** (not just the
+package-choice checkbox on it), folding its one real action — calling
+`POST /onboarding/sso {enable: true}`, which generates the three
+Authelia secrets and neutralises other packages' internal auth — into
+`OnboardingPackages.vue`'s `proceed()`, right after the final package
+selection is PATCHed to the server. This is the same call the old step
+made on explicit opt-in; it's now automatic and unconditional, same as
+Caddy's own setup never got a dedicated step either. Non-fatal on
+failure (console.warn), same posture as the preview call and
+`patchDraft` itself — the wizard must still complete if the backend
+hiccups, and it's idempotent to retry from Packages → identity →
+Enable afterwards.
+
+**Why not just lock the checkbox and keep the SSO page as a read-only
+"here's what's happening" screen?** Considered it, but three
+independent things pointed the same way:
+
+1. `docs/UX_SPEC.md`'s own acceptance criterion **G1** already reads
+   `Step header text matches /^Step \d of 9$/` — nine, not ten. The SSO
+   step (Phase D iter-11) was added after that spec was written and
+   never reconciled with it.
+2. `packages/dashboard/e2e/tests/wizard-happy-path.spec.ts`'s own
+   header comment states the canonical flow as "Welcome → Admin →
+   Domain → Packages → Secrets → DNS → TLS → Review → Done" — nine
+   steps, no SSO page, and the whole spec file never once visits
+   `/onboarding/sso`.
+3. `packages/dashboard/README.md`'s "What it does" bullet already
+   describes "9-step onboarding: welcome → admin → domain → packages →
+   secrets → DNS → TLS → review → done" — also nine, also no SSO page.
+
+All three predate or are contemporaneous with the SSO step's addition
+and none of them were ever updated for it. Removing the step doesn't
+just satisfy "the Auth step should go" — it resolves a real, pre-existing
+drift between the shipped 10-step build and its own spec/e2e/README.
+Treating this as confirmation rather than coincidence.
+
+**Mechanics:**
+
+- `stores/onboarding.ts`: dropped `'sso'` from `STEPS` and
+  `STEP_LABELS`. `OnboardingShell.vue` reads both reactively and needed
+  no changes of its own.
+- `router/index.ts`: removed the `sso` child route. Router guard's
+  resume-to-last-step redirect now falls back to `'welcome'` for any
+  step string not in `STEPS` (defends against a draft persisted
+  mid-`sso` before this change, which would otherwise 404 into the
+  catch-all and could loop).
+- `api/onboarding.ts`: dropped `'sso'` from the `OnboardingStepId` union.
+- Deleted `OnboardingSso.vue` (dead: unrouted, nothing else imported it).
+- Added a `/api/onboarding/sso` MSW mock handler (there wasn't one
+  before — the old step already called this with no mock backing it in
+  dev mode; now that every wizard run calls it, worth having).
+- Fixed the "Step X of 10" eyebrow text in every step view I'm allowed
+  to touch: Welcome (1/9), Admin (2/9), Domain (3/9), Packages (4/9,
+  unchanged position), Secrets (was 6/10, now 5/9), DNS (was 7/10, now
+  6/9), TLS (was 8/10, now 7/9).
+
+**What I could NOT fix, and why it matters:** `OnboardingReview.vue`
+("Step 9 of 10") and `OnboardingDone.vue` ("Step 10 of 10") are off
+limits — another agent is fixing a launch-ordering bug in those files
+right now. Both still show the old 10-step numbering and need to
+become "Step 8 of 9" / "Step 9 of 9". Flagged to that agent directly
+(see SendMessage) rather than left silent, since they own the files and
+I don't.
+
+**New step count: 9** (was 10). `npm run typecheck` and
+`npm run test:unit` (450/450) clean after this change too.
+
+**Blast radius flag (not fixed here, per instructions):** a recent
+audit found rotated `AUTHELIA_*` secrets don't reach Authelia's
+`configuration.yml`. Making `identity` mandatory means every box now
+runs this path by default instead of only boxes where an operator
+opted in — the same templating gap, wider default exposure. Out of
+scope for this change; another fix is already in flight.
+
+Commit: "frontend: retire the Auth wizard step, Authelia is mandatory".

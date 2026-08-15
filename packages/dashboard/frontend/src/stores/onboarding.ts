@@ -28,12 +28,25 @@ interface LocalAdmin {
   savedAcknowledged: boolean;
 }
 
+// Phase D iter-11 added a dedicated 'sso' step here (opt in/out of
+// Authelia). Removed: identity is now part of the mandatory package set
+// (see OnboardingPackages.vue's isMandatory()/isCorePackage()) rather
+// than an optional choice, so there's nothing left for a dedicated step
+// to ask — a coherent "SSO: off" no longer exists. Authelia's secrets
+// and forward-auth wiring are configured automatically once the
+// operator confirms package selection (see OnboardingPackages.vue's
+// proceed(), which calls the same /onboarding/sso endpoint this step
+// used to call on explicit opt-in).
+//
+// This also restores the 9-step count docs/UX_SPEC.md's G1 and the
+// packages/dashboard/e2e wizard-happy-path spec already assumed —
+// neither was ever updated for the 10-step build, so removing the step
+// fixes a pre-existing drift rather than creating one.
 export const STEPS: OnboardingStepId[] = [
   'welcome',
   'admin',
   'domain',
   'packages',
-  'sso',
   'secrets',
   'dns',
   'tls',
@@ -46,7 +59,6 @@ export const STEP_LABELS: Record<OnboardingStepId, string> = {
   admin: 'Admin account',
   domain: 'Hostname & domain',
   packages: 'Packages',
-  sso: 'Single sign-on',
   secrets: 'Secrets',
   dns: 'DNS story',
   tls: 'Trust the root CA',
