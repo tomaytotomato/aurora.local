@@ -1,5 +1,6 @@
 package com.tomaytotomato.aurora.support;
 
+import com.tomaytotomato.aurora.services.CommandCancelledException;
 import com.tomaytotomato.aurora.services.CommandRunner;
 
 import java.nio.file.Path;
@@ -40,6 +41,15 @@ public class FakeCommandRunner implements CommandRunner {
   /** Insertion-ordered so the first matching stub wins, like a router. */
   private final Map<String, Result> stubs = new LinkedHashMap<>();
 
+  /**
+   * Argv fragments that, when matched, block {@link #stream} until its
+   * {@link CommandRunner.CancelToken} is cancelled — a deterministic
+   * stand-in for a real process that never produces output, so a test can
+   * exercise "cancel a running job" without a real OS process or a sleep
+   * long enough to be slow.
+   */
+  private final List<String> hangUntilCancelled = new ArrayList<>();
+
   private Result fallback = Result.of(0, List.of());
 
   // ------------------------------------------------------------------
@@ -76,6 +86,18 @@ public class FakeCommandRunner implements CommandRunner {
     return stub(argvContains, Result.timedOut(List.of(linesBefore)));
   }
 
+  /**
+   * Make {@link #stream} block for this argv until the caller's
+   * {@link CommandRunner.CancelToken} is cancelled, then throw
+   * {@link CommandCancelledException} — the shape a cancelled real launch
+   * takes. Lets a test start a job, assert it is RUNNING, cancel it, and
+   * assert it reaches a terminal state, all without a real process.
+   */
+  public FakeCommandRunner stubHangsUntilCancelled(String argvContains) {
+    hangUntilCancelled.add(argvContains);
+    return this;
+  }
+
   /** What an unstubbed command returns. Defaults to a silent success. */
   public FakeCommandRunner defaultTo(Result result) {
     this.fallback = result;
@@ -86,6 +108,7 @@ public class FakeCommandRunner implements CommandRunner {
   public void reset() {
     invocations.clear();
     stubs.clear();
+    hangUntilCancelled.clear();
     fallback = Result.of(0, List.of());
   }
 
@@ -102,11 +125,34 @@ public class FakeCommandRunner implements CommandRunner {
   }
 
   @Override
-  public synchronized int stream(Path workingDir, Map<String, String> env, List<String> argv,
-                                 Consumer<String> onLine) {
-    invocations.add(new Invocation(workingDir, List.copyOf(argv),
-        env == null ? Map.of() : Map.copyOf(env)));
-    Result result = resultFor(argv);
+  public int stream(Path workingDir, Map<String, String> env, List<String> argv,
+                    Consumer<String> onLine, CommandRunner.CancelToken cancelToken) {
+    boolean hang;
+    Result result;
+    synchronized (this) {
+      invocations.add(new Invocation(workingDir, List.copyOf(argv),
+          env == null ? Map.of() : Map.copyOf(env)));
+      String joined = String.join(" ", argv);
+      hang = hangUntilCancelled.stream().anyMatch(joined::contains);
+      result = hang ? null : resultFor(argv);
+    }
+
+    if (hang) {
+      // Deliberately outside the synchronized block: blocking here while
+      // holding the fake's monitor would stop a test thread from reading
+      // invocations() or calling reset() while this "job" is still
+      // running, which is exactly the window a cancellation test needs.
+      while (cancelToken == null || !cancelToken.isCancelled()) {
+        try {
+          Thread.sleep(5);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
+        }
+      }
+      throw new CommandCancelledException("fake command cancelled: " + String.join(" ", argv));
+    }
+
     for (String line : result.lines()) {
       onLine.accept(line);
     }

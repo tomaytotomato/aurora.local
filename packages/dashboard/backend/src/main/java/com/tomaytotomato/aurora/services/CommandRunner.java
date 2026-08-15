@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -39,9 +40,16 @@ public interface CommandRunner {
    * Run to completion and collect stdout (with stderr merged in, since
    * every caller wants both interleaved as the operator would see them).
    *
+   * <p>{@code timeout} bounds total wall-clock time, not just the final
+   * {@code waitFor}: a process that never closes its output (because it is
+   * silently wedged rather than merely slow to finish) is killed within
+   * {@code timeout} of being started, regardless of whether anything was
+   * ever read from it.
+   *
    * @param workingDir directory to run in; null means the JVM's own
-   * @param timeout    hard ceiling; the process is destroyed on expiry and
-   *                   the result reports {@link Result#timedOut()}
+   * @param timeout    hard ceiling on total wall-clock time; the process
+   *                   (and any descendants it spawned) is killed on expiry
+   *                   and the result reports {@link Result#timedOut()}
    * @param env        extra environment entries, merged over the inherited
    *                   environment
    * @param argv       program and arguments, never shell-interpreted
@@ -59,14 +67,69 @@ public interface CommandRunner {
   }
 
   /**
-   * Run and stream each output line to {@code onLine} as it arrives.
+   * Run and stream each output line to {@code onLine} as it arrives, with
+   * no way to cancel it early. Equivalent to calling the four-argument
+   * overload with a fresh, never-cancelled {@link CancelToken}.
    *
    * @return the process exit code
-   * @throws IOException          if the process could not be started
-   * @throws InterruptedException if the calling thread is interrupted while waiting
+   * @throws IOException              if the process could not be started
+   * @throws InterruptedException     if the calling thread is interrupted while waiting
+   * @throws CommandTimeoutException  if the process produced no output for
+   *     longer than the implementation's inactivity ceiling; it and any
+   *     descendants have already been killed by the time this is thrown
    */
-  int stream(Path workingDir, Map<String, String> env, List<String> argv, Consumer<String> onLine)
-      throws IOException, InterruptedException;
+  default int stream(Path workingDir, Map<String, String> env, List<String> argv,
+                     Consumer<String> onLine) throws IOException, InterruptedException {
+    return stream(workingDir, env, argv, onLine, new CancelToken());
+  }
+
+  /**
+   * Run and stream each output line to {@code onLine} as it arrives.
+   *
+   * <p>Unlike {@link #run}, a streamed command is often legitimately
+   * long-running (a {@code docker compose pull} of a large image can take
+   * many minutes on home broadband), so there is no total-duration
+   * ceiling here. Instead the implementation applies an inactivity
+   * ceiling — no output for N minutes means the process has stopped
+   * doing anything useful, whatever the reason — and {@code cancelToken}
+   * lets a caller stop a job the operator asked to cancel without waiting
+   * for that ceiling.
+   *
+   * @param cancelToken cooperative cancellation; call {@link CancelToken#cancel()}
+   *                    from another thread to stop this command early
+   * @return the process exit code
+   * @throws IOException                if the process could not be started
+   * @throws InterruptedException       if the calling thread is interrupted while waiting
+   * @throws CommandTimeoutException    if the process produced no output for
+   *     longer than the implementation's inactivity ceiling; it and any
+   *     descendants have already been killed by the time this is thrown
+   * @throws CommandCancelledException  if {@code cancelToken} was cancelled
+   *     while the process was running; it and any descendants have already
+   *     been killed by the time this is thrown
+   */
+  int stream(Path workingDir, Map<String, String> env, List<String> argv, Consumer<String> onLine,
+      CancelToken cancelToken) throws IOException, InterruptedException;
+
+  /**
+   * Cooperative cancellation flag for {@link #stream}. One token per
+   * command invocation; cancelling has no effect on anything else.
+   *
+   * <p>Cancelling is a request, not an instant: the implementation notices
+   * on its next check (see the implementation for the poll interval), so
+   * {@link #cancel()} returning does not itself mean the process is dead
+   * yet.
+   */
+  final class CancelToken {
+    private final AtomicBoolean cancelled = new AtomicBoolean(false);
+
+    public void cancel() {
+      cancelled.set(true);
+    }
+
+    public boolean isCancelled() {
+      return cancelled.get();
+    }
+  }
 
   /**
    * Outcome of a completed command.
