@@ -79,14 +79,14 @@ is the compose service name upper-cased with `-` -> `_`)
 | home-automation | zigbee2mqtt | IMAGE_ZIGBEE2MQTT | koenkk/zigbee2mqtt:latest | pending |
 | identity | authelia | IMAGE_AUTHELIA | authelia/authelia:latest | done -> 4.39.20 (multi-arch incl. arm64) |
 | jellyfin | jellyfin | IMAGE_JELLYFIN | lscr.io/linuxserver/jellyfin:latest | pending |
-| media | sonarr | IMAGE_SONARR | lscr.io/linuxserver/sonarr:latest | pending |
-| media | radarr | IMAGE_RADARR | lscr.io/linuxserver/radarr:latest | pending |
-| media | prowlarr | IMAGE_PROWLARR | lscr.io/linuxserver/prowlarr:latest | pending |
-| media | bazarr | IMAGE_BAZARR | lscr.io/linuxserver/bazarr:latest | pending |
-| media | seerr | IMAGE_SEERR | ghcr.io/seerr-team/seerr:latest | pending |
-| media | flaresolverr | IMAGE_FLARESOLVERR | ghcr.io/flaresolverr/flaresolverr:latest | pending |
-| media | rdtclient | IMAGE_RDTCLIENT | rogerfar/rdtclient:latest | pending |
-| media | qbittorrent | IMAGE_QBITTORRENT | lscr.io/linuxserver/qbittorrent:latest | pending |
+| media | sonarr | IMAGE_SONARR | lscr.io/linuxserver/sonarr:latest | done -> 4.0.19 (8d old, multi-arch) |
+| media | radarr | IMAGE_RADARR | lscr.io/linuxserver/radarr:latest | done -> version-6.3.0.10514 (13d old, multi-arch) |
+| media | prowlarr | IMAGE_PROWLARR | lscr.io/linuxserver/prowlarr:latest | done -> version-2.5.2.5491 (10d old, multi-arch) |
+| media | bazarr | IMAGE_BAZARR | lscr.io/linuxserver/bazarr:latest | done -> 1.6.0 (4d old, multi-arch) |
+| media | seerr | IMAGE_SEERR | ghcr.io/seerr-team/seerr:latest | done -> v3.4.1 (Jellyseerr/Overseerr merger, multi-arch) |
+| media | flaresolverr | IMAGE_FLARESOLVERR | ghcr.io/flaresolverr/flaresolverr:latest | done -> v3.5.0 (active, not abandoned, multi-arch) |
+| media | rdtclient | IMAGE_RDTCLIENT | rogerfar/rdtclient:latest | done -> 2.0.142 (GH Releases page stale, Docker tags active; multi-arch) |
+| media | qbittorrent | IMAGE_QBITTORRENT | lscr.io/linuxserver/qbittorrent:latest | done -> 5.2.3 (5d old, multi-arch) |
 | memos | memos | IMAGE_MEMOS | neosmemo/memos:stable | pending |
 | monitoring | prometheus | IMAGE_PROMETHEUS | prom/prometheus:latest | pending |
 | monitoring | grafana | IMAGE_GRAFANA | grafana/grafana:latest | pending |
