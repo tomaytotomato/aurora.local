@@ -162,11 +162,78 @@ fi
 render_all "${pkgs[@]}"
 
 # --------------------------------------------------------------------
+# Self-recreation guard
+# --------------------------------------------------------------------
+# LaunchService runs this script from inside the dashboard's own
+# container (the onboarding wizard's Launch step) and sets
+# AURORA_LAUNCHED_BY=aurora-dashboard so we can tell. Without this guard,
+# `up -d` over every enabled package — which includes "dashboard" itself
+# — recreates the very container the command is running in the moment
+# the install step has rewritten a .env file: the process takes SIGTERM
+# mid-invocation and every other package is left "Created" but never
+# started.
+#
+# Two different call sites in the dashboard backend independently
+# invented a marker for "this process is running inside the dashboard's
+# own container": LaunchService sets AURORA_LAUNCHED_BY for the
+# onboarding wizard's Launch step; JobService.submitCommand sets
+# AURORA_INVOKED_BY for every other in-container job it runs (SnapRAID
+# parity sync/scrub today, package enable/disable/update once those
+# land). Both mean exactly the same thing to this script, so the guard
+# below reacts to whichever is set rather than picking a winner and
+# leaving the other call site free to reintroduce this exact bug under
+# a name nobody's guarding against.
+self_launch_marker=0
+[[ "${AURORA_LAUNCHED_BY:-}" == "aurora-dashboard" ]] && self_launch_marker=1
+[[ "${AURORA_INVOKED_BY:-}" == "aurora-dashboard" ]] && self_launch_marker=1
+
+# Fix: keep every -f file exactly as assembled above (dropping the
+# dashboard's own would make --remove-orphans below treat its running
+# container as an orphan and delete it, which is worse than the bug),
+# but hand `up -d` an explicit list of every service EXCEPT the
+# dashboard's own instead of no arguments. Compose then only creates,
+# recreates or starts those services; the dashboard's own container is
+# never touched, regardless of whether its config changed.
+up_target_services=()
+self_launch=0
+if [[ $self_launch_marker -eq 1 ]] && [[ " ${pkgs[*]} " == *" dashboard "* ]]; then
+  self_launch=1
+  self_compose="$REPO/packages/dashboard/compose.yml"
+  mapfile -t self_services < <(docker compose -f "$self_compose" config --services)
+  mapfile -t all_services  < <(docker compose -p aurora "${files[@]}" config --services)
+  for svc in "${all_services[@]}"; do
+    is_self=0
+    for s in "${self_services[@]}"; do [[ "$svc" == "$s" ]] && is_self=1 && break; done
+    [[ $is_self -eq 0 ]] && up_target_services+=("$svc")
+  done
+  log_step "self-launch guard: excluding dashboard's own service(s) [${self_services[*]}] from 'up -d' (invoked from inside its own container)"
+
+  # A recreate interrupted this way leaves compose's rename-then-remove
+  # dance half-done: the old container is renamed out of the way but
+  # never cleaned up. That's debris, not a blocker — the name is free
+  # again for the next recreate — and an install script auto-removing
+  # containers on every run is a worse failure mode than leaving one
+  # around, so we only surface it.
+  mapfile -t stray_containers < <(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E '_aurora$' || true)
+  if [[ ${#stray_containers[@]} -gt 0 ]]; then
+    log_warn "found stray renamed container(s) from a previous interrupted recreate: ${stray_containers[*]} (safe to 'docker rm' once you've confirmed nothing needs them)"
+  fi
+fi
+
+# --------------------------------------------------------------------
 # Up
 # --------------------------------------------------------------------
 log_step "bringing up: ${pkgs[*]}"
 docker compose -p aurora "${files[@]}" pull
-docker compose -p aurora "${files[@]}" up -d --remove-orphans
+if [[ $self_launch -eq 1 ]]; then
+  if [[ ${#up_target_services[@]} -gt 0 ]]; then
+    docker compose -p aurora "${files[@]}" up -d --remove-orphans "${up_target_services[@]}"
+  else
+    log_info "self-launch guard: nothing besides the dashboard itself to bring up; skipping 'up -d'"
+  fi
+else
+  docker compose -p aurora "${files[@]}" up -d --remove-orphans
+fi
 docker compose -p aurora "${files[@]}" ps
 
 # --------------------------------------------------------------------

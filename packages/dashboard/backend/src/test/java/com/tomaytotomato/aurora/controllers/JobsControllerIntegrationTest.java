@@ -158,6 +158,20 @@ class JobsControllerIntegrationTest extends AuroraIntegrationTest {
       var invocation = commands.firstMatching("aurora-test-command");
       assertThat(invocation.argv()).containsExactly("aurora-test-command", "--target", "jellyfin");
     }
+
+    @Test
+    void tags_the_environment_so_a_shelled_out_script_knows_it_is_self_invoked() {
+      // scripts/up.sh and scripts/down.sh read this to avoid recreating the
+      // dashboard's own container when a job shells out to them from
+      // inside it (package enable/disable/update, once those exist).
+      // LaunchService uses a differently-named marker (AURORA_LAUNCHED_BY)
+      // for the same purpose on the onboarding wizard's Launch step; both
+      // shell scripts' self-launch guards check for either.
+      succeedingJob(JobService.Kind.UPDATE, "jellyfin", "ok");
+
+      var invocation = commands.firstMatching("aurora-test-command");
+      assertThat(invocation.env()).containsEntry("AURORA_INVOKED_BY", "aurora-dashboard");
+    }
   }
 
   @Nested
