@@ -34,9 +34,22 @@ async function proceed(): Promise<void> {
   // OnboardingService#install() force-adds the same baseline again later
   // as a belt-and-braces safety net if this step gets skipped via the
   // sidebar.
+  //
+  // Union with whatever the server already reports, not a wholesale
+  // replace: the host's own bootstrap (bootstrap.sh / scripts/up.sh)
+  // brings `core` and `dashboard` up before the wizard ever runs — that's
+  // how there's a dashboard to serve this page at all — so
+  // `draft.enabled_packages` can already be non-empty by the time this
+  // step submits. Overwriting it with a fixed two-name list would drop
+  // `dashboard` from `.state.yml`'s enabled[] and leave it showing
+  // "enabled: false" in the catalogue despite visibly running.
+  const baseline = new Set([
+    ...(store.draft?.enabled_packages ?? []),
+    ...MANDATORY_FIRST_RUN_PACKAGES,
+  ]);
   await store.patchDraft({
     domain: domain.value,
-    enabled_packages: [...MANDATORY_FIRST_RUN_PACKAGES],
+    enabled_packages: [...baseline],
     step: 'sso',
   });
   store.next();
