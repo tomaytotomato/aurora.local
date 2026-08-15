@@ -13,6 +13,7 @@ export function jobHeadline(kind: JobKind, state: JobState): string {
   const phrasing: Record<JobKind, [running: string, success: string, failed: string]> = {
     enable: ['Adding the app…', 'App added', "Couldn't add the app"],
     disable: ['Removing the app…', 'App removed', "Couldn't remove the app"],
+    stop: ['Stopping the app…', 'App stopped', "Couldn't stop the app"],
     update: ['Updating…', 'Update complete', 'Update failed'],
     'update-check': ['Checking for updates…', 'Check complete', "Couldn't check for updates"],
     start: ['Starting…', 'Started', "Couldn't start"],

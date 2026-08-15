@@ -1,11 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import { type AxiosAdapter, type AxiosResponse } from 'axios';
 import PackageDetail from './PackageDetail.vue';
 import { http } from '@/api/client';
+import { JobsApi } from '@/api/jobs';
 import type { PackageDetail as PackageDetailWire } from '@/api/packages';
+
+/**
+ * Stands in for the browser's real EventSource, which jsdom doesn't
+ * provide. Only needed by tests that click a lifecycle action button —
+ * that mounts JobLogPanel, which opens a stream immediately.
+ */
+class FakeEventSource {
+  addEventListener(): void {}
+  close(): void {}
+}
 
 /**
  * Full-mount tests for the app detail page's control panel
@@ -106,6 +117,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete (http.defaults as { adapter?: AxiosAdapter }).adapter;
+  vi.restoreAllMocks();
 });
 
 describe('PackageDetail control panel', () => {
@@ -155,7 +167,7 @@ describe('PackageDetail control panel', () => {
     expect(w.find('[data-test="action-uninstall"]').exists()).toBe(true);
   });
 
-  it('a running app offers a disabled Disable (with a reason) and Uninstall, but not Start or Install', async () => {
+  it('a running app offers a clickable Disable and Uninstall, but not Start or Install', async () => {
     stubResponse({
       method: 'get',
       url: '/packages/photos',
@@ -166,9 +178,24 @@ describe('PackageDetail control panel', () => {
     expect(w.find('[data-test="action-start"]').exists()).toBe(false);
     const disableBtn = w.find('[data-test="action-disable"]');
     expect(disableBtn.exists()).toBe(true);
-    expect(disableBtn.attributes('disabled')).toBeDefined();
-    expect(w.find('[data-test="action-disable-reason"]').text().length).toBeGreaterThan(0);
+    expect(disableBtn.attributes('disabled')).toBeUndefined();
     expect(w.find('[data-test="action-uninstall"]').exists()).toBe(true);
+  });
+
+  it('clicking Disable posts to /packages/{name}/stop, not /disable', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/photos',
+      data: packageDetail({ name: 'photos', enabled: true, running: true }),
+    });
+    stubResponse({ method: 'post', url: '/packages/photos/stop', data: { jobId: 'job-stop-1' } });
+    vi.spyOn(JobsApi, 'openStream').mockImplementation(() => new FakeEventSource() as unknown as EventSource);
+    const { w } = await mountDetail('photos');
+
+    await w.find('[data-test="action-disable"]').trigger('click');
+    await flushPromises();
+
+    expect(captured.some((c) => c.method === 'post' && c.url === '/packages/photos/stop')).toBe(true);
   });
 
   it('a core package offers none of the four actions, however its enabled/running flags read', async () => {

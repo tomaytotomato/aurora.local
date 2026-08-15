@@ -327,20 +327,16 @@ function cleanName(names: string[] | undefined): string {
 }
 
 // ── Lifecycle actions ──────────────────────────────────────────────────
-// Core packages only ever get restart/upgrade; install/start/uninstall
-// are gated by `actionSlot(...)` both here and in the template (belt +
-// braces — the button simply doesn't render or is disabled for an
-// invalid state, but the handlers double-check too). Install, uninstall,
-// start and update all return a job id and stream their log into the
-// panel below the control card, rather than reporting "started" in a
+// Core packages only ever get restart/upgrade; install/start/disable/
+// uninstall are gated by `actionSlot(...)` both here and in the template
+// (belt + braces — the button simply doesn't render or is disabled for
+// an invalid state, but the handlers double-check too). All four
+// lifecycle verbs plus update return a job id and stream their log into
+// the panel below the control card, rather than reporting "started" in a
 // toast and going quiet. Restart stays a plain 204: it is over in
 // seconds and has nothing worth watching.
-//
-// 'disable' (stop a running app without uninstalling it) has no backend
-// endpoint — see lib/packageLifecycle.ts — so it is not a JobAction here.
-// The button renders visible-but-disabled with its reason.
-type Busy = 'enable' | 'uninstall' | 'restart' | 'upgrade' | 'start' | null;
-type JobAction = 'enable' | 'uninstall' | 'upgrade' | 'start';
+type Busy = 'enable' | 'disable' | 'uninstall' | 'restart' | 'upgrade' | 'start' | null;
+type JobAction = 'enable' | 'disable' | 'uninstall' | 'upgrade' | 'start';
 const busy = ref<Busy>(null);
 const removeOpen = ref(false);
 const activeJobId = ref<string | null>(null);
@@ -356,6 +352,7 @@ async function refreshAfterLifecycle(): Promise<void> {
 
 const FAILURE_COPY: Record<JobAction, { title: string; subject: string; action: string }> = {
   enable: { title: "Couldn't install the app", subject: 'this app', action: 'install' },
+  disable: { title: "Couldn't stop the app", subject: 'this app', action: 'stop' },
   uninstall: { title: "Couldn't uninstall the app", subject: 'this app', action: 'uninstall' },
   upgrade: { title: "Couldn't update the app", subject: 'this app', action: 'update' },
   start: { title: "Couldn't start the app", subject: 'this app', action: 'start' },
@@ -363,7 +360,7 @@ const FAILURE_COPY: Record<JobAction, { title: string; subject: string; action: 
 
 async function startJob(action: JobAction): Promise<void> {
   if (!detail.value) return;
-  if (action === 'uninstall' && !removable.value) return;
+  if ((action === 'uninstall' || action === 'disable') && !removable.value) return;
   busy.value = action;
   try {
     let jobId: string;
@@ -375,6 +372,9 @@ async function startJob(action: JobAction): Promise<void> {
     } else {
       const call = {
         enable: PackagesApi.enable,
+        // Disable (stop, stays enrolled) vs. Uninstall (stop + un-enrol)
+        // are two different backend verbs — see lib/packageLifecycle.ts.
+        disable: PackagesApi.stop,
         uninstall: PackagesApi.disable,
         upgrade: PackagesApi.upgrade,
       }[action];
@@ -411,6 +411,10 @@ function confirmAdd(): void {
 const confirmDisable = () => startJob('uninstall');
 const upgradePackage = () => startJob('upgrade');
 const startPackage = () => startJob('start');
+// Disable (stop, stays enrolled) is reversible with a plain Start, so it
+// gets a direct click like Start/Restart rather than a confirm dialog —
+// Uninstall keeps the dialog because it un-enrols the app.
+const disablePackage = () => startJob('disable');
 
 async function restartPackage(): Promise<void> {
   if (!detail.value) return;
@@ -427,6 +431,7 @@ async function restartPackage(): Promise<void> {
 
 const SUCCESS_COPY: Record<JobAction, (n: string) => { title: string; description: string }> = {
   enable: (n) => ({ title: 'Installed', description: `${n} is up and running.` }),
+  disable: (n) => ({ title: 'Stopped', description: `${n} has been stopped. Start it again any time — nothing was uninstalled.` }),
   uninstall: (n) => ({ title: 'Uninstalled', description: `${n} has been stopped and removed. Its data is still on disk.` }),
   upgrade: (n) => ({ title: 'Updated', description: `${n} is running the latest version.` }),
   start: (n) => ({ title: 'Started', description: `${n} is up and running.` }),
@@ -604,10 +609,10 @@ onMounted(async () => {
             v-if="actionSlot('disable').visible"
             size="sm"
             variant="secondary"
-            disabled
-            :title="actionSlot('disable').reason"
+            :disabled="actionsLocked || !actionSlot('disable').enabled"
             data-test="action-disable"
-          >Disable</Button>
+            @click="disablePackage"
+          >{{ busy === 'disable' ? 'Stopping…' : 'Disable' }}</Button>
 
           <Button
             v-if="actionSlot('uninstall').visible"
@@ -619,13 +624,6 @@ onMounted(async () => {
           >Uninstall</Button>
         </div>
       </div>
-      <!-- Disable has no backing endpoint yet (see lib/packageLifecycle.ts);
-           the button above is disabled rather than hidden or wired to the
-           wrong verb, and this line says why in the operator's own words
-           rather than only living in a title="" tooltip. -->
-      <p v-if="actionSlot('disable').visible" class="text-xs text-muted-foreground mt-3" data-test="action-disable-reason">
-        {{ actionSlot('disable').reason }}
-      </p>
     </Card>
 
     <!-- Live log for whichever of add / remove / update is in flight.

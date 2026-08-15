@@ -42,6 +42,14 @@ export const packagesHandlers = [
     state.running.delete(name);
     return HttpResponse.json({ jobId: createJob('disable', name).id }, { status: 202 });
   }),
+  // Disable (stop, stays enrolled): unlike /disable above, enabled[]
+  // is untouched — only the running flag drops, so Start brings it
+  // back with no reinstall.
+  http.post('/api/packages/:name/stop', ({ params }) => {
+    const name = String(params.name);
+    state.running.delete(name);
+    return HttpResponse.json({ jobId: createJob('stop', name).id }, { status: 202 });
+  }),
   http.post('/api/packages/:name/restart', () => noContent()),
   http.post('/api/packages/:name/upgrade', ({ params }) =>
     HttpResponse.json({ jobId: createJob('update', String(params.name)).id }, { status: 202 }),

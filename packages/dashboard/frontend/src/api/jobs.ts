@@ -19,6 +19,7 @@ import { http } from './client';
 export type JobKind =
   | 'enable'
   | 'disable'
+  | 'stop'
   | 'update'
   | 'update-check'
   | 'start'
