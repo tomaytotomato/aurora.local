@@ -31,6 +31,7 @@
     <zxing.version>3.5.3</zxing.version>
     <testcontainers.version>1.21.3</testcontainers.version>
     <wiremock.version>3.9.1</wiremock.version>
+    <json-schema-validator.version>1.5.9</json-schema-validator.version>
   </properties>
 
   <dependencies>
@@ -140,6 +141,22 @@
       <groupId>org.wiremock</groupId>
       <artifactId>wiremock-standalone</artifactId>
       <version>${wiremock.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!--
+      OpenApiConformance (test support) validates request/response bodies
+      captured by MockMvc against openapi.yaml's JSON Schema (draft
+      2020-12, matching `openapi: 3.1.0`). Chosen over the Atlassian
+      swagger/openapi-request-validator family because that project's
+      OpenAPI 3.1 support is unconfirmed and it drags in its own Swagger
+      parser; this is a small, actively maintained validator we drive
+      directly against a spec we already parse with SnakeYAML.
+    -->
+    <dependency>
+      <groupId>com.networknt</groupId>
+      <artifactId>json-schema-validator</artifactId>
+      <version>${json-schema-validator.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

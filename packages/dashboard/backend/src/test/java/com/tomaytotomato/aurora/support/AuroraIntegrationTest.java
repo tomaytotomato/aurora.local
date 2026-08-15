@@ -128,7 +128,9 @@ public abstract class AuroraIntegrationTest {
 
   @BeforeEach
   void resetTestWorld() throws IOException {
-    mvc = MockMvcBuilders.webAppContextSetup(webContext).apply(springSecurity()).build();
+    mvc = MockMvcBuilders.webAppContextSetup(webContext).apply(springSecurity())
+        .alwaysExpect(OpenApiConformance.conformsToSpec())
+        .build();
     commands.reset();
 
     for (String table : MUTABLE_TABLES) {
