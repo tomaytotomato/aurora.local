@@ -40,8 +40,13 @@ public class OnboardingService {
   private static final java.util.Set<String> VALID_DNS_MODES =
       java.util.Set.of("adguard", "router", "mdns");
 
+  // "packages" dropped (2026-08-15): the interactive package-picker step
+  // was removed from the wizard — see docs note in OnboardingDomain.vue —
+  // so it is no longer a step a client can resume into. "sso" was never
+  // added here either; the resume-hint jumps straight past it into
+  // "secrets", same as it always has (see setDomain()).
   private static final java.util.Set<String> VALID_STEPS = java.util.Set.of(
-      "welcome", "admin", "domain", "packages", "secrets", "dns", "tls", "review", "done"
+      "welcome", "admin", "domain", "secrets", "dns", "tls", "review", "done"
   );
 
   private final AdminUserRepo users;
@@ -175,7 +180,6 @@ public class OnboardingService {
       case "welcome"  -> 0;
       case "admin"    -> 1;
       case "domain"   -> 2;
-      case "packages" -> 3;
       case "secrets"  -> 4;
       case "dns"      -> 5;
       case "tls"      -> 6;
@@ -551,8 +555,22 @@ public class OnboardingService {
   // ------------------------------------------------------------------
 
   /**
+   * The packages every first-run box gets regardless of anything a client
+   * PATCHed — the reverse proxy ({@code core}) and LAN file sharing
+   * ({@code storage}). Mirrors the frontend's {@code isCorePackage()}
+   * authority (see {@code frontend/src/api/packages.ts}) minus {@code
+   * identity}: whether Authelia/SSO is enabled stays a deliberate yes/no
+   * asked by the onboarding SSO step (still a wizard step in its own
+   * right) rather than something this belt-and-braces forcing overrides.
+   * Forcing identity on here too would silently undo an operator's
+   * explicit "skip SSO" choice — and worse, do it without ever generating
+   * its secrets, since that only happens via {@code POST /onboarding/sso}.
+   */
+  private static final List<String> MANDATORY_PACKAGES = List.of("core", "storage");
+
+  /**
    * Apply the wizard draft. In v0.1 this means:
-   *   1. Ensure {@code core} is in the enabled set (it's required).
+   *   1. Ensure the mandatory packages are in the enabled set (they're required).
    *   2. Write .state.yml (already done by earlier PATCHes, this is idempotent).
    *   3. Report which packages have containers up vs. which need to be started.
    * It does <b>not</b> spawn containers itself — aurora's container image
@@ -567,12 +585,21 @@ public class OnboardingService {
 
     var applied = new java.util.ArrayList<String>();
 
-    // 1. Force core on. Anything relying on ".enabled contains 'core'" is
-    // guaranteed to hold after this call.
+    // 1. Force the mandatory set on. Anything relying on ".enabled
+    // contains 'core'" (or 'storage') is guaranteed to hold after this
+    // call — belt-and-braces in case a step got skipped via the sidebar,
+    // same reasoning OnboardingReview.vue's own comment already gives for
+    // its PATCH immediately before this endpoint is called.
     var state = stateFiles.readState();
     var requested = new java.util.ArrayList<>(state.enabled() == null ? List.of() : state.enabled());
-    boolean hadCore = requested.contains("core");
-    if (!hadCore) requested.add(0, "core");
+    var wasMissing = new java.util.LinkedHashSet<String>();
+    int insertAt = 0;
+    for (String mandatory : MANDATORY_PACKAGES) {
+      if (!requested.contains(mandatory)) {
+        requested.add(insertAt++, mandatory);
+        wasMissing.add(mandatory);
+      }
+    }
 
     // 1b. Resolve the rest of the hard-dependency closure exactly the way
     // scripts/up.sh's manifest_resolve_deps would, and persist THAT set —
@@ -587,13 +614,14 @@ public class OnboardingService {
     enabledOrder.addAll(resolution.resolved());
     var enabled = new java.util.ArrayList<>(enabledOrder);
 
-    if (!hadCore) {
-      applied.add("Added core to enabled_packages (was missing; core is required).");
-    } else {
-      applied.add("core is enabled.");
+    for (String mandatory : MANDATORY_PACKAGES) {
+      applied.add(wasMissing.contains(mandatory)
+          ? "Added " + prettyPackageName(mandatory) + " to enabled_packages (was missing; "
+              + prettyPackageName(mandatory) + " is required)."
+          : prettyPackageName(mandatory) + " is enabled.");
     }
     for (String added : resolution.addedDependencies()) {
-      if ("core".equals(added)) continue;
+      if (MANDATORY_PACKAGES.contains(added)) continue;
       var requesters = resolution.requiredBy().getOrDefault(added, List.of());
       applied.add("Added " + prettyPackageName(added) + " to enabled_packages ("
           + joinPretty(requesters) + " requires it).");
@@ -873,7 +901,13 @@ public class OnboardingService {
     upsertCoreEnvDomain(normalized);
     audit.record(null, "onboarding.domain.set", "domain:" + normalized, null);
     // Advance the server-side step cursor forward but never backward.
-    if (rank(currentStep()) < rank("packages")) settings.put(KEY_STEP, "packages");
+    //
+    // Used to jump to "packages" here, then "packages" itself jumped
+    // straight to "secrets" (skipping "sso" as a resumable hint value —
+    // that was already the case before the picker step was removed, and
+    // is left unchanged). Now that there is no picker step in between,
+    // domain jumps directly to the same "secrets" end-state in one go.
+    if (rank(currentStep()) < rank("secrets")) settings.put(KEY_STEP, "secrets");
   }
 
   public void setEnabledPackages(List<String> enabled) {
