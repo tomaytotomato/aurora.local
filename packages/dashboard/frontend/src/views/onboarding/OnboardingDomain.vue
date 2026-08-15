@@ -37,14 +37,22 @@ async function proceed(): Promise<void> {
   //
   // Union with whatever the server already reports, not a wholesale
   // replace: the host's own bootstrap (bootstrap.sh / scripts/up.sh)
-  // brings `core` and `dashboard` up before the wizard ever runs — that's
-  // how there's a dashboard to serve this page at all — so
-  // `draft.enabled_packages` can already be non-empty by the time this
-  // step submits. Overwriting it with a fixed two-name list would drop
-  // `dashboard` from `.state.yml`'s enabled[] and leave it showing
-  // "enabled: false" in the catalogue despite visibly running.
+  // brings `core` up before the wizard ever runs, so `draft
+  // .enabled_packages` can already be non-empty by the time this step
+  // submits (e.g. a previous partial attempt already added something).
+  //
+  // `dashboard` is filtered out rather than preserved: the backend's
+  // PackageNameValidator permanently REJECTS it in any enabled_packages
+  // payload (it's in that validator's own RESERVED set) with a 400,
+  // because it is never meant to be client-submitted at all — it is the
+  // "always present" infrastructure package this very page is served
+  // by, tracked outside `.state.yml`'s enabled[] entirely (see
+  // PackagesService.INFRASTRUCTURE_PACKAGES). Bootstrap seeds
+  // `enabled: [core, dashboard]` directly (not through this endpoint),
+  // which is exactly why this filter is needed: without it, the very
+  // first real PATCH this step ever sends would 400 on every real box.
   const baseline = new Set([
-    ...(store.draft?.enabled_packages ?? []),
+    ...(store.draft?.enabled_packages ?? []).filter((p) => p !== 'dashboard'),
     ...MANDATORY_FIRST_RUN_PACKAGES,
   ]);
   await store.patchDraft({
