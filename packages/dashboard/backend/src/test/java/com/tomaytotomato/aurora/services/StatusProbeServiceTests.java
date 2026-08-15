@@ -378,6 +378,53 @@ class StatusProbeServiceTests {
     assertEquals("not-started", svc().probe("notes").state);
   }
 
+  // --- Dashboard self-probe (Done-page false-negative fix) ------------
+  //
+  // The Done page reported "the dashboard has not started" — on the very
+  // screen the dashboard's own container was serving — because
+  // packages/dashboard/manifest.yml had no probe: block, so readProbe()
+  // returned {} and probe() defaulted to kind: docker with the container
+  // name defaulting to the package name "dashboard". The real container
+  // is named "aurora" (packages/dashboard/compose.yml), so
+  // docker.findByName("dashboard") could never find anything and the row
+  // always reported not-started, offering a "Start" button for a package
+  // that was already running. Fixed by giving dashboard the same
+  // probe.kind: self shape core already has (see
+  // snapshot_sortsBlockerFirst_thenAlphabetical below) — self bypasses the
+  // docker lookup entirely because answering the request already proves
+  // the dashboard is up.
+
+  @Test
+  void dashboardSelfProbe_reportsRunning_regardlessOfDockerLookup() {
+    Mockito.when(packages.readProbe("dashboard")).thenReturn(Map.of(
+        "kind", "self", "container", "aurora", "external_url", "http://{domain}/"));
+    // Stubbed to return empty on purpose: this is the exact "container not
+    // found" answer that produced the false negative before the fix. A
+    // self probe must never even consult it.
+    Mockito.when(docker.findByName(anyString())).thenReturn(Optional.empty());
+
+    var r = svc().probe("dashboard");
+
+    assertEquals("running", r.state,
+        "the dashboard must never report not-started for itself — it is definitionally "
+            + "up if it can answer the request that asks");
+    assertEquals("http://aurora.local/", r.openUrl);
+    Mockito.verify(docker, Mockito.never()).findByName(anyString());
+  }
+
+  @Test
+  void dashboardWithoutSelfProbeConfig_wouldWronglyReportNotStarted() {
+    // Documents the bug's exact mechanism: an *unconfigured* dashboard
+    // manifest (no probe: block, as it was before this fix) falls back to
+    // kind: docker, container defaulting to the package name "dashboard" —
+    // which never matches the real container name "aurora" — so the probe
+    // always came up not-started, no matter how healthy the dashboard was.
+    Mockito.when(packages.readProbe("dashboard")).thenReturn(Map.of());
+    Mockito.when(docker.findByName("dashboard")).thenReturn(Optional.empty());
+
+    assertEquals("not-started", svc().probe("dashboard").state);
+  }
+
   // --- Priority sort --------------------------------------------------
 
   @Test
