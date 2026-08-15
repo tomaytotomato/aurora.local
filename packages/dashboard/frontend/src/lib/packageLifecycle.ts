@@ -3,18 +3,15 @@
 // matrix (the part most likely to regress when a new state shows up)
 // can be tested without mounting the view.
 //
-// Backing verbs, and which have a real backend endpoint today:
-//   install   -> POST /packages/{name}/enable    (exists)
-//   start     -> POST /services/{package}/start  (exists)
-//   uninstall -> POST /packages/{name}/disable   (exists — its own doc
-//                summary is "Stop and disable a package", i.e. it already
-//                stops a running package as part of removing it)
-//   disable   -> no endpoint. There is no "stop this app but leave it
-//                enabled/installed" verb in openapi.yaml — enable() starts
-//                it, disable() removes it. Shown disabled with a reason
-//                rather than wired to the wrong endpoint or hidden
-//                silently; see dev/notes/app-detail-progress.md for the
-//                spec-change ask.
+// Backing verbs — all four now have a real backend endpoint:
+//   install   -> POST /packages/{name}/enable   (enrol + start)
+//   start     -> POST /services/{package}/start (start an already-enrolled,
+//                stopped package; untouched by this change)
+//   disable   -> POST /packages/{name}/stop     (stop only, stays enrolled
+//                — so a plain Start brings it back with no reinstall)
+//   uninstall -> POST /packages/{name}/disable  (stop + un-enrol; its own
+//                doc summary is "Stop and disable a package". Data under
+//                data/<name> is preserved either way.)
 import type { ServiceState } from '@/api/services';
 
 export type PackageAction = 'install' | 'start' | 'disable' | 'uninstall';
@@ -40,7 +37,6 @@ export interface ActionInputs {
 }
 
 const CORE_REASON = "This app runs the platform baseline and can't be added, started, stopped, or removed from here.";
-const DISABLE_NO_ENDPOINT_REASON = "Aurora doesn't have a way to stop this app without also uninstalling it yet.";
 
 /**
  * The four lifecycle actions for the current state, in a fixed order
@@ -67,7 +63,10 @@ export function packageActionSlots(input: ActionInputs): ActionSlot[] {
   return [
     { action: 'install', visible: notInstalled, enabled: notInstalled },
     { action: 'start', visible: stopped, enabled: stopped },
-    { action: 'disable', visible: isRunning, enabled: false, reason: DISABLE_NO_ENDPOINT_REASON },
+    // Only visible while running — stopping an already-stopped package
+    // is not a state the backend accepts (409), so there is nothing
+    // useful for the button to do outside this state.
+    { action: 'disable', visible: isRunning, enabled: isRunning },
     // Uninstall works from either installed state — disable() already
     // stops a running package as part of removing it (its own openapi.yaml
     // summary: "Stop and disable a package"), so there's no need to force

@@ -112,6 +112,18 @@ export function jobScript(kind: JobKind, target: string | null): JobScript {
         450,
       );
 
+    case 'stop':
+      return ok(
+        [
+          `==> stopping ${target}`,
+          `Container ${project(target)} Stopping`,
+          `Container ${project(target)} Stopped`,
+          `Container ${project(target)} Removed`,
+          `${target} stays installed — start it again any time`,
+        ],
+        400,
+      );
+
     case 'start':
       return ok(
         [

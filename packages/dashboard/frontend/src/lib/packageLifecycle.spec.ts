@@ -39,12 +39,16 @@ describe('packageActionSlots', () => {
     expect(find(slots, 'uninstall')).toMatchObject({ visible: true, enabled: true });
   });
 
-  it('a running app can Disable (shown, disabled, with a reason) but not Start or Install', () => {
+  it('a running app can Disable but not Start or Install', () => {
     const slots = packageActionSlots({ isCore: false, enabled: true, running: true });
     expect(find(slots, 'install').visible).toBe(false);
     expect(find(slots, 'start').visible).toBe(false);
-    expect(find(slots, 'disable')).toMatchObject({ visible: true, enabled: false });
-    expect(find(slots, 'disable').reason).toBeTruthy();
+    expect(find(slots, 'disable')).toMatchObject({ visible: true, enabled: true });
+  });
+
+  it('disable is not shown at all once the app is already stopped', () => {
+    const slots = packageActionSlots({ isCore: false, enabled: true, running: false });
+    expect(find(slots, 'disable').visible).toBe(false);
   });
 
   it('a running app can still Uninstall directly, matching the existing disable() behaviour', () => {
