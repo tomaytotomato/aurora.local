@@ -1,0 +1,19 @@
+name: dashboard
+title: Aurora
+description: |
+  Aurora dashboard fixture — mirrors packages/dashboard/manifest.yml's
+  probe block for PackagesServiceTests.
+category: core
+depends_on:
+  - core
+recommends: []
+profiles: {}
+ports: []
+requires:
+  min_ram_mb: 256
+  host_roles: []
+required_env: []
+probe:
+  kind: self
+  container: aurora
+post_install_notes: ""

@@ -25,6 +25,22 @@ requires:
 required_env:
   - AURORA_SESSION_SECRET
 
+# B1-style self probe (see packages/core/manifest.yml and
+# PackagesService's "probe.kind == self" handling): if this package is
+# answering the request at all, it is definitionally running. Without
+# this, StatusProbeService falls back to kind: docker with container
+# defaulting to the package name "dashboard" — but the actual container
+# is named "aurora" (packages/dashboard/compose.yml, container_name:
+# aurora), so the lookup always came up empty and the Done page's
+# checklist reported the dashboard itself as "Not started" with a
+# "Start" button, on the very screen it was serving. Fixed by asking the
+# one question that's always true instead of a docker lookup that can
+# only ever be wrong for this specific package.
+probe:
+  kind: self
+  container: aurora
+  external_url: http://{domain}/
+
 post_install_notes: |
   1. Open the first-run wizard: https://$DOMAIN/
   2. Create the admin user (password for v0.1; passkey coming in v0.2).
