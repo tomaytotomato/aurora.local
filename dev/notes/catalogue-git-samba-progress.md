@@ -120,3 +120,73 @@ short list of things worth evaluating when a replacement is picked
 - Backend Java: untouched by this work (no files under
   `packages/dashboard/backend/src` were changed), so the 725-test
   backend suite wasn't re-run.
+
+## Task 2: research a Samba replacement (no implementation)
+
+`packages/storage` is a mandatory core package pinning
+`dperson/samba:latest` — no release in ~5 years, no version tags at
+all (confirmed again here; `pinnable-versions-progress.md` already
+flagged it as "no safe pin at all"). `packages/storage/compose.yml`
+was **not** touched — this is research only.
+
+### Candidates, verified with `docker buildx imagetools inspect`
+
+- **`ghcr.io/servercontainers/samba`** — actively maintained (commits
+  into July 2026), 669 stars. Version tags:
+  `a<avahi-ver>-s<samba-ver>-r<revision>`, e.g. `a3.24.1-s4.23.8-r0`.
+  Confirmed that tag resolves to digest
+  `sha256:9c629b0b9261ba04289275479f67f6bdaadd6ed18e90631e1ed451749ea69d18`
+  across `linux/amd64`, `linux/arm64`, `linux/arm/v7`, `linux/arm/v6`.
+  Three tags shipped in the last three months — roughly monthly
+  cadence. Config is environment-variable driven (`ACCOUNT_<user>`,
+  `UID_<user>`, `SAMBA_VOLUME_CONFIG_<name>`,
+  `SAMBA_GLOBAL_CONFIG_<key>`), closest in shape to how every other
+  package in this catalogue is already configured. Bundles Avahi +
+  wsdd2 — Avahi needs `AVAHI_DISABLE=true` since the host already runs
+  its own (Ansible role `R8`), or it's two mDNS responders on one box.
+
+- **`crazymax/samba`** (`ghcr.io/crazy-max/samba` mirror) — 630 stars.
+  Tags track the upstream Samba version directly:
+  `4.23.8` (29 days old at check time), `4.22.8` (3 months), `4.21.4`
+  (~1 year), back to `4.13.8`. Confirmed `4.23.8` resolves to digest
+  `sha256:b37f7af97c773eddb593537f64da6389e5ee6695bcecf44f3ba1a8a6bcf34125`
+  across `linux/amd64`, `linux/arm64`, `linux/arm/v7`, `linux/arm/v6`,
+  `linux/ppc64le`. Configuration is a mounted `/data/config.yml`
+  (YAML) rather than env vars — cleaner version tags, but a bigger
+  structural change from `dperson`'s CLI-flag scheme since Aurora would
+  need to template and mount a new config file rather than just adding
+  `environment:` entries.
+
+No official `samba` image exists on Docker Hub (confirmed:
+`docker buildx imagetools inspect samba:latest` → access denied,
+repository doesn't exist).
+
+### Recommendation
+
+`servercontainers/samba`, prototyped first, on fit with the catalogue's
+existing environment-variable convention; `crazymax/samba` as the
+fallback if the mounted-YAML-config approach turns out to be less
+trouble than it looks, given its cleaner version-only tags. Neither is
+a drop-in — both replace `dperson`'s single `-u`/`-s` CLI scheme with
+something structurally different, so this needs to be a deliberate,
+tested swap, not a quiet image bump. Full writeup with the evidence
+above is in `docs/ROADMAP.md` under "Research: replacing `dperson/samba`
+in `packages/storage`".
+
+### Is Samba still the right call?
+
+Yes, kept: it's still the only LAN sharing protocol every target
+device (Windows/macOS/Linux/phones) can mount natively, and MiniDLNA
+already covers the SMB-can't-reach case (smart TVs/consoles). NFS would
+help Linux/macOS but hurts Windows; Syncthing solves folder sync, not a
+mounted share; `filebrowser` covers "grab one file over the web", not a
+mounted drive. The problem was always the specific abandoned image,
+not the protocol.
+
+## Verification (Task 2)
+
+- No compose or manifest files touched — this was research only, per
+  instructions. `packages/storage/compose.yml` is unchanged.
+- All image references checked with `docker buildx imagetools inspect`
+  against the live registries today; nothing recommended on the
+  strength of a web page alone.
