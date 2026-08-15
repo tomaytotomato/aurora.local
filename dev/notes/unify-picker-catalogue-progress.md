@@ -140,3 +140,20 @@ Dispatched a read-only investigation of `packages/dashboard/backend`:
   UI-lock authority before this change); flagging it because "drive the
   grouping from isCorePackage()" only strengthens a frontend rule that the
   backend doesn't itself enforce.
+
+## Styleguide conformance
+
+`docs/STYLEGUIDE.md`'s "State vocabulary" section requires
+`data-state="loading|empty|error"` on every data surface (referencing
+`VpnView.vue` as the pattern). Added it to the picker's new skeleton and
+error states. Noted but not retrofitted: neither `PackagesCatalogue.vue` nor
+`PackagesCore.vue` carry these markers today either, despite predating this
+change — left alone as out of scope for this task.
+
+## Final state
+
+- `npm run typecheck`: clean.
+- `npm run test:unit`: 474 passed (45 files), up from 457 (43 files) at the
+  start. No test deleted; two new spec files added
+  (`lib/packageName.spec.ts`, `views/onboarding/OnboardingPackages.spec.ts`).
+- Branch: `refactor/unify-picker-catalogue`, three commits, nothing pushed.
