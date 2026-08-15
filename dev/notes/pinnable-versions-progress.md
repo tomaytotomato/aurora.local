@@ -32,9 +32,99 @@ that don't match `RepoDigests`).
 
 Compose files are NOT modified. `pins.env` files are additive data only.
 
-## Inventory (from `grep -n image: packages/*/compose.yml`)
+## Inventory (from `grep -n image: packages/*/compose.yml`, service names
+resolved the same way `scripts/pin.sh` does — `IMAGE_<SVC>` where `<SVC>`
+is the compose service name upper-cased with `-` -> `_`)
 
-Package-by-package status below. Each row: current ref -> recommended pin,
-multi-arch, notes.
+| pkg | service | env var | current ref | status |
+|---|---|---|---|---|
+| ai | ollama-cpu | IMAGE_OLLAMA_CPU | ollama/ollama:latest | pending |
+| ai | ollama-gpu | IMAGE_OLLAMA_GPU | ollama/ollama:latest | pending |
+| ai | open-webui | IMAGE_OPEN_WEBUI | ghcr.io/open-webui/open-webui:main | pending |
+| backup | kopia | IMAGE_KOPIA | kopia/kopia:latest | pending |
+| core | caddy | IMAGE_CADDY | caddy:2-alpine | pending |
+| dashboard | aurora | (exempt) | aurora-dashboard:${AURORA_VERSION:-0.1.0} | exempt — Aurora's own image, see UnpinnedImageTagsRule javadoc |
+| dev | code-server | IMAGE_CODE_SERVER | lscr.io/linuxserver/code-server:latest | pending |
+| dev | postgres | IMAGE_POSTGRES | postgres:16-alpine | pending |
+| dev | redis | IMAGE_REDIS | redis:7-alpine | pending |
+| documents | paperless | IMAGE_PAPERLESS | ghcr.io/paperless-ngx/paperless-ngx:latest | pending |
+| documents | paperless-postgres | IMAGE_PAPERLESS_POSTGRES | docker.io/library/postgres:16-alpine | pending |
+| documents | paperless-redis | IMAGE_PAPERLESS_REDIS | docker.io/library/redis:7-alpine | pending |
+| documents | paperless-gotenberg | IMAGE_PAPERLESS_GOTENBERG | docker.io/gotenberg/gotenberg:8 | pending |
+| documents | paperless-tika | IMAGE_PAPERLESS_TIKA | docker.io/apache/tika:latest | pending |
+| documents | stirling-pdf | IMAGE_STIRLING_PDF | docker.io/frooodle/s-pdf:latest | pending |
+| filebrowser | filebrowser | IMAGE_FILEBROWSER | filebrowser/filebrowser:v2.31.2 | pending (verify) |
+| git | forgejo | IMAGE_FORGEJO | codeberg.org/forgejo/forgejo:1.21 | pending |
+| git | forgejo-runner | IMAGE_FORGEJO_RUNNER | code.forgejo.org/forgejo/runner:3.5.1 | pending (verify) |
+| home-automation | homeassistant | IMAGE_HOMEASSISTANT | ghcr.io/home-assistant/home-assistant:stable | pending |
+| home-automation | mosquitto | IMAGE_MOSQUITTO | eclipse-mosquitto:2 | pending |
+| home-automation | zigbee2mqtt | IMAGE_ZIGBEE2MQTT | koenkk/zigbee2mqtt:latest | pending |
+| identity | authelia | IMAGE_AUTHELIA | authelia/authelia:latest | pending |
+| jellyfin | jellyfin | IMAGE_JELLYFIN | lscr.io/linuxserver/jellyfin:latest | pending |
+| media | sonarr | IMAGE_SONARR | lscr.io/linuxserver/sonarr:latest | pending |
+| media | radarr | IMAGE_RADARR | lscr.io/linuxserver/radarr:latest | pending |
+| media | prowlarr | IMAGE_PROWLARR | lscr.io/linuxserver/prowlarr:latest | pending |
+| media | bazarr | IMAGE_BAZARR | lscr.io/linuxserver/bazarr:latest | pending |
+| media | seerr | IMAGE_SEERR | ghcr.io/seerr-team/seerr:latest | pending |
+| media | flaresolverr | IMAGE_FLARESOLVERR | ghcr.io/flaresolverr/flaresolverr:latest | pending |
+| media | rdtclient | IMAGE_RDTCLIENT | rogerfar/rdtclient:latest | pending |
+| media | qbittorrent | IMAGE_QBITTORRENT | lscr.io/linuxserver/qbittorrent:latest | pending |
+| memos | memos | IMAGE_MEMOS | neosmemo/memos:stable | pending |
+| monitoring | prometheus | IMAGE_PROMETHEUS | prom/prometheus:latest | pending |
+| monitoring | grafana | IMAGE_GRAFANA | grafana/grafana:latest | pending |
+| monitoring | node-exporter | IMAGE_NODE_EXPORTER | prom/node-exporter:latest | pending |
+| monitoring | cadvisor | IMAGE_CADVISOR | gcr.io/cadvisor/cadvisor:latest | pending |
+| monitoring | uptime-kuma | IMAGE_UPTIME_KUMA | louislam/uptime-kuma:1 | pending |
+| notes | silverbullet | IMAGE_SILVERBULLET | ghcr.io/silverbulletmd/silverbullet:latest | pending |
+| photos | immich-server | (IMMICH_VERSION) | ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release} | pending — already parameterised via .env, not a hardcoded tag |
+| photos | immich-ml | (IMMICH_VERSION) | ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release} | pending — must match immich-server exactly |
+| photos | immich-redis | IMAGE_IMMICH_REDIS | docker.io/redis:6.2-alpine | pending |
+| photos | immich-postgres | IMAGE_IMMICH_POSTGRES | docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0 | pending |
+| privacy | adguard | IMAGE_ADGUARD | adguard/adguardhome:latest | pending |
+| privacy | gluetun | IMAGE_GLUETUN | qmcgaw/gluetun:latest | pending |
+| storage | samba | IMAGE_SAMBA | dperson/samba:latest | pending |
+| storage | minidlna | IMAGE_MINIDLNA | vladgh/minidlna:latest | pending |
 
-<!-- status rows appended per package as work proceeds -->
+## Key findings from reading existing infrastructure before designing anything
+
+1. **`packages/<pkg>/pins.env` is the real, functional mechanism.** `scripts/pin.sh`
+   generates it (`--refresh`/`--apply`), `scripts/lib/render.sh` `render_pins()`
+   sources it into the shell before `docker compose up`, and `docs/ARCHITECTURE.md`'s
+   sequence diagram shows it in the boot path. This is where the curated data goes —
+   not a new manifest field, not a new catalogue-level file.
+
+2. **`scripts/pin.sh --refresh` throws the tag away.** `resolve_digest()` does
+   `repo="${ref%%:*}"` and writes `repo@sha256:digest` with no human-readable tag,
+   even though `UnpinnedImageTagsRule`'s own javadoc states the safe form is
+   `postgres:16@sha256:abc123…` (tag *and* digest). This task's `pins.env` files
+   keep the tag. `scripts/pin.sh` itself is not touched (out of scope; flagged as
+   a follow-up for the owner).
+
+3. **Bug found in `HardeningService.pinning()`** (packages/dashboard/backend/.../services/HardeningService.java:76):
+   it checks `compose.repo().resolve("pins.env")` — a single file at the **repo
+   root** — for existence/mtime to drive the dashboard's security-score "pinning"
+   indicator. That is not where `scripts/pin.sh` or `render_pins()` ever write.
+   The per-package files this task produces will make the CLI (`pin.sh --check`)
+   and the runtime (`render_pins`) work correctly, but the dashboard's own
+   hardening score will keep reporting `pinsFileExists: false` regardless,
+   because it is looking in the wrong place. Confirmed by
+   `HardeningControllerIntegrationTest` which literally writes/deletes a
+   root-level `pins.env` fixture. **Not fixed here** — it's a Java change to a
+   file other agents may be touching, and outside this task's brief. Flagged for
+   the owner as the top thing a reviewer should check.
+
+4. **Two images are already parameterised via `.env`, not hardcoded tags:**
+   `packages/dashboard` (`AURORA_VERSION`, exempt — Aurora's own image) and
+   `packages/photos` (`IMMICH_VERSION`, defaults to the floating `release` tag).
+   For Immich, pinning today doesn't need `scripts/pin.sh --apply` at all —
+   `render_pins` already exports whatever `pins.env` sets, and `IMMICH_VERSION`
+   is a normal compose interpolation variable, so setting `IMMICH_VERSION=` in
+   `packages/photos/pins.env` takes effect immediately, no compose.yml edit
+   required. Recorded there rather than as `IMAGE_IMMICH_SERVER`.
+
+5. **Digest method:** `docker buildx imagetools inspect --format '{{.Manifest.Digest}}' <ref>`
+   for the digest; `docker buildx imagetools inspect <ref> | grep Platform` for
+   multi-arch (confirmed working locally, e.g. `caddy:2-alpine` -> 6 platforms
+   including `linux/amd64` and `linux/arm64/v8`). `docker manifest inspect --verbose`
+   deliberately avoided per the task brief (per-platform digests, not the
+   `RepoDigests` value).
