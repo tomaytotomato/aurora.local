@@ -133,8 +133,44 @@ has never brought up) and asserting the CTA is visible rather than
 tolerating its absence.
 
 Ran against a genuinely fresh testbed VM (`destroy` + `all`, confirmed
-`bootstrap_mode: true, complete: false` before starting):
-**pending final confirmed run — see below.**
+`bootstrap_mode: true, complete: false` before starting). Result: **fails,
+reproducing the exact reported error**:
+
+```
+Error: POST /api/onboarding/launch status (body: {"detail":"onboarding already
+complete; use authenticated endpoints","instance":"/api/onboarding/launch",
+"status":409,"title":"Conflict"})
+Expected: 202
+Received: 409
+```
+
+Byte-for-byte the same `detail`/`instance`/`status` as yesterday's report.
+This is on `main`, no fix applied.
+
+### Verified against the fix
+
+Merged `fix/onboarding-launch-ordering` (commit `cdc3518`) locally with
+`git merge fix/onboarding-launch-ordering` — clean, no conflicts. That
+commit stops `OnboardingReview.vue` calling `/complete` at all and moves
+the commit into `OnboardingDone.vue`, firing only once the launch stream
+reports success (or there was nothing to launch). Rebuilt the testbed
+fresh on the merged code and re-ran the same walkthrough (as a throwaway
+scratch spec, since the exact call sequence the fix produces is different
+enough — no `/complete` call around Review any more — that the committed
+spec's mid-journey assertion about it doesn't apply post-fix): **passes**,
+`POST /api/onboarding/launch` returns 202. Then reverted the merge
+(`git revert -m 1 <merge-commit>`, keeping history honest rather than
+rewriting it) so this branch carries none of the other agent's fix — the
+testbed was also rebuilt a final time from the un-merged branch so it's
+left in a state that matches what's actually committed here.
+
+**This is the core answer to the task.** Neither existing spec would have
+caught yesterday's regression, on any target, because of what they
+assert, not because of the environment. `wizard-sequential-journey.spec.ts`
+does catch it — red on `main`, green on the fix — because it is the only
+spec that drives the actual UI in the actual order a real user does:
+Review's Install button, then Done's Start services button, with nothing
+skipped in between.
 
 ## Self-immolation side effect (not mine to fix, flagged to fix-launch-selfkill and onboarding-picker)
 
@@ -160,3 +196,97 @@ for the box (the guard in `guardMidOnboarding()` rejects *before*
 successful 202 launch on this box is not — every real `Start services`
 click against a package list missing `dashboard` risks killing the
 dashboard mid-request.
+
+## CI job: not added
+
+Tried to establish whether the isolated `:8091` docker-compose path (the
+only one a GitHub Actions runner could plausibly use — it can't run a
+Lima VM) is CI-ready. It is not, and I did not add a job for it:
+
+- Built `aurora-dashboard:0.1.0` locally via Docker Desktop
+  (`docker compose -f compose.yml -f e2e/scripts/compose.e2e.yml build aurora`,
+  after exporting `AURORA_SESSION_SECRET` — the compose file requires it
+  and there's no `packages/dashboard/.env` in a clean checkout). Build
+  succeeded.
+- Running `reset-aurora-e2e.sh` itself then failed two different ways
+  before it even started a container, both fixed on this branch (see the
+  "e2e: fix reset-aurora-e2e.sh and teardown.sh for macOS" commit):
+  `getent` doesn't exist on macOS, and the `AURORA_SESSION_SECRET` the
+  script seeds into the scratch repo's `.env` never reaches Compose's
+  interpolation because Compose's built-in `.env` loading resolves
+  against the *real* `packages/dashboard/` (the first `-f` file's
+  directory), not the scratch copy — the script writes the value to a
+  file Compose was never going to read.
+- With both of those fixed, the `aurora` container itself now starts but
+  crash-loops: `org.sqlite.SQLiteException: [SQLITE_CANTOPEN] Unable to
+  open the database file`. This looks like a UID mismatch — `compose.yml`
+  runs the container as `${AURORA_UID:-1000}:${DOCKER_GID:-999}`, and
+  `reset-aurora-e2e.sh` sets `AURORA_UID="$(id -u)"`, which is 1000 on the
+  Debian testbed (lines up with the Dockerfile's baked-in `chown
+  aurora:aurora /data` at UID 1000) but is not 1000 for a macOS user,
+  leaving the fresh `aurora_data` named volume owned by a UID the
+  container can't write into. Did not fix this — it needs either an
+  init container that chowns the volume to `$AURORA_UID` before `aurora`
+  starts, or dropping the UID override for this path specifically, and
+  either one risks being wrong in a way I can't fully verify without
+  more time on a machine I don't want to leave in a half-fixed state.
+
+A CI job that runs against a path I cannot show green on my own machine
+is exactly the "red CI job nobody can run" the task warned against, so I
+did not add one. What I'd propose once the above is fixed: a `e2e`
+job in `.github/workflows/ci.yml` alongside `frontend`/`backend`, building
+the image, running `reset-aurora-e2e.sh`, then `npx playwright test`
+(default mode, no `FRESH_BOX` — the isolated project's own `/reset`
+endpoint is exactly what `AURORA_E2E=1` unlocks it for).
+
+## Coverage gaps in the first-run journey
+
+What has real automated coverage today (after this branch):
+- Every wizard step's own markup, in isolation (`wizard-happy-path.spec.ts`,
+  `no-cli-instructions.spec.ts`) — though see above, several of these
+  assertions are currently stale against the live markup.
+- Admin creation, package selection, and the full Welcome→Done click-through,
+  including Review's Install and Done's Start services
+  (`wizard-sequential-journey.spec.ts`, new).
+- Launch streaming's happy path in isolation, via the state-seeding
+  shortcut (`done-launch.spec.ts`) — useful for what it actually tests
+  (the SSE wiring), misleading if read as "the launch flow works".
+- Post-install dashboard behaviour once onboarding is complete (the
+  majority of the other 13 specs), gated on the auth fixture.
+
+What has no coverage at all:
+- **The SSO/identity step** (`OnboardingSso.vue`) — no spec touches it
+  beyond my new one clicking past it with SSO left off. Turning it on
+  (which writes `packages/identity/.env` and generates Authelia secrets)
+  is completely unexercised by the suite.
+- **DNS mode selection beyond "the tabs render"** — no spec actually picks
+  adguard/router/mdns and checks the resulting `dns_mode` takes effect.
+  (`dev/notes/launch-selfkill-progress.md` independently records Authelia
+  crash-looping on a pre-existing secret-templating gap once `identity`
+  is actually enabled on the testbed — another sign this path is
+  genuinely unwalked by anything.)
+- **Launch failure and retry**, for real. `error-recovery.spec.ts` mocks
+  the failure via `page.route` interception; nothing drives a real
+  package failing to start and checks the retry button actually recovers
+  it.
+- **The self-immolation bug** described above — no spec would catch a
+  wizard that kills its own dashboard container, because nothing asserts
+  the box is still reachable after a launch, only that the initial POST
+  returned the expected status code.
+- **Multi-run idempotency of the real testbed target** — every spec here
+  assumes either a fresh box or the isolated project's reset endpoint;
+  nothing exercises "an operator re-runs the wizard on a box that already
+  has one package enabled" the way `bootstrap.sh add` supports.
+
+## Answering "can we brute-force the process on Debian"
+
+Yes, substantially: `wizard-sequential-journey.spec.ts` proves the whole
+Welcome→Done click path can be driven headlessly and repeatably against a
+real install, provided the box starts fresh (no reset mechanism exists
+for a real box short of reinstalling — `AURORA_E2E_FRESH_BOX=1` only
+lets the suite *tolerate* that limitation, it doesn't remove it). What
+can't yet be brute-forced repeatedly on the same box: anything past a
+successful "Start services" click, because there is no server-side reset
+for a real install and the only way to get a second clean run is
+`./dev/testbed/up.sh destroy && ./dev/testbed/up.sh all` (roughly 3–4
+minutes end to end on this Mac, once images are warm).
