@@ -30,6 +30,19 @@ required_env:
   - AUTHELIA_SESSION_SECRET
   - AUTHELIA_STORAGE_ENCRYPTION_KEY
 
+# Without this block StatusProbeService defaults the probed container name
+# to the package name ("identity"), but compose.yml actually names the
+# container "authelia" (see container_name: authelia). That mismatch made
+# docker.findByName("identity") fail even when Authelia was genuinely up,
+# so every live-status surface (Done page checklist, dashboard home,
+# app detail status light) reported identity as not-started regardless of
+# its real state. Same class of bug already hit dashboard/core and notes;
+# this is the identity instance of it.
+probe:
+  kind: docker
+  container: authelia
+  external_url: "https://auth.{domain}/"
+
 post_install_notes: |
   1. Generate strong secrets for AUTHELIA_JWT_SECRET,
      AUTHELIA_SESSION_SECRET, AUTHELIA_STORAGE_ENCRYPTION_KEY:
