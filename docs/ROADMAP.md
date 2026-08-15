@@ -143,6 +143,104 @@ hosting off-box entirely (GitHub/Codeberg-hosted, no local package).
 Not evaluated here — this entry exists so nobody re-adds the same dead
 pin without knowing why it was pulled.
 
+## Research: replacing `dperson/samba` in `packages/storage`
+
+`storage` is one of the three mandatory core packages, so its image
+choice sits on every install. `dperson/samba:latest` has no release
+in roughly five years and, unlike Forgejo, no version tags at all —
+only `latest` and a handful of stale architecture-named tags — so it
+cannot be pinned even to a frozen version the way `git`'s Forgejo pin
+was. `dev/notes/pinnable-versions-progress.md` already flagged this
+as "no safe pin at all" and recommended the owner consider a
+maintained alternative as a separate decision. This is that research.
+**No change has been made to `packages/storage/compose.yml`** — this
+is evidence for a decision, not a migration.
+
+### Candidates checked
+
+Two actively maintained images stood out. Both confirmed today with
+`docker buildx imagetools inspect` (not taken on trust):
+
+**`ghcr.io/servercontainers/samba`** — Samba on Alpine, from the
+ServerContainers project (669 stars, 75 forks). Commit history runs
+into July 2026, so it is being kept current. Version tags follow an
+`a<avahi-ver>-s<samba-ver>-r<revision>` scheme, e.g.
+`a3.24.1-s4.23.8-r0` (Samba 4.23.8, Avahi 3.24.1, revision 0) —
+confirmed to exist and resolve to digest
+`sha256:9c629b0b9261ba04289275479f67f6bdaadd6ed18e90631e1ed451749ea69d18`,
+published across `linux/amd64`, `linux/arm64`, `linux/arm/v7`, and
+`linux/arm/v6`. Three such tags have shipped in the last three months
+(`a3.23.4-s4.22.10-r0` → `a3.24.0-s4.23.8-r0` → `a3.24.1-s4.23.8-r0`),
+so roughly monthly cadence. Configuration is environment-variable
+driven: `ACCOUNT_<user>` / `UID_<user>` for accounts,
+`SAMBA_VOLUME_CONFIG_<name>` for each share (a semicolon-delimited
+string, same shape of idea as `dperson`'s `-s` flag but as an env var
+instead of a CLI arg), `SAMBA_GLOBAL_CONFIG_<key>` for `smb.conf`
+globals. It also bundles Avahi (zeroconf/Time Machine) and wsdd2
+(Windows network discovery) as optional services, toggled off with
+`AVAHI_DISABLE=true` / `WSDD2_DISABLE=true` — worth noting because
+Aurora's host provisioning already runs its own Avahi at the OS level
+(`R8` in the Ansible role list, `docs/ARCHITECTURE.md` L2), so adopting
+this image without disabling its bundled Avahi would run two mDNS
+responders on the same box.
+
+**`crazymax/samba`** (mirrored at `ghcr.io/crazy-max/samba`) — from
+the same maintainer as several widely-used GitHub Actions
+(`docker/setup-buildx-action` etc.), 630 stars, 61 forks. Tags track
+the upstream Samba version directly and cleanly: `4.23.8` (29 days
+old), `4.22.8` (3 months old), `4.21.4` (about a year old), with
+history back to `4.13.8`. Confirmed `4.23.8` resolves to digest
+`sha256:b37f7af97c773eddb593537f64da6389e5ee6695bcecf44f3ba1a8a6bcf34125`
+across `linux/amd64`, `linux/arm64`, `linux/arm/v7`, `linux/arm/v6`,
+and `linux/ppc64le` (one more platform than the box needs, no harm).
+Configuration is a mounted `/data/config.yml` (YAML, with
+`${VARIABLE-default}`-style interpolation) rather than environment
+variables — a bigger structural change from `dperson`'s CLI-flag
+style than `servercontainers`' env-var scheme, since it introduces a
+config file Aurora would need to template and mount rather than
+values it can keep passing through `compose.yml`'s `environment:`
+block the way every other package in this catalogue already works.
+
+Neither is a drop-in: both replace `dperson`'s single `-u`/`-s`
+command-line scheme, and neither maps 1:1 onto today's
+`SAMBA_USER`/`SAMBA_PASS` env vars in `packages/storage/.env.example`.
+`servercontainers/samba` is the closer fit to how every other package
+in this catalogue is already configured (values in `environment:`,
+nothing new to mount or render), so it is the one worth prototyping
+first; `crazymax/samba`'s plain-Samba-version tags are easier to read
+at a glance and worth keeping as the fallback if the YAML config file
+turns out to be less trouble than expected.
+
+### Is Samba still the right protocol?
+
+Worth asking, since `storage` also carries MiniDLNA and this is a
+home server, not an enterprise file server. SMB is kept: it is still
+the only LAN file-sharing protocol every target device (Windows,
+macOS, Linux, and phones) can mount natively without extra client
+software, and MiniDLNA already covers the smart-TV/console case SMB
+doesn't reach. NFS would be lighter on Linux/macOS but makes Windows
+worse, not better, and something like Syncthing solves a different
+problem (folder sync, not a mounted network drive on demand). The
+`filebrowser` package already covers the "just want a web UI to grab
+a file" case, so it isn't a substitute for a mounted share either.
+Nothing here argues for dropping SMB — only for picking a container
+image that is still receiving security fixes.
+
+### What a switch would actually cost
+
+Small in code, real in verification. `packages/storage/compose.yml`
+is one service (`samba`), one `command:` block building the user and
+a single `media` share, and two env vars (`SAMBA_USER`, `SAMBA_PASS`).
+Swapping the image means: rewriting that one service's `environment:`
+block for the new scheme, deciding what to do with the bundled
+Avahi/wsdd2 services either candidate brings, and testing that
+existing SMB clients (Windows Explorer, macOS Finder, phones) can
+still mount the share and read/write it under the new image before
+calling it done — this is a mandatory core package, so a regression
+here is not a quiet one. That test is real effort even though the
+diff is small, which is exactly why this is deferred to a deliberate
+decision rather than folded into an unrelated change.
+
 ## Decided against
 
 ### Self-hosted Obsidian
