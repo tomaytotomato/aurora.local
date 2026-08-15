@@ -42,7 +42,7 @@ is the compose service name upper-cased with `-` -> `_`)
 | ai | ollama-gpu | IMAGE_OLLAMA_GPU | ollama/ollama:latest | pending |
 | ai | open-webui | IMAGE_OPEN_WEBUI | ghcr.io/open-webui/open-webui:main | pending |
 | backup | kopia | IMAGE_KOPIA | kopia/kopia:latest | pending |
-| core | caddy | IMAGE_CADDY | caddy:2-alpine | pending |
+| core | caddy | IMAGE_CADDY | caddy:2-alpine | done -> 2.11.4-alpine (multi-arch incl. arm64) |
 | dashboard | aurora | (exempt) | aurora-dashboard:${AURORA_VERSION:-0.1.0} | exempt — Aurora's own image, see UnpinnedImageTagsRule javadoc |
 | dev | code-server | IMAGE_CODE_SERVER | lscr.io/linuxserver/code-server:latest | pending |
 | dev | postgres | IMAGE_POSTGRES | postgres:16-alpine | pending |
@@ -59,7 +59,7 @@ is the compose service name upper-cased with `-` -> `_`)
 | home-automation | homeassistant | IMAGE_HOMEASSISTANT | ghcr.io/home-assistant/home-assistant:stable | pending |
 | home-automation | mosquitto | IMAGE_MOSQUITTO | eclipse-mosquitto:2 | pending |
 | home-automation | zigbee2mqtt | IMAGE_ZIGBEE2MQTT | koenkk/zigbee2mqtt:latest | pending |
-| identity | authelia | IMAGE_AUTHELIA | authelia/authelia:latest | pending |
+| identity | authelia | IMAGE_AUTHELIA | authelia/authelia:latest | done -> 4.39.20 (multi-arch incl. arm64) |
 | jellyfin | jellyfin | IMAGE_JELLYFIN | lscr.io/linuxserver/jellyfin:latest | pending |
 | media | sonarr | IMAGE_SONARR | lscr.io/linuxserver/sonarr:latest | pending |
 | media | radarr | IMAGE_RADARR | lscr.io/linuxserver/radarr:latest | pending |
