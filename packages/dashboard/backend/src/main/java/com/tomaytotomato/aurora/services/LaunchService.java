@@ -250,18 +250,52 @@ public class LaunchService {
 
     // Through the shared seam rather than a second ProcessBuilder: stderr
     // is merged there too, so the script's own log_step tagging still
-    // reads in order.
+    // reads in order. job.cancelToken is what lets cancel(jobId) reach the
+    // real OS process without this thread having to poll for anything.
     try {
       int exit = commands.stream(repo, Map.of("AURORA_LAUNCHED_BY", "aurora-dashboard"),
-          cmd, line -> onLine(job, line));
+          cmd, line -> onLine(job, line), job.cancelToken);
       finish(job, exit == 0 ? State.SUCCESS : State.FAILED, exit,
           exit == 0 ? null : "up.sh exited " + exit);
+    } catch (CommandCancelledException e) {
+      // The operator (or an automated caller) asked for this to stop.
+      // Not a guess, so it bypasses the tail-based classifier entirely.
+      finishClassified(job, "This launch was cancelled.", "cancelled");
+    } catch (CommandTimeoutException e) {
+      // No output for the stream's inactivity ceiling — the up.sh process
+      // (and anything docker compose spawned under it) has already been
+      // killed by the time this is thrown. This is exactly Finding 1: the
+      // single-in-flight lock must not survive this job.
+      finishClassified(job,
+          "This launch produced no output for a while and Aurora stopped it automatically. "
+              + "The container engine or a package may be stuck.",
+          "stalled");
     } catch (IOException e) {
       finish(job, State.FAILED, -1, "could not start bash: " + e.getMessage());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       finish(job, State.FAILED, -1, "reader interrupted: " + e.getMessage());
     }
+  }
+
+  /**
+   * Cancel a running launch. A no-op (returns false) if no job with this
+   * id is currently {@link State#RUNNING} — including an unknown id and an
+   * already-finished job, which are both "nothing to cancel" from the
+   * caller's point of view.
+   *
+   * <p>Service-level only: there is no HTTP path for this in
+   * {@code openapi.yaml} yet. Wiring one up is a contract change that
+   * belongs there first — {@code OpenApiConformanceTest} would fail the
+   * build the moment a controller method existed without it.
+   */
+  public boolean cancel(String jobId) {
+    Job job = jobs.get(jobId);
+    if (job == null || job.state != State.RUNNING) {
+      return false;
+    }
+    job.cancelToken.cancel();
+    return true;
   }
 
   private void onLine(Job job, String line) {
@@ -303,28 +337,48 @@ public class LaunchService {
   }
 
   private void finish(Job job, State state, int exit, String reason) {
-    job.state = state;
-    job.exitCode = exit;
-    job.finishedAt = Instant.now();
+    Classified classified = null;
     if (state == State.FAILED) {
       // Iter-3: classify raw failure into human copy + machine-readable code.
       // Tail lines are inspected so port-conflict / pull-rate / disk-full /
       // docker-down / crash patterns get plain-English reasons Sarah can act on.
-      String tail;
-      synchronized (job.tail) {
-        StringBuilder b = new StringBuilder();
-        int from = Math.max(0, job.tail.size() - 200);
-        int i = 0;
-        for (String line : job.tail) {
-          if (i++ < from) continue;
-          b.append(line).append('\n');
-        }
-        tail = b.toString();
-      }
       String firstPkg = job.packages.isEmpty() ? "your services" : job.packages.get(0);
-      Classified c = classify(tail, exit, firstPkg, reason);
-      job.failureReason = c.reason;
-      job.failureCode = c.code;
+      classified = classify(tailText(job), exit, firstPkg, reason);
+    }
+    finishWith(job, state, exit, reason, classified);
+  }
+
+  /**
+   * Terminate a job with an already-known reason and code rather than
+   * guessing one from the tail. Used for outcomes the caller already knows
+   * the whole story of — cancelled by the operator, or killed for
+   * producing no output — where running them through {@link #classify}
+   * would be trading a known fact for a pattern match.
+   */
+  private void finishClassified(Job job, String reason, String code) {
+    finishWith(job, State.FAILED, -1, reason, new Classified(reason, code));
+  }
+
+  private String tailText(Job job) {
+    synchronized (job.tail) {
+      StringBuilder b = new StringBuilder();
+      int from = Math.max(0, job.tail.size() - 200);
+      int i = 0;
+      for (String line : job.tail) {
+        if (i++ < from) continue;
+        b.append(line).append('\n');
+      }
+      return b.toString();
+    }
+  }
+
+  private void finishWith(Job job, State state, int exit, String reason, Classified classified) {
+    job.state = state;
+    job.exitCode = exit;
+    job.finishedAt = Instant.now();
+    if (classified != null) {
+      job.failureReason = classified.reason;
+      job.failureCode = classified.code;
     } else {
       job.failureReason = reason;
       job.failureCode = null;
@@ -496,6 +550,8 @@ public class LaunchService {
 
     final Deque<String> tail = new ArrayDeque<>();
     final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    /** Set by {@link LaunchService#cancel(String)}; read by the watchdog inside {@code commands.stream}. */
+    final CommandRunner.CancelToken cancelToken = new CommandRunner.CancelToken();
 
     Job(String id, List<String> packages) {
       this.id = id;
