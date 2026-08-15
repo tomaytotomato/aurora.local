@@ -134,8 +134,12 @@ class AutheliaServiceTests {
     String yaml = AutheliaService.renderYaml(List.of());
     Object root = new Yaml().load(yaml);
     assertThat(root).isNotNull();
-    // Authelia tolerates an empty users: {} block (auth just fails
-    // for everyone \u2014 fail-closed, correct behaviour).
+    // Valid YAML shape-wise, but NOT something reconcile() will ever
+    // hand to Authelia: it rejects an empty users: {} block outright
+    // ("users: non zero value required") and refuses to start rather
+    // than failing closed gracefully. reconcile() below skips the
+    // write entirely when there are no users, precisely because this
+    // output isn't safe to put on disk.
     @SuppressWarnings("unchecked")
     Map<String, Object> asMap = (Map<String, Object>) root;
     assertThat(asMap).containsKey("users");
@@ -184,7 +188,9 @@ class AutheliaServiceTests {
 
   @Test
   void reconcile_creates_parent_directories_on_first_run() throws IOException {
-    Mockito.when(repo.findAll()).thenReturn(List.of());
+    Mockito.when(repo.findAll()).thenReturn(List.of(
+        new AdminUser(1, "bruce", "$argon2id$hash", "UTC", "2026-01-01T00:00:00Z", Role.ADMIN)
+    ));
     assertThat(repoRoot.resolve("data/identity/authelia")).doesNotExist();
 
     svc.reconcile(UserChangedEvent.STARTUP);
@@ -193,13 +199,62 @@ class AutheliaServiceTests {
 
   @Test
   void reconcile_updates_lastWriteAt_and_clears_lastError() {
-    Mockito.when(repo.findAll()).thenReturn(List.of());
+    Mockito.when(repo.findAll()).thenReturn(List.of(
+        new AdminUser(1, "bruce", "$argon2id$hash", "UTC", "2026-01-01T00:00:00Z", Role.ADMIN)
+    ));
     assertThat(svc.lastWriteAt()).isNull();
     assertThat(svc.lastError()).isNull();
 
     svc.reconcile(UserChangedEvent.STARTUP);
     assertThat(svc.lastWriteAt()).isNotNull();
     assertThat(svc.lastError()).isNull();
+  }
+
+  // ─── the empty-users guard (fresh-install boot fix) ────────────────
+
+  @Test
+  void reconcile_skips_the_write_when_there_are_no_admin_users_yet() throws IOException {
+    // The realistic state on a fresh install: identity is mandatory
+    // and up before the onboarding wizard has created anyone. Writing
+    // users: {} would let Authelia's file backend refuse to start
+    // entirely, so reconcile must not create anything here at all.
+    Mockito.when(repo.findAll()).thenReturn(List.of());
+
+    int n = svc.reconcile(UserChangedEvent.STARTUP);
+
+    assertThat(n).isZero();
+    assertThat(repoRoot.resolve("data/identity/authelia")).doesNotExist();
+    assertThat(svc.lastWriteAt()).isNull();
+    assertThat(svc.lastError()).isNull();
+  }
+
+  @Test
+  void reconcile_preserves_an_existing_seed_file_when_there_are_no_admin_users_yet()
+      throws IOException {
+    // render_identity_seed (scripts/lib/render.sh) copies
+    // users_database.example.yml into place before Aurora ever starts,
+    // so Authelia has a schema-valid (if unusable) placeholder admin to
+    // boot from. reconcile() must not clobber that seed with an empty
+    // block just because Aurora's own users table is still empty.
+    Path target = repoRoot.resolve("data/identity/authelia/users_database.yml");
+    Files.createDirectories(target.getParent());
+    Files.writeString(target, "users:\n  admin:\n    password: 'seed-placeholder'\n");
+    Mockito.when(repo.findAll()).thenReturn(List.of());
+
+    svc.reconcile(UserChangedEvent.STARTUP);
+
+    assertThat(Files.readString(target, StandardCharsets.UTF_8))
+        .contains("seed-placeholder");
+  }
+
+  @Test
+  void reconcile_does_NOT_audit_when_there_are_no_admin_users_yet() {
+    Mockito.when(repo.findAll()).thenReturn(List.of());
+
+    svc.reconcile(UserChangedEvent.CREATE);
+
+    Mockito.verify(audit, Mockito.never()).record(Mockito.any(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyString());
   }
 
   @Test
@@ -234,7 +289,13 @@ class AutheliaServiceTests {
         new AuroraProperties.Docker("unix:///dev/null")
     );
     AutheliaService badSvc = new AutheliaService(repo, badProps, audit);
-    Mockito.when(repo.findAll()).thenReturn(List.of());
+    // Non-empty on purpose: an empty findAll() now short-circuits
+    // before ever touching the filesystem (see the empty-users guard
+    // tests above), so this needs a real user to actually exercise the
+    // write-failure path this test is for.
+    Mockito.when(repo.findAll()).thenReturn(List.of(
+        new AdminUser(1, "bruce", "$argon2id$hash", "UTC", "2026-01-01T00:00:00Z", Role.ADMIN)
+    ));
 
     int n = badSvc.reconcile(UserChangedEvent.STARTUP);
     assertThat(n).isEqualTo(-1); // \u2192 error sentinel
@@ -298,7 +359,12 @@ class AutheliaServiceTests {
         new AuroraProperties.Docker("unix:///dev/null")
     );
     AutheliaService badSvc = new AutheliaService(repo, badProps, audit);
-    Mockito.when(repo.findAll()).thenReturn(List.of());
+    // Non-empty for the same reason as the sibling test above — needs
+    // to actually reach the write and fail, not short-circuit on the
+    // empty-users guard.
+    Mockito.when(repo.findAll()).thenReturn(List.of(
+        new AdminUser(1, "bruce", "$argon2id$hash", "UTC", "2026-01-01T00:00:00Z", Role.ADMIN)
+    ));
 
     badSvc.reconcile(UserChangedEvent.CREATE);
 
