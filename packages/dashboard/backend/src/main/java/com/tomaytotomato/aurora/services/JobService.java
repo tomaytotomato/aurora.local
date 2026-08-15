@@ -114,7 +114,7 @@ public class JobService {
    * {@code update-check}.
    */
   public enum Kind {
-    ENABLE, DISABLE, UPDATE, UPDATE_CHECK, START, RESTART, BACKUP, RESTORE,
+    ENABLE, DISABLE, STOP, UPDATE, UPDATE_CHECK, START, RESTART, BACKUP, RESTORE,
     PARITY_SYNC, PARITY_SCRUB, DEPLOY;
 
     public String wire() {

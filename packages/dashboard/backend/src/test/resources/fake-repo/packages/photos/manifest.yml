@@ -1,0 +1,13 @@
+name: photos
+title: Photos
+description: fixture — not enabled, used to test the install/enable transition
+category: media
+depends_on: [core]
+recommends: []
+profiles: {}
+ports: []
+requires:
+  min_ram_mb: 512
+  host_roles: []
+required_env: []
+post_install_notes: ""

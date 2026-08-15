@@ -52,7 +52,9 @@ class PackagesControllerTests {
   }
 
   private static MockMvc mvc(PackagesService packages) {
-    return MockMvcBuilders.standaloneSetup(new PackagesController(packages)).build();
+    return MockMvcBuilders.standaloneSetup(
+        new PackagesController(packages, Mockito.mock(com.tomaytotomato.aurora.services.PackageLifecycleService.class))
+    ).build();
   }
 
   @Test
