@@ -98,8 +98,8 @@ is the compose service name upper-cased with `-` -> `_`)
 | photos | immich-ml | (IMMICH_VERSION) | ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release} | pending — must match immich-server exactly |
 | photos | immich-redis | IMAGE_IMMICH_REDIS | docker.io/redis:6.2-alpine | pending |
 | photos | immich-postgres | IMAGE_IMMICH_POSTGRES | docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0 | pending |
-| privacy | adguard | IMAGE_ADGUARD | adguard/adguardhome:latest | pending |
-| privacy | gluetun | IMAGE_GLUETUN | qmcgaw/gluetun:latest | pending |
+| privacy | adguard | IMAGE_ADGUARD | adguard/adguardhome:latest | done -> v0.107.78 (security release, multi-arch incl. arm64) |
+| privacy | gluetun | IMAGE_GLUETUN | qmcgaw/gluetun:latest | done -> v3.41.1 (v3.42 imminent per maintainer, re-check soon) |
 | storage | samba | IMAGE_SAMBA | dperson/samba:latest | done -> NO SAFE PIN (abandoned ~5yr, digest-froze latest instead) |
 | storage | minidlna | IMAGE_MINIDLNA | vladgh/minidlna:latest | done -> 1.3.10 (multi-arch incl. arm64) |
 
