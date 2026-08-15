@@ -31,26 +31,52 @@ services:
       # "{{ env ... }}" string reaches the YAML parser and every
       # templated field fails validation.
       - X_AUTHELIA_CONFIG_FILTERS=template
-      # Static config file lives in the bind-mount; secrets injected
-      # via env so they don't touch disk.
-      - AUTHELIA_JWT_SECRET=${AUTHELIA_JWT_SECRET}
+      # Deliberately NOT named AUTHELIA_JWT_SECRET inside the
+      # container. That exact name is on Authelia's own fixed list of
+      # legacy "environment secret" variables, which it auto-maps onto
+      # the deprecated top-level jwt_secret key with no template
+      # filter involved at all — a second, independent mechanism
+      # acting on the same value as configuration.yml's own
+      # identity_validation.reset_password.jwt_secret template below.
+      # Having both present (even with identical values) makes
+      # Authelia refuse to start: it declines to reconcile the two and
+      # the new key ends up unset ("option 'jwt_secret' is required").
+      # Renaming only what the container sees avoids the collision;
+      # packages/identity/.env, .env.example, manifest.yml and
+      # IdentitySecretsService all keep calling it AUTHELIA_JWT_SECRET
+      # — this is the one place that value is handed to Authelia under
+      # a different name.
+      - AURORA_IDENTITY_JWT_SECRET=${AUTHELIA_JWT_SECRET}
+      # Session secret and storage encryption key don't have the above
+      # problem — Authelia's auto-mapping target for both is the
+      # current, non-deprecated key (session.secret / storage.
+      # encryption_key), the same one configuration.yml's template
+      # writes to, so the two mechanisms agree rather than collide.
+      # No rename needed; changing these for symmetry would just be
+      # more surface for no benefit.
       - AUTHELIA_SESSION_SECRET=${AUTHELIA_SESSION_SECRET}
       - AUTHELIA_STORAGE_ENCRYPTION_KEY=${AUTHELIA_STORAGE_ENCRYPTION_KEY}
       # Bake the domain into cookies via env; configuration.yml
       # references ${DOMAIN}.
       - DOMAIN=${DOMAIN:-aurora.local}
-      # SMTP notifier vars are deliberately NOT listed here. Authelia
-      # maps any AUTHELIA_NOTIFIER_SMTP_* env var straight onto
-      # notifier.smtp.*, even if the value is empty, and having both
-      # notifier.smtp and notifier.filesystem present at once is a
-      # fatal config error. Listing them here with a `:-` fallback
-      # would define them as empty strings rather than leaving them
-      # absent, which trips that check on every install that doesn't
-      # want SMTP (i.e. most of them). env_file below only forwards a
-      # key if it's actually uncommented in .env, so "leave it out to
-      # get the filesystem notifier" is genuinely true.
-    env_file:
-      - ../identity/.env
+      # Optional SMTP notifier vars. Authelia maps any
+      # AUTHELIA_NOTIFIER_SMTP_* env var straight onto notifier.smtp.*,
+      # even if the value is empty, and having both notifier.smtp and
+      # notifier.filesystem present at once is a fatal config error.
+      # These bare entries (no "=value") are Compose's shell-passthrough
+      # form: the variable is forwarded only if it's actually set in
+      # the shell that invokes `docker compose`, and otherwise it is
+      # genuinely absent from the container rather than present-but-
+      # empty. up.sh sources packages/identity/.env into its own shell
+      # before calling compose, so uncommenting one of these five lines
+      # in .env is what makes it appear here; leaving them commented (the
+      # default, filesystem notifier) means bash's `.` never defines the
+      # shell variable in the first place, so it stays truly unset.
+      - AUTHELIA_NOTIFIER_SMTP_HOST
+      - AUTHELIA_NOTIFIER_SMTP_PORT
+      - AUTHELIA_NOTIFIER_SMTP_USERNAME
+      - AUTHELIA_NOTIFIER_SMTP_PASSWORD
+      - AUTHELIA_NOTIFIER_SMTP_SENDER
     volumes:
       - ../identity/authelia:/config:ro
       # State (SQLite, notifications). Users db lives here too so it

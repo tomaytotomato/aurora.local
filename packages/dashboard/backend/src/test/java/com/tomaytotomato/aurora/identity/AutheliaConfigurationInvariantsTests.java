@@ -141,9 +141,42 @@ class AutheliaConfigurationInvariantsTests {
     // Authelia 4.38+ refuses to boot without identity_validation for
     // reset flows. Keep it explicit so an image upgrade doesn't
     // silently start denying password-reset requests.
+    //
+    // Deliberately AURORA_IDENTITY_JWT_SECRET, not AUTHELIA_JWT_SECRET:
+    // the latter is on Authelia's own fixed list of legacy environment
+    // secret names and auto-maps onto the deprecated top-level
+    // jwt_secret key, which collides with this one and stops Authelia
+    // starting even when both hold the same value. compose.yml renames
+    // the container-facing var to sidestep it — see its comment.
     Map<String, Object> iv = (Map<String, Object>) load().get("identity_validation");
     Map<String, Object> reset = (Map<String, Object>) iv.get("reset_password");
-    assertThat(String.valueOf(reset.get("jwt_secret"))).contains("AUTHELIA_JWT_SECRET");
+    assertThat(String.valueOf(reset.get("jwt_secret"))).contains("AURORA_IDENTITY_JWT_SECRET");
+  }
+
+  @Test
+  void jwt_secret_never_reads_the_authelia_managed_env_var_name() throws IOException {
+    // Regression guard for the fresh-install boot crash: AUTHELIA_JWT_SECRET
+    // is on Authelia's own fixed list of legacy environment secret names and
+    // auto-maps onto the deprecated top-level jwt_secret key with no
+    // template involved at all. If this file ever goes back to reading
+    // {{ env "AUTHELIA_JWT_SECRET" }} here, that auto-mapped key and this
+    // one collide and Authelia refuses to start, even though both hold the
+    // exact same value — "option 'jwt_secret' is required" at boot despite
+    // a real secret being set. Verified against the real authelia/authelia
+    // image on the testbed, not just reasoned about.
+    //
+    // Only non-comment lines matter here — the header + the block above
+    // both explain the collision in prose and name AUTHELIA_JWT_SECRET to
+    // do it.
+    try (var in = AutheliaConfigurationInvariantsTests.class.getResourceAsStream(CLASSPATH_YML)) {
+      String body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+      for (String line : body.split("\\R")) {
+        if (!line.trim().startsWith("#")) {
+          assertThat(line).as("non-comment line should never read AUTHELIA_JWT_SECRET: %s", line)
+              .doesNotContain("AUTHELIA_JWT_SECRET");
+        }
+      }
+    }
   }
 
   @Test
@@ -156,8 +189,12 @@ class AutheliaConfigurationInvariantsTests {
       // value here, this test screams — the config is bind-mounted
       // read-only into Authelia AND checked into git, so a literal
       // secret would end up in a repo's public history.
+      //
+      // AURORA_IDENTITY_JWT_SECRET is the container-facing name for
+      // the JWT secret (see compose.yml); AUTHELIA_JWT_SECRET itself
+      // should never appear in this file at all any more.
       for (String key : List.of(
-          "AUTHELIA_JWT_SECRET",
+          "AURORA_IDENTITY_JWT_SECRET",
           "AUTHELIA_SESSION_SECRET",
           "AUTHELIA_STORAGE_ENCRYPTION_KEY")) {
         // Any occurrence must be inside a Go-template env reference.
