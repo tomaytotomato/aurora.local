@@ -191,7 +191,7 @@ async function proceed(): Promise<void> {
       <AlertDescription>{{ err }}</AlertDescription>
     </Alert>
 
-    <Alert v-if="loadError" variant="warning" class="mb-6">
+    <Alert v-if="loadError" variant="warning" class="mb-6" data-state="error">
       <AlertDescription class="flex items-center justify-between gap-4">
         <span>Couldn't reach the backend for the package list.</span>
         <Button variant="secondary" size="sm" @click="load">Try again</Button>
@@ -203,7 +203,7 @@ async function proceed(): Promise<void> {
          fallback catalogue — see the comment above `loadError` — so the
          picker never asserts specific package facts it hasn't actually
          received. -->
-    <div v-if="packages.loading && catalogue.length === 0" class="grid grid-cols-2 gap-3 mb-3">
+    <div v-if="packages.loading && catalogue.length === 0" class="grid grid-cols-2 gap-3 mb-3" data-state="loading">
       <div
         v-for="n in 6"
         :key="`skeleton-${n}`"
