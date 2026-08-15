@@ -33,7 +33,7 @@ class AutheliaConfigurationInvariantsTests {
 
   private static final String CLASSPATH_YML = "/identity/configuration.yml";
   private static final Path SOURCE_FILE = Path.of(
-      "../../packages/identity/authelia/configuration.yml"
+      "../../../packages/identity/authelia/configuration.yml"
   );
 
   @SuppressWarnings("unchecked")
