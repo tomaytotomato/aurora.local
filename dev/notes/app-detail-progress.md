@@ -111,6 +111,130 @@ eight (`git`, `photos`, `ai`, `backup`, `dev`, `documents`,
 `home-automation`, `monitoring`) is out of scope here — left for whichever
 agent owns those packages this session.
 
-## Fault 4 — control panel (Install/Disable/Start/Uninstall + status light)
+## Fault 2 — action button invisible until first tab click (DONE)
 
-Investigating next.
+Reproduced the real mechanism with a Playwright script against the live
+dev server rather than guessing: a plain fresh load of `/apps/identity`
+renders the action card fine within ~250ms with zero interaction — no
+bug there. The real defect only shows up navigating **between two
+package detail pages** (`/apps/media` → `/apps/identity` via a link, or
+browser back/forward) — Vue Router reuses the `PackageDetail` component
+instance across a `:name` param change on the same matched route, so
+`onMounted` never fires a second time. `packages.fetchOne(name.value)`
+was only ever called from `onMounted`, so the whole page — not just the
+action button — kept showing the previous app's data (or nothing, first
+visit) until a hard reload.
+
+Confirmed with Playwright: `action-card exists = false` at every
+timestamp checked (250ms through 1750ms) after a client-side nav to a
+second package, including after clicking between tabs — clicking a tab
+never fixed it in isolation, which matches "not a design decision": it
+is a real gap, not perceived load latency.
+
+Fix: extracted `loadDetail()` and added a `watch(name, () => loadDetail())`
+alongside the existing `onMounted` call, mirroring the pattern the two
+other `watch(name, ...)` blocks in this file already use for
+containers/env and the job/network reset. Also added a loading skeleton
+for the action-panel area (`data-test="package-actions-skeleton"`) so the
+brief real-network gap before first paint reads as "loading" rather than
+blank silence — a genuine, if secondary, contributor to how this looked
+in the wild.
+
+Regression test: `PackageDetail.spec.ts` — "re-fetches package detail
+when the route :name param changes without a remount" mounts once,
+asserts on `media`'s buttons, pushes to `/apps/photos` without
+remounting, and asserts the buttons updated to `photos`'s state.
+
+## Fault 4 — control panel (Install/Disable/Start/Uninstall + status light) (DONE)
+
+### Status light — six states, wired to the real probe
+
+`StatusLight.vue` wraps the existing `Badge` primitive (it already
+renders a currentColor dot for non-neutral tones) rather than inventing
+a bespoke dot component. States: `running` (ok/green), `starting`
+(warn/amber), `unhealthy` (err/red), `stopped` / `not-installed` /
+`unknown` (all neutral/grey, but distinguished by **label text** — the
+task's "unknown must be representable" requirement is met by giving it
+different copy from `not-installed`, not a different colour, since both
+are honestly "grey" states).
+
+Derivation (`deriveStatusLight` in `lib/packageLifecycle.ts`):
+1. `unknown` — the initial `GET /packages/{name}` hasn't resolved yet.
+   This is the only case that shows unknown; once `enabled`/`running`
+   are known, there is always a real answer for at least running/stopped.
+2. `not-installed` — `!enabled`.
+3. Otherwise, prefers the live probe (`GET /services/status`, via the
+   existing `useServiceStatusStream` composable — same SSE-with-poll-
+   fallback the Done checklist and dashboard home already use) for the
+   `starting`/`unhealthy` distinction the plain booleans can't make;
+   falls back to the `running` boolean when no probe entry exists yet
+   (stream not delivered, or the package isn't in `StatusProbeService`'s
+   scope).
+
+This is exactly where the identity/`StatusProbeService` container-name
+bug (see above) would have resurfaced one layer up if left unfixed — the
+identity manifest fix was a precondition for this light being honest.
+
+### Action matrix — pure function, 13 tests
+
+`packageActionSlots` in `lib/packageLifecycle.ts` maps
+`{isCore, enabled, running}` to the four slots. Endpoint check against
+openapi.yaml:
+
+| Action    | Endpoint                              | Exists? |
+|-----------|----------------------------------------|---------|
+| Install   | `POST /packages/{name}/enable`         | yes |
+| Start     | `POST /services/{package}/start`       | yes |
+| Uninstall | `POST /packages/{name}/disable`        | yes (its own summary is "Stop and disable a package" — it already stops a running package as part of removing it, so Uninstall stays available whether the app is running or stopped, matching the pre-existing "Remove" button's behaviour) |
+| Disable   | *(stop only, keep enabled/installed)*  | **no** |
+
+**Disable has no backend verb.** `enable` installs-and-starts; `disable`
+stops-and-removes. There is no "stop this app but leave it configured"
+endpoint in openapi.yaml. Per the task's instruction not to touch the
+spec, the Disable button is implemented visible-but-disabled (only shown
+at all for a running, non-core app — a state where stopping is
+conceptually valid) with inline reason copy
+("Aurora doesn't have a way to stop this app without also uninstalling
+it yet.") rather than silently wired to `disable()` or hidden outright.
+**This is the one control that needs a spec change** (a new
+`POST /packages/{name}/stop`-shaped endpoint) before it can do anything.
+
+State → visible actions:
+- not-installed: Install only.
+- stopped (enabled, not running): Start, Uninstall.
+- running (enabled, running): Disable (disabled+reason), Uninstall.
+- core (any enabled/running combination): none of the four — locked
+  purely on `isCore`, independent of the wire state, per "a core package
+  can do none of them."
+
+Restart and Update keep their pre-existing, separate gating
+(`isCore || detail.enabled`) — the task named four specific actions to
+add, not to remove what already worked.
+
+### Wiring
+
+- Install → `PackagesApi.enable()` (unchanged, renamed from "Add app").
+- Start → `ServicesApi.start()`, new to this page. Its response shape is
+  `{job_id, packages, started_at}` (snake_case `job_id`), unlike the
+  other lifecycle verbs' `{jobId}` — handled explicitly in `startJob()`
+  rather than papering over the mismatch.
+- Uninstall → `PackagesApi.disable()` (unchanged, renamed from "Remove"),
+  still behind the existing destructive confirm `Dialog` (danger variant).
+- Disable → not wired; see above.
+- All three real actions stream into the existing `JobLogPanel` via
+  `activeJobId`/`activeAction`, exactly like the pre-existing
+  install/uninstall/update actions — verified against the real dev
+  server (mocked backend): clicking Start on a stopped package shows a
+  live "Starting…" panel with an elapsed timer and log line, and locks
+  the other buttons while it runs.
+
+### Verification
+
+Backend: `mvn test` 725 (was 721 + 4 new `PackagesControllerTests`).
+Frontend: `npm run typecheck` clean; `npm run test:unit` 485 (was 457 +
+13 `packageLifecycle.spec.ts` + 8 `StatusLight.spec.ts` + 7
+`PackageDetail.spec.ts`). Manually verified against the mocked dev
+server for identity (core, running, no actions), media (stopped,
+Start+Uninstall, "Starting…" probe state), photos (not-installed,
+Install only), and monitoring (running, Disable shown-disabled with
+reason, Uninstall available).
