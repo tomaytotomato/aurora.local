@@ -1,0 +1,13 @@
+name: identity
+title: Identity
+description: fixture
+category: identity
+depends_on: [core]
+recommends: []
+profiles: {}
+ports: []
+requires:
+  min_ram_mb: 256
+  host_roles: []
+required_env: []
+post_install_notes: ""
