@@ -145,15 +145,41 @@ Backend: 729 → 745 tests, all green. (Note: the task brief said 725; the
 worktree's actual pre-existing count was 729 — recorded here as measured,
 not as a discrepancy worth chasing.)
 
-## Still to do
+## Frontend
 
-- Frontend: `packageActionSlots()` needs a real `disable` slot (not
-  visible-but-disabled), `PackagesApi.stop()`, and `PackageDetail.vue`
-  wiring + a confirm/copy update. Frontend test counts to follow.
-- `scripts/up.sh` / `down.sh` javadoc comments already said "package
-  enable/disable/update once those land" for the `AURORA_INVOKED_BY`
-  self-launch guard — confirmed this still applies unchanged: every
-  command this service runs goes through `JobService.submitCommand` /
-  `commands.stream(..., Map.of("AURORA_INVOKED_BY", "aurora-dashboard"), ...)`,
-  which is the same seam the guard already recognises. Nothing new
-  needed there.
+- `packageActionSlots()` (`lib/packageLifecycle.ts`): Disable is now a
+  real slot — `visible: isRunning, enabled: isRunning` (no more
+  visible-but-disabled-with-a-reason; the backend's own 409 on an
+  already-stopped package makes the reason moot, the button just isn't
+  there once there's nothing to stop).
+- `PackagesApi.stop()` added (`api/packages.ts`); `PackagesApi.disable()`
+  is unchanged (still Uninstall).
+- `PackageDetail.vue`: Disable is wired as a direct action (like
+  Start/Restart), not behind a confirm dialog — it's reversible with a
+  plain Start, unlike Uninstall. New `JobAction` member `'disable'` maps
+  to `PackagesApi.stop`; `'uninstall'` still maps to `PackagesApi.disable`
+  (the naming looks backwards until you remember the UI verb and the
+  backend verb are deliberately not the same word).
+- Threaded the new `stop` `JobKind` through the mock layer (`api/jobs.ts`,
+  `mocks/fixtures/jobs.ts` job script, `mocks/handlers/packages.ts`,
+  `lib/job-copy.ts` headline) so the dev server (`npm run dev:mock`)
+  behaves the same as the real backend.
+- Updated the two pre-existing tests that encoded the old
+  visible-but-disabled Disable button (`packageLifecycle.spec.ts`,
+  `PackageDetail.spec.ts`) and added a click-through test asserting
+  Disable posts to `/stop`, not `/disable`.
+
+Frontend: 507 → 509 tests, `npm run typecheck` clean.
+
+## Known gaps not touched by this task
+
+- `POST /packages/{name}/restart` and `.../upgrade` are documented and
+  wired on the frontend but still have no backend implementation — not
+  one of the four named verbs, flagged for whoever picks it up next.
+- `POST /services/{name}/start`'s `.state.yml` overwrite risk (see
+  above) — real, but the endpoint itself was out of scope here.
+
+## Final counts
+
+- Backend: 729 → 745 (all green, Java 25).
+- Frontend: 507 → 509 (all green), `npm run typecheck` clean.
