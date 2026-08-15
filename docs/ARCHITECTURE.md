@@ -28,14 +28,13 @@ graph TB
         AdGuard["🛡️ AdGuard Home<br/>LAN DNS + *.aurora.local rewrites"]
         Caddy["🔐 Caddy<br/>:80/:443 + internal CA"]
         Authelia["🔑 Authelia<br/>forward-auth SSO/2FA"]
-        Homepage["📊 Homepage<br/>services.base.yaml + fragments"]
+        Aurora["📊 Aurora<br/>dashboard, served at the apex vhost"]
     end
 
     subgraph L5["L5 — Packages (docker-compose bundles)"]
         direction LR
         subgraph Core["core"]
             C1[caddy]
-            C2[homepage]
         end
         subgraph Privacy["privacy"]
             P1[adguard]
@@ -113,7 +112,7 @@ graph TB
     AdGuard -->|answers *.aurora.local| Caddy
     Caddy -->|forward_auth| Authelia
     Caddy -->|reverse_proxy| L5
-    Homepage -->|tiles| L5
+    Caddy -->|apex vhost| Aurora
 
     L5 --> Proj
     Proj --> DockerEng
@@ -181,7 +180,7 @@ sequenceDiagram
     Compose->>Compose: getent group docker → DOCKER_GID
     Compose->>Render: render_all(enabled_pkgs)
     Render->>Render: copy caddy.snippet → data/caddy/snippets/
-    Render->>Render: services.base.yaml + homepage.yml → services.yaml
+    Render->>Render: services.base.yaml + homepage.yml → services.yaml (vestigial: no Homepage container reads this since v0.1)
     Render->>Render: seed users_database.yml (if identity)
     Render->>Render: source pins.env (if present)
     Compose->>Compose: docker compose -p aurora -f pkg1 -f pkg2 ... up -d
