@@ -19,10 +19,17 @@ users of aurora.local (documented below).
   bundle inside the aurora.local repo, so users install it the same way
   they install any other aurora.local package.
 
-It is **not** a replacement for Homepage (which is the tile grid users
-hit day-to-day). It is the *admin plane* — install, configure, audit,
-troubleshoot. Think of Homepage as the living-room TV, this thing as
-the fuse box.
+**Update (v0.1 shipped):** Homepage was retired from `core` before this
+brief's plan was fully built out — Aurora ended up as the single
+landing page rather than sitting alongside a separate tile grid. The
+rest of this section describes the original two-dashboard plan for
+historical context; treat "Homepage" below as retired unless a later
+doc says otherwise.
+
+It was going to be a companion to Homepage (the tile grid users hit
+day-to-day), not a replacement — this, the fuse box; Homepage, the
+living-room TV. That pairing didn't survive contact with the real
+install: Aurora is the fuse box *and* the living-room TV now.
 
 Working name: **Aurora** (feel free to change).
 
@@ -122,7 +129,8 @@ succeeded.
 ### Out of scope (defer or say no)
 
 - Multi-tenant, multi-user roles. One admin, done.
-- Custom dashboards / drag-and-drop tiles. Homepage exists for that.
+- Custom dashboards / drag-and-drop tiles — that was Homepage's job
+  before it was retired in v0.1; not revisited here.
 - Log aggregation UI (users tail Docker logs; we won't reinvent that
   wheel).
 - Cluster/multi-host management.
@@ -351,9 +359,10 @@ step is skippable but marked with a warning if it is.
 8. **Review & install** — plan diff (packages to enable, services to
    start, ports to open), confirm, streaming log output during
    `scripts/up.sh`.
-9. **Done** — links to every package's landing page, big "open
-   Homepage" button, small "advanced tools" button that leads to this
-   dashboard's normal home.
+9. **Done** — links to every package's landing page and a button into
+   this dashboard's normal home. (Original draft had a separate "open
+   Homepage" button here; moot now Homepage is retired — Aurora's home
+   is the only place to land.)
 
 ### 6.2 Package management
 
@@ -667,16 +676,15 @@ right gid at container-user level.
 - Aurora's own compose.yml must use `${DOCKER_GID}` and `scripts/up.sh`
   exports it via `getent group docker`. Do NOT hardcode a number.
 
-### 11.4 Homepage's dashboard is NOT this dashboard
+### 11.4 Homepage's dashboard is NOT this dashboard — superseded
 
-Users will confuse "Homepage" (the tile grid at `aurora.local`) with
-Aurora. Be explicit:
-
-- Every Aurora screen has a "Back to dashboard" link that goes to
-  Homepage, not to Aurora's own root.
-- The Aurora vhost is `admin.$DOMAIN`, distinct.
-- README/onboarding calls them "the dashboard" (Homepage) and "the
-  admin panel" (Aurora) consistently.
+**This section described a two-dashboard world that no longer exists.**
+Homepage was retired in v0.1; Aurora is served at the apex `$DOMAIN`
+and is the only dashboard. There is no "Back to Homepage" link — see
+`docs/UX_SPEC_DASHBOARD.md` D5, which explicitly kills it — and no
+`admin.$DOMAIN` split. Kept here so a future reader understands why an
+old build might have had an "admin.$DOMAIN" vhost or a Homepage link;
+don't reintroduce either.
 
 ### 11.5 Caddy caches the config
 
@@ -694,8 +702,9 @@ on the "just installed" screen. Bury the tile grid; foreground the
 
 ### 11.7 Homepage user gid + docker.sock
 
-Any Java container that mounts docker.sock needs a matching gid,
-same as Homepage. This bit us. See 11.3.
+Any Java container that mounts docker.sock needs a matching gid — the
+same problem Homepage used to have back when it ran here. This bit us.
+See 11.3.
 
 ### 11.8 States that need reconciliation
 
@@ -956,10 +965,12 @@ Categories:
 
 Aurora lives closest to the third category (admin panel), but
 borrows heavily from the second (curated, opinionated app catalogue
-via aurora.local packages). It is deliberately **not** a tile
-dashboard — Homepage already exists in `packages/core`.
+via aurora.local packages). It was deliberately **not** a tile
+dashboard while Homepage ran in `packages/core` alongside it; now that
+Homepage is retired (v0.1), Aurora is the only dashboard on the box,
+tile grid or otherwise.
 
-### 18.1 Homepage — the tile grid already in-house
+### 18.1 Homepage — retired, but its ideas are worth stealing
 
 **One-line:** static, YAML-driven service launcher with widgets for
 100+ apps; API keys proxied through the server so the client never

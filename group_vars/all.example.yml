@@ -57,7 +57,7 @@ external_mounts: []
 # ---- package toggles ----
 # Consumed by scripts/up.sh; ansible only cares about host-level roles.
 packages_enabled:
-  - core        # always on: caddy + homepage
+  - core        # always on: caddy + Aurora dashboard
   - privacy     # adguard + gluetun
   - media       # arr stack + rdtclient + qbittorrent
   - storage     # samba + minidlna

@@ -1,8 +1,11 @@
 # core
 
-Always-on: Caddy (reverse proxy + local HTTPS) and Homepage (dashboard).
+Always-on: Caddy, the reverse proxy and local HTTPS terminator.
 
-Every other package's vhost is served under `*.$DOMAIN`.
+Every other package's vhost is served under `*.$DOMAIN`. The apex
+`$DOMAIN` itself reverse-proxies to `packages/dashboard` (Aurora) —
+Aurora is the dashboard; there is no separate tile-grid app to run
+alongside it.
 
 ## First-run
 
@@ -10,8 +13,3 @@ Every other package's vhost is served under `*.$DOMAIN`.
 2. `./scripts/up.sh core`
 3. Install Caddy's root CA on client devices for HTTPS:
    `./scripts/get-caddy-root-cert.sh`
-
-## Homepage
-
-`homepage/config/*.yaml` is bind-mounted. Edit and restart the
-container to reload; Homepage also watches for changes.

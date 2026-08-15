@@ -25,7 +25,7 @@ export const packageSeeds: Seed[] = [
       name: 'core',
       title: 'Core',
       category: 'core',
-      description: 'Caddy reverse proxy (HTTPS) + Homepage dashboard.',
+      description: 'Caddy reverse proxy (HTTPS). Aurora is the dashboard.',
       enabled: true,
       running: true,
       requires: { start_budget_seconds: 30, min_ram_mb: 256, min_disk_gb: 1 },
@@ -35,7 +35,7 @@ export const packageSeeds: Seed[] = [
       homepageUrl: 'https://caddyserver.com',
     },
     detail: {
-      readme: '# Core\n\nCaddy terminates TLS and reverse-proxies every other\npackage vhost. Homepage renders the tile grid.',
+      readme: '# Core\n\nCaddy terminates TLS and reverse-proxies every other\npackage vhost. Aurora (packages/dashboard) is the dashboard.',
       vhosts: ['aurora.local'],
       homepageTiles: 0,
     },
