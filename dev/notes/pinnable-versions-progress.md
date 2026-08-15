@@ -94,10 +94,10 @@ is the compose service name upper-cased with `-` -> `_`)
 | monitoring | cadvisor | IMAGE_CADVISOR | gcr.io/cadvisor/cadvisor:latest | done -> v0.55.1; gcr.io registry deprecated/frozen, real latest (v0.60.5) only on ghcr.io |
 | monitoring | uptime-kuma | IMAGE_UPTIME_KUMA | louislam/uptime-kuma:1 | done -> 1.23.17 (final 1.x; project now on 2.x) |
 | notes | silverbullet | IMAGE_SILVERBULLET | ghcr.io/silverbulletmd/silverbullet:latest | done -> 2.10.0 (:latest already drifted from it; multi-arch) |
-| photos | immich-server | (IMMICH_VERSION) | ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release} | pending — already parameterised via .env, not a hardcoded tag |
-| photos | immich-ml | (IMMICH_VERSION) | ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release} | pending — must match immich-server exactly |
-| photos | immich-redis | IMAGE_IMMICH_REDIS | docker.io/redis:6.2-alpine | pending |
-| photos | immich-postgres | IMAGE_IMMICH_POSTGRES | docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0 | pending |
+| photos | immich-server | (IMMICH_VERSION) | ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release} | done -> IMMICH_VERSION=v3.1.0 (takes effect without --apply; multi-arch) |
+| photos | immich-ml | (IMMICH_VERSION) | ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release} | done -> matches v3.1.0 exactly (multi-arch) |
+| photos | immich-redis | IMAGE_IMMICH_REDIS | docker.io/redis:6.2-alpine | done -> 6.2.23-alpine; Redis 6 is EOL, Immich now recommends valkey:8 |
+| photos | immich-postgres | IMAGE_IMMICH_POSTGRES | docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0 | done -> digest-froze deprecated image; Immich docs give exact VectorChord replacement |
 | privacy | adguard | IMAGE_ADGUARD | adguard/adguardhome:latest | done -> v0.107.78 (security release, multi-arch incl. arm64) |
 | privacy | gluetun | IMAGE_GLUETUN | qmcgaw/gluetun:latest | done -> v3.41.1 (v3.42 imminent per maintainer, re-check soon) |
 | storage | samba | IMAGE_SAMBA | dperson/samba:latest | done -> NO SAFE PIN (abandoned ~5yr, digest-froze latest instead) |
