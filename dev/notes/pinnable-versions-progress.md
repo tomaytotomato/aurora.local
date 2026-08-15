@@ -78,7 +78,7 @@ is the compose service name upper-cased with `-` -> `_`)
 | home-automation | mosquitto | IMAGE_MOSQUITTO | eclipse-mosquitto:2 | done -> 2.1.2-alpine (multi-arch) |
 | home-automation | zigbee2mqtt | IMAGE_ZIGBEE2MQTT | koenkk/zigbee2mqtt:latest | done -> 2.13.0 (multi-arch incl. arm64) |
 | identity | authelia | IMAGE_AUTHELIA | authelia/authelia:latest | done -> 4.39.20 (multi-arch incl. arm64) |
-| jellyfin | jellyfin | IMAGE_JELLYFIN | lscr.io/linuxserver/jellyfin:latest | pending |
+| jellyfin | jellyfin | IMAGE_JELLYFIN | lscr.io/linuxserver/jellyfin:latest | done -> 10.11.11 (multi-arch) |
 | media | sonarr | IMAGE_SONARR | lscr.io/linuxserver/sonarr:latest | done -> 4.0.19 (8d old, multi-arch) |
 | media | radarr | IMAGE_RADARR | lscr.io/linuxserver/radarr:latest | done -> version-6.3.0.10514 (13d old, multi-arch) |
 | media | prowlarr | IMAGE_PROWLARR | lscr.io/linuxserver/prowlarr:latest | done -> version-2.5.2.5491 (10d old, multi-arch) |
@@ -87,7 +87,7 @@ is the compose service name upper-cased with `-` -> `_`)
 | media | flaresolverr | IMAGE_FLARESOLVERR | ghcr.io/flaresolverr/flaresolverr:latest | done -> v3.5.0 (active, not abandoned, multi-arch) |
 | media | rdtclient | IMAGE_RDTCLIENT | rogerfar/rdtclient:latest | done -> 2.0.142 (GH Releases page stale, Docker tags active; multi-arch) |
 | media | qbittorrent | IMAGE_QBITTORRENT | lscr.io/linuxserver/qbittorrent:latest | done -> 5.2.3 (5d old, multi-arch) |
-| memos | memos | IMAGE_MEMOS | neosmemo/memos:stable | pending |
+| memos | memos | IMAGE_MEMOS | neosmemo/memos:stable | done -> 0.30.0 (multi-arch) |
 | monitoring | prometheus | IMAGE_PROMETHEUS | prom/prometheus:latest | pending |
 | monitoring | grafana | IMAGE_GRAFANA | grafana/grafana:latest | pending |
 | monitoring | node-exporter | IMAGE_NODE_EXPORTER | prom/node-exporter:latest | pending |
