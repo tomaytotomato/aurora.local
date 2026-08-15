@@ -12,12 +12,21 @@ import AuroraCredit from '@/components/AuroraCredit.vue';
 // outside-card headers. Those headers carry the `.on-photo` class so
 // their text stays legible over the photo in either theme. See
 // docs/STYLEGUIDE.md.
+//
+// Responsive (tablet fix): the fixed 240px sidebar column used to apply
+// at every width, so a 768px portrait tablet lost a third of its width
+// to the rail before any content rendered. Below `lg` (1024px — the
+// same "sidebar becomes a top bar" idea OnboardingShell.vue already
+// uses at 900px) the grid drops to a single column and Sidebar.vue
+// switches itself to a horizontal top bar. At `lg` and up (desktop, and
+// tablet landscape at/above the base 1024px iPad) the grid — and
+// Sidebar — look exactly as before.
 </script>
 
 <template>
   <AuroraBackground scrim="strong" />
 
-  <div class="min-h-screen grid grid-cols-[240px_1fr] relative z-10">
+  <div class="min-h-screen grid grid-cols-1 lg:grid-cols-[240px_1fr] relative z-10">
     <Sidebar />
     <div class="flex flex-col min-h-screen">
       <TopBar />

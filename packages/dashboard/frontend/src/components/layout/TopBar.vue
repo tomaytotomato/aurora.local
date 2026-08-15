@@ -61,8 +61,19 @@ async function signOut(): Promise<void> {
 <template>
   <header class="border-b border-border/60 bg-background">
     <div class="content h-14 grid grid-cols-3 items-center">
+      <!--
+        Responsive (tablet fix): a CSS grid item's default min-width is
+        `auto` (≈ max-content), not 0 — so a long hostname/domain string
+        here (identity is a grid track, not a flex child) could force its
+        1fr track wider than the viewport instead of wrapping/truncating,
+        pushing the whole header into horizontal overflow on a narrow
+        tablet. `min-w-0` lets the track shrink below its content's
+        natural width; `truncate` gives the text somewhere to go instead
+        of wrapping onto a second line that would blow through the fixed
+        `h-14` row height.
+      -->
       <div
-        class="font-mono text-xs text-muted-foreground justify-self-start"
+        class="font-mono text-xs text-muted-foreground justify-self-start min-w-0 truncate"
         data-test="topbar-identity"
         data-region="identity"
       >
@@ -84,7 +95,7 @@ async function signOut(): Promise<void> {
       </div>
 
       <div
-        class="flex items-center gap-2 justify-self-end text-xs text-muted-foreground"
+        class="flex items-center gap-2 justify-self-end text-xs text-muted-foreground min-w-0"
         data-region="user"
       >
         <!--

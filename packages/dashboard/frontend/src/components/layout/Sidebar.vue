@@ -125,9 +125,23 @@ watch(() => route.path, (path, prev) => {
 </script>
 
 <template>
-  <aside class="border-r border-border/60 bg-card flex flex-col">
-    <div class="px-6 py-5 border-b border-border/60">
-      <RouterLink to="/" class="flex items-center gap-2.5 no-underline">
+  <!--
+    Responsive (tablet fix): below `lg` this renders as a horizontal top
+    bar instead of a full-height vertical rail — AppShell.vue drops its
+    grid to a single column at the same breakpoint, so there's no fixed-
+    width column stealing space from page content on a portrait tablet.
+    `lg:` classes below restore the original vertical-rail markup
+    unchanged for desktop and tablet-landscape widths.
+  -->
+  <aside
+    class="border-border/60 bg-card flex flex-col
+           border-b lg:border-b-0 lg:border-r"
+  >
+    <div
+      class="flex items-center justify-between gap-4 px-4 py-3 border-b border-border/60
+             lg:block lg:px-6 lg:py-5"
+    >
+      <RouterLink to="/" class="flex items-center gap-2.5 no-underline shrink-0">
         <svg viewBox="0 0 32 32" class="w-6 h-6" aria-hidden="true">
           <!-- iter-3 theme-flip: bg uses --color-ink (dark in light mode,
                near-white in dark mode); stroke + dot use the inverting
@@ -138,23 +152,33 @@ watch(() => route.path, (path, prev) => {
         </svg>
         <span class="font-serif text-lg leading-none text-foreground">Aurora</span>
       </RouterLink>
-      <div class="mt-1 eyebrow">admin plane</div>
+      <!-- Decorative kicker — hidden below `sm` to keep the collapsed top
+           bar to one line on a phone-narrow viewport. Every tablet width
+           in scope (>=768px) is above `sm` (640px) so it still shows. -->
+      <div class="eyebrow hidden sm:block lg:mt-1">admin plane</div>
     </div>
 
-    <nav class="flex-1 py-4 px-3">
+    <nav
+      class="flex flex-row items-center gap-1 overflow-x-auto px-3 py-2
+             lg:flex-1 lg:flex-col lg:items-stretch lg:gap-0 lg:overflow-visible lg:py-4"
+    >
       <RouterLink
         v-for="item in visibleNav"
         :key="item.to"
         :to="item.to"
-        class="flex items-center gap-3 px-3 py-2 rounded-md text-sm no-underline transition-colors duration-150"
+        class="flex items-center gap-2 px-3 py-2 rounded-md text-sm no-underline
+               transition-colors duration-150 shrink-0 whitespace-nowrap
+               lg:gap-3 lg:w-full lg:shrink lg:whitespace-normal"
         :class="isActive(item.to)
           ? 'bg-muted text-foreground'
           : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'"
       >
-        <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
           <path :d="item.icon" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <span class="flex-1">{{ item.label }}</span>
+        <!-- Labels stay visible through the whole tablet range (>=640px);
+             only a phone-narrow top bar drops to icon-only. -->
+        <span class="hidden sm:inline lg:flex-1">{{ item.label }}</span>
         <!--
           iter-32 sidebar badge for /security nudge. Only rendered when
           the section has open findings so a clean box shows no chrome.
@@ -174,7 +198,9 @@ watch(() => route.path, (path, prev) => {
       </RouterLink>
     </nav>
 
-    <div class="px-6 py-5 border-t border-border/60">
+    <!-- Documentation footer is non-essential chrome; hidden below `lg`
+         so the collapsed top bar stays compact on tablet. -->
+    <div class="hidden lg:block px-6 py-5 border-t border-border/60">
       <div class="eyebrow mb-2">Documentation</div>
       <a href="/docs/DASHBOARD_BRIEF.md" class="text-xs text-muted-foreground">Brief</a>
       <span class="mx-2 text-muted-foreground">·</span>

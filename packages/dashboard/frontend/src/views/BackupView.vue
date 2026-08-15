@@ -272,7 +272,12 @@ function onTabChange(next: Tab): void {
     </div>
 
     <!-- loading -->
-    <div v-if="loading" class="grid grid-cols-4 gap-4" data-state="loading">
+    <!-- Tablet fix: 4 equal columns of a stat card (eyebrow + title +
+         badge/paragraph) get crushed to ~100px of usable width once the
+         p-7 card padding is subtracted from a tablet-width column. Two
+         columns up to `lg` keeps every card readable; `lg`+ (desktop,
+         tablet landscape at the 1024px boundary) is unchanged. -->
+    <div v-if="loading" class="grid grid-cols-2 lg:grid-cols-4 gap-4" data-state="loading">
       <Card v-for="n in 4" :key="`sk-${n}`">
         <Skeleton class="h-3 w-16 mb-2" />
         <Skeleton class="h-5 w-24 mb-3" />
@@ -355,7 +360,8 @@ function onTabChange(next: Tab): void {
 
       <!-- ── Overview ────────────────────────────────────────────── -->
       <div v-if="tab === 'overview' && status">
-        <div class="grid grid-cols-4 gap-4 mb-6">
+        <!-- Same tablet fix as the loading skeleton above. -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card data-test="backup-last-run">
             <div class="eyebrow mb-1">Last run</div>
             <h3 class="card-title mb-2">{{ whenLabel(status.lastRunAt) }}</h3>

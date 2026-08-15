@@ -58,7 +58,12 @@ const appsNav = computed(() => {
     />
 
 
-    <div v-if="packages.loading && !packages.list.length" class="grid grid-cols-3 gap-6">
+    <!-- Tablet fix: three p-8 cards with a full description paragraph
+         (line-clamp-3) need more than the ~150px of column width left
+         over at 768–1023px once gaps and card padding come out of a
+         3-column grid. Two columns from `sm` up keeps the description
+         readable; `lg`+ restores the full 3-column desktop grid. -->
+    <div v-if="packages.loading && !packages.list.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
       <Card v-for="n in 3" :key="`skeleton-${n}`" class="h-full p-8">
         <div class="flex items-start justify-between mb-3">
           <div class="space-y-2">
@@ -81,7 +86,8 @@ const appsNav = computed(() => {
       No core apps found.
     </Card>
 
-    <div v-else class="grid grid-cols-3 gap-6">
+    <!-- Same tablet fix as the loading skeleton above. -->
+    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
       <router-link
         v-for="pkg in core"
         :key="pkg.name"
