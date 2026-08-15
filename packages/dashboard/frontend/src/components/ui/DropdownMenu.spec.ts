@@ -6,13 +6,18 @@ import DropdownMenuSeparator from './DropdownMenuSeparator.vue';
 
 /**
  * C10 iter-20: shadcn-vue DropdownMenu + Item + Separator smoke tests.
+ * iter-overlays-1: content now teleports to <body> (see DropdownMenu.vue
+ * for why — it used to clip inside any `overflow-x-auto`/`overflow-
+ * hidden` ancestor, e.g. the Table wrapper), so assertions on the menu
+ * content query `document` rather than the wrapper, matching the
+ * pattern Dialog.spec.ts already uses for its own Teleport.
  *
  * Covers:
  *   - Trigger toggles content visibility.
  *   - aria-haspopup + aria-expanded track state.
  *   - Click-outside closes the menu.
  *   - ESC closes the menu.
- *   - Alignment prop chooses left-0 vs right-0.
+ *   - Alignment prop sets data-align + the right transform class.
  *   - MenuItem emits select on click, respects disabled, applies
  *     destructive tokens.
  *   - Separator is role=separator.
@@ -49,7 +54,7 @@ describe('DropdownMenu', () => {
   it('renders trigger and hides content initially', () => {
     const w = mountMenu();
     expect(w.find('[data-test="trigger"]').exists()).toBe(true);
-    expect(w.find('[role="menu"]').exists()).toBe(false);
+    expect(document.querySelector('[role="menu"]')).toBeFalsy();
     const trig = w.get('[data-slot="dropdown-trigger"]');
     expect(trig.attributes('aria-haspopup')).toBe('menu');
     expect(trig.attributes('aria-expanded')).toBe('false');
@@ -59,7 +64,7 @@ describe('DropdownMenu', () => {
   it('trigger click opens the menu and flips aria-expanded', async () => {
     const w = mountMenu();
     await w.get('[data-slot="dropdown-trigger"]').trigger('click');
-    expect(w.find('[role="menu"]').exists()).toBe(true);
+    expect(document.querySelector('[role="menu"]')).toBeTruthy();
     expect(w.get('[data-slot="dropdown-trigger"]').attributes('aria-expanded')).toBe('true');
     w.unmount();
   });
@@ -69,19 +74,19 @@ describe('DropdownMenu', () => {
     const trig = w.get('[data-slot="dropdown-trigger"]');
     await trig.trigger('click');
     await trig.trigger('click');
-    expect(w.find('[role="menu"]').exists()).toBe(false);
+    expect(document.querySelector('[role="menu"]')).toBeFalsy();
     w.unmount();
   });
 
   it('click outside closes the menu', async () => {
     const w = mountMenu();
     await w.get('[data-slot="dropdown-trigger"]').trigger('click');
-    expect(w.find('[role="menu"]').exists()).toBe(true);
+    expect(document.querySelector('[role="menu"]')).toBeTruthy();
 
     // Dispatch a click on document.body (outside the root).
     document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushPromises();
-    expect(w.find('[role="menu"]').exists()).toBe(false);
+    expect(document.querySelector('[role="menu"]')).toBeFalsy();
     w.unmount();
   });
 
@@ -90,26 +95,44 @@ describe('DropdownMenu', () => {
     await w.get('[data-slot="dropdown-trigger"]').trigger('click');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await flushPromises();
-    expect(w.find('[role="menu"]').exists()).toBe(false);
+    expect(document.querySelector('[role="menu"]')).toBeFalsy();
     w.unmount();
   });
 
-  it('align="left" applies left-0 to content, default is right-0', async () => {
+  it('content is teleported to <body>, escaping the wrapper root entirely', async () => {
+    const w = mountMenu();
+    await w.get('[data-slot="dropdown-trigger"]').trigger('click');
+    // The whole point of the teleport fix: the menu must NOT be a
+    // descendant of the component root (which is what an `overflow-
+    // hidden`/`overflow-x-auto` ancestor like the Table wrapper would
+    // clip against). It must be a direct-ish child of <body> instead.
+    const menu = document.querySelector('[role="menu"]') as HTMLElement;
+    expect(menu).toBeTruthy();
+    expect(w.element.contains(menu)).toBe(false);
+    expect(document.body.contains(menu)).toBe(true);
+    w.unmount();
+  });
+
+  it('align sets data-align + chooses the right-aligning transform', async () => {
     const r = mountMenu();
     await r.get('[data-slot="dropdown-trigger"]').trigger('click');
-    expect(r.get('[role="menu"]').classes().join(' ')).toContain('right-0');
+    const rightMenu = document.querySelector('[role="menu"]') as HTMLElement;
+    expect(rightMenu.getAttribute('data-align')).toBe('right');
+    expect(rightMenu.className).toContain('-translate-x-full');
     r.unmount();
 
     const l = mountMenu({ align: 'left' });
     await l.get('[data-slot="dropdown-trigger"]').trigger('click');
-    expect(l.get('[role="menu"]').classes().join(' ')).toContain('left-0');
+    const leftMenu = document.querySelector('[role="menu"]') as HTMLElement;
+    expect(leftMenu.getAttribute('data-align')).toBe('left');
+    expect(leftMenu.className).not.toContain('-translate-x-full');
     l.unmount();
   });
 
   it('menu content is styled with shadcn popover tokens', async () => {
     const w = mountMenu();
     await w.get('[data-slot="dropdown-trigger"]').trigger('click');
-    const cls = w.get('[role="menu"]').classes().join(' ');
+    const cls = (document.querySelector('[role="menu"]') as HTMLElement).className;
     expect(cls).toContain('bg-popover');
     expect(cls).toContain('text-popover-foreground');
     expect(cls).toContain('border-border');

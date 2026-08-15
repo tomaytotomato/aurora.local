@@ -204,7 +204,10 @@ describe('UsersView — role update', () => {
     const { w } = await mountUsersView('admin');
     await w.get('[data-test="users-row-menu-trigger-alice"]').trigger('click');
     await settle();
-    await w.get('[data-test="users-row-edit-alice"]').trigger('click');
+    // DropdownMenu content teleports to <body> (iter-overlays-1, so the
+    // menu isn't clipped by the Table wrapper's overflow-x-auto), so the
+    // item lives outside `w`'s root and has to be found via document.
+    document.querySelector<HTMLElement>('[data-test="users-row-edit-alice"]')!.click();
     await settle();
     // The Dialog teleports its panel to <body>. `data-test` on the
     // component tag doesn't fall through the Teleport wrapper, so
@@ -230,7 +233,8 @@ describe('UsersView — role update', () => {
     const { w } = await mountUsersView('admin');
     await w.get('[data-test="users-row-menu-trigger-bruce"]').trigger('click');
     await settle();
-    await w.get('[data-test="users-row-edit-bruce"]').trigger('click');
+    // Teleported menu content — see the alice case above.
+    document.querySelector<HTMLElement>('[data-test="users-row-edit-bruce"]')!.click();
     await settle();
 
     document.querySelector<HTMLElement>('[data-test="users-edit-submit"]')!.click();
@@ -255,7 +259,8 @@ describe('UsersView — delete', () => {
     const { w } = await mountUsersView('admin');
     await w.get('[data-test="users-row-menu-trigger-alice"]').trigger('click');
     await settle();
-    await w.get('[data-test="users-row-delete-alice"]').trigger('click');
+    // Teleported menu content — see the edit-role case above.
+    document.querySelector<HTMLElement>('[data-test="users-row-delete-alice"]')!.click();
     await settle();
 
     // Same Teleport shape as the edit Dialog — query by known slot.
