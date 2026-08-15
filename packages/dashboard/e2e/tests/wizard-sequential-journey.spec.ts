@@ -50,26 +50,19 @@ test.describe('wizard sequential journey (real UI, no API shortcuts)', () => {
     }
     await continueBtn().click();
 
-    // Domain
+    // Domain — advancing here now also seeds .state.yml's enabled[] with
+    // the mandatory baseline (core, storage); see OnboardingDomain.vue.
+    // The interactive package-picker step that used to sit here is gone
+    // (2026-08-15) — everything beyond the mandatory set is added later
+    // from the Apps catalogue, not chosen mid-wizard.
     await page.waitForURL(/\/onboarding\/domain/, { timeout: 10_000 });
     await continueBtn().click();
 
-    // Packages — pick the "Media server" preset explicitly. Accepting
-    // whatever happens to be pre-selected is how the first cut of this
-    // spec passed without noticing anything was wrong: on a box that
-    // already has `core` running from a previous spec, the pre-selected
-    // set can end up being exactly what's already up, `/install` reports
-    // nothing new to start, the Done page never renders the "Start
-    // services" CTA at all, and the launch assertion below is silently
-    // skipped. Forcing a preset that includes packages this box has
-    // never brought up (privacy/media/storage) guarantees there is
-    // always something for "Start services" to actually do.
-    await page.waitForURL(/\/onboarding\/packages/, { timeout: 10_000 });
-    await page.getByRole('button', { name: /^Media server$/ }).click();
-    await page.getByRole('button', { name: /^Continue with \d+ packages?$/ }).click();
-
-    // SSO — router order is welcome/admin/domain/packages/sso/secrets/dns/tls/review/done.
-    // Leave it off; just move on.
+    // SSO — router order is welcome/admin/domain/sso/secrets/dns/tls/review/done.
+    // Accept the default (opt in): this is what guarantees `identity` is
+    // part of the enabled set, so there is always something beyond core/
+    // storage for "Start services" below to actually bring up on a box
+    // that already has core running from a previous spec.
     await page.waitForURL(/\/onboarding\/sso/, { timeout: 10_000 });
     await continueBtn().click();
 
