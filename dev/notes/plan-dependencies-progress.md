@@ -69,15 +69,24 @@ and the real install never disagree.
       core) and log auto-added dependencies in `applied`.
 - [x] `mvn test` green at 684/684 with the implementation in place, before
       adding any new tests.
-- [ ] Add tests: unit tests for the resolver algorithm (transitive, cycle,
-      dangling, self-cycle) + integration tests through `/api/onboarding/plan`
-      and `/install` (real fake-repo package `media` for the depends_on/
-      recommends cases; per-test synthetic manifests written via
-      `writeRepoFile` for cycle/dangling, scoped to that test only — the
-      shared `fake-repo` fixture itself is left untouched since 11 other
-      integration test classes reuse it).
-- [ ] Final full `mvn test` run, record before/after count.
-- [ ] Commit.
+- [x] Added `OnboardingServiceDependencyResolutionTests` (19 pure-helper
+      unit tests: transitive resolution, self-cycle, 2-node cycle, cycle not
+      blocking unrelated packages, dangling deps, warning copy text,
+      `prettyPackageName`). No filesystem/Spring context — `Package` records
+      built in memory since the resolver only needs a `Map<String, Package>`.
+- [x] Added `OnboardingPlanDependencyIntegrationTest` (6 tests through the
+      real `/api/onboarding/plan` and `/install` HTTP endpoints, real SQLite,
+      `AuroraIntegrationTest` harness). Uses the *existing* fake-repo
+      `media -> core` / `media -> privacy` for the depends_on/recommends
+      cases; writes synthetic `loop-a`/`loop-b`/`broken`/`leaf`/`privacy`
+      manifests via `writeRepoFile` for the cycle/dangling/transitive/
+      already-satisfied cases, scoped to each test's own repo copy (wiped
+      and reseeded before every test) — the shared `fake-repo` fixture used
+      by 11 other integration test classes was never edited.
+- [x] Full `mvn test`: 684 before this work, 703 after the unit tests,
+      709 after the integration tests. All green throughout, including
+      `OpenApiConformanceTest` (no openapi.yaml change was needed).
+- [x] Commit.
 
 ## Real manifests found
 
