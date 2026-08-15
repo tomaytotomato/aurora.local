@@ -56,6 +56,54 @@ weak_value() {
 
 require_cmd openssl
 
+# --------------------------------------------------------------------
+# recreate_running_package <pkg> <envfile>
+#
+# Docker Compose only evaluates a compose file's ${VAR} interpolation
+# once, at container-create time. `docker compose restart` (or
+# `docker restart <container>`) reuses the container exactly as it was
+# created, so a secret rewritten in packages/<pkg>/.env after the
+# container is already up never reaches the running process on its
+# own — the container just keeps the old value forever. This recreates
+# the one package whose .env just changed (scoped to its own
+# compose.yml, no --remove-orphans) so a rotated secret actually lands
+# in the running config instead of silently going stale.
+#
+# No-op (with a warning, never fatal — this is a report-first script)
+# when docker isn't available, or when the package has no containers
+# up yet: nothing to recreate on a box that hasn't been brought up.
+# --------------------------------------------------------------------
+recreate_running_package() {
+  local pkg="$1" envf="$2"
+  local compose_file="$REPO/packages/$pkg/compose.yml"
+  [[ -f "$compose_file" ]] || return 0
+
+  if ! has_cmd docker; then
+    warn "  docker not found; $pkg/.env was rotated on disk only — recreate its container(s) by hand"
+    return 0
+  fi
+
+  local running
+  running="$(docker compose -p aurora -f "$compose_file" ps -q 2>/dev/null)" || running=""
+  if [[ -z "$running" ]]; then
+    dim "  $pkg is not currently up; the rotated secret(s) take effect on the next up.sh"
+    return 0
+  fi
+
+  log "  recreating $pkg container(s) so the rotated secret(s) reach the running config"
+  if (
+    set -a
+    # shellcheck source=/dev/null
+    . "$envf"
+    set +a
+    docker compose -p aurora -f "$compose_file" up -d --force-recreate
+  ) >/dev/null; then
+    ok "  $pkg recreated"
+  else
+    warn "  automatic recreate failed — run by hand: docker compose -p aurora -f packages/$pkg/compose.yml up -d --force-recreate"
+  fi
+}
+
 FOUND=0
 for envf in "$REPO"/packages/*/.env; do
   [[ -f "$envf" ]] || continue
@@ -92,9 +140,14 @@ for envf in "$REPO"/packages/*/.env; do
         # sed with | as delim (hex has no |). Only first match per key.
         sed -i "0,/^${k}=/{s|^${k}=.*|${k}=${newv}|}" "$envf"
       done
-      ok "applied; diff vs backup:"
-      diff -u "$envf.bak" "$envf" || true
+      # Report which keys changed, never the values. A `diff -u` here
+      # would print the freshly-rotated secret in plain text to
+      # whatever terminal or log captures this script's stdout —
+      # exactly the leak rotation exists to prevent.
+      ok "applied; keys changed: $(printf '%s ' "${weak_here[@]%%=*}")"
       echo
+
+      recreate_running_package "$pkg" "$envf"
     fi
   fi
 done
