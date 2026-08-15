@@ -3,9 +3,11 @@
 #                                                             #
 # Bind-mounted read-only into the container at                #
 #   /config/configuration.yml                                 #
-# Secrets arrive via env vars (AUTHELIA_JWT_SECRET etc.)      #
-# — Authelia auto-detects them via its documented env-var-    #
-# secret convention.                                          #
+# Secrets arrive via env vars. Session secret and storage      #
+# encryption key rely on Authelia's own env-var-secret         #
+# convention; the JWT secret is set explicitly below (as       #
+# AURORA_IDENTITY_JWT_SECRET, not AUTHELIA_JWT_SECRET — see    #
+# compose.yml for why the container-facing name differs).      #
 #                                                             #
 # Phase D (Aurora dashboard) manages the users_database.yml   #
 # file — see AutheliaService. Do NOT hand-edit that file, it  #
@@ -25,11 +27,22 @@ log:
 # Signs reset / enrollment tokens. Reuses the JWT secret; the two
 # subject slots key off different intents so a leaked reset link
 # can't be replayed as a session cookie.
+#
+# Reads AURORA_IDENTITY_JWT_SECRET, not AUTHELIA_JWT_SECRET. The
+# latter is on Authelia's own fixed list of legacy "environment
+# secret" names and auto-maps onto the deprecated top-level
+# jwt_secret key with no template involved — a second mechanism
+# acting on the same value as this key. Authelia won't start with
+# both present, even when they agree: it refuses to reconcile them
+# and this field ends up unset ("option 'jwt_secret' is required").
+# compose.yml renames the container-facing env var to sidestep the
+# collision; packages/identity/.env still calls the secret
+# AUTHELIA_JWT_SECRET everywhere outside the container.
 identity_validation:
   reset_password:
     jwt_lifespan: 5m
     jwt_algorithm: HS256
-    jwt_secret: '{{ env "AUTHELIA_JWT_SECRET" }}'
+    jwt_secret: '{{ env "AURORA_IDENTITY_JWT_SECRET" }}'
 
 # ---- Authentication backend ----------------------------------
 # File-based. users_database.yml is projected from Aurora's users
