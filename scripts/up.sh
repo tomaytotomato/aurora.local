@@ -173,6 +173,20 @@ render_all "${pkgs[@]}"
 # mid-invocation and every other package is left "Created" but never
 # started.
 #
+# Two different call sites in the dashboard backend independently
+# invented a marker for "this process is running inside the dashboard's
+# own container": LaunchService sets AURORA_LAUNCHED_BY for the
+# onboarding wizard's Launch step; JobService.submitCommand sets
+# AURORA_INVOKED_BY for every other in-container job it runs (SnapRAID
+# parity sync/scrub today, package enable/disable/update once those
+# land). Both mean exactly the same thing to this script, so the guard
+# below reacts to whichever is set rather than picking a winner and
+# leaving the other call site free to reintroduce this exact bug under
+# a name nobody's guarding against.
+self_launch_marker=0
+[[ "${AURORA_LAUNCHED_BY:-}" == "aurora-dashboard" ]] && self_launch_marker=1
+[[ "${AURORA_INVOKED_BY:-}" == "aurora-dashboard" ]] && self_launch_marker=1
+
 # Fix: keep every -f file exactly as assembled above (dropping the
 # dashboard's own would make --remove-orphans below treat its running
 # container as an orphan and delete it, which is worse than the bug),
@@ -182,8 +196,7 @@ render_all "${pkgs[@]}"
 # never touched, regardless of whether its config changed.
 up_target_services=()
 self_launch=0
-if [[ "${AURORA_LAUNCHED_BY:-}" == "aurora-dashboard" ]] \
-    && [[ " ${pkgs[*]} " == *" dashboard "* ]]; then
+if [[ $self_launch_marker -eq 1 ]] && [[ " ${pkgs[*]} " == *" dashboard "* ]]; then
   self_launch=1
   self_compose="$REPO/packages/dashboard/compose.yml"
   mapfile -t self_services < <(docker compose -f "$self_compose" config --services)
@@ -193,7 +206,7 @@ if [[ "${AURORA_LAUNCHED_BY:-}" == "aurora-dashboard" ]] \
     for s in "${self_services[@]}"; do [[ "$svc" == "$s" ]] && is_self=1 && break; done
     [[ $is_self -eq 0 ]] && up_target_services+=("$svc")
   done
-  log_step "self-launch guard: excluding dashboard's own service(s) [${self_services[*]}] from 'up -d' (AURORA_LAUNCHED_BY=aurora-dashboard)"
+  log_step "self-launch guard: excluding dashboard's own service(s) [${self_services[*]}] from 'up -d' (invoked from inside its own container)"
 
   # A recreate interrupted this way leaves compose's rename-then-remove
   # dance half-done: the old container is renamed out of the way but
