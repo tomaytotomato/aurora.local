@@ -169,3 +169,52 @@ compose file: `media` is the only `Disk` share exported (`IPC$` is
 Samba's own internal service, not a data share). The env-var swap was
 sufficient — no share was dropped, and no mounted `smb.conf` was
 needed.
+
+### Authenticate, write, read back — the real proof
+
+`smbclient` was missing from the Debian testbed image
+(`apt-get install -y smbclient`). Credentials came straight from the
+package's own generated `.env` on the VM (`SAMBA_USER=bruce`,
+`SAMBA_PASS=<bootstrap-generated secret>` — bootstrap.sh generates a
+real password per install, not the `changeme` compose default).
+
+Listing shares, authenticated:
+
+```
+$ smbclient -L //127.0.0.1/ -U bruce%<pass> -m SMB3
+	Sharename       Type      Comment
+	---------       ----      -------
+	media           Disk      Shared
+	IPC$            IPC       IPC Service (samba)
+SMB1 disabled -- no workgroup available
+```
+
+Write a file, list it, read it back as a separate operation, diff the
+two copies:
+
+```
+--- smbclient put ---
+putting file /tmp/roundtrip-src.txt as \roundtrip-proof.txt (49.8 kb/s) (average 49.8 kb/s)
+--- smbclient ls after put ---
+  roundtrip-proof.txt                 A       51  Sat Aug 15 19:41:01 2026
+		41072836 blocks of size 1024. 33826464 blocks available
+--- smbclient get ---
+getting file \roundtrip-proof.txt of size 51 as /tmp/roundtrip-dst.txt (510000.0 KiloBytes/sec) (average inf KiloBytes/sec)
+--- downloaded file content ---
+aurora samba swap round-trip proof - dockurr/samba
+--- diff (empty output = identical) ---
+MATCH: content is byte-identical
+```
+
+And confirmed the write landed on the real host-side bind mount, not
+just inside the container:
+
+```
+$ sudo ls -la /home/bruce/media/
+-rwxr--r-- 1 bruce lima    51 Aug 15 19:41 roundtrip-proof.txt
+$ sudo cat /home/bruce/media/roundtrip-proof.txt
+aurora samba swap round-trip proof - dockurr/samba
+```
+
+Authentication, write, and read are all proven against the real
+container, not assumed from a directory listing.
