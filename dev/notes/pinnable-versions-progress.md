@@ -15,6 +15,24 @@ and `scripts/pin.sh --apply` (not run by this task) would rewrite
 home for this data — no new manifest field, no schema change, nothing
 new for yamllint to check (`pins.env` is a shell env file, not YAML).
 
+**Correction after starting (important):** `.gitignore` line 49 excludes
+`packages/*/pins.env` outright — comment: "Written by `scripts/pin.sh
+--apply`; sourced by `scripts/lib/render.sh`." It is host-local generated
+state, like a lock file, and was never meant to be committed. Writing the
+curated research straight into `pins.env` would have made it invisible to
+git — the opposite of "the next person can re-derive it."
+
+The repo already solves exactly this problem for `.env`: `.env` is
+gitignored, `!.env.example` is explicitly kept and is the checked-in
+template every package is contractually required to ship
+(`docs/PACKAGE_CONTRACT.md`). This work mirrors that pattern one level
+down: curated pins live in `packages/<pkg>/pins.env.example` (committed),
+and the real `packages/<pkg>/pins.env` stays exactly what it already is —
+gitignored, host-local, produced by `scripts/pin.sh`. No `.gitignore`
+change was needed (the ignore pattern is `pins.env`, not `pins.env.*`, so
+`.example` files were never matched). No new manifest field, no schema
+change, nothing new for yamllint (still a shell env file).
+
 Deviation from what `scripts/pin.sh --refresh` currently writes: that
 script's `resolve_digest()` throws the tag away (`repo="${ref%%:*}"`),
 writing `repo@sha256:digest` with no human-readable tag. That contradicts
