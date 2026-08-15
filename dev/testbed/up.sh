@@ -78,19 +78,32 @@ cmd_sync() {
   # persistent storage. Deleting that on a testbed costs a rebuild. The
   # same command pointed at a real box would take the photo library with
   # it.
+  # rsync exits 24 ("some files vanished before they could be transferred")
+  # when a file disappears mid-copy. Under `set -e` that aborts the whole
+  # install, which is absurd for a warning. It happens routinely here
+  # because agents create and tear down git worktrees while a sync is
+  # running, so .git/worktrees churns underneath rsync. Excluded below,
+  # and 24 tolerated as the warning it is; every other code still fails.
   limactl shell "$VM" -- sudo install -d -o bruce -g bruce "$GUEST_REPO"
+  local rc=0
   limactl shell "$VM" -- sudo rsync -a --delete \
     --exclude 'node_modules/' \
     --exclude 'target/' \
     --exclude 'dist/' \
     --exclude '.claude/worktrees/' \
+    --exclude '.git/worktrees/' \
     --exclude '.env' \
     --exclude '.state.yml' \
     --exclude 'inventory.ini' \
     --exclude 'data/' \
     --exclude 'packages/dashboard/state/' \
     --chown=bruce:bruce \
-    "$REPO/" "$GUEST_REPO/"
+    "$REPO/" "$GUEST_REPO/" || rc=$?
+  if [[ $rc -ne 0 && $rc -ne 24 ]]; then
+    bad "rsync failed (exit $rc)"
+    return "$rc"
+  fi
+  [[ $rc -eq 24 ]] && step "rsync reported vanished files (exit 24), continuing"
   ok "synced $(as_bruce "du -sh $GUEST_REPO | cut -f1")"
 }
 
