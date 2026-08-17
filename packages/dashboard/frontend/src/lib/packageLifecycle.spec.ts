@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveStatusLight, packageActionSlots, type ActionSlot } from './packageLifecycle';
+import { deriveStatusLight, isInstalledView, packageActionSlots, type ActionSlot } from './packageLifecycle';
 
 function find(slots: ActionSlot[], action: ActionSlot['action']): ActionSlot {
   const slot = slots.find((s) => s.action === action);
@@ -69,6 +69,21 @@ describe('packageActionSlots', () => {
         }
       }
     }
+  });
+});
+
+describe('isInstalledView', () => {
+  it('is the preview half for a not-installed, non-core package', () => {
+    expect(isInstalledView({ isCore: false, enabled: false })).toBe(false);
+  });
+
+  it('is the installed half once the app is enabled', () => {
+    expect(isInstalledView({ isCore: false, enabled: true })).toBe(true);
+  });
+
+  it('a core package is always the installed half, whatever its enabled flag says', () => {
+    expect(isInstalledView({ isCore: true, enabled: false })).toBe(true);
+    expect(isInstalledView({ isCore: true, enabled: true })).toBe(true);
   });
 });
 

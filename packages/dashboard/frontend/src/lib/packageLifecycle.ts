@@ -75,6 +75,26 @@ export function packageActionSlots(input: ActionInputs): ActionSlot[] {
   ];
 }
 
+export interface ViewModeInputs {
+  /** Core packages (core/identity/storage) are always installed in
+   * spirit — they can't be added or removed — regardless of what their
+   * `enabled` flag happens to say on the wire. */
+  isCore: boolean;
+  enabled: boolean;
+}
+
+/**
+ * Which half of the app detail page applies: the installed half (live
+ * state, logs, config, network, version/update status, backup coverage)
+ * or the preview half (what installing it would do — before any of that
+ * exists to report on). One route, one component, two modes — a bookmark
+ * to `/apps/<name>` keeps working across an install, and the switch is a
+ * plain reactive flip on `enabled`, not a navigation.
+ */
+export function isInstalledView(input: ViewModeInputs): boolean {
+  return input.isCore || input.enabled;
+}
+
 export type StatusLightState =
   | 'running'
   | 'stopped'

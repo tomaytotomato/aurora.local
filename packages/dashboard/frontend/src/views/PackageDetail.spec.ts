@@ -6,6 +6,7 @@ import { AxiosError, type AxiosAdapter, type AxiosResponse } from 'axios';
 import PackageDetail from './PackageDetail.vue';
 import { http } from '@/api/client';
 import { JobsApi } from '@/api/jobs';
+import { usePackagesStore } from '@/stores/packages';
 import type { PackageDetail as PackageDetailWire } from '@/api/packages';
 
 /**
@@ -354,5 +355,187 @@ describe('PackageDetail — Overview ABOUT card', () => {
     const { w } = await mountDetail('notes');
 
     expect(w.text()).toContain('No description yet.');
+  });
+});
+
+/**
+ * The split this page needed: an app that has never been installed gets
+ * the preview half (PackagePreview.vue — what installing it would cost),
+ * not the installed half's tabs and cards, which describe state that
+ * doesn't exist yet. See lib/packageLifecycle.ts::isInstalledView for the
+ * pure function the mode switch is built on.
+ */
+describe('PackageDetail — preview vs installed view', () => {
+  it('a not-installed app renders the preview, not the installed tabs', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/photos',
+      data: packageDetail({ name: 'photos', enabled: false, running: false }),
+    });
+    const { w } = await mountDetail('photos');
+
+    expect(w.find('[data-test="package-preview"]').exists()).toBe(true);
+    expect(w.findAll('[role="tab"]')).toHaveLength(0);
+  });
+
+  it('an installed app still gets the full Overview/Config/Network/Logs/Related tab set', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/media',
+      data: packageDetail({ name: 'media', enabled: true, running: true }),
+    });
+    const { w } = await mountDetail('media');
+
+    expect(w.find('[data-test="package-preview"]').exists()).toBe(false);
+    expect(w.findAll('[role="tab"]').map((t) => t.text())).toEqual([
+      'Overview',
+      'Config',
+      'Network',
+      'Logs',
+      'Related',
+    ]);
+  });
+
+  it('a core package gets the installed view even if its enabled flag were ever false', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/identity',
+      data: packageDetail({ name: 'identity', enabled: false, running: false }),
+    });
+    const { w } = await mountDetail('identity');
+
+    expect(w.find('[data-test="package-preview"]').exists()).toBe(false);
+    expect(w.findAll('[role="tab"]').length).toBeGreaterThan(0);
+  });
+
+  it('a not-installed app is never described as stopped anywhere on the page', async () => {
+    // This is the exact bug reported: a NOT INSTALLED badge next to a
+    // Details card reading "Status: stopped" — two different, disagreeing
+    // claims about the same app. The Details card itself only exists on
+    // the installed half now, but this pins the outward symptom too.
+    stubResponse({
+      method: 'get',
+      url: '/packages/photos',
+      data: packageDetail({ name: 'photos', enabled: false, running: false }),
+    });
+    const { w } = await mountDetail('photos');
+
+    expect(w.text()).not.toMatch(/\bstopped\b/i);
+    expect(w.find('[data-status-light="not-installed"]').exists()).toBe(true);
+  });
+
+  it('a not-installed app never shows the installed Details, Backup or Version-freshness cards', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/photos',
+      data: packageDetail({
+        name: 'photos',
+        enabled: false,
+        running: false,
+        backup: { paths: ['data/photos/library'], before: [] },
+      }),
+    });
+    const { w } = await mountDetail('photos');
+
+    expect(w.find('[data-test="package-details-card"]').exists()).toBe(false);
+    expect(w.find('[data-test="package-backup-card"]').exists()).toBe(false);
+    expect(w.find('[data-test="package-updates-card"]').exists()).toBe(false);
+  });
+
+  it('the installed Details card reads the derived status light, not a raw running boolean', async () => {
+    // Before this fix, Details read `detail.running ? 'running' : 'stopped'`
+    // directly — bypassing deriveStatusLight entirely, which is exactly how
+    // a starting-but-not-yet-healthy app could show "running" in Details
+    // while a more careful surface called it something else.
+    responses.length = 0;
+    stubResponse({ method: 'get', url: '/updates', data: [] });
+    stubResponse({
+      method: 'get',
+      url: '/packages/media',
+      data: packageDetail({ name: 'media', enabled: true, running: true }),
+    });
+    stubResponse({
+      method: 'get',
+      url: '/services/status',
+      data: {
+        generated_at: new Date().toISOString(),
+        services: [{ package: 'media', state: 'starting' }],
+      },
+    });
+    const { w } = await mountDetail('media');
+
+    const details = w.find('[data-test="package-details-card"]');
+    expect(details.exists()).toBe(true);
+    expect(details.text()).toContain('starting');
+    expect(details.text()).not.toContain('running');
+  });
+
+  it('a not-installed app shows the tag it would install, never a freshness verdict', async () => {
+    responses.length = 0;
+    stubResponse({
+      method: 'get',
+      url: '/packages/photos',
+      data: packageDetail({ name: 'photos', enabled: false, running: false }),
+    });
+    stubResponse({
+      method: 'get',
+      url: '/services/status',
+      data: { generated_at: new Date().toISOString(), services: [] },
+    });
+    stubResponse({
+      method: 'get',
+      url: '/updates',
+      data: [
+        {
+          package: 'photos',
+          state: 'current',
+          images: [
+            {
+              image: 'ghcr.io/immich-app/immich-server',
+              currentTag: 'v1.108.0',
+              currentDigest: 'sha256:aaaa',
+              latestTag: 'v1.108.0',
+              latestDigest: 'sha256:aaaa',
+              pinned: true,
+              state: 'current',
+            },
+          ],
+          lastCheckedAt: '2026-08-01T00:00:00Z',
+          lastUpdatedAt: '2026-08-01T00:00:00Z',
+          lastUpdateJobId: null,
+          lastUpdateFailed: false,
+        },
+      ],
+    });
+    const { w } = await mountDetail('photos');
+
+    expect(w.find('[data-test="package-preview-version"]').exists()).toBe(true);
+    expect(w.text()).toContain('v1.108.0');
+    expect(w.text()).not.toContain('Up to date');
+    expect(w.text()).not.toContain('Checked');
+  });
+
+  it('a package that installs mid-session switches from preview to the installed view with no reload', async () => {
+    const photosReply = {
+      method: 'get',
+      url: '/packages/photos',
+      data: packageDetail({ name: 'photos', enabled: false, running: false }),
+    };
+    stubResponse(photosReply);
+    const { w } = await mountDetail('photos');
+
+    expect(w.find('[data-test="package-preview"]').exists()).toBe(true);
+    expect(w.find('[data-test="package-details-card"]').exists()).toBe(false);
+
+    // Simulates what refreshAfterLifecycle() does once an install job
+    // succeeds: re-fetch the same package, now enabled+running. No route
+    // change, no remount — just the store updating underneath the same
+    // component instance.
+    photosReply.data = packageDetail({ name: 'photos', enabled: true, running: true });
+    await usePackagesStore().fetchOne('photos');
+    await flushPromises();
+
+    expect(w.find('[data-test="package-preview"]').exists()).toBe(false);
+    expect(w.find('[data-test="package-details-card"]').exists()).toBe(true);
   });
 });
