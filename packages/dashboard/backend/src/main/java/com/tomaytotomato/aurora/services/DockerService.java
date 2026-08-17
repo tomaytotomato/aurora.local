@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -55,6 +56,48 @@ public class DockerService {
 
   public DockerService(DockerClient docker) {
     this.docker = docker;
+  }
+
+  /**
+   * Containers belonging to one package: those whose compose project
+   * label matches {@code aurora-<pkg>} (or, for {@code core}, either that
+   * or the historical shared {@code aurora} project), plus — for any
+   * package — a container still labelled under the legacy shared
+   * {@code aurora} project whose own name equals {@code expectedContainer}.
+   *
+   * <p>That second clause exists because docker labels are fixed at
+   * container-creation time: a container created before its package's
+   * compose.yml declared its own project name (silverbullet, package
+   * "notes", is the concrete real-box case) never gets relabelled just
+   * because the manifest moved on. {@link #findByName} already tolerates
+   * this (it searches every {@code aurora}/{@code aurora-*} container by
+   * name, which is why {@code GET /services/status} reports such a
+   * container correctly) — this gives project-scoped callers
+   * ({@code ContainersController}, the per-package network endpoint) the
+   * same tolerance, so two surfaces on the same page never disagree about
+   * whether a package's container exists.
+   *
+   * @param expectedContainer the name the caller expects this package's
+   *                           container to have (manifest {@code probe.container},
+   *                           or the package name itself when unset) — pass
+   *                           {@code null} to skip the legacy fallback.
+   */
+  public List<Container> containersForPackage(String pkg, String expectedContainer) {
+    Set<String> targetProjects = "core".equals(pkg)
+        ? Set.of(PROJECT_NAME, PROJECT_PREFIX + "core")
+        : Set.of(PROJECT_PREFIX + pkg);
+    List<Container> out = new ArrayList<>();
+    for (Container c : listProjectContainers()) {
+      Map<String, String> labels = c.getLabels();
+      String project = labels == null ? null : labels.get(PROJECT_LABEL);
+      boolean projectMatches = targetProjects.contains(project);
+      boolean legacyMatches = !projectMatches
+          && PROJECT_NAME.equals(project)
+          && expectedContainer != null
+          && expectedContainer.equals(primaryName(c));
+      if (projectMatches || legacyMatches) out.add(c);
+    }
+    return out;
   }
 
   public List<Container> listProjectContainers() {

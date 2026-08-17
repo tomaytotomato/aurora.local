@@ -130,6 +130,88 @@ class DockerServiceTests {
     assertEquals("/silverbullet", out.get(0).getNames()[0]);
   }
 
+  // ─── containersForPackage() — feeds the per-package Logs tab and the
+  // per-package network endpoint ───────────────────────────────────────
+
+  @Test
+  void containersForPackage_matchesTheCurrentPerPackageProject() {
+    Container sonarr = container("aurora-media-sonarr", labels("aurora-media"));
+    Container radarr = container("aurora-media-radarr", labels("aurora-media"));
+    Container silverbullet = container("silverbullet", labels("aurora-notes"));
+    Mockito.when(cmd.exec()).thenReturn(List.of(sonarr, radarr, silverbullet));
+
+    List<Container> out = new DockerService(docker).containersForPackage("media", "media");
+    assertEquals(2, out.size());
+  }
+
+  @Test
+  void containersForPackage_fallsBackToContainerNameUnderTheLegacySharedProject() {
+    // The real-box bug: silverbullet (package "notes") was created before
+    // packages/notes/compose.yml declared its own "aurora-notes" project,
+    // so it is still labelled under the legacy shared "aurora" project.
+    // GET /services/status resolves it correctly (findByName searches by
+    // container name across aurora + aurora-*), so the per-package
+    // container listing has to tolerate the same case or it disagrees
+    // with the rest of the page about whether "notes" is running.
+    Container silverbullet = container("silverbullet", labels("aurora"));
+    Container caddy = container("caddy", labels("aurora"));
+    Mockito.when(cmd.exec()).thenReturn(List.of(silverbullet, caddy));
+
+    List<Container> out = new DockerService(docker).containersForPackage("notes", "silverbullet");
+
+    assertEquals(1, out.size());
+    assertEquals("/silverbullet", out.get(0).getNames()[0]);
+  }
+
+  @Test
+  void containersForPackage_legacyFallbackDoesNotMatchAnotherContainerUnderTheSameLegacyProject() {
+    // Matches by container name, not "any container under aurora" —
+    // otherwise package=notes would also pick up caddy just because both
+    // predate the per-package split.
+    Container silverbullet = container("silverbullet", labels("aurora"));
+    Container caddy = container("caddy", labels("aurora"));
+    Mockito.when(cmd.exec()).thenReturn(List.of(silverbullet, caddy));
+
+    List<Container> out = new DockerService(docker).containersForPackage("notes", "silverbullet");
+
+    assertEquals(1, out.size());
+  }
+
+  @Test
+  void containersForPackage_coreMatchesBothTheLegacyAndCurrentProject() {
+    // packages/core/compose.yml has moved through home-core -> aurora-core
+    // across the rebrand, never literally "aurora" — but a caddy container
+    // created before that rename still carries the old bare label.
+    Container legacyCaddy = container("caddy", labels("aurora"));
+    List<Container> viaLegacy = new DockerService(mockClientReturning(legacyCaddy))
+        .containersForPackage("core", "core");
+    assertEquals(1, viaLegacy.size());
+
+    Container currentCaddy = container("caddy", labels("aurora-core"));
+    List<Container> viaCurrent = new DockerService(mockClientReturning(currentCaddy))
+        .containersForPackage("core", "core");
+    assertEquals(1, viaCurrent.size());
+  }
+
+  @Test
+  void containersForPackage_returnsEmptyWhenNothingMatches() {
+    Container sonarr = container("aurora-media-sonarr", labels("aurora-media"));
+    Mockito.when(cmd.exec()).thenReturn(List.of(sonarr));
+
+    List<Container> out = new DockerService(docker).containersForPackage("photos", "photos");
+    assertEquals(0, out.size());
+  }
+
+  /** A fresh mocked {@link DockerClient} pre-wired to return one container. */
+  private DockerClient mockClientReturning(Container c) {
+    DockerClient client = Mockito.mock(DockerClient.class);
+    ListContainersCmd freshCmd = Mockito.mock(ListContainersCmd.class);
+    Mockito.when(client.listContainersCmd()).thenReturn(freshCmd);
+    Mockito.when(freshCmd.withShowAll(anyBoolean())).thenReturn(freshCmd);
+    Mockito.when(freshCmd.exec()).thenReturn(List.of(c));
+    return client;
+  }
+
   // ─── listContainerSummaries() — feeds /api/proxy/targets ────────────────
 
   private Container containerWithPorts(String name, List<Integer> privatePorts, Map<String, String> labels) {
