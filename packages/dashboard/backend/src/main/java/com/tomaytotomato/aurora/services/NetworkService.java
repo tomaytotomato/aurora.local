@@ -12,16 +12,10 @@ import java.util.Optional;
 
 /**
  * {@code GET /packages/{name}/network} — how one app's traffic leaves the
- * box. See docs/SPLIT_TUNNEL.md for the mechanism.
- *
- * <p>The per-app toggle ("move this app onto the VPN gateway from the
- * dashboard") is still that document's "Planned" section — no compose
- * rewrite, port move, or Caddy vhost update exists yet, so every package
- * reports {@code locked=true} regardless of whether it currently has a
- * gateway. What this service reports honestly today is: does this
- * package's compose.yml already share a gateway's network namespace
- * (qBittorrent under gluetun does; nothing else does yet), and is that
- * gateway actually up.
+ * box (docs/SPLIT_TUNNEL.md). The toggle itself isn't built yet, so every
+ * package reports {@code locked=true}; this reports whether the package's
+ * compose.yml already shares a gateway's namespace and whether that
+ * gateway is up.
  */
 @Service
 public class NetworkService {
@@ -55,7 +49,7 @@ public class NetworkService {
     boolean gatewayHealthy = gateway.map(g -> docker.findByName(g)
         .map(DockerService.ContainerInfo::isRunning)
         .orElse(false))
-        .orElse(true); // no gateway to be unhealthy — direct mode is always "fine"
+        .orElse(true);
 
     List<Integer> publishedPorts = portsFor(p);
 
@@ -63,12 +57,12 @@ public class NetworkService {
         pkg,
         mode,
         gateway.orElse(null),
-        true, // locked — see class javadoc; the toggle itself isn't built yet
+        true,
         PackageNetwork.NOT_WIRED_UP_YET,
         containers,
         publishedPorts,
-        null, // egressIp — no external lookup mechanism exists yet
-        null, // egressCountry — ditto
+        null,
+        null,
         gatewayHealthy
     ));
   }

@@ -146,13 +146,6 @@ class DockerServiceTests {
 
   @Test
   void containersForPackage_fallsBackToContainerNameUnderTheLegacySharedProject() {
-    // The real-box bug: silverbullet (package "notes") was created before
-    // packages/notes/compose.yml declared its own "aurora-notes" project,
-    // so it is still labelled under the legacy shared "aurora" project.
-    // GET /services/status resolves it correctly (findByName searches by
-    // container name across aurora + aurora-*), so the per-package
-    // container listing has to tolerate the same case or it disagrees
-    // with the rest of the page about whether "notes" is running.
     Container silverbullet = container("silverbullet", labels("aurora"));
     Container caddy = container("caddy", labels("aurora"));
     Mockito.when(cmd.exec()).thenReturn(List.of(silverbullet, caddy));
@@ -165,9 +158,6 @@ class DockerServiceTests {
 
   @Test
   void containersForPackage_legacyFallbackDoesNotMatchAnotherContainerUnderTheSameLegacyProject() {
-    // Matches by container name, not "any container under aurora" —
-    // otherwise package=notes would also pick up caddy just because both
-    // predate the per-package split.
     Container silverbullet = container("silverbullet", labels("aurora"));
     Container caddy = container("caddy", labels("aurora"));
     Mockito.when(cmd.exec()).thenReturn(List.of(silverbullet, caddy));
@@ -179,9 +169,6 @@ class DockerServiceTests {
 
   @Test
   void containersForPackage_coreMatchesBothTheLegacyAndCurrentProject() {
-    // packages/core/compose.yml has moved through home-core -> aurora-core
-    // across the rebrand, never literally "aurora" — but a caddy container
-    // created before that rename still carries the old bare label.
     Container legacyCaddy = container("caddy", labels("aurora"));
     List<Container> viaLegacy = new DockerService(mockClientReturning(legacyCaddy))
         .containersForPackage("core", "core");

@@ -65,10 +65,7 @@ function installAdapter(): void {
           headers: {},
           config,
         } as AxiosResponse;
-        // A stubbed non-2xx must actually reject, same as real axios —
-        // otherwise `humanCopyForError` (which reads `err.response.status`)
-        // never sees the failure and callers silently treat the stubbed
-        // error body as valid data.
+        // A stubbed non-2xx must actually reject, same as real axios.
         if (status < 200 || status >= 300) {
           const err = new AxiosError('stubbed failure', String(status), config, undefined, response);
           return Promise.reject(err);
@@ -253,25 +250,8 @@ describe('PackageDetail control panel', () => {
 });
 
 /**
- * Real-box bug: the header showed RUNNING and the control panel said
- * "Docker — Enabled and running", but the Logs tab said nothing was
- * running yet and the Network tab said the app's networking was gone —
- * both tabs quietly disagreeing with the rest of the same page.
- *
- * Root cause was two different things wearing one symptom:
- *   - Logs: the backend's per-package container filter did an exact
- *     compose-project-label match, missing a container still labelled
- *     under the pre-per-package-split shared project (fixed backend-side
- *     in DockerService.containersForPackage; these tests pin the
- *     frontend side — a non-empty container list must never render the
- *     "nothing running yet" empty state).
- *   - Network: GET /packages/{name}/network had no backend handler at
- *     all, so it always 404'd regardless of package state, and the
- *     generic 404 copy read as "gone" rather than "not built yet".
- *
- * This suite pins the observable contract from the frontend's side: for
- * a package the header and control panel already show as enabled and
- * running, no tab may render copy implying it isn't.
+ * A package the header/control panel show as enabled and running must
+ * never have a tab imply the opposite.
  */
 describe('PackageDetail — a running package is never reported as not-started by any tab', () => {
   async function clickTab(w: Awaited<ReturnType<typeof mountDetail>>['w'], label: string): Promise<void> {
@@ -338,8 +318,6 @@ describe('PackageDetail — a running package is never reported as not-started b
   });
 
   it('a genuine 404 on the network endpoint reads as "can\'t find", not the old broken "That this app\'s..." sentence', async () => {
-    // Belt-and-braces on fault 2: even the failure copy, if the box
-    // genuinely has nothing to say, must read as English.
     stubResponse({ method: 'get', url: '/packages/notes', data: runningNotesDetail() });
     stubResponse({ method: 'get', url: '/packages/notes/network', status: 404, data: {} });
     const { w } = await mountDetail('notes');
@@ -353,10 +331,6 @@ describe('PackageDetail — a running package is never reported as not-started b
 
 describe('PackageDetail — Overview ABOUT card', () => {
   it('falls back to the manifest description when readme is absent, instead of "No description yet"', async () => {
-    // Real-box bug: the header (which reads `description`) showed
-    // SilverBullet's full description while the ABOUT card (which read
-    // only `readme`, a field no manifest populates yet) said "No
-    // description yet" for the exact same package on the exact same page.
     stubResponse({
       method: 'get',
       url: '/packages/notes',

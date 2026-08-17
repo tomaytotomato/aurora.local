@@ -5,20 +5,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * How one package's traffic leaves the box. See {@code docs/SPLIT_TUNNEL.md}
- * for the mechanism (container network-namespace sharing with a gateway
- * such as {@code gluetun}) and {@code openapi.yaml}'s {@code PackageNetwork}
- * schema for the wire contract this mirrors field-for-field.
+ * How one package's traffic leaves the box (see docs/SPLIT_TUNNEL.md).
+ * Mirrors openapi.yaml's {@code PackageNetwork} schema.
  *
- * <p>The per-app toggle itself ("move this app onto the VPN gateway from the
- * dashboard") is still {@code docs/SPLIT_TUNNEL.md}'s "Planned" section, not
- * a shipped feature — no compose rewrite, port move, or Caddy vhost update
- * exists yet. {@link #locked} is therefore {@code true} for every package
- * today; {@link #lockedReason} says why rather than the dashboard silently
- * pretending a working switch is available.
+ * <p>The per-app toggle itself isn't built yet, so {@link #locked} is
+ * always {@code true}; {@link #lockedReason} says why.
  *
- * <p>{@code package} is a Java keyword, hence the {@code pkg} field name
- * with an explicit {@link JsonProperty} — same trick as {@link VpnStatus#iface}.
+ * <p>{@code package} is a Java keyword, hence {@code pkg} + {@link JsonProperty}.
  */
 public record PackageNetwork(
     @JsonProperty("package") String pkg,

@@ -17,15 +17,8 @@ import java.util.Map;
 
 /**
  * {@code /packages/{name}/network} — how one app's traffic leaves the box.
- * See {@link NetworkService} for what "how" means today versus what
- * docs/SPLIT_TUNNEL.md still lists as planned.
- *
- * <p>Real-box bug this closes: before this controller existed, every call
- * to {@code GET /packages/{name}/network} 404'd (no handler at all, not a
- * "no data for this package yet" 404), and the frontend's generic 404 copy
- * read as "this app's networking is not on this box any more" — flatly
- * contradicting a page that, one screen up, was showing the same app as
- * enabled and running. The endpoint now actually answers.
+ * Previously had no handler at all, so every call 404'd regardless of the
+ * package's state. See {@link NetworkService}.
  */
 @RestController
 @RequestMapping("/api/packages")
@@ -46,14 +39,7 @@ public class NetworkController {
         .orElseGet(() -> ResponseEntity.notFound().build());
   }
 
-  /**
-   * Moving an app on or off the gateway is still docs/SPLIT_TUNNEL.md's
-   * "Planned" section — no compose rewrite, port move, or Caddy vhost
-   * update exists yet. 404 if the package itself doesn't exist (consistent
-   * with every other {@code /packages/{name}/*} verb); 409 otherwise,
-   * matching openapi.yaml's documented "cannot be changed" response rather
-   * than a bare unimplemented-endpoint 404 or 501.
-   */
+  /** The toggle itself isn't built yet — 404 for an unknown package, 409 otherwise. */
   @PutMapping("/{name}/network")
   public ResponseEntity<Void> setMode(@PathVariable String name, @RequestBody Map<String, Object> body) {
     if (packages.find(name).isEmpty()) {

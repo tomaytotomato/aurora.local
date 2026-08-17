@@ -20,15 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * {@code /api/packages/{name}/network} against a real repository tree.
- *
- * <p>Before this controller existed, every call here 404'd — there was no
- * handler at all — and the dashboard's app-detail Network tab showed
- * "That this app's networking is not on this box any more" for a package
- * that was, one screen up, plainly enabled and running (the real-box bug
- * this closes). These tests pin the honest answer the endpoint gives now.
- */
+/** {@code /api/packages/{name}/network} against a real repository tree. */
 @WithMockUser
 class NetworkControllerIntegrationTest extends AuroraIntegrationTest {
 
@@ -56,10 +48,6 @@ class NetworkControllerIntegrationTest extends AuroraIntegrationTest {
 
   @BeforeEach
   void seedNotes() throws IOException {
-    // Mirrors the real packages/notes/manifest.yml + compose.yml: the
-    // compose service is "silverbullet", not "notes", and it predates the
-    // per-package project split on the fixture that matters here — so the
-    // container is labelled under the legacy shared "aurora" project.
     writeRepoFile("packages/notes/manifest.yml", """
         name: notes
         title: Notes (SilverBullet)
@@ -104,9 +92,6 @@ class NetworkControllerIntegrationTest extends AuroraIntegrationTest {
 
   @Test
   void locked_is_true_with_a_reason_because_the_toggle_is_not_wired_up_yet() throws Exception {
-    // The one thing this test must never regress to: a real, running
-    // package reported as if its networking had vanished. Locked+reason
-    // is an honest "not built yet"; it must never come back as a 404.
     stubContainers(container("silverbullet", "aurora"));
 
     mvc.perform(get("/api/packages/notes/network"))
@@ -131,9 +116,6 @@ class NetworkControllerIntegrationTest extends AuroraIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.mode").value("vpn"))
         .andExpect(jsonPath("$.gateway").value("gluetun"))
-        // gluetun isn't in the stubbed container list under its own name
-        // lookup path here, so gatewayHealthy reads false — a genuinely
-        // down gateway, not a fabricated "fine".
         .andExpect(jsonPath("$.gatewayHealthy").exists());
   }
 
@@ -145,8 +127,6 @@ class NetworkControllerIntegrationTest extends AuroraIntegrationTest {
 
   @Test
   void put_is_a_409_not_a_404_or_a_silent_no_op() throws Exception {
-    // The toggle isn't built yet, but the package is real — this must be
-    // "can't do that yet" (409, matching openapi.yaml), not "not found".
     mvc.perform(put("/api/packages/notes/network")
             .contentType("application/json")
             .content("{\"mode\":\"vpn\"}"))

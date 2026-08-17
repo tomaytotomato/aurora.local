@@ -19,23 +19,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * B3-followup (iter-16): {@code GET /api/containers?package=<name>}
- * request handling at the controller boundary. The actual project-label /
- * legacy-fallback matching now lives in
- * {@link DockerService#containersForPackage} (see
- * {@code DockerServiceTests} for that behaviour) — these tests only cover
- * what the controller itself is responsible for:
- *
- * <ul>
- *   <li>no {@code package} query → delegates to
- *       {@link DockerService#listProjectContainers()} unfiltered;</li>
- *   <li>a {@code package} query → delegates to
- *       {@link DockerService#containersForPackage} with the right
- *       expected-container name (the manifest's {@code probe.container},
- *       defaulting to the package name);</li>
- *   <li>malformed package name → 400 without hitting docker;</li>
- *   <li>the JSON shape of whatever DockerService hands back.</li>
- * </ul>
+ * {@code GET /api/containers?package=<name>} at the controller boundary.
+ * The matching logic itself lives in
+ * {@link DockerService#containersForPackage} — see {@code DockerServiceTests}.
  */
 class ContainersControllerFilterTests {
 
@@ -92,9 +78,6 @@ class ContainersControllerFilterTests {
 
   @Test
   void filtered_call_uses_the_manifests_declared_probe_container_not_just_the_package_name() throws Exception {
-    // notes' manifest declares probe.container: silverbullet (the compose
-    // service is named "silverbullet", not "notes") — the controller must
-    // pass that through rather than always asking for the package name.
     DockerService docker = Mockito.mock(DockerService.class);
     Container silverbullet = container("silverbullet", "aurora-notes", "silverbullet");
     Mockito.when(docker.containersForPackage("notes", "silverbullet")).thenReturn(List.of(silverbullet));
@@ -139,9 +122,6 @@ class ContainersControllerFilterTests {
 
   @Test
   void empty_package_query_is_treated_as_no_filter() throws Exception {
-    // Empty string ≠ null in Spring's binding; must still be validated.
-    // '^[a-z][a-z0-9-]{0,31}$' rejects the empty string, so ?package= is
-    // a 400. Verifies the belt-and-braces of the shape regex.
     DockerService docker = Mockito.mock(DockerService.class);
     mvc(docker).perform(get("/api/containers").param("package", ""))
         .andExpect(status().isBadRequest());
