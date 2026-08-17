@@ -52,13 +52,14 @@ public class ContainersController {
     // B3-followup (iter-16): when "package=<name>" is supplied, filter to
     // this package's containers. DockerService.containersForPackage does
     // the matching (project label, with a container-name fallback for the
-    // legacy shared "aurora" project) — see its javadoc for why the
-    // fallback matters: a container created before its package had its
-    // own compose project name (silverbullet, package "notes", is the
-    // real-box case) never gets relabelled just because the manifest
-    // moved on, and this is the same tolerance GET /services/status
-    // already relies on via DockerService.findByName. One definition of
-    // "this package's containers" rather than two that can drift apart.
+    // shared "aurora" project) — see its javadoc for why the fallback
+    // matters: scripts/up.sh always launches with "-p aurora", so a
+    // package's own "aurora-<pkg>" compose.yml project name is not what
+    // real containers actually carry (silverbullet, package "notes", is
+    // the verified real-box case), and this is the same tolerance
+    // GET /services/status already relies on via DockerService.findByName.
+    // One definition of "this package's containers" rather than two that
+    // can drift apart.
     Iterable<Container> matched = pkg == null
         ? docker.listProjectContainers()
         : docker.containersForPackage(pkg, expectedContainerFor(pkg));

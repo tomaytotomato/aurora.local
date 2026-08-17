@@ -33,22 +33,31 @@ public class DockerService {
   private static final String PROJECT_LABEL = "com.docker.compose.project";
   private static final String PROJECT_NAME = "aurora";
   /**
-   * Aurora's LaunchService may launch package stacks with any of:
+   * Package stacks can end up under either of two compose project labels:
    * <ul>
-   *   <li>{@code -p aurora} (shared project, historical) → label
-   *       {@code com.docker.compose.project=aurora}</li>
-   *   <li>The per-package name from compose.yml top-level {@code name:}
-   *       (e.g. {@code aurora-notes}, {@code aurora-media}, {@code aurora-core},
-   *       {@code aurora-dashboard}) → label
-   *       {@code com.docker.compose.project=aurora-<pkg>}</li>
+   *   <li>{@code com.docker.compose.project=aurora} — {@code scripts/up.sh}
+   *       (what {@code LaunchService} runs for every Install/Start, and
+   *       what the real install chain and this testbed both use) always
+   *       invokes {@code docker compose -p aurora ...}, overriding
+   *       whatever each compose.yml's own top-level {@code name:} says.
+   *       Verified against a running testbed box: caddy, aurora
+   *       (dashboard), authelia and silverbullet were <em>all</em> labelled
+   *       {@code aurora}, never their per-package name, despite
+   *       {@code packages/notes/compose.yml} declaring
+   *       {@code name: aurora-notes}. This is the normal case on a real
+   *       box, not a historical one.</li>
+   *   <li>{@code com.docker.compose.project=aurora-<pkg>} — only happens
+   *       if compose is invoked directly against one package's
+   *       compose.yml without going through {@code up.sh} (manual testing,
+   *       bypassing Aurora's own scripts).</li>
    * </ul>
-   * Historically we filtered on the shared {@code aurora} project only,
-   * which under-counted every stack launched with its declared
-   * per-package name. That produced the System-card {@code Containers 1}
-   * anomaly Bruce reported on 2026-08-02 (aurora + caddy + silverbullet
-   * live, only silverbullet visible to the label filter). Broadening to
-   * {@code aurora} OR {@code aurora-*} keeps the semantics honest without
-   * conflating with unrelated projects.
+   * Historically this filtered on the shared {@code aurora} project only,
+   * which under-counted any stack that had been launched the second way.
+   * That produced the System-card {@code Containers 1} anomaly Bruce
+   * reported on 2026-08-02 (aurora + caddy + silverbullet live, only
+   * silverbullet visible to the label filter). Broadening to {@code aurora}
+   * OR {@code aurora-*} keeps the semantics honest without conflating with
+   * unrelated projects.
    */
   private static final String PROJECT_PREFIX = "aurora-";
 
@@ -61,18 +70,18 @@ public class DockerService {
   /**
    * Containers belonging to one package: those whose compose project
    * label matches {@code aurora-<pkg>} (or, for {@code core}, either that
-   * or the historical shared {@code aurora} project), plus — for any
-   * package — a container still labelled under the legacy shared
-   * {@code aurora} project whose own name equals {@code expectedContainer}.
+   * or the shared {@code aurora} project), plus — for any package — a
+   * container labelled under the shared {@code aurora} project whose own
+   * name equals {@code expectedContainer}.
    *
-   * <p>That second clause exists because docker labels are fixed at
-   * container-creation time: a container created before its package's
-   * compose.yml declared its own project name (silverbullet, package
-   * "notes", is the concrete real-box case) never gets relabelled just
-   * because the manifest moved on. {@link #findByName} already tolerates
-   * this (it searches every {@code aurora}/{@code aurora-*} container by
-   * name, which is why {@code GET /services/status} reports such a
-   * container correctly) — this gives project-scoped callers
+   * <p>That second clause is not a rare fallback: {@code scripts/up.sh}
+   * (see {@code PROJECT_PREFIX}'s javadoc) always launches with
+   * {@code -p aurora}, so it is the normal case for every package on a
+   * real box — {@code aurora-<pkg>} only happens if someone runs compose
+   * directly against one package's file. {@link #findByName} already
+   * tolerates this (it searches every {@code aurora}/{@code aurora-*}
+   * container by name, which is why {@code GET /services/status} reports
+   * such a container correctly) — this gives project-scoped callers
    * ({@code ContainersController}, the per-package network endpoint) the
    * same tolerance, so two surfaces on the same page never disagree about
    * whether a package's container exists.
@@ -80,7 +89,7 @@ public class DockerService {
    * @param expectedContainer the name the caller expects this package's
    *                           container to have (manifest {@code probe.container},
    *                           or the package name itself when unset) — pass
-   *                           {@code null} to skip the legacy fallback.
+   *                           {@code null} to skip the name-based match.
    */
   public List<Container> containersForPackage(String pkg, String expectedContainer) {
     Set<String> targetProjects = "core".equals(pkg)
