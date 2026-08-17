@@ -240,6 +240,10 @@ fail2ban_max_retry: 5
 
 # ---- network ----
 lan_ip: $lan_ip
+
+# Frees port 53 for the privacy package's AdGuard by turning off
+# systemd-resolved's loopback stub listener. Set false to keep the stub.
+dns_stub_listener_disabled: true
 EOF
     log_ok "wrote $gv"
   fi

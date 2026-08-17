@@ -1,0 +1,14 @@
+---
+# AdGuard Home (the privacy package) publishes port 53 on every one of
+# the box's addresses so LAN clients can reach it however they find it.
+# Debian ships systemd-resolved holding 127.0.0.53:53, which sits inside
+# that range, so the container cannot bind and the package never starts.
+#
+# Turning the stub listener off frees the port. The host keeps resolving
+# names through the upstream servers resolved already learned from DHCP;
+# it just stops offering them on a loopback address.
+#
+# Set this false on a box that must keep its loopback stub. The privacy
+# package will then only start if AdGuard is bound to a specific address
+# instead (LAN_IP in packages/privacy/.env).
+dns_stub_listener_disabled: true

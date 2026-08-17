@@ -32,6 +32,11 @@
       when: smartd_enabled | default(true)
     - role: avahi
       tags: [avahi, network]
+    # Runs before docker so image pulls happen with the host resolver in
+    # its final state. Frees port 53 for the privacy package's AdGuard.
+    - role: dns-stub
+      tags: [dns, network]
+      when: dns_stub_listener_disabled | default(true)
     - role: unattended-upgrades
       tags: [updates, system]
     - role: docker

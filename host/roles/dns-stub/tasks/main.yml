@@ -1,0 +1,149 @@
+---
+# Frees port 53 for the privacy package's AdGuard container by turning
+# off systemd-resolved's loopback stub listener. See defaults/main.yml
+# for why, and dns_stub_listener_disabled to opt out.
+#
+# The order below matters: /etc/resolv.conf is repointed away from the
+# stub address *before* resolved is restarted, so the host never sits in
+# a window where it is asking a listener that no longer exists.
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+- name: Report when there is no systemd-resolved to disable
+  ansible.builtin.debug:
+    msg: >-
+      systemd-resolved is not installed on this host, so port 53 is
+      already free for AdGuard. Nothing to do.
+  when: "'systemd-resolved.service' not in ansible_facts.services"
+
+- name: Free port 53 from the systemd-resolved stub listener
+  when: "'systemd-resolved.service' in ansible_facts.services"
+  block:
+    - name: Ensure resolved.conf.d exists
+      ansible.builtin.file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Disable the resolved stub listener
+      ansible.builtin.copy:
+        dest: /etc/systemd/resolved.conf.d/10-aurora-dns-stub.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by aurora.local (host/roles/dns-stub). Edits will be
+          # overwritten on the next Ansible run.
+          #
+          # AdGuard Home in the privacy package binds port 53 on every
+          # address. The stub listener on 127.0.0.53:53 is inside that
+          # range and would block the container from starting, so it is
+          # turned off here. /etc/resolv.conf points at resolved's own
+          # resolv.conf instead, which lists the real upstream servers.
+          [Resolve]
+          DNSStubListener=no
+      notify: Restart systemd-resolved
+
+    # A stopped-but-installed resolved is not holding the port, and its
+    # runtime resolv.conf does not exist while it is down, so repointing
+    # at it would leave a dangling symlink and no DNS at all. The drop-in
+    # above still lands, which keeps the port free if it starts later.
+    - name: Note that resolved is installed but not running
+      ansible.builtin.debug:
+        msg: >-
+          systemd-resolved is installed but not running, so it is not
+          holding port 53. The drop-in has been written for whenever it
+          next starts; /etc/resolv.conf left untouched.
+      when: ansible_facts.services['systemd-resolved.service'].state != 'running'
+
+    - name: Configure the host resolver for a stubless resolved
+      when: ansible_facts.services['systemd-resolved.service'].state == 'running'
+      block:
+        - name: Inspect /etc/resolv.conf
+          ansible.builtin.stat:
+            path: /etc/resolv.conf
+            follow: false
+          register: dns_stub_resolv_conf
+
+        - name: Read /etc/resolv.conf when it is a regular file
+          ansible.builtin.slurp:
+            path: /etc/resolv.conf
+          register: dns_stub_resolv_body
+          when:
+            - dns_stub_resolv_conf.stat.exists
+            - not (dns_stub_resolv_conf.stat.islnk | default(false))
+
+        # Two ways a host ends up depending on the stub: Debian's symlink
+        # to stub-resolv.conf, or a plain file (some cloud images) with
+        # nameserver 127.0.0.53 written into it. Either one goes dead the
+        # moment the stub listener stops, so both need repointing.
+        - name: Decide whether the resolver depends on the stub listener
+          ansible.builtin.set_fact:
+            dns_stub_resolv_needs_repoint: >-
+              {{
+                ('stub-resolv.conf' in (dns_stub_resolv_conf.stat.lnk_source | default('')))
+                or ('127.0.0.53' in ((dns_stub_resolv_body.content | default('')) | b64decode))
+              }}
+
+        - name: Point /etc/resolv.conf at resolved's upstream server list
+          ansible.builtin.file:
+            src: /run/systemd/resolve/resolv.conf
+            dest: /etc/resolv.conf
+            state: link
+            force: true
+            owner: root
+            group: root
+          when: dns_stub_resolv_needs_repoint | bool
+
+        - name: Apply the resolved configuration now
+          ansible.builtin.meta: flush_handlers
+
+        # Verification, not decoration: the whole point of this role is
+        # that AdGuard can bind, and the only way to know is to look. A
+        # holder that is not resolved (a running AdGuard, for one) is
+        # legitimate and deliberately not treated as a failure.
+        - name: Check what is listening on port 53
+          ansible.builtin.command: ss -H -lntu sport = :53
+          register: dns_stub_port53
+          changed_when: false
+          failed_when: false
+
+        # Matched by address rather than by owning process: resolved
+        # runs two stub listeners (127.0.0.53 for ordinary lookups,
+        # 127.0.0.54 for the proxy path) and both sit inside the
+        # 0.0.0.0:53 that AdGuard asks for, so either one left behind
+        # keeps the container from starting.
+        - name: Assert both resolved stub listeners have let go of port 53
+          ansible.builtin.assert:
+            that:
+              - dns_stub_port53.stdout is not search('127\.0\.0\.5[34]')
+            fail_msg: >-
+              A systemd-resolved stub listener is still on port 53 after
+              the drop-in was applied, so the privacy package's AdGuard
+              container will not be able to bind. Listeners:
+              {{ dns_stub_port53.stdout_lines | join('; ') }}
+            success_msg: >-
+              Both resolved stub listeners have released port 53;
+              AdGuard can bind.
+          when: dns_stub_port53.rc == 0
+
+        - name: Confirm the host can still resolve names
+          ansible.builtin.command: getent hosts deb.debian.org
+          register: dns_stub_resolution
+          changed_when: false
+          failed_when: false
+
+        - name: Assert host DNS survived the change
+          ansible.builtin.assert:
+            that:
+              - dns_stub_resolution.rc == 0
+            fail_msg: >-
+              The host can no longer resolve deb.debian.org after
+              disabling the resolved stub listener. /etc/resolv.conf is
+              {{ dns_stub_resolv_conf.stat.lnk_source | default('a regular file') }};
+              check that /run/systemd/resolve/resolv.conf lists upstream
+              servers.
+            success_msg: Host DNS resolution still works.

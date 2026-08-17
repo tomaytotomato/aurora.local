@@ -91,3 +91,11 @@ lan_ip: 192.168.0.110
 
 # mDNS host name published by avahi (usually leave as inventory_hostname).
 # avahi_host_name: aurora
+
+# Debian's systemd-resolved listens on 127.0.0.53:53, which stops
+# AdGuard binding port 53 and so stops the privacy package starting at
+# all. The dns-stub role turns that stub listener off and repoints
+# /etc/resolv.conf at the upstream servers resolved already knows.
+# Set false to keep the loopback stub; the privacy package will then
+# only start if LAN_IP in packages/privacy/.env names a specific address.
+dns_stub_listener_disabled: true

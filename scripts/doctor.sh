@@ -145,6 +145,23 @@ fi
 # ---- DNS / adguard ---------------------------------------------------
 if list_enabled_packages | grep -qx privacy; then
   log "dns"
+
+  # AdGuard cannot bind port 53 while systemd-resolved's stub listeners
+  # hold 127.0.0.53 and 127.0.0.54, and the failure looks like an opaque
+  # docker error at launch time rather than anything about DNS. Catch it
+  # here, before the install, where it can still be read as a sentence.
+  # host/roles/dns-stub is what normally clears this.
+  #
+  # Matched by address, not by process name: ss only prints the owning
+  # process when run as root, and this script deliberately refuses to
+  # run as root, so a users:(("systemd-resolve")) match would never fire
+  # and the check would pass on a box that is definitely broken.
+  if has_cmd ss && ss -H -lntu sport = :53 2>/dev/null | grep -qE '127\.0\.0\.5[34]'; then
+    _fail "systemd-resolved holds port 53; adguard cannot start (run host/site.yml -t dns, or set LAN_IP in packages/privacy/.env)"
+  else
+    _pass "port 53 is free of systemd-resolved"
+  fi
+
   domain="${domain:-${DOMAIN:-aurora.local}}"
   if has_cmd getent && getent hosts "$domain" >/dev/null 2>&1; then
     _pass "DNS $domain resolves"

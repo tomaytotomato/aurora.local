@@ -24,8 +24,11 @@ services:
     restart: unless-stopped
     networks: [aurora_net]
     ports:
-      # DNS is bound to the LAN IP only so systemd-resolved can keep
-      # its loopback stub on 127.0.0.53. LAN clients point at $LAN_IP.
+      # Binds every address by default so LAN clients reach DNS however
+      # they find the box. That needs port 53 genuinely free: Debian's
+      # systemd-resolved holds 127.0.0.53:53 until host/roles/dns-stub
+      # turns its stub listener off. Set LAN_IP to a specific address
+      # only if you are keeping that stub.
       - "${LAN_IP:-0.0.0.0}:53:53/tcp"
       - "${LAN_IP:-0.0.0.0}:53:53/udp"
       # First-boot setup wizard; can close after Caddy vhost works.
