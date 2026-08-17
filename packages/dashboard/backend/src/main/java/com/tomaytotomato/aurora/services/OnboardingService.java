@@ -1,6 +1,7 @@
 package com.tomaytotomato.aurora.services;
 
 import com.tomaytotomato.aurora.config.AuroraProperties;
+import com.tomaytotomato.aurora.domain.AdminUser;
 import com.tomaytotomato.aurora.domain.Package;
 import com.tomaytotomato.aurora.persistence.AdminUserRepo;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
@@ -94,6 +95,16 @@ public class OnboardingService {
 
   public boolean isComplete() {
     return settings.get(KEY_COMPLETE).map("true"::equals).orElse(false);
+  }
+
+  /**
+   * The wizard-created admin, if one exists. v0.1 onboarding only ever
+   * creates one; used by {@code OnboardingController#complete} to log
+   * that admin in once the wizard finishes, without needing the
+   * password again.
+   */
+  public java.util.Optional<AdminUser> primaryAdmin() {
+    return users.findFirst();
   }
 
   public String currentStep() {

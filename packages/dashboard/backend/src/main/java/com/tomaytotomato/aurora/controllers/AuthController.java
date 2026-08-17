@@ -3,6 +3,7 @@ package com.tomaytotomato.aurora.controllers;
 import com.tomaytotomato.aurora.domain.AdminUser;
 import com.tomaytotomato.aurora.domain.RepoState;
 import com.tomaytotomato.aurora.services.AuthService;
+import com.tomaytotomato.aurora.services.SessionService;
 import com.tomaytotomato.aurora.services.StateFileService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -10,8 +11,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -33,14 +31,14 @@ import java.util.Optional;
 @RequestMapping("/api/auth")
 public class AuthController {
 
-  private static final String SESSION_USER = "aurora.user";
-
   private final AuthService auth;
   private final StateFileService stateFiles;
+  private final SessionService sessions;
 
-  public AuthController(AuthService auth, StateFileService stateFiles) {
+  public AuthController(AuthService auth, StateFileService stateFiles, SessionService sessions) {
     this.auth = auth;
     this.stateFiles = stateFiles;
+    this.sessions = sessions;
   }
 
   @PostMapping("/login")
@@ -49,20 +47,10 @@ public class AuthController {
     if (user.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid credentials");
     }
-    // Rotate session on login (session fixation protection).
-    HttpSession old = request.getSession(false);
-    if (old != null) old.invalidate();
-    HttpSession session = request.getSession(true);
-    session.setAttribute(SESSION_USER, user.get().username());
-
-    // Spring Security authority mirrors the DB role. Phase D grew the
-    // role model beyond ROLE_ADMIN; the authority string is the DB
-    // role uppercased with 'ROLE_' prefix so downstream @PreAuthorize
-    // (if we ever adopt it) reads naturally.
-    String authority = "ROLE_" + user.get().role().name();
-    var authToken = new UsernamePasswordAuthenticationToken(
-        user.get().username(), null, List.of(new SimpleGrantedAuthority(authority)));
-    SecurityContextHolder.getContext().setAuthentication(authToken);
+    // Rotates the session (fixation protection) and sets the Spring
+    // Security authentication token — see SessionService for why this is
+    // shared with the onboarding-completion path.
+    sessions.establish(user.get(), request);
 
     return new Session(true, user.get().username(), false, user.get().tz(),
         user.get().role().wireName());
@@ -117,7 +105,7 @@ public class AuthController {
   public Session session(HttpServletRequest request) {
     HttpSession s = request.getSession(false);
     if (s == null) return Session.anonymous();
-    Object u = s.getAttribute(SESSION_USER);
+    Object u = s.getAttribute(SessionService.SESSION_USER);
     if (u == null) return Session.anonymous();
     // Fetch role fresh from DB every time so a role change (Phase D
     // /api/users PUT flip) takes effect on the next request without

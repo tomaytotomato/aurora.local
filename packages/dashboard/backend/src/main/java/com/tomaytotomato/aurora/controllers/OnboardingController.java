@@ -3,11 +3,13 @@ package com.tomaytotomato.aurora.controllers;
 import com.tomaytotomato.aurora.services.LaunchService;
 import com.tomaytotomato.aurora.services.OnboardingService;
 import com.tomaytotomato.aurora.services.PackagesService;
+import com.tomaytotomato.aurora.services.SessionService;
 import com.tomaytotomato.aurora.services.StateFileService;
 import com.tomaytotomato.aurora.services.IdentitySecretsService;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.domain.RepoState;
 import com.tomaytotomato.aurora.services.SystemService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -59,6 +61,7 @@ public class OnboardingController {
   private final IdentitySecretsService identitySecrets;
   private final AuditEventRepo audit;
   private final PackagesService packagesService;
+  private final SessionService sessions;
 
   /**
    * TD5: when true, exposes {@code POST /api/onboarding/reset}. Bound from
@@ -72,7 +75,7 @@ public class OnboardingController {
   public OnboardingController(OnboardingService onboarding, SystemService system,
                               LaunchService launcher, StateFileService stateFiles,
                               IdentitySecretsService identitySecrets, AuditEventRepo audit,
-                              PackagesService packagesService) {
+                              PackagesService packagesService, SessionService sessions) {
     this.onboarding = onboarding;
     this.system = system;
     this.launcher = launcher;
@@ -80,6 +83,7 @@ public class OnboardingController {
     this.identitySecrets = identitySecrets;
     this.audit = audit;
     this.packagesService = packagesService;
+    this.sessions = sessions;
   }
 
   // --- canonical shape ------------------------------------------------
@@ -128,14 +132,32 @@ public class OnboardingController {
     return ResponseEntity.ok(Map.of("id", id, "username", req.username()));
   }
 
+  /**
+   * Commits the wizard and logs the operator in, in one call.
+   *
+   * <p>Why here rather than {@code POST /admin}: at admin-creation time
+   * onboarding has several steps left (domain, secrets, DNS, review,
+   * launch), any of which can still fail or be abandoned — establishing
+   * a session that early would hand out a login for a box that has not
+   * finished setting itself up. {@code /complete} only ever succeeds
+   * once: {@link OnboardingService#guardMidOnboarding()} refuses it with
+   * 409 once {@code isComplete()} is already true, so a second caller can
+   * never replay this into a fresh session. And since the admin exists
+   * at all only because someone already chose its username and password
+   * via {@code POST /admin}, granting a session here hands out nothing
+   * an attacker could not already get by logging in with those same
+   * credentials — it just skips the redundant extra step for the
+   * operator who just set them.
+   */
   @PostMapping("/complete")
-  public ResponseEntity<Map<String, Object>> complete() {
+  public ResponseEntity<Map<String, Object>> complete(HttpServletRequest request) {
     try {
       onboarding.guardMidOnboarding();
     } catch (IllegalStateException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
     }
     onboarding.markComplete();
+    onboarding.primaryAdmin().ifPresent(admin -> sessions.establish(admin, request));
     return ResponseEntity.ok(Map.of("complete", true));
   }
 
