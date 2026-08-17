@@ -13,15 +13,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * {@link NetworkService} — what {@code GET /packages/{name}/network}
- * reports today, versus what docs/SPLIT_TUNNEL.md still lists as planned.
- *
- * <p>The regression this whole endpoint exists to close: before it was
- * wired up, every call 404'd (no handler, not "no data for this package"),
- * and the frontend's generic copy read as "this app's networking is not
- * on this box any more" for a package that was plainly running.
- */
+/** {@link NetworkService} — what {@code GET /packages/{name}/network} reports today. */
 class NetworkServiceTests {
 
   private static Package pkg(String name, boolean enabled, boolean running, List<Map<String, Object>> ports) {
@@ -67,8 +59,6 @@ class NetworkServiceTests {
     assertThat(out.gateway()).isNull();
     assertThat(out.containers()).containsExactly("silverbullet");
     assertThat(out.publishedPorts()).containsExactly(3030);
-    // The one thing that must never regress: a genuinely running package
-    // reported as though its networking had disappeared.
     assertThat(out.locked()).isTrue();
     assertThat(out.lockedReason()).isNotBlank();
   }

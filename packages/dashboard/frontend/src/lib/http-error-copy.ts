@@ -49,14 +49,6 @@ export function httpStatusFromError(err: unknown): number | undefined {
  *
  * No trailing period on the returned string \u2014 callers can append
  * additional context if desired.
- *
- * The 404 default used to read `That ${ctx.subject} is not on this box
- * any more.`, which reads fine for a bare noun ("That container...") but
- * turns into a run-on ("That this app's networking is not on this box
- * any more.") for every subject already written as its own noun phrase
- * ("this app's networking", "this app's configuration") \u2014 which is
- * most of them. Leading with the brand name instead of a demonstrative
- * pronoun reads naturally for both shapes.
  */
 export function humanCopyForStatus(status: number | undefined, ctx: ErrorCopyContext): string {
   if (status === 401 || status === 403) {

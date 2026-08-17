@@ -33,31 +33,11 @@ public class DockerService {
   private static final String PROJECT_LABEL = "com.docker.compose.project";
   private static final String PROJECT_NAME = "aurora";
   /**
-   * Package stacks can end up under either of two compose project labels:
-   * <ul>
-   *   <li>{@code com.docker.compose.project=aurora} — {@code scripts/up.sh}
-   *       (what {@code LaunchService} runs for every Install/Start, and
-   *       what the real install chain and this testbed both use) always
-   *       invokes {@code docker compose -p aurora ...}, overriding
-   *       whatever each compose.yml's own top-level {@code name:} says.
-   *       Verified against a running testbed box: caddy, aurora
-   *       (dashboard), authelia and silverbullet were <em>all</em> labelled
-   *       {@code aurora}, never their per-package name, despite
-   *       {@code packages/notes/compose.yml} declaring
-   *       {@code name: aurora-notes}. This is the normal case on a real
-   *       box, not a historical one.</li>
-   *   <li>{@code com.docker.compose.project=aurora-<pkg>} — only happens
-   *       if compose is invoked directly against one package's
-   *       compose.yml without going through {@code up.sh} (manual testing,
-   *       bypassing Aurora's own scripts).</li>
-   * </ul>
-   * Historically this filtered on the shared {@code aurora} project only,
-   * which under-counted any stack that had been launched the second way.
-   * That produced the System-card {@code Containers 1} anomaly Bruce
-   * reported on 2026-08-02 (aurora + caddy + silverbullet live, only
-   * silverbullet visible to the label filter). Broadening to {@code aurora}
-   * OR {@code aurora-*} keeps the semantics honest without conflating with
-   * unrelated projects.
+   * {@code scripts/up.sh} always runs {@code docker compose -p aurora ...},
+   * overriding each compose.yml's own {@code name:} — verified on a
+   * running testbed box, every container is labelled {@code aurora}
+   * regardless of package. {@code aurora-<pkg>} only shows up if compose
+   * is invoked directly, bypassing {@code up.sh}. Match both.
    */
   private static final String PROJECT_PREFIX = "aurora-";
 
@@ -68,28 +48,16 @@ public class DockerService {
   }
 
   /**
-   * Containers belonging to one package: those whose compose project
-   * label matches {@code aurora-<pkg>} (or, for {@code core}, either that
-   * or the shared {@code aurora} project), plus — for any package — a
-   * container labelled under the shared {@code aurora} project whose own
-   * name equals {@code expectedContainer}.
+   * Containers belonging to one package: project label {@code aurora-<pkg>}
+   * (or, for {@code core}, {@code aurora} too), plus a container under the
+   * shared {@code aurora} project whose own name equals
+   * {@code expectedContainer} — the normal case per {@code PROJECT_PREFIX}'s
+   * javadoc. Same tolerance {@link #findByName} already gives
+   * {@code GET /services/status}, so the two surfaces agree.
    *
-   * <p>That second clause is not a rare fallback: {@code scripts/up.sh}
-   * (see {@code PROJECT_PREFIX}'s javadoc) always launches with
-   * {@code -p aurora}, so it is the normal case for every package on a
-   * real box — {@code aurora-<pkg>} only happens if someone runs compose
-   * directly against one package's file. {@link #findByName} already
-   * tolerates this (it searches every {@code aurora}/{@code aurora-*}
-   * container by name, which is why {@code GET /services/status} reports
-   * such a container correctly) — this gives project-scoped callers
-   * ({@code ContainersController}, the per-package network endpoint) the
-   * same tolerance, so two surfaces on the same page never disagree about
-   * whether a package's container exists.
-   *
-   * @param expectedContainer the name the caller expects this package's
-   *                           container to have (manifest {@code probe.container},
-   *                           or the package name itself when unset) — pass
-   *                           {@code null} to skip the name-based match.
+   * @param expectedContainer manifest {@code probe.container}, or the
+   *                           package name when unset; {@code null} skips
+   *                           the name-based match.
    */
   public List<Container> containersForPackage(String pkg, String expectedContainer) {
     Set<String> targetProjects = "core".equals(pkg)

@@ -80,13 +80,8 @@ const backTo = computed(() => (isCore.value ? '/apps/core' : '/apps/catalogue'))
 const backLabel = computed(() => (isCore.value ? '← Core' : '← Apps'));
 const links = computed(() => (detail.value ? packageLinks(detail.value) : []));
 
-// `readme` is the long-form doc (openapi's PackageDetail.readme) but no
-// manifest wires it up yet, so it is always absent on the wire today —
-// every package's ABOUT card fell back to "No description yet." even
-// though the page header, one screen up, was already showing the
-// manifest's `description`. Prefer readme (richer, once it exists) but
-// fall back to the same description the header uses, so the two never
-// disagree about whether this app has a description at all.
+// readme is never populated yet; fall back to the same description the
+// header uses so the two never disagree.
 const readmeBody = computed(() => (detail.value?.readme ?? '').replace(/^#\s+.*\n+/, '').trim());
 const aboutBody = computed(() => readmeBody.value || (detail.value?.description ?? '').trim());
 
@@ -731,16 +726,9 @@ onMounted(async () => {
             </p>
           </Card>
 
-          <!-- Consolidated: Runtime/Status, Docker/Structure, Network/vhosts,
-               Network/Ports, and Depends-on used to be five separate cards
-               (plus Requirements below) for what is really one fact —
-               "what is this app, and what does it touch" — read straight
-               off manifest-derived fields with no action of their own.
-               Version (its own update state + copy) and Limits
-               (PackageResourcesCard, its own Change action) stay separate:
-               they do something a plain row can't. Backup stays separate
-               too — it carries its own warning state and a link into the
-               Backup page, not just a fact to read. -->
+          <!-- Consolidated Status/Structure/vhosts/Ports/Depends-on/Requirements
+               into one card. Version, Limits and Backup stay separate — each
+               has its own state or action a plain row can't carry. -->
           <Card class="col-span-2" data-test="package-details-card">
             <div class="eyebrow mb-1">Details</div>
             <h3 class="mb-3">At a glance</h3>
@@ -821,10 +809,7 @@ onMounted(async () => {
           </Card>
 
           <!-- Ceilings against live usage. One runaway container on a
-               box with no swap takes everything down with it. Kept as its
-               own card (not folded into Details above): it has a Change
-               action the rest of Details doesn't, same reasoning as
-               Version. -->
+               box with no swap takes everything down with it. -->
           <PackageResourcesCard v-if="detail.enabled || isCore" :package="detail.name" />
         </div>
       </div>
