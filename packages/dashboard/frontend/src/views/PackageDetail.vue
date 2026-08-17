@@ -18,7 +18,7 @@ import {
 import { buildEnvForm, isEnvFormDirty, validateEnvForm } from '@/lib/envForm';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import { packageLabel, prettyPackageName } from '@/lib/packageName';
-import { deriveStatusLight, packageActionSlots, type PackageAction } from '@/lib/packageLifecycle';
+import { deriveStatusLight, isInstalledView, packageActionSlots, type PackageAction } from '@/lib/packageLifecycle';
 import { useServiceStatusStream } from '@/composables/useServiceStatusStream';
 import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
@@ -29,6 +29,7 @@ import StatusLight from '@/components/StatusLight.vue';
 import JobLogPanel from '@/components/JobLogPanel.vue';
 import PackageResourcesCard from '@/components/PackageResourcesCard.vue';
 import PackageImpactPanel from '@/components/PackageImpactPanel.vue';
+import PackagePreview from '@/components/PackagePreview.vue';
 import { Alert, AlertDescription, Button, Dialog, Input, Label, Skeleton } from '@/components/ui';
 
 const route = useRoute();
@@ -69,6 +70,17 @@ const actionSlots = computed(() =>
     enabled: detail.value?.enabled ?? false,
     running: detail.value?.running ?? false,
   }),
+);
+// Which half of the page applies: the installed half (live state, logs,
+// config, network, version/update status, backup coverage — everything
+// below) or the preview half (PackagePreview — what installing it would
+// cost, before any of the above exists to report on). Same route either
+// way; this is a reactive flip on `enabled`, not a navigation, so a
+// package that installs mid-session lands here with no reload. Core
+// packages are always the installed half regardless of their enabled
+// flag — see isInstalledView().
+const installed = computed(() =>
+  isInstalledView({ isCore: isCore.value, enabled: detail.value?.enabled ?? false }),
 );
 function actionSlot(action: PackageAction) {
   return actionSlots.value.find((s) => s.action === action)!;
@@ -643,6 +655,18 @@ onMounted(async () => {
     />
 
     <!--
+      Not-installed apps get the preview half instead of the tabbed
+      region below — Config, Network and Logs all describe something
+      running, and installing hasn't happened yet. See PackagePreview.vue
+      for what's shown instead, and lib/packageLifecycle.ts::isInstalledView
+      for the flag this branches on. While `detail` is still loading,
+      `installed` reads false but this stays on the Tabs branch (the `||
+      !detail` below) so the existing Overview skeleton keeps doing its
+      job rather than a second, competing loading state appearing here.
+    -->
+    <PackagePreview v-if="detail && !installed" :detail="detail" :update="update" />
+
+    <!--
       The tabbed region sits over the app-wide aurora photo. The tab
       strip stays transparent and uses on-photo-tabs for legible triggers
       (same as PackagesCatalogue's Installed/Marketplace tabs and
@@ -651,6 +675,7 @@ onMounted(async () => {
       cards under it.
     -->
     <Tabs
+      v-else
       v-model="activeTab"
       class="on-photo-tabs"
       :tabs="[
@@ -735,7 +760,14 @@ onMounted(async () => {
             <dl class="text-sm space-y-3">
               <div class="flex items-center justify-between">
                 <dt class="text-muted-foreground">Status</dt>
-                <dd class="font-mono">{{ detail.running ? 'running' : 'stopped' }}</dd>
+                <!-- Reads the same derived light as the badge at the top of
+                     the page (lib/packageLifecycle.ts::deriveStatusLight),
+                     not a raw enabled/running boolean — this is exactly
+                     where "Status: stopped" and a NOT INSTALLED badge used
+                     to disagree, because this row bypassed the light
+                     entirely. It also now shows starting/unhealthy rather
+                     than collapsing them into a flat "running". -->
+                <dd class="font-mono">{{ lightState }}</dd>
               </div>
               <div class="flex items-center justify-between">
                 <dt class="text-muted-foreground">Docker</dt>
@@ -809,8 +841,11 @@ onMounted(async () => {
           </Card>
 
           <!-- Ceilings against live usage. One runaway container on a
-               box with no swap takes everything down with it. -->
-          <PackageResourcesCard v-if="detail.enabled || isCore" :package="detail.name" />
+               box with no swap takes everything down with it. Reads the
+               manifest default + any override regardless of install
+               state, so no gate is needed here — PackagePreview shows
+               the same card pre-install. -->
+          <PackageResourcesCard :package="detail.name" />
         </div>
       </div>
 
