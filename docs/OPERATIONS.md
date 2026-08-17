@@ -10,6 +10,7 @@ idempotent, safe to run repeatedly, and lives under `scripts/`.
 | `scripts/backup.sh`        | Snapshot config + small state to tarball, prune old    | Daily             |
 | `scripts/pin.sh`           | Report / refresh / apply image-digest pins             | Weekly (`--check`) |
 | `scripts/rotate-secrets.sh`| Find weak `.env` values, rotate on `--apply`           | Quarterly         |
+| `scripts/reset-admin-password.sh` | Recover a lost dashboard admin username/password | Ad-hoc / break-glass |
 
 Every script accepts `-h` / `--help`.
 
@@ -120,11 +121,83 @@ Best-effort weakness heuristic — never rotates keys named `*_USER`,
 
 Run after any suspected credential leak, or quarterly as hygiene.
 
+## reset-admin-password
+
+There is no "forgot password" flow in the dashboard itself — v0.1 is a
+single-box admin plane with no email provider to send a reset link
+through. If the owner loses the admin username or password set during
+onboarding, this script is the supported way back in, run from a shell
+on the box.
+
+```
+./scripts/reset-admin-password.sh list        # show every user: id, username, role
+./scripts/reset-admin-password.sh <username>   # interactively set a new password
+```
+
+`list` prints every row in `admin_user` (id, username, role, created)
+and nothing else — no password hashes. Run it first if the *username*
+is what's forgotten, or if more than one admin exists and you need to
+see which one to reset; resetting a password never changes role or
+count, so it never runs into the "keep at least one admin" rule that
+guards role changes and deletes elsewhere in the app. If the table is
+completely empty, this isn't a recovery case at all: the onboarding
+wizard creates the first admin from scratch the next time anyone visits
+the dashboard, and `list` says so instead of printing nothing.
+
+**Why there's no old-password prompt.** Anyone who can run this script
+already has a shell on the box, which means `docker exec` into the
+container and read access to every `.env` file under `packages/*/` —
+none of that is gated on the dashboard's own login. Asking for the
+password you're trying to recover, in order to prove you're allowed to
+recover it, would be theatre. Shell access to the box **is** the
+authorisation, the same assumption `rotate-secrets.sh` and `backup.sh`
+already make. What the script does *not* do is expose this any other
+way: the reset logic lives inside `aurora.jar` and is dispatched from a
+plain argument check in `AuroraApplication.main()`, before Spring Boot
+(and therefore every HTTP route, including the onboarding wizard) has
+started. There is no controller and no endpoint — nothing on the
+dashboard's frontend or API can reach it.
+
+**How it reaches the database.** `/data/aurora.db` lives on the named
+Docker volume `aurora_data`, not a bind mount, and the aurora image is
+a bare JRE with no `sqlite3` binary. The script runs
+`java -jar aurora.jar reset-admin-password` inside the container
+instead — the exact JDBC driver, repo class, and BCrypt cost the app
+itself uses for login, so the hash it writes is guaranteed to verify on
+the next login attempt. It tries, in order:
+
+1. **Container running** — `docker exec -i aurora java -jar ...`.
+2. **Container stopped but not removed** — a short-lived helper
+   container from the same image, `--volumes-from aurora`, so it reaches
+   the same `/data` without needing to know the volume name or image
+   tag by hand.
+
+If the container has been `docker rm`'d entirely, neither applies. Fall
+back to running the jar directly against the volume:
+
+```
+docker run --rm -i -v aurora_data:/data -e AURORA_DB_PATH=/data/aurora.db \
+  aurora-dashboard:<version from packages/dashboard/.env, default 0.1.0> \
+  reset-admin-password list
+```
+
+**No restart needed afterwards.** Login re-reads the password hash from
+the database on every attempt — nothing caches it in the JVM — so the
+very next login sees the new password immediately. An already-logged-in
+session stays valid until it's logged out or expires, same as any other
+password change.
+
+The new password is always read from an interactive, hidden prompt and
+piped to the container over stdin — never as a command-line argument
+(visible in `ps`) and never printed back. If a run reports "database is
+locked", the running app was mid-request at that exact moment; wait a
+moment and try again.
+
 ## Dependencies
 
 | Tool       | Used by                                                 | Optional?      |
 |------------|---------------------------------------------------------|----------------|
-| `docker`   | doctor, health, pin                                     | no             |
+| `docker`   | doctor, health, pin, reset-admin-password               | no             |
 | `curl`     | health (HTTP probes)                                    | probes skipped |
 | `openssl`  | rotate-secrets (rand-hex)                               | no             |
 | `tar`      | backup                                                  | no             |
