@@ -4,6 +4,7 @@ import com.tomaytotomato.aurora.services.DockerEventService;
 import com.tomaytotomato.aurora.services.DockerService;
 import com.tomaytotomato.aurora.services.DockerService.LogLine;
 import com.tomaytotomato.aurora.services.DockerService.LogTail;
+import com.tomaytotomato.aurora.services.PackagesService;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,7 +32,8 @@ class ContainersControllerLogsTests {
 
   private static MockMvc mvc(DockerService docker) {
     DockerEventService events = Mockito.mock(DockerEventService.class);
-    return MockMvcBuilders.standaloneSetup(new ContainersController(docker, events)).build();
+    PackagesService packages = Mockito.mock(PackagesService.class);
+    return MockMvcBuilders.standaloneSetup(new ContainersController(docker, events, packages)).build();
   }
 
   @Test

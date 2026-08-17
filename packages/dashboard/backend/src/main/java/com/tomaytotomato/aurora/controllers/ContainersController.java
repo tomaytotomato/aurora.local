@@ -6,6 +6,7 @@ import com.tomaytotomato.aurora.services.DockerEventService.ContainerEvent;
 import com.tomaytotomato.aurora.services.DockerService;
 import com.tomaytotomato.aurora.services.DockerService.LogLine;
 import com.tomaytotomato.aurora.services.DockerService.LogTail;
+import com.tomaytotomato.aurora.services.PackagesService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,10 +30,12 @@ public class ContainersController {
 
   private final DockerService docker;
   private final DockerEventService events;
+  private final PackagesService packages;
 
-  public ContainersController(DockerService docker, DockerEventService events) {
+  public ContainersController(DockerService docker, DockerEventService events, PackagesService packages) {
     this.docker = docker;
     this.events = events;
+    this.packages = packages;
   }
 
   private static final Pattern PACKAGE_NAME_SHAPE =
@@ -46,25 +49,22 @@ public class ContainersController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "package name is malformed");
     }
-    // B3-followup (iter-16): when "package=<name>" is supplied, filter
-    // to containers whose compose project label is exactly
-    // "aurora-<name>". Aurora launches each package's stack under its
-    // per-package project name, so this label-equality check gives us a
-    // stable service-→-container listing without parsing compose files.
-    // The historical shared "aurora" project holds aurora itself + a
-    // handful of pre-per-package leftovers (caddy, silverbullet); those
-    // are surfaced under package=core if the caller asks for it, because
-    // packages/core/compose.yml top-level name is exactly "aurora".
-    String targetProject = pkg == null ? null
-        : ("core".equals(pkg) ? "aurora" : "aurora-" + pkg);
+    // B3-followup (iter-16): when "package=<name>" is supplied, filter to
+    // this package's containers. DockerService.containersForPackage does
+    // the matching (project label, with a container-name fallback for the
+    // legacy shared "aurora" project) — see its javadoc for why the
+    // fallback matters: a container created before its package had its
+    // own compose project name (silverbullet, package "notes", is the
+    // real-box case) never gets relabelled just because the manifest
+    // moved on, and this is the same tolerance GET /services/status
+    // already relies on via DockerService.findByName. One definition of
+    // "this package's containers" rather than two that can drift apart.
+    Iterable<Container> matched = pkg == null
+        ? docker.listProjectContainers()
+        : docker.containersForPackage(pkg, expectedContainerFor(pkg));
 
     List<Map<String, Object>> out = new ArrayList<>();
-    for (Container c : docker.listProjectContainers()) {
-      if (targetProject != null) {
-        Map<String, String> labels = c.getLabels();
-        String project = labels == null ? null : labels.get("com.docker.compose.project");
-        if (!targetProject.equals(project)) continue;
-      }
+    for (Container c : matched) {
       out.add(Map.of(
           "id", c.getId(),
           "names", c.getNames() == null ? new String[0] : c.getNames(),
@@ -76,6 +76,20 @@ public class ContainersController {
       ));
     }
     return out;
+  }
+
+  /**
+   * The container name a package's manifest declares it probes (see
+   * {@code probe.container} in manifest.yml, same field
+   * {@link com.tomaytotomato.aurora.services.StatusProbeService} reads),
+   * falling back to the package name itself when the manifest has no
+   * {@code probe:} block — identical default to
+   * {@code StatusProbeService.probe()}.
+   */
+  private String expectedContainerFor(String pkg) {
+    Map<String, Object> probe = packages.readProbe(pkg);
+    Object container = probe == null ? null : probe.get("container");
+    return container instanceof String s && !s.isBlank() ? s : pkg;
   }
 
   /**
