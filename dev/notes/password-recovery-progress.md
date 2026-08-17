@@ -96,3 +96,60 @@ brief, but the new code is written the opposite way on purpose.
 
 `mvn test`: **759/759 passing** (full suite, Java 25 via
 `temurin-25.jdk`) — no regressions, 12 new tests.
+
+## 2026-08-17 — slice 2: shell script + docs
+
+`scripts/reset-admin-password.sh`: `list` / `<username>` / `-h`.
+Resolves the container in two steps — `docker exec` if `aurora` is
+running, else a `--volumes-from aurora` helper container if it exists
+stopped — and documents the manual `docker run -v aurora_data:/data`
+fallback in `docs/OPERATIONS.md` for the case where the container's
+been `docker rm`'d outright (not automated: at that point you also need
+to know the image tag, and guessing wrong silently creates a *second*
+`aurora_data`-shaped volume rather than failing loudly, which felt like
+the wrong trade for an edge case this rare).
+
+Password is always read via `read -rs` (hidden, interactive) and piped
+to the container over stdin — confirmed via `shellcheck -x -S style -e
+SC1091` (koalaman/shellcheck:stable, clean) that no password-bearing
+variable is ever passed as an argument or interpolated into a command
+Docker would echo.
+
+Documented in `docs/OPERATIONS.md`: new table row, full section
+matching the existing doctor/health/backup/pin/rotate-secrets style,
+plus the authorisation-model and restart-not-needed explanations
+written out in full (not just cross-referenced) since this is exactly
+where an operator in the dark would look first.
+
+### What was proved and how
+
+- The hash `ResetAdminPasswordCli.reset()` writes verifies against a
+  `BCryptPasswordEncoder` built independently at cost 12 — the exact
+  cost `AuthService.BCRYPT_COST` uses (read, not modified).
+- The CLI's list/reset/dispatch logic against a real on-disk SQLite
+  file created fresh per test, migrated with the actual V1/V3 SQL.
+- No plaintext password or hash ever reaches stdout/stderr (asserted in
+  tests, not just claimed).
+- Shell: `bash -n` and `shellcheck -x -S style -e SC1091` clean across
+  `bootstrap.sh scripts/*.sh scripts/lib/*.sh`, including the new file.
+- Full backend suite green: 759/759.
+
+### What remains unproven without a live box
+
+- `docker exec -i aurora java -jar /app/aurora.jar reset-admin-password
+  ...` against the *actual* running container — no VM available in this
+  worktree (explicitly off-limits; another agent has it). The command
+  shape is right (matches the Dockerfile's `ENTRYPOINT` and the
+  compose `container_name: aurora`), but never executed against a real
+  container.
+- The `--volumes-from`-based stopped-container path, likewise.
+- Real-world SQLite lock contention: whether a `docker exec`'d reset
+  actually collides with the running app's Hikari connection (pool size
+  1) under load, versus the brief, un-contended case tested here. The
+  code treats a locked-database error as a "try again" rather than
+  retrying automatically — untested whether that's the right call under
+  real concurrent traffic.
+- Whether `docker inspect -f '{{.State.Running}}'` and
+  `{{.Config.Image}}` behave identically across the Docker versions
+  aurora.local actually targets (only exercised against whatever
+  `docker` this sandbox has).
