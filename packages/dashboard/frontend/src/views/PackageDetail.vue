@@ -731,44 +731,66 @@ onMounted(async () => {
             </p>
           </Card>
 
-          <Card>
-            <div class="eyebrow mb-1">Runtime</div>
-            <h3 class="mb-3">Status</h3>
-            <div class="text-3xl font-mono text-foreground">{{ detail.running ? 'running' : 'stopped' }}</div>
-          </Card>
-          <Card>
-            <div class="eyebrow mb-1">Docker</div>
-            <h3 class="mb-3">Structure</h3>
-            <DockerBadge :structure="structure" class="text-sm text-foreground mb-2" />
-            <p class="text-xs text-muted-foreground">
-              {{ structure === 'compose'
-                ? 'Multiple services started together as one Docker Compose project.'
-                : 'A single Docker container.' }}
-            </p>
-          </Card>
-          <Card>
-            <div class="eyebrow mb-1">Network</div>
-            <h3 class="mb-3">vhosts</h3>
-            <ul class="text-sm font-mono text-foreground space-y-0.5">
-              <li v-for="v in (detail.vhosts ?? [])" :key="v">{{ v }}</li>
-              <li v-if="!(detail.vhosts ?? []).length" class="text-muted-foreground">none</li>
-            </ul>
-          </Card>
-          <Card>
-            <div class="eyebrow mb-1">Network</div>
-            <h3 class="mb-3">Ports</h3>
-            <ul class="text-sm font-mono text-foreground space-y-0.5">
-              <li v-for="(p, i) in (detail.ports ?? [])" :key="i">{{ portLabel(p) }}</li>
-              <li v-if="!(detail.ports ?? []).length" class="text-muted-foreground">none</li>
-            </ul>
-          </Card>
-          <Card>
-            <div class="eyebrow mb-1">Depends on</div>
-            <h3 class="mb-3">Dependencies</h3>
-            <div class="flex gap-2 flex-wrap">
-              <span v-for="d in (detail.dependsOn ?? [])" :key="d" class="font-mono text-xs px-2 py-1 rounded border border-border">{{ d }}</span>
-              <span v-if="!(detail.dependsOn ?? []).length" class="text-muted-foreground text-sm">none</span>
-            </div>
+          <!-- Consolidated: Runtime/Status, Docker/Structure, Network/vhosts,
+               Network/Ports, and Depends-on used to be five separate cards
+               (plus Requirements below) for what is really one fact —
+               "what is this app, and what does it touch" — read straight
+               off manifest-derived fields with no action of their own.
+               Version (its own update state + copy) and Limits
+               (PackageResourcesCard, its own Change action) stay separate:
+               they do something a plain row can't. Backup stays separate
+               too — it carries its own warning state and a link into the
+               Backup page, not just a fact to read. -->
+          <Card class="col-span-2" data-test="package-details-card">
+            <div class="eyebrow mb-1">Details</div>
+            <h3 class="mb-3">At a glance</h3>
+            <dl class="text-sm space-y-3">
+              <div class="flex items-center justify-between">
+                <dt class="text-muted-foreground">Status</dt>
+                <dd class="font-mono">{{ detail.running ? 'running' : 'stopped' }}</dd>
+              </div>
+              <div class="flex items-center justify-between">
+                <dt class="text-muted-foreground">Docker</dt>
+                <dd><DockerBadge :structure="structure" /></dd>
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <dt class="text-muted-foreground shrink-0">vhosts</dt>
+                <dd class="font-mono text-xs text-right">
+                  <template v-if="(detail.vhosts ?? []).length">
+                    <div v-for="v in detail.vhosts" :key="v">{{ v }}</div>
+                  </template>
+                  <span v-else class="text-muted-foreground font-sans">none</span>
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <dt class="text-muted-foreground shrink-0">Ports</dt>
+                <dd class="font-mono text-xs text-right">
+                  <template v-if="(detail.ports ?? []).length">
+                    <div v-for="(p, i) in detail.ports" :key="i">{{ portLabel(p) }}</div>
+                  </template>
+                  <span v-else class="text-muted-foreground font-sans">none</span>
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <dt class="text-muted-foreground shrink-0">Depends on</dt>
+                <dd>
+                  <div class="flex gap-2 flex-wrap justify-end">
+                    <span v-for="d in (detail.dependsOn ?? [])" :key="d" class="font-mono text-xs px-2 py-1 rounded border border-border">{{ d }}</span>
+                    <span v-if="!(detail.dependsOn ?? []).length" class="text-muted-foreground">none</span>
+                  </div>
+                </dd>
+              </div>
+              <template v-if="minRamMb !== undefined || minDiskGb !== undefined">
+                <div v-if="minRamMb !== undefined" class="flex justify-between">
+                  <dt class="text-muted-foreground">Minimum RAM</dt>
+                  <dd class="font-mono">{{ minRamMb }} MB</dd>
+                </div>
+                <div v-if="minDiskGb !== undefined" class="flex justify-between">
+                  <dt class="text-muted-foreground">Minimum disk</dt>
+                  <dd class="font-mono">{{ minDiskGb }} GB</dd>
+                </div>
+              </template>
+            </dl>
           </Card>
           <!-- The manifest's backup: block, read-only. Writing it is a
                manifest job; this is here so an operator can see at a
@@ -799,17 +821,11 @@ onMounted(async () => {
           </Card>
 
           <!-- Ceilings against live usage. One runaway container on a
-               box with no swap takes everything down with it. -->
+               box with no swap takes everything down with it. Kept as its
+               own card (not folded into Details above): it has a Change
+               action the rest of Details doesn't, same reasoning as
+               Version. -->
           <PackageResourcesCard v-if="detail.enabled || isCore" :package="detail.name" />
-
-          <Card v-if="minRamMb !== undefined || minDiskGb !== undefined">
-            <div class="eyebrow mb-1">Requirements</div>
-            <h3 class="mb-3">Resources</h3>
-            <dl class="text-sm space-y-2">
-              <div v-if="minRamMb !== undefined" class="flex justify-between"><dt class="text-muted-foreground">Minimum RAM</dt><dd class="font-mono">{{ minRamMb }} MB</dd></div>
-              <div v-if="minDiskGb !== undefined" class="flex justify-between"><dt class="text-muted-foreground">Minimum disk</dt><dd class="font-mono">{{ minDiskGb }} GB</dd></div>
-            </dl>
-          </Card>
         </div>
       </div>
 
