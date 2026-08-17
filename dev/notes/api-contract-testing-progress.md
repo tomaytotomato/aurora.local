@@ -284,3 +284,17 @@ automatic path (not the hand-written one), five (now six, same three
 findings) genuine gaps catalogued precisely rather than silently
 accepted or over-broadly suppressed. Write-up for the calling agent
 next.
+
+**Addendum (onboarding-session-guard piece of work):** a new
+integration test exercising `GET /auth/me` inside `AuroraIntegrationTest`
+(the first one to call that endpoint through the conformance-checked
+`mvc`) turned up a seventh gap: `Session.role` (present on the record
+since Phase D, well before `GET /auth/me` was itself added to the spec
+in this file's own commit) is missing from the spec's `Session` schema.
+Same gap on `GET /auth/session` — untested by name so far, but it is
+the identical response record. Carved out narrowly as
+`"GET /auth/me -> 200", Set.of("role")` in
+`KNOWN_UNDOCUMENTED_RESPONSE_FIELDS`, same pattern as the `/packages/{name}`
+entry above. `role` is genuinely read by the frontend (gates the
+`/users` nav link and admin-only routes), so this wants a spec fix, not
+a response trim.

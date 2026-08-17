@@ -2,6 +2,7 @@ package com.tomaytotomato.aurora.controllers;
 
 import com.tomaytotomato.aurora.domain.RepoState;
 import com.tomaytotomato.aurora.services.AuthService;
+import com.tomaytotomato.aurora.services.SessionService;
 import com.tomaytotomato.aurora.services.StateFileService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,7 @@ class AuthControllerLogoutTests {
   void setUp() {
     auth = Mockito.mock(AuthService.class);
     stateFiles = Mockito.mock(StateFileService.class);
-    ctrl = new AuthController(auth, stateFiles);
+    ctrl = new AuthController(auth, stateFiles, new SessionService());
     mvc = MockMvcBuilders.standaloneSetup(ctrl).build();
   }
 

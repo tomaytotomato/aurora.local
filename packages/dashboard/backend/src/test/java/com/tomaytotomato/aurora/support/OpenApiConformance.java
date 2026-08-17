@@ -128,9 +128,27 @@ public final class OpenApiConformance implements ResultMatcher {
    * badge), so trimming the backend response is not a safe unilateral
    * call — this needs someone to decide whether the fields get
    * documented or the wire shape gets a dedicated view model.
+   *
+   * <p>{@code GET /packages -> 200} is the identical gap on the list
+   * endpoint — same {@code Package} record, same five fields — predicted
+   * in the paragraph above but not yet carved out because nothing had
+   * exercised it with a non-empty, fully-populated fixture list through
+   * this checker until an onboarding-completion test did.
+   *
+   * <p>{@code GET /auth/me -> 200}: {@code AuthController.Session}
+   * carries {@code role} (added well before {@code GET /auth/me} was
+   * itself added to the spec), but the spec's {@code Session} schema —
+   * shared with {@code GET /auth/session}, which has the identical gap —
+   * only documents {@code authenticated}, {@code username},
+   * {@code passkeyEnrolled} and {@code tz}. The frontend already reads
+   * {@code role} to gate the {@code /users} nav link and admin-only
+   * views, so this is drift to document and fix in the spec, not a field
+   * to quietly drop from the response.
    */
   private static final Map<String, Set<String>> KNOWN_UNDOCUMENTED_RESPONSE_FIELDS = Map.of(
-      "GET /packages/{name} -> 200", Set.of("recommends", "profiles", "requiredEnv", "postInstallNotes", "sso")
+      "GET /packages/{name} -> 200", Set.of("recommends", "profiles", "requiredEnv", "postInstallNotes", "sso"),
+      "GET /packages -> 200", Set.of("recommends", "profiles", "requiredEnv", "postInstallNotes", "sso"),
+      "GET /auth/me -> 200", Set.of("role")
   );
 
   /**
@@ -275,11 +293,27 @@ public final class OpenApiConformance implements ResultMatcher {
             .formatted(description, formatProblems(problems), new String(originalBody, StandardCharsets.UTF_8)));
   }
 
+  /**
+   * Strip named fields before validation. Handles both a bare object body
+   * ({@code GET /packages/{name}}) and a list body ({@code GET /packages}):
+   * for a list, the same fields are stripped from every item, since a
+   * "known undocumented field" on a record is a property of the record's
+   * shape, not of which endpoint happens to be returning it wrapped in an
+   * array or not.
+   */
   private JsonNode strip(JsonNode instance, Set<String> fields) {
-    if (fields == null || !(instance instanceof ObjectNode obj)) return instance;
-    ObjectNode copy = obj.deepCopy();
-    fields.forEach(copy::remove);
-    return copy;
+    if (fields == null) return instance;
+    if (instance instanceof ObjectNode obj) {
+      ObjectNode copy = obj.deepCopy();
+      fields.forEach(copy::remove);
+      return copy;
+    }
+    if (instance instanceof ArrayNode arr) {
+      ArrayNode copy = mapper.createArrayNode();
+      arr.forEach(item -> copy.add(strip(item, fields)));
+      return copy;
+    }
+    return instance;
   }
 
   private JsonNode dropNonStringArrayEntries(JsonNode instance, Set<String> fields) {

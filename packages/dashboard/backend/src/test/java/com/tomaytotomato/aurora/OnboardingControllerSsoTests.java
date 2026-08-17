@@ -72,7 +72,8 @@ class OnboardingControllerSsoTests {
         stateFiles,
         identitySecrets,
         audit,
-        mock(com.tomaytotomato.aurora.services.PackagesService.class)
+        mock(com.tomaytotomato.aurora.services.PackagesService.class),
+        mock(com.tomaytotomato.aurora.services.SessionService.class)
     );
     mvc = MockMvcBuilders.standaloneSetup(c).build();
   }

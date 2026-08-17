@@ -1,4 +1,9 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import {
+  createRouter,
+  createWebHistory,
+  type RouteLocationNormalized,
+  type RouteRecordRaw,
+} from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useOnboardingStore } from '@/stores/onboarding';
 
@@ -95,10 +100,14 @@ export const router = createRouter({
 
 // Guard order:
 //   1. Onboarding not complete → force /onboarding/** (except /login).
-//   2. Onboarding done + route is public → allow.
-//   3. Otherwise require an authenticated session; else /login.
+//   2. Onboarding done + the URL is still an onboarding route → the
+//      dashboard, not the wizard (see onboardingGuard below).
+//   3. Onboarding done + route is public → allow.
+//   4. Otherwise require an authenticated session; else /login.
 // Fail-open on network errors so the user can still reach /login.
-router.beforeEach(async (to) => {
+export async function onboardingGuard(
+  to: RouteLocationNormalized,
+): Promise<boolean | { path: string; query?: Record<string, string> }> {
   const onboarding = useOnboardingStore();
 
   // One-shot hydration per SPA lifetime. Populates the full draft so
@@ -125,7 +134,19 @@ router.beforeEach(async (to) => {
     return { path: `/onboarding/${step}` };
   }
 
-  // Onboarding done. Normal auth flow.
+  // Onboarding is done. Its own routes are still registered (so a stale
+  // tab mid-wizard doesn't 404), but there is nothing left in them to do —
+  // walking back in via the browser's back button or a stale bookmark
+  // would let someone retry steps (e.g. "start services") against a box
+  // that has already launched. The backend's own guardMidOnboarding()
+  // refuses the mutating calls those steps would make (409), but bouncing
+  // here means the operator never sees a broken wizard screen in the
+  // first place.
+  if (to.meta.onboarding) {
+    return { path: '/' };
+  }
+
+  // Normal auth flow.
   if (to.meta.public) return true;
 
   const auth = useAuthStore();
@@ -141,4 +162,6 @@ router.beforeEach(async (to) => {
     return { path: '/' };
   }
   return true;
-});
+}
+
+router.beforeEach(onboardingGuard);
