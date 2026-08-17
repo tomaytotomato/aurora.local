@@ -80,7 +80,15 @@ const backTo = computed(() => (isCore.value ? '/apps/core' : '/apps/catalogue'))
 const backLabel = computed(() => (isCore.value ? '← Core' : '← Apps'));
 const links = computed(() => (detail.value ? packageLinks(detail.value) : []));
 
+// `readme` is the long-form doc (openapi's PackageDetail.readme) but no
+// manifest wires it up yet, so it is always absent on the wire today —
+// every package's ABOUT card fell back to "No description yet." even
+// though the page header, one screen up, was already showing the
+// manifest's `description`. Prefer readme (richer, once it exists) but
+// fall back to the same description the header uses, so the two never
+// disagree about whether this app has a description at all.
 const readmeBody = computed(() => (detail.value?.readme ?? '').replace(/^#\s+.*\n+/, '').trim());
+const aboutBody = computed(() => readmeBody.value || (detail.value?.description ?? '').trim());
 
 function portLabel(p: Record<string, unknown>): string {
   const host = p.host ?? p.port ?? '?';
@@ -675,7 +683,7 @@ onMounted(async () => {
           <Card class="col-span-2">
             <div class="eyebrow mb-1">About</div>
             <h3 class="mb-3">What this is</h3>
-            <p v-if="readmeBody" class="text-sm text-foreground whitespace-pre-line">{{ readmeBody }}</p>
+            <p v-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
             <p v-else class="text-sm text-muted-foreground">No description yet.</p>
           </Card>
           <!-- Versions. Absent entirely when the updates domain has
