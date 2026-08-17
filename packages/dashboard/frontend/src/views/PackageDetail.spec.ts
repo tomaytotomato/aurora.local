@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
-import { type AxiosAdapter, type AxiosResponse } from 'axios';
+import { AxiosError, type AxiosAdapter, type AxiosResponse } from 'axios';
 import PackageDetail from './PackageDetail.vue';
 import { http } from '@/api/client';
 import { JobsApi } from '@/api/jobs';
@@ -57,13 +57,23 @@ function installAdapter(): void {
             ? r.url.test(url)
             : true);
       if (matches) {
-        return Promise.resolve({
+        const status = r.status ?? 200;
+        const response = {
           data: r.data ?? {},
-          status: r.status ?? 200,
+          status,
           statusText: 'OK',
           headers: {},
           config,
-        } as AxiosResponse);
+        } as AxiosResponse;
+        // A stubbed non-2xx must actually reject, same as real axios —
+        // otherwise `humanCopyForError` (which reads `err.response.status`)
+        // never sees the failure and callers silently treat the stubbed
+        // error body as valid data.
+        if (status < 200 || status >= 300) {
+          const err = new AxiosError('stubbed failure', String(status), config, undefined, response);
+          return Promise.reject(err);
+        }
+        return Promise.resolve(response);
       }
     }
     // Fallback: 200 empty body. Keeps unrelated fetches (resources,
@@ -239,5 +249,136 @@ describe('PackageDetail control panel', () => {
     expect(w.find('[data-test="action-install"]').exists()).toBe(true);
     expect(w.find('[data-test="action-uninstall"]').exists()).toBe(false);
     expect(captured.some((c) => c.method === 'get' && c.url === '/packages/photos')).toBe(true);
+  });
+});
+
+/**
+ * Real-box bug: the header showed RUNNING and the control panel said
+ * "Docker — Enabled and running", but the Logs tab said nothing was
+ * running yet and the Network tab said the app's networking was gone —
+ * both tabs quietly disagreeing with the rest of the same page.
+ *
+ * Root cause was two different things wearing one symptom:
+ *   - Logs: the backend's per-package container filter did an exact
+ *     compose-project-label match, missing a container still labelled
+ *     under the pre-per-package-split shared project (fixed backend-side
+ *     in DockerService.containersForPackage; these tests pin the
+ *     frontend side — a non-empty container list must never render the
+ *     "nothing running yet" empty state).
+ *   - Network: GET /packages/{name}/network had no backend handler at
+ *     all, so it always 404'd regardless of package state, and the
+ *     generic 404 copy read as "gone" rather than "not built yet".
+ *
+ * This suite pins the observable contract from the frontend's side: for
+ * a package the header and control panel already show as enabled and
+ * running, no tab may render copy implying it isn't.
+ */
+describe('PackageDetail — a running package is never reported as not-started by any tab', () => {
+  async function clickTab(w: Awaited<ReturnType<typeof mountDetail>>['w'], label: string): Promise<void> {
+    const tabs = w.findAll('[role="tab"]');
+    const tab = tabs.find((t) => t.text() === label);
+    if (!tab) throw new Error(`no tab labelled "${label}"`);
+    await tab.trigger('click');
+    await flushPromises();
+  }
+
+  function runningNotesDetail() {
+    return packageDetail({
+      name: 'notes',
+      title: 'Notes (SilverBullet)',
+      enabled: true,
+      running: true,
+    });
+  }
+
+  it('the Logs tab shows the container list, not "nothing running yet", once containers resolve', async () => {
+    stubResponse({ method: 'get', url: '/packages/notes', data: runningNotesDetail() });
+    stubResponse({
+      method: 'get',
+      url: '/containers',
+      data: [
+        { id: 'abc', names: ['/silverbullet'], image: 'ghcr.io/silverbulletmd/silverbullet:latest',
+          state: 'running', status: 'Up 2 seconds (health: starting)', service: 'silverbullet', labels: {} },
+      ],
+    });
+    const { w } = await mountDetail('notes');
+
+    await clickTab(w, 'Logs');
+
+    expect(w.find('[data-test="package-logs-empty"]').exists()).toBe(false);
+    expect(w.find('[data-test="package-logs-list"]').exists()).toBe(true);
+    expect(w.text()).not.toContain('Nothing running for this app yet');
+  });
+
+  it('the Network tab answers instead of 404ing, and never claims the networking is gone', async () => {
+    stubResponse({ method: 'get', url: '/packages/notes', data: runningNotesDetail() });
+    stubResponse({
+      method: 'get',
+      url: '/packages/notes/network',
+      data: {
+        package: 'notes',
+        mode: 'direct',
+        gateway: null,
+        locked: true,
+        lockedReason: "Aurora doesn't support changing this from the dashboard yet.",
+        containers: ['silverbullet'],
+        publishedPorts: [3030],
+        egressIp: null,
+        egressCountry: null,
+        gatewayHealthy: true,
+      },
+    });
+    const { w } = await mountDetail('notes');
+
+    await clickTab(w, 'Network');
+
+    expect(w.find('[data-state="error"]').exists()).toBe(false);
+    expect(w.find('[data-test="package-network-card"]').exists()).toBe(true);
+    expect(w.text()).not.toContain('is not on this box any more');
+  });
+
+  it('a genuine 404 on the network endpoint reads as "can\'t find", not the old broken "That this app\'s..." sentence', async () => {
+    // Belt-and-braces on fault 2: even the failure copy, if the box
+    // genuinely has nothing to say, must read as English.
+    stubResponse({ method: 'get', url: '/packages/notes', data: runningNotesDetail() });
+    stubResponse({ method: 'get', url: '/packages/notes/network', status: 404, data: {} });
+    const { w } = await mountDetail('notes');
+
+    await clickTab(w, 'Network');
+
+    expect(w.text()).toContain("Aurora can't find this app's networking on this box any more");
+    expect(w.text()).not.toMatch(/\bThat this app's/);
+  });
+});
+
+describe('PackageDetail — Overview ABOUT card', () => {
+  it('falls back to the manifest description when readme is absent, instead of "No description yet"', async () => {
+    // Real-box bug: the header (which reads `description`) showed
+    // SilverBullet's full description while the ABOUT card (which read
+    // only `readme`, a field no manifest populates yet) said "No
+    // description yet" for the exact same package on the exact same page.
+    stubResponse({
+      method: 'get',
+      url: '/packages/notes',
+      data: packageDetail({
+        name: 'notes',
+        description: 'SilverBullet is a markdown-native notes system.',
+      }),
+    });
+    const { w } = await mountDetail('notes');
+
+    expect(w.text()).toContain('SilverBullet is a markdown-native notes system.');
+    expect(w.text()).not.toContain('No description yet.');
+  });
+
+  it('still shows "No description yet" when the manifest genuinely has none', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/notes',
+      data: packageDetail({ name: 'notes', description: '' }),
+    });
+    const { w } = await mountDetail('notes');
+
+    expect(w.text()).toContain('No description yet.');
   });
 });
