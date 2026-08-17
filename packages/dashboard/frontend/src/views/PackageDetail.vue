@@ -893,15 +893,25 @@ onMounted(async () => {
               </div>
               <p class="text-sm text-muted-foreground max-w-xl">
                 <template v-if="tunnelled">
-                  Traffic from this app leaves through the VPN gateway. The outside world sees
-                  <span class="font-mono">{{ network.egressIp }}</span>
-                  <template v-if="network.egressCountry"> in {{ network.egressCountry }}</template>,
-                  not your home connection.
+                  <template v-if="network.egressIp">
+                    Traffic from this app leaves through the VPN gateway. The outside world sees
+                    <span class="font-mono">{{ network.egressIp }}</span>
+                    <template v-if="network.egressCountry"> in {{ network.egressCountry }}</template>,
+                    not your home connection.
+                  </template>
+                  <template v-else>
+                    Traffic from this app leaves through the VPN gateway, not your home connection.
+                  </template>
                 </template>
                 <template v-else>
-                  Traffic from this app leaves over your normal connection, from
-                  <span class="font-mono">{{ network.egressIp }}</span
-                  ><template v-if="network.egressCountry"> in {{ network.egressCountry }}</template>.
+                  <template v-if="network.egressIp">
+                    Traffic from this app leaves over your normal connection, from
+                    <span class="font-mono">{{ network.egressIp }}</span
+                    ><template v-if="network.egressCountry"> in {{ network.egressCountry }}</template>.
+                  </template>
+                  <template v-else>
+                    Traffic from this app leaves over your normal connection, same as everything else on the box.
+                  </template>
                 </template>
               </p>
             </div>
