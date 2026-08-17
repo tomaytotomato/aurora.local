@@ -18,9 +18,12 @@ const DEFAULTS: Record<string, { mem: number; cpus: number }> = {
   jellyfin: { mem: 4096, cpus: 3.0 },
 };
 
+// Only packages that are actually enabled in mocks/fixtures/packages.ts
+// belong here. `photos` used to carry a live reading despite being
+// not-installed there — exactly the kind of fabricated "it's running"
+// data this page's preview/installed split exists to stop showing.
 const LIVE: Record<string, { mem: number; cpu: number }> = {
   ai: { mem: 9100, cpu: 212 },
-  photos: { mem: 1840, cpu: 14 },
   media: { mem: 1120, cpu: 22 },
   monitoring: { mem: 610, cpu: 6 },
   core: { mem: 92, cpu: 1 },
