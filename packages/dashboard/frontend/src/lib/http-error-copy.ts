@@ -42,13 +42,21 @@ export function httpStatusFromError(err: unknown): number | undefined {
  *   \u2022 401 / 403 always yield a session-expired copy.
  *   \u2022 400 uses ctx.badRequest when provided, else a generic
  *     'malformed request' fallback.
- *   \u2022 404 uses ctx.notFound when provided, else 'That {subject}
- *     is not on this box any more.'
+ *   \u2022 404 uses ctx.notFound when provided, else "Aurora can't find
+ *     {subject} on this box any more."
  *   \u2022 any other status (including no status) yields
  *     "Aurora couldn't {action} the {subject} just now."
  *
  * No trailing period on the returned string \u2014 callers can append
  * additional context if desired.
+ *
+ * The 404 default used to read `That ${ctx.subject} is not on this box
+ * any more.`, which reads fine for a bare noun ("That container...") but
+ * turns into a run-on ("That this app's networking is not on this box
+ * any more.") for every subject already written as its own noun phrase
+ * ("this app's networking", "this app's configuration") \u2014 which is
+ * most of them. Leading with the brand name instead of a demonstrative
+ * pronoun reads naturally for both shapes.
  */
 export function humanCopyForStatus(status: number | undefined, ctx: ErrorCopyContext): string {
   if (status === 401 || status === 403) {
@@ -58,7 +66,7 @@ export function humanCopyForStatus(status: number | undefined, ctx: ErrorCopyCon
     return ctx.badRequest ?? `Aurora couldn't understand that request.`;
   }
   if (status === 404) {
-    return ctx.notFound ?? `That ${ctx.subject} is not on this box any more.`;
+    return ctx.notFound ?? `Aurora can't find ${ctx.subject} on this box any more.`;
   }
   return `Aurora couldn't ${ctx.action} ${ctx.subject} just now.`;
 }

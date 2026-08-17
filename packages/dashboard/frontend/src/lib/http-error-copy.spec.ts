@@ -51,10 +51,24 @@ describe('http-error-copy helpers', () => {
 
     it('404 uses ctx.notFound when provided, else falls back to subject-noun', () => {
       expect(humanCopyForStatus(404, CTX)).toBe(
-        'That container logs is not on this box any more.',
+        "Aurora can't find container logs on this box any more.",
       );
       expect(humanCopyForStatus(404, { ...CTX, notFound: 'That container is gone.' }))
         .toBe('That container is gone.');
+    });
+
+    it('404 default reads naturally for subjects that are already a noun phrase', () => {
+      // Regression: the old template was `That ${subject} is not on this
+      // box any more.`, which produced "That this app's networking is not
+      // on this box any more." for any subject already phrased as its own
+      // noun ("this app's X") — a doubled demonstrative that read as
+      // broken English.
+      expect(humanCopyForStatus(404, { subject: "this app's networking", action: 'load' })).toBe(
+        "Aurora can't find this app's networking on this box any more.",
+      );
+      expect(humanCopyForStatus(404, { subject: "this app's configuration", action: 'load' })).toBe(
+        "Aurora can't find this app's configuration on this box any more.",
+      );
     });
 
     it('unrecognised statuses (500, 502, undefined) yield the generic branch', () => {
