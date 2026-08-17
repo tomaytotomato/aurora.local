@@ -36,6 +36,14 @@ public class ComposeScanner {
   private static final Pattern IMAGE_LINE =
       Pattern.compile("^\\s*image:\\s*[\"']?([^\\s\"']+)", Pattern.MULTILINE);
 
+  /**
+   * {@code network_mode: "service:gluetun"} (or single-quoted / bare) —
+   * the split-tunnel mechanism docs/SPLIT_TUNNEL.md describes. Captures
+   * the gateway's service name.
+   */
+  private static final Pattern NETWORK_MODE_SERVICE_LINE =
+      Pattern.compile("^\\s*network_mode:\\s*[\"']?service:([a-zA-Z0-9_.-]+)[\"']?\\s*$", Pattern.MULTILINE);
+
   /** An image reference and the package whose compose file declares it. */
   public record ImageRef(String pkg, String image) {
   }
@@ -88,6 +96,19 @@ public class ComposeScanner {
     Path file = repo().resolve("packages").resolve(pkg).resolve("compose.yml");
     if (!Files.isRegularFile(file)) return List.of();
     return imagesIn(read(file));
+  }
+
+  /**
+   * The gateway service a package's compose file shares a network
+   * namespace with (see docs/SPLIT_TUNNEL.md), if any. Empty when no
+   * service in the package declares {@code network_mode: "service:<gw>"}
+   * — the common case, since split-tunnelling is opt-in per app.
+   */
+  public java.util.Optional<String> gatewayFor(String pkg) {
+    Path file = repo().resolve("packages").resolve(pkg).resolve("compose.yml");
+    if (!Files.isRegularFile(file)) return java.util.Optional.empty();
+    Matcher m = NETWORK_MODE_SERVICE_LINE.matcher(read(file));
+    return m.find() ? java.util.Optional.of(m.group(1)) : java.util.Optional.empty();
   }
 
   private static List<String> imagesIn(String body) {
