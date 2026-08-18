@@ -33,7 +33,7 @@ import java.util.Optional;
  * <p><b>How it talks to Kopia.</b> Via the {@code kopia} CLI inside the
  * running container ({@code docker exec kopia kopia … --json}), not
  * Kopia's HTTP server API. That is now the standing rule for every
- * packaged service that ships both — see {@code docs/ARCHITECTURE.md} §4
+ * packaged service that ships both — see {@code docs/ARCHITECTURE.md} §5
  * for the reasoning (credentials stay inside their own package, one
  * failure vocabulary, one thing to fake in tests). The backup design doc's
  * aside about "the server API" predates the decision and is a description

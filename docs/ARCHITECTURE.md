@@ -1,6 +1,8 @@
 # Architecture
 
-Three mermaid diagrams: layered stack, bootstrap sequence, request flow.
+Four mermaid diagrams: layered stack, bootstrap sequence, request flow,
+and the control plane — which is the one to read first if you are asking
+"what actually drives what".
 
 Render on GitHub by opening this file, or paste any block into
 <https://mermaid.live> to iterate.
@@ -179,13 +181,12 @@ sequenceDiagram
     Compose->>Compose: getent group docker → DOCKER_GID
     Compose->>Render: render_all(enabled_pkgs)
     Render->>Render: copy caddy.snippet → data/caddy/snippets/
-    Render->>Render: services.base.yaml + homepage.yml → services.yaml (vestigial: no Homepage container reads this since v0.1)
     Render->>Render: seed users_database.yml (if identity)
     Render->>Render: source pins.env (if present)
     Compose->>Compose: docker compose -p aurora -f pkg1 -f pkg2 ... up -d
 
     Compose-->>User: containers running
-    Note over User,Compose: http(s)://home.aurora.local reachable
+    Note over User,Compose: http(s)://<domain> reachable — Aurora serves the apex vhost
 ```
 
 ## 3. Request flow (client hitting a service)
@@ -228,7 +229,75 @@ graph LR
     class Prow,Rdt backend
 ```
 
-## 4. How the backend talks to a packaged service
+## 4. Control plane — what drives what
+
+The layered view above shows where things sit. This shows how the box gets
+built and changed, and it is the diagram people get wrong: the two halves
+(Ansible for the host, bash + compose for the apps) are not siblings —
+`bootstrap.sh` drives both, in order — and the dashboard is not above the
+apps, it *is* one of them.
+
+```mermaid
+graph TD
+    classDef operator fill:#713f12,stroke:#facc15,color:#000
+    classDef truth fill:#334155,stroke:#94a3b8,color:#fff
+    classDef ansible fill:#7c2d12,stroke:#f97316,color:#fff
+    classDef script fill:#166534,stroke:#4ade80,color:#fff
+    classDef host fill:#1e40af,stroke:#60a5fa,color:#fff
+    classDef pkg fill:#581c87,stroke:#c084fc,color:#fff
+
+    Human["Operator at a TTY"] -->|"curl to bash"| BS["bootstrap.sh<br/>the only entry point"]
+
+    BS -->|"writes, then reads"| Files["Source of truth: plain files<br/>group_vars/all.yml — host answers<br/>.state.yml — enabled packages<br/>packages/*/manifest.yml — deps, ports, vhosts, sso, backup"]
+
+    BS -->|"step 1: the host"| Site["host/site.yml<br/>Ansible, root, runs once"]
+    Site --> Roles["15 roles: docker, firewall, ssh-hardening,<br/>fail2ban, dns-stub, avahi, swap, smartd"]
+    Roles --> Host["Debian-family host<br/>apt, ufw, systemd units, port 53 freed"]
+
+    BS -->|"step 2: the apps"| Up["scripts/up.sh<br/>CONVERGES the box to the set it is given"]
+    Files -->|"deps resolved, enabled[] read"| Up
+    Up -->|"rewrites enabled[]"| Files
+
+    Up --> Render["lib/render.sh<br/>caddy snippets, identity seed, image pins"]
+    Up --> Compose["docker compose -p aurora<br/>-f every enabled package"]
+    Down["scripts/down.sh"] --> Compose
+    Scoped["scripts/restart.sh<br/>scripts/upgrade.sh<br/>one package, converge nothing"] --> Compose
+
+    Compose --> Aurora["dashboard: the Aurora app<br/>Spring Boot + Vue"]
+    Compose --> Rest["the other 16 packages<br/>core, privacy, identity, media, photos,<br/>documents, monitoring, storage, backup"]
+
+    Aurora ==>|"THE LOOP: the dashboard is itself an app,<br/>and manages the others by shelling back out<br/>behind a self-recreation guard"| Up
+    Aurora ==> Scoped
+
+    class Human operator
+    class Files truth
+    class BS,Site,Roles ansible
+    class Up,Down,Scoped,Render,Compose script
+    class Host host
+    class Aurora,Rest pkg
+```
+
+Three properties worth stating in words, because they are the ones that
+cause bugs:
+
+**`up.sh` converges; it does not "start".** It ends with
+`state_set_enabled "${pkgs[@]}"` and passes `--remove-orphans`, so
+`up.sh media` means "make this box be core+media" — it rewrites
+`.state.yml` and reaps every other package's containers. `restart.sh` and
+`upgrade.sh` exist precisely so that acting on one package cannot do that.
+
+**The loop is real and it bites.** The dashboard runs in a container that
+`up.sh` manages, and it manages packages by running `up.sh`. Recreating
+the container that is running the script kills the script mid-invocation;
+that was a genuine bug, and both scripts now carry a guard keyed on
+`AURORA_LAUNCHED_BY` / `AURORA_INVOKED_BY`.
+
+**There is no database in the control plane.** Every input is a file in
+the repo — manifests, `.state.yml`, `group_vars/all.yml`. The dashboard's
+SQLite holds its own concerns (users, audit, settings, VPN peers), not
+what the box is.
+
+## 5. How the backend talks to a packaged service
 
 **Standing decision: drive a packaged service through its CLI, not its
 HTTP API.** Where a service ships both — Kopia, AdGuard, Authelia,
