@@ -107,9 +107,7 @@ public final class OpenApiConformance implements ResultMatcher {
    * the spec's requestBody only documents {@code username} and
    * {@code password}.
    */
-  private static final Map<String, Set<String>> KNOWN_UNDOCUMENTED_REQUEST_FIELDS = Map.of(
-      "POST /onboarding/admin", Set.of("tz")
-  );
+  private static final Map<String, Set<String>> KNOWN_UNDOCUMENTED_REQUEST_FIELDS = Map.of();
 
   /**
    * A specific, named field a response body sends that the response
@@ -145,11 +143,7 @@ public final class OpenApiConformance implements ResultMatcher {
    * views, so this is drift to document and fix in the spec, not a field
    * to quietly drop from the response.
    */
-  private static final Map<String, Set<String>> KNOWN_UNDOCUMENTED_RESPONSE_FIELDS = Map.of(
-      "GET /packages/{name} -> 200", Set.of("recommends", "profiles", "requiredEnv", "postInstallNotes", "sso"),
-      "GET /packages -> 200", Set.of("recommends", "profiles", "requiredEnv", "postInstallNotes", "sso"),
-      "GET /auth/me -> 200", Set.of("role")
-  );
+  private static final Map<String, Set<String>> KNOWN_UNDOCUMENTED_RESPONSE_FIELDS = Map.of();
 
   /**
    * A specific, named response field that comes back {@code null} in a
@@ -165,9 +159,7 @@ public final class OpenApiConformance implements ResultMatcher {
    * has nothing to collect and the backend correctly answers
    * {@code collectedAt: null} rather than 404ing the whole resource.
    */
-  private static final Map<String, Set<String>> KNOWN_NULLABLE_RESPONSE_FIELDS = Map.of(
-      "GET /disks/{id}/smart -> 200", Set.of("collectedAt")
-  );
+  private static final Map<String, Set<String>> KNOWN_NULLABLE_RESPONSE_FIELDS = Map.of();
 
   /**
    * An operation whose requestBody schema requires fields the operation
@@ -179,31 +171,35 @@ public final class OpenApiConformance implements ResultMatcher {
    * else about the schema, including types, enums and any field that
    * <em>is</em> present, is still checked in full.
    *
+   * <p><b>Empty, and worth keeping empty.</b> Both former entries were
+   * defects in the spec rather than the backend, and both specs are now
+   * fixed:
+   *
    * <ul>
-   *   <li>{@code PATCH /notifications/channels/{id}} — requestBody is an
-   *       {@code allOf} of the full {@code ChannelDraft} (requires
-   *       {@code kind, name, target, events}), but the operation is a
-   *       partial update ("Change a channel, or mute it") and the backend
-   *       correctly accepts e.g. {@code {"enabled": false}} alone.</li>
-   *   <li>{@code POST /system/import} — requestBody is
-   *       {@code SettingsExport}, the same schema as the export response,
-   *       requiring {@code exportedAt, hostname, domain, profiles,
-   *       dnsMode, settings}. {@code SettingsPortabilityController.importSettings}
-   *       only ever reads {@code version}, {@code enabledPackages} and
-   *       {@code domain} — everything else is genuinely optional in
-   *       practice.</li>
+   *   <li>{@code PATCH /notifications/channels/{id}} took an
+   *       {@code allOf} over the full {@code ChannelDraft}, so the
+   *       contract demanded {@code kind, name, target, events} on a
+   *       request whose entire purpose is sending one of them. It now
+   *       takes {@code ChannelPatch}, every field optional, which is what
+   *       "change a channel, or mute it" means.</li>
+   *   <li>{@code POST /system/import} took {@code SettingsExport} — the
+   *       export <em>response</em> schema — demanding five fields the
+   *       importer never reads, so a hand-written import file was
+   *       rejected by the contract and accepted by the box. It now takes
+   *       a dedicated {@code ImportRequest}.</li>
    * </ul>
    */
-  private static final Map<String, Map<String, Set<String>>> KNOWN_RELAXED_REQUIRED = Map.of(
-      "PATCH /notifications/channels/{id}", Map.of("ChannelDraft", Set.of("kind", "name", "target", "events")),
-      "POST /system/import", Map.of("SettingsExport",
-          Set.of("exportedAt", "hostname", "domain", "profiles", "dnsMode", "settings"))
-  );
+  private static final Map<String, Map<String, Set<String>>> KNOWN_RELAXED_REQUIRED = Map.of();
 
   /**
-   * The same {@code POST /system/import} gap as {@link #KNOWN_RELAXED_REQUIRED},
-   * a different symptom: {@code SettingsExport.enabledPackages} is typed
-   * {@code items: {type: string}}, but
+   * The one entry here is <em>not</em> a spec defect, and the distinction
+   * matters: the other registries existed because the contract was wrong,
+   * and they are empty now that it has been corrected. This one exists
+   * because a test deliberately sends an invalid request to prove the
+   * backend survives it.
+   *
+   * <p>{@code ImportRequest.enabledPackages} is typed
+   * {@code items: {type: string}} — strings are the contract — but
    * {@code SettingsPortabilityControllerIntegrationTest.ignores_junk_in_the_package_list_rather_than_writing_it}
    * deliberately sends {@code ["core", null, "", 42]} to pin that the
    * backend filters exactly this junk out rather than 400ing

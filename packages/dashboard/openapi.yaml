@@ -72,6 +72,12 @@ paths:
               properties:
                 username: { type: string }
                 password: { type: string }
+                tz:
+                  type: string
+                  description: >
+                    IANA timezone. Read by
+                    OnboardingService.createInitialAdmin, which sets the
+                    box's timezone from it; the wizard has always sent it.
       responses:
         '200':
           description: Logged in.
@@ -168,6 +174,12 @@ paths:
               properties:
                 username: { type: string }
                 password: { type: string }
+                tz:
+                  type: string
+                  description: >
+                    IANA timezone. Read by
+                    OnboardingService.createInitialAdmin, which sets the
+                    box's timezone from it; the wizard has always sent it.
       responses:
         '204': { description: Admin created. }
         '409': { description: Admin already exists. }
@@ -810,12 +822,7 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              allOf:
-                - { $ref: '#/components/schemas/ChannelDraft' }
-                - type: object
-                  properties:
-                    enabled: { type: boolean }
+            schema: { $ref: '#/components/schemas/ChannelPatch' }
       responses:
         '200':
           description: The updated channel.
@@ -1435,7 +1442,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/SettingsExport' }
+            schema: { $ref: '#/components/schemas/ImportRequest' }
       responses:
         '200':
           description: What changed, or would.
@@ -1861,6 +1868,16 @@ components:
         username: { type: [string, 'null'] }
         passkeyEnrolled: { type: boolean }
         tz: { type: [string, 'null'] }
+        role:
+          description: >
+            Which role the session holds. AuthController.Session has sent
+            this since well before GET /auth/me was itself specified, and
+            the frontend reads it to gate the /users nav entry and the
+            admin-only views, so the spec was simply behind the wire.
+            Nullable because an unauthenticated session has no role.
+          oneOf:
+            - { $ref: '#/components/schemas/UserRole' }
+            - { type: 'null' }
 
     OnboardingStepId:
       type: string
@@ -2004,6 +2021,51 @@ components:
           type: [string, 'null']
         homepageUrl:
           type: [string, 'null']
+        # The five fields below were served by the backend and documented
+        # nowhere, so every packages response had to be stripped before it
+        # could be validated. The frontend reads all of them, so the spec
+        # was what was wrong. Straight off the manifest, hence the loose
+        # typing on profiles.
+        recommends:
+          type: array
+          items: { type: string }
+          description: Packages this one works better with, not hard dependencies.
+        profiles:
+          type: object
+          additionalProperties: true
+          description: The manifest's `profiles:` block — optional compose profiles.
+        requiredEnv:
+          type: array
+          items: { type: string }
+          description: Env keys with no usable default; drives `required` on EnvVarSpec.
+        postInstallNotes:
+          type: string
+          description: >
+            Free text from the manifest, shown after an install. Omitted
+            when the manifest declares none.
+        sso:
+          $ref: '#/components/schemas/PackageSsoBlock'
+    PackageSsoBlock:
+      type: object
+      description: >
+        The manifest's `sso:` block. Gates the SSO badge on the app page
+        and tells CaddySnippetService whether to emit `import authelia`
+        into the package's vhosts.
+      required: [protect, minRole, trustedHeaders, disableEnv]
+      properties:
+        protect: { type: boolean }
+        minRole:
+          # ALL_CAPS, unlike UserRole's lowercase: this comes from the
+          # domain Role enum, which has a wireName() but no @JsonValue, so
+          # Jackson serialises the constant name. Documented as it is
+          # rather than as it perhaps ought to be.
+          type: string
+          enum: [GUEST, USER, ADMIN]
+        trustedHeaders: { type: boolean }
+        disableEnv:
+          type: array
+          items: { type: string }
+
     EnvVarSpec:
       type: object
       required: [key, secret, required]
@@ -2301,7 +2363,11 @@ components:
         attributes:
           type: array
           items: { $ref: '#/components/schemas/SmartAttribute' }
-        collectedAt: { type: string, format: date-time }
+        collectedAt:
+          # A disk with no SMART support has nothing to collect, and the
+          # backend answers null rather than 404ing the whole resource.
+          type: [string, 'null']
+          format: date-time
     PoolBranch:
       type: object
       required: [diskId, path, totalBytes, usedBytes]
@@ -2377,6 +2443,23 @@ components:
         events:
           type: array
           items: { $ref: '#/components/schemas/NotifyEvent' }
+    ChannelPatch:
+      type: object
+      description: >
+        A partial update — every field optional, which is what "change a
+        channel, or mute it" means. This used to be an allOf over
+        ChannelDraft, so the contract demanded kind, name, target and
+        events on a request whose whole point is sending one of them; the
+        backend has always accepted {"enabled": false} alone.
+      properties:
+        kind: { $ref: '#/components/schemas/ChannelKind' }
+        name: { type: string }
+        target: { type: string }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/NotifyEvent' }
+        enabled: { type: boolean }
+
     NotificationChannel:
       allOf:
         - { $ref: '#/components/schemas/ChannelDraft' }
@@ -2433,6 +2516,31 @@ components:
         pinning: { $ref: '#/components/schemas/PinningState' }
         secrets: { $ref: '#/components/schemas/SecretsState' }
         dockerSocket: { $ref: '#/components/schemas/SocketState' }
+    ImportRequest:
+      type: object
+      description: >
+        What POST /system/import actually reads:
+        SettingsPortabilityController.importSettings touches `version`,
+        `enabledPackages` and `domain` and nothing else. The request used
+        to be typed as SettingsExport — the export *response* schema —
+        which demanded exportedAt, hostname, profiles, dnsMode and
+        settings on the way in, none of which the importer looks at. A
+        hand-written import file that omitted them was rejected by the
+        contract and accepted by the box.
+      required: [version]
+      properties:
+        version:
+          type: integer
+          description: Schema version, so a future import can migrate the file.
+        domain: { type: [string, 'null'] }
+        enabledPackages:
+          type: array
+          items: { type: string }
+          description: >
+            Package names. Non-string entries are filtered out rather than
+            rejected, so a hand-edited file with a stray null still
+            imports — but the contract is strings.
+
     SettingsExport:
       type: object
       required: [version, exportedAt, hostname, domain, enabledPackages, profiles, dnsMode, settings]
