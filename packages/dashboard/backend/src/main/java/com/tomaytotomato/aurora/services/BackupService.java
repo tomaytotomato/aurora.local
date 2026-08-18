@@ -32,12 +32,12 @@ import java.util.Optional;
  *
  * <p><b>How it talks to Kopia.</b> Via the {@code kopia} CLI inside the
  * running container ({@code docker exec kopia kopia … --json}), not
- * Kopia's HTTP server API. Two reasons: it is the same shape as every
- * other external tool this backend drives ({@code wg}, {@code smartctl},
- * {@code snapraid}, all through {@link CommandRunner}), and the HTTP route
- * would mean this service reading another package's {@code .env} for the
- * server credentials. The design doc's aside about "the server API" is a
- * description of intent, not a constraint.
+ * Kopia's HTTP server API. That is now the standing rule for every
+ * packaged service that ships both — see {@code docs/ARCHITECTURE.md} §4
+ * for the reasoning (credentials stay inside their own package, one
+ * failure vocabulary, one thing to fake in tests). The backup design doc's
+ * aside about "the server API" predates the decision and is a description
+ * of intent, not a constraint.
  *
  * <p><b>What it will not do.</b> Invent numbers. A repository Aurora
  * cannot reach has null sizes rather than zeroes, and a declared path
