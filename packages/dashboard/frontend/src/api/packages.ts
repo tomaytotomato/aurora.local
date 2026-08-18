@@ -155,8 +155,18 @@ export interface JobRef {
  * (`storage` / Samba). They can be configured but never added/removed from
  * the box — see docs/PACKAGE_CONTRACT.md. This is an opinionated, curated
  * set (aurora ships a fixed baseline), so it's an explicit name list rather
- * than a category rule. A backend `core` manifest flag can supersede this
- * later; until then the frontend owns the list.
+ * than a category rule.
+ *
+ * The frontend does NOT own this list any more, whatever this comment used
+ * to say: PackageLifecycleService.CORE_PACKAGES holds the identical three
+ * names and 403s add/start/stop/remove for them, so hiding a button here
+ * and refusing the call there have to agree. Drift is guarded from both
+ * sides — see core_package_set_has_not_drifted in
+ * PackagesLifecycleControllerIntegrationTest, and the test below.
+ *
+ * Not to be confused with OnboardingService.MANDATORY_PACKAGES, which is
+ * {core, storage}: that is what onboarding force-adds, and it leaves out
+ * identity deliberately because enabling SSO is a question the wizard asks.
  */
 const CORE_PACKAGE_NAMES = ['core', 'identity', 'storage'] as const;
 const CORE_PACKAGES: ReadonlySet<string> = new Set(CORE_PACKAGE_NAMES);

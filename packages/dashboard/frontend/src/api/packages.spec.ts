@@ -137,3 +137,17 @@ describe('packageLinks', () => {
     expect(packageLinks(p)).toEqual([]);
   });
 });
+
+describe('the core package set', () => {
+  it('matches the set the backend enforces', () => {
+    // Twin of core_package_set_has_not_drifted in
+    // PackagesLifecycleControllerIntegrationTest. If these two disagree,
+    // the UI either offers an action the API 403s or hides one it allows.
+    for (const name of ['core', 'identity', 'storage']) {
+      expect(isCorePackage({ name })).toBe(true);
+    }
+    for (const name of ['media', 'photos', 'vpn', 'backup']) {
+      expect(isCorePackage({ name })).toBe(false);
+    }
+  });
+});

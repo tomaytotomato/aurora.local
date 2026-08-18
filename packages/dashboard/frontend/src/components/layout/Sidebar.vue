@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from 'vue-router';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useSystemStore } from '@/stores/system';
 import { useAuthStore } from '@/stores/auth';
 import { SecurityApi } from '@/api/security';
@@ -58,6 +58,42 @@ const visibleNav = computed<NavItem[]>(() =>
     return true;
   }),
 );
+
+/**
+ * Below `lg` the nav is a horizontally scrolling strip, and it scrolled
+ * with nothing to say so: Settings sits off the right edge on a tablet
+ * and there was no cue that anything was there. A fade on the right edge
+ * is that cue, shown only while there is genuinely more to scroll to, so
+ * a viewport wide enough to fit every item gets no decoration it has not
+ * earned.
+ *
+ * Measured rather than assumed via a media query, because whether the
+ * strip overflows depends on how many items the session can actually see
+ * (capability flags and the admin role both change the count).
+ */
+const navStrip = ref<HTMLElement | null>(null);
+const moreToScroll = ref(false);
+
+function measureNavOverflow(): void {
+  const el = navStrip.value;
+  if (!el) return;
+  // 1px of slack: sub-pixel layout means scrollWidth can exceed
+  // clientWidth by a fraction on a strip that is visually complete.
+  moreToScroll.value = el.scrollWidth - el.clientWidth - el.scrollLeft > 1;
+}
+
+let navResizeObserver: ResizeObserver | null = null;
+onMounted(() => {
+  measureNavOverflow();
+  if (typeof ResizeObserver !== 'undefined' && navStrip.value) {
+    navResizeObserver = new ResizeObserver(measureNavOverflow);
+    navResizeObserver.observe(navStrip.value);
+  }
+});
+onBeforeUnmount(() => {
+  navResizeObserver?.disconnect();
+  navResizeObserver = null;
+});
 
 const isActive = (to: string): boolean => {
   if (to === '/') return route.path === '/';
@@ -157,10 +193,16 @@ watch(() => route.path, (path, prev) => {
       <div class="eyebrow hidden sm:block lg:mt-1">admin plane</div>
     </div>
 
-    <nav
-      class="flex flex-row items-center gap-1 overflow-x-auto px-3 py-2
-             lg:flex-1 lg:flex-col lg:items-stretch lg:gap-0 lg:overflow-visible lg:py-4"
-    >
+    <!-- The fade is positioned against this wrapper, not the scroll
+         container, so it stays put instead of scrolling away with the
+         content it is describing. -->
+    <div class="relative min-w-0 lg:flex-1 lg:flex lg:flex-col">
+      <nav
+        ref="navStrip"
+        class="flex flex-row items-center gap-1 overflow-x-auto px-3 py-2
+               lg:flex-1 lg:flex-col lg:items-stretch lg:gap-0 lg:overflow-visible lg:py-4"
+        @scroll="measureNavOverflow"
+      >
       <RouterLink
         v-for="item in visibleNav"
         :key="item.to"
@@ -195,7 +237,20 @@ watch(() => route.path, (path, prev) => {
           :aria-label="totalSecurity() + ' open security findings'"
         >{{ totalSecurity() }}</span>
       </RouterLink>
-    </nav>
+      </nav>
+
+      <!-- The affordance itself: a fade over the right edge of the strip,
+           below `lg` only (the vertical rail does not scroll). aria-hidden
+           and pointer-events-none — it is a hint to the eye, not content,
+           and must not swallow a tap on the item underneath it. -->
+      <div
+        v-if="moreToScroll"
+        class="pointer-events-none absolute right-0 top-0 bottom-0 w-10
+               bg-gradient-to-l from-background to-transparent lg:hidden"
+        aria-hidden="true"
+        data-test="sidebar-scroll-affordance"
+      />
+    </div>
 
     <!-- Documentation footer is non-essential chrome; hidden below `lg`
          so the collapsed top bar stays compact on tablet. -->
