@@ -153,6 +153,21 @@ public class VpnController {
     return vpn.updateConfig(req);
   }
 
+  /**
+   * Undoes {@code POST /config/init}. Destructive by design — see
+   * {@link com.tomaytotomato.aurora.services.VpnService#removeConfig()}
+   * for why the peers go too.
+   */
+  @DeleteMapping("/config")
+  public ResponseEntity<Void> removeConfig() {
+    try {
+      vpn.removeConfig();
+      return ResponseEntity.noContent().build();
+    } catch (IllegalStateException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+  }
+
   @PostMapping("/config/init")
   public ResponseEntity<VpnConfig> initConfig() {
     try {

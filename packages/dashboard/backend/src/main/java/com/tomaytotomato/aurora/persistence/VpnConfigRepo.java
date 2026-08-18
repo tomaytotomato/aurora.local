@@ -65,6 +65,15 @@ public class VpnConfigRepo {
         endpointHost, listenPort, dns, serverAddress, mtu);
   }
 
+  /**
+   * Discard the singleton row — DELETE /vpn/config. Returns the number of
+   * rows removed so the caller can tell "removed it" from "there was
+   * nothing there", which is the difference between a 204 and a 404.
+   */
+  public int delete() {
+    return jdbc.update("DELETE FROM vpn_config WHERE id = 1");
+  }
+
   /** Regenerate just the keypair — POST /vpn/server/rotate-key. */
   public void updateKeys(String serverPrivateKey, String serverPublicKey) {
     jdbc.update(

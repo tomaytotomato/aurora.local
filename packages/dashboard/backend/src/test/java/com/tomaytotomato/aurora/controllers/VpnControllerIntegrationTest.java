@@ -389,4 +389,136 @@ class VpnControllerIntegrationTest extends AuroraIntegrationTest {
       assertThat(serverPublicKey).isNotBlank();
     }
   }
+
+  /**
+   * {@code POST /vpn/config/init} had no inverse. One click on the setup
+   * screen — the only control on that card, sitting where a dismiss would
+   * be — permanently flipped a box to "configured": keypair generated, no
+   * endpoint, no peers, {@code wg0} absent, and no route back short of
+   * editing SQLite. Found on the testbed by looking at the page, then
+   * confirmed by reading the database.
+   */
+  @Nested
+  @DisplayName("removing the configuration")
+  class Removal {
+
+    @Test
+    @DisplayName("the box goes back to not-configured, so the setup screen returns")
+    void removal_returns_the_box_to_not_configured() throws Exception {
+      initConfig();
+      mvc.perform(get("/api/vpn/config")).andExpect(status().isOk());
+
+      mvc.perform(delete("/api/vpn/config")).andExpect(status().isNoContent());
+
+      // Both signals the frontend reads: the 404 that drives its
+      // not-configured empty state, and the run state.
+      mvc.perform(get("/api/vpn/config")).andExpect(status().isNotFound());
+      mvc.perform(get("/api/vpn/status"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.runState").value("not-configured"));
+    }
+
+    @Test
+    @DisplayName("every peer goes too, because its .conf embeds the discarded server key")
+    void removal_deletes_every_peer() throws Exception {
+      initConfig();
+      createPeer("split");
+      createPeer("full");
+      mvc.perform(get("/api/vpn/peers")).andExpect(jsonPath("$.length()").value(2));
+
+      mvc.perform(delete("/api/vpn/config")).andExpect(status().isNoContent());
+
+      // Leaving peers behind would be worse than deleting them: they
+      // would list as valid devices whose configs authenticate against a
+      // server key that no longer exists.
+      mvc.perform(get("/api/vpn/peers"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("removing nothing is a 404, not a silent success")
+    void removal_without_a_config_is_a_404() throws Exception {
+      mvc.perform(delete("/api/vpn/config")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("the door swings both ways: init works again afterwards")
+    void init_works_again_after_removal() throws Exception {
+      initConfig();
+      mvc.perform(delete("/api/vpn/config")).andExpect(status().isNoContent());
+
+      // Without this, "undo" would only have moved the dead end.
+      mvc.perform(post("/api/vpn/config/init")).andExpect(status().isOk());
+      mvc.perform(get("/api/vpn/config")).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("a fresh keypair, not the discarded one")
+    void init_after_removal_generates_a_new_keypair() throws Exception {
+      initConfig();
+      String firstKey = JsonPath.read(
+          mvc.perform(get("/api/vpn/config")).andReturn().getResponse().getContentAsString(),
+          "$.serverPublicKey");
+
+      mvc.perform(delete("/api/vpn/config")).andExpect(status().isNoContent());
+      mvc.perform(post("/api/vpn/config/init")).andExpect(status().isOk());
+
+      String secondKey = JsonPath.read(
+          mvc.perform(get("/api/vpn/config")).andReturn().getResponse().getContentAsString(),
+          "$.serverPublicKey");
+      assertThat(secondKey).isNotEqualTo(firstKey);
+    }
+  }
+
+  /**
+   * Generating or discarding a server keypair left no trace anywhere:
+   * answering "when did this box get a VPN, and who did it?" on the
+   * testbed took a copy of the SQLite file and a query. Publishing an
+   * mDNS alias has been audited all along; this is more consequential
+   * than that.
+   */
+  @Nested
+  @DisplayName("audit trail")
+  class Audit {
+
+    private int auditCount(String action) {
+      Integer n = jdbcTemplate.queryForObject(
+          "select count(*) from audit_event where action = ?", Integer.class, action);
+      return n == null ? 0 : n;
+    }
+
+    @Test
+    void generating_the_server_config_is_audited() throws Exception {
+      initConfig();
+      assertThat(auditCount("vpn.config.init")).isEqualTo(1);
+    }
+
+    @Test
+    void removing_the_server_config_is_audited_with_what_it_took_out() throws Exception {
+      initConfig();
+      createPeer("split");
+      mvc.perform(delete("/api/vpn/config")).andExpect(status().isNoContent());
+
+      assertThat(auditCount("vpn.config.remove")).isEqualTo(1);
+      String diff = jdbcTemplate.queryForObject(
+          "select diff_json from audit_event where action = 'vpn.config.remove'", String.class);
+      assertThat(diff)
+          .as("the peer count matters: it is what the operator cannot get back")
+          .contains("\"peers_deleted\":1");
+    }
+
+    @Test
+    void rotating_the_server_key_is_audited() throws Exception {
+      initConfig();
+      mvc.perform(post("/api/vpn/server/rotate-key")).andExpect(status().isOk());
+      assertThat(auditCount("vpn.server.rotate-key")).isEqualTo(1);
+    }
+
+    @Test
+    void a_failed_removal_records_nothing() throws Exception {
+      mvc.perform(delete("/api/vpn/config")).andExpect(status().isNotFound());
+      assertThat(auditCount("vpn.config.remove")).isZero();
+    }
+  }
 }

@@ -140,6 +140,65 @@ async function saveConfig(): Promise<void> {
   }
 }
 
+/**
+ * What is stopping this configuration from working, in the operator's
+ * words. A single click on "Generate configuration" leaves a keypair and
+ * nothing else — no endpoint, no peers, no wg0 — and the page used to
+ * render that as a working VPN across three tabs. Saying what is missing
+ * is the difference between a status page and a decoration.
+ */
+const setupBlockers = computed<string[]>(() => {
+  if (!config.value) return [];
+  const missing: string[] = [];
+  if (!config.value.endpointHost?.trim()) {
+    missing.push('an endpoint hostname or public IP, so a peer knows where to connect');
+  }
+  if (!config.value.serverPublicKey) {
+    missing.push('a server keypair — regenerate one on the Advanced tab');
+  }
+  if (!peers.value.length) {
+    missing.push('at least one peer device');
+  }
+  if (status.value && status.value.runState !== 'running') {
+    missing.push(`the ${status.value.interface ?? 'wg0'} interface to be up on the box`);
+  }
+  return missing;
+});
+
+// ---- remove the whole configuration (destructive, and the only way
+// back to the setup screen — POST /vpn/config/init had no inverse) ----
+const removeConfigOpen = ref(false);
+const removingConfig = ref(false);
+async function removeConfig(): Promise<void> {
+  removingConfig.value = true;
+  try {
+    await VpnApi.removeConfig();
+    // Set the not-configured state directly rather than re-running load().
+    // We know what we just did, and a box that has had its config deleted
+    // has nothing worth another three round trips.
+    config.value = null;
+    form.value = null;
+    peers.value = [];
+    activeTab.value = 'overview';
+    pageState.value = 'not-configured';
+    toast({
+      title: 'VPN configuration removed',
+      description: 'The server keypair and every peer have been deleted.',
+      variant: 'warning',
+      duration: 5000,
+    });
+  } catch (e) {
+    toast({
+      title: "Couldn't remove the configuration",
+      description: humanCopyForError(e, { subject: 'the VPN configuration', action: 'remove' }),
+      variant: 'destructive',
+    });
+  } finally {
+    removingConfig.value = false;
+    removeConfigOpen.value = false;
+  }
+}
+
 // ---- rotate server key (destructive) ----
 const rotateOpen = ref(false);
 const rotating = ref(false);
@@ -337,8 +396,35 @@ function onTab(t: string): void {
       below are opaque Cards. An opaque box around the tabs reads as a
       floating panel detached from the cards under it, so we don't use one.
     -->
+    <!--
+      A configuration can exist and still be incapable of carrying a
+      single packet. Say so plainly above the tabs rather than letting
+      three tabs of empty dials imply a working tunnel.
+    -->
+    <Card
+      v-else-if="pageState === 'ready' && setupBlockers.length"
+      class="p-6 mb-4"
+      data-state="incomplete"
+      data-test="vpn-incomplete"
+    >
+      <Alert variant="warning">
+        <AlertDescription>
+          <p class="mb-2">This VPN is configured but not usable yet. It still needs:</p>
+          <ul class="list-disc pl-5 space-y-1">
+            <li v-for="blocker in setupBlockers" :key="blocker">{{ blocker }}</li>
+          </ul>
+        </AlertDescription>
+      </Alert>
+    </Card>
+
+    <!--
+      `v-else-if` on the explicit state, not a bare `v-else`: the ready
+      view used to be the fallback for anything that wasn't loading,
+      error or not-configured, so any state the page hadn't anticipated
+      rendered as "configured".
+    -->
     <Tabs
-      v-else
+      v-if="pageState === 'ready'"
       :model-value="activeTab"
       class="on-photo-tabs"
       :tabs="[
@@ -402,12 +488,25 @@ function onTab(t: string): void {
             </Button>
           </div>
           <hr class="my-5" />
-          <button
-            type="button"
-            class="text-sm text-muted-foreground hover:text-foreground"
-            data-test="vpn-rotate-open"
-            @click="rotateOpen = true"
-          >Regenerate server key</button>
+          <div class="flex flex-col items-start gap-3">
+            <button
+              type="button"
+              class="text-sm text-muted-foreground hover:text-foreground"
+              data-test="vpn-rotate-open"
+              @click="rotateOpen = true"
+            >Regenerate server key</button>
+            <!--
+              The way back to the setup screen. Generating a configuration
+              used to be a one-way door: a single click wrote a keypair and
+              nothing in the UI or the API could undo it.
+            -->
+            <button
+              type="button"
+              class="text-sm text-destructive hover:underline"
+              data-test="vpn-remove-open"
+              @click="removeConfigOpen = true"
+            >Remove VPN configuration</button>
+          </div>
         </Card>
       </div>
 
@@ -506,6 +605,27 @@ function onTab(t: string): void {
         </Card>
       </div>
     </Tabs>
+
+    <!-- Remove-configuration confirm. Destructive twice over: the keypair
+         goes and every peer with it. -->
+    <Dialog :open="removeConfigOpen" @update:open="removeConfigOpen = $event">
+      <template #title>Remove the VPN configuration?</template>
+      <template #description>
+        The server keypair is discarded and every peer is deleted, because each
+        device's config only works against the key it was issued under. You can
+        generate a fresh configuration afterwards, but no existing device will
+        reconnect without a new config.
+      </template>
+      <template #footer>
+        <Button variant="secondary" @click="removeConfigOpen = false">Cancel</Button>
+        <Button
+          variant="danger"
+          :disabled="removingConfig"
+          data-test="vpn-remove-confirm"
+          @click="removeConfig"
+        >{{ removingConfig ? 'Removing…' : 'Remove configuration' }}</Button>
+      </template>
+    </Dialog>
 
     <!-- Rotate-key confirm -->
     <Dialog :open="rotateOpen" @update:open="rotateOpen = $event">

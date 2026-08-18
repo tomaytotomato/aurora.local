@@ -1599,6 +1599,23 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/VpnConfig' }
+    delete:
+      tags: [vpn]
+      summary: Remove the server configuration and every peer
+      description: >
+        Undoes POST /vpn/config/init, returning the box to its
+        not-configured state. Destructive: the server keypair is
+        discarded and every peer is deleted, because a peer's issued
+        .conf embeds the server key it was created against and is
+        useless without it.
+
+        This exists because init had no inverse. One click on the setup
+        screen permanently flipped a box to "configured" — keypair
+        generated, no endpoint, no peers, wg0 absent — with no route back
+        short of editing the database by hand.
+      responses:
+        '204': { description: Removed. }
+        '404': { description: Nothing to remove — not configured. }
   /vpn/config/init:
     post:
       tags: [vpn]

@@ -72,6 +72,16 @@ public class VpnPeerRepo {
     return jdbc.update("DELETE FROM vpn_peer WHERE id = ?", id);
   }
 
+  /**
+   * Remove every peer. Only used when the server configuration itself is
+   * discarded: a peer's issued {@code .conf} authenticates against the
+   * server key it was created under, so keeping the rows would leave a
+   * list of devices that cannot connect to anything.
+   */
+  public int deleteAll() {
+    return jdbc.update("DELETE FROM vpn_peer");
+  }
+
   public int setEnabled(String id, boolean enabled) {
     return jdbc.update("UPDATE vpn_peer SET enabled = ? WHERE id = ?", enabled ? 1 : 0, id);
   }

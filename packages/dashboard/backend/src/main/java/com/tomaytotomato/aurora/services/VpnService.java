@@ -4,6 +4,7 @@ import com.tomaytotomato.aurora.domain.VpnConfig;
 import com.tomaytotomato.aurora.domain.VpnPeer;
 import com.tomaytotomato.aurora.domain.VpnPeerSecret;
 import com.tomaytotomato.aurora.domain.VpnStatus;
+import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.persistence.VpnConfigRepo;
 import com.tomaytotomato.aurora.persistence.VpnConfigRow;
 import com.tomaytotomato.aurora.persistence.VpnPeerRepo;
@@ -55,13 +56,15 @@ public class VpnService {
   private final VpnPeerRepo peerRepo;
   private final CommandRunner commands;
   private final SystemService system;
+  private final AuditEventRepo audit;
 
   public VpnService(VpnConfigRepo configRepo, VpnPeerRepo peerRepo, CommandRunner commands,
-                    SystemService system) {
+                    SystemService system, AuditEventRepo audit) {
     this.configRepo = configRepo;
     this.peerRepo = peerRepo;
     this.commands = commands;
     this.system = system;
+    this.audit = audit;
   }
 
   // ------------------------------------------------------------------
@@ -87,7 +90,37 @@ public class VpnService {
         keys.privateKeyBase64(), keys.publicKeyBase64());
     configRepo.insert(row);
     log.info("vpn: server configuration generated (listenPort={})", row.listenPort());
+    audit.record(null, "vpn.config.init", DEFAULT_IFACE,
+        "{\"listen_port\":" + row.listenPort() + "}");
     return toApiConfig(row);
+  }
+
+  /**
+   * Discard the server configuration and every peer, returning the box to
+   * its not-configured state. Throws {@link IllegalStateException} when
+   * there is nothing to remove; the controller maps that to 404.
+   *
+   * <p>The inverse of {@link #initConfig()}, which for a long time had
+   * none: a single click on the setup screen generated a keypair and there
+   * was no way back to that screen short of editing the database.
+   *
+   * <p>Peers go with it deliberately. Each one's issued {@code .conf}
+   * authenticates against the server key being discarded here, so keeping
+   * the rows would leave a list of devices that look valid and cannot
+   * connect to anything.
+   *
+   * @return how many peers were deleted alongside the config
+   */
+  public int removeConfig() {
+    if (!configRepo.exists()) {
+      throw new IllegalStateException("vpn is not configured");
+    }
+    int peersDeleted = peerRepo.deleteAll();
+    configRepo.delete();
+    log.info("vpn: server configuration removed ({} peer(s) deleted)", peersDeleted);
+    audit.record(null, "vpn.config.remove", DEFAULT_IFACE,
+        "{\"peers_deleted\":" + peersDeleted + "}");
+    return peersDeleted;
   }
 
   /**
@@ -120,6 +153,8 @@ public class VpnService {
     var keys = WireGuardKeys.generate();
     configRepo.updateKeys(keys.privateKeyBase64(), keys.publicKeyBase64());
     log.info("vpn: server keypair rotated");
+    audit.record(null, "vpn.server.rotate-key", DEFAULT_IFACE,
+        "{\"peers_invalidated\":" + peerRepo.count() + "}");
     return configRepo.find().map(VpnService::toApiConfig).orElseThrow();
   }
 

@@ -71,6 +71,14 @@ export const vpnHandlers = [
     }
     return HttpResponse.json(state.vpn.config);
   }),
+  // Undo of config/init. Peers go too, mirroring the backend: their
+  // issued .conf authenticates against the key being discarded.
+  http.delete('/api/vpn/config', () => {
+    if (state.vpn.config === null) return new HttpResponse(null, { status: 404 });
+    state.vpn.config = null;
+    state.vpn.peers = [];
+    return noContent();
+  }),
   http.put('/api/vpn/config', async ({ request }) => {
     const patch = (await request.json()) as Partial<NonNullable<typeof state.vpn.config>>;
     state.vpn.config = { ...(state.vpn.config ?? {}), ...patch } as typeof state.vpn.config;

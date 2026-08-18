@@ -108,6 +108,15 @@ export const VpnApi = {
     return data;
   },
 
+  /**
+   * Undo initConfig: discard the server keypair and every peer, returning
+   * the box to not-configured. Destructive — a peer's issued .conf
+   * authenticates against the key being discarded.
+   */
+  async removeConfig(): Promise<void> {
+    await http.delete('/vpn/config');
+  },
+
   async saveConfig(patch: Partial<VpnConfig>): Promise<VpnConfig> {
     const { data } = await http.put<VpnConfig>('/vpn/config', patch);
     return data;
