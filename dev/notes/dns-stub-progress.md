@@ -89,6 +89,53 @@ Debian 12 Lima VM, which had the fault live: both stub listeners on 53,
 5. Re-applied the role, `adguard` back up, `./dev/testbed/up.sh verify`
    green (dashboard 8090 → 200, caddy 80 → 200).
 
+## Rebuild from a destroyed VM
+
+Redone from nothing on the 18th (`up.sh destroy`, then the full chain
+with `core dashboard privacy`), because the run above was against a box
+that had already been bootstrapped several times.
+
+- `bootstrap.sh` regenerated `group_vars/all.yml` carrying
+  `dns_stub_listener_disabled: true`.
+- `dns-stub` fired inside the full `site.yml` run, both assertions
+  green, and `adguard` went Created → Started first time, publishing
+  `0.0.0.0:53` tcp and udp plus 3000. No intervention anywhere.
+- `doctor.sh`: 0 failures.
+
+The `meta: flush_handlers` also runs `avahi`'s pending restart, visible
+in the log. Expected, harmless, and the reason the task is named
+"Apply the resolved configuration now" rather than pretending it only
+touches resolved.
+
+## Proving the repoint branch
+
+Lima's Debian image points `/etc/resolv.conf` at
+`/run/systemd/resolve/resolv.conf` itself, so on both testbed runs the
+repoint task skipped — the branch that matters most on a real Debian box
+was the one branch never executed.
+
+Forced it deliberately: stopped `adguard`, removed the drop-in,
+restarted resolved to get the stub back, and symlinked
+`/etc/resolv.conf` → `stub-resolv.conf`, which is the genuine stock
+Debian shape (`nameserver 127.0.0.53`, resolution working through it).
+Re-ran the role: the repoint task reported `changed`, both assertions
+passed, and the host still resolved afterwards. Every branch of the role
+has now been executed at least once.
+
+## A container can be "Up" and publish nothing
+
+Worth knowing before anyone else re-tests this by hand. Last night's
+sequence — `docker stop adguard`, a `docker start` that failed on the
+port conflict, then a `docker start` that succeeded — left the container
+`Up` for eleven hours with `HostConfig.PortBindings` still listing 53 and
+`NetworkSettings.Ports` **empty**. Nothing was listening on 53 at all.
+
+`docker ps` reports that as `adguard   Up 11 hours` with a blank Ports
+column, which reads as success at a glance. It fooled me for a day.
+`docker compose up -d` recreates it correctly; `docker start` after a
+failed bind does not. Check `docker port <name>` rather than the status
+column.
+
 ## Left undone
 
 - `packages/privacy/.env.example` still carries the old comment arguing
@@ -99,7 +146,9 @@ Debian 12 Lima VM, which had the fault live: both stub listeners on 53,
 - AdGuard binds but does not yet *answer*: its first-run wizard has
   never been completed on the testbed, so there is no
   `AdGuardHome.yaml` and `up.sh` warns about it. Binding was the
-  blocker; serving is a separate, unproven step.
+  blocker; serving is a separate, unproven step. Reachable at
+  `http://localhost:3000/` from macOS through Lima's automatic port
+  forwarding (302 to `/install.html`).
 - The host still resolves through its upstream servers, not through
   AdGuard. Deliberate for now — pointing the box at its own container
   means a stopped AdGuard takes docker pulls down with it. Worth a
