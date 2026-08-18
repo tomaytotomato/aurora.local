@@ -282,8 +282,14 @@ export const PackagesApi = {
     const { data } = await http.post<JobRef>(`/packages/${name}/disable`);
     return data;
   },
-  async restart(name: string): Promise<void> {
-    await http.post(`/packages/${name}/restart`);
+  /**
+   * Restart: returns a job, not a 204. A restart is unbounded (a VPN
+   * handshake, a database reopening), so it streams through JobLogPanel
+   * like the other lifecycle verbs rather than blocking a request.
+   */
+  async restart(name: string): Promise<JobRef> {
+    const { data } = await http.post<JobRef>(`/packages/${name}/restart`);
+    return data;
   },
   async upgrade(name: string): Promise<JobRef> {
     const { data } = await http.post<JobRef>(`/packages/${name}/upgrade`);

@@ -353,7 +353,7 @@ function cleanName(names: string[] | undefined): string {
 // toast and going quiet. Restart stays a plain 204: it is over in
 // seconds and has nothing worth watching.
 type Busy = 'enable' | 'disable' | 'uninstall' | 'restart' | 'upgrade' | 'start' | null;
-type JobAction = 'enable' | 'disable' | 'uninstall' | 'upgrade' | 'start';
+type JobAction = 'enable' | 'disable' | 'uninstall' | 'upgrade' | 'start' | 'restart';
 const busy = ref<Busy>(null);
 const removeOpen = ref(false);
 const activeJobId = ref<string | null>(null);
@@ -373,6 +373,7 @@ const FAILURE_COPY: Record<JobAction, { title: string; subject: string; action: 
   uninstall: { title: "Couldn't uninstall the app", subject: 'this app', action: 'uninstall' },
   upgrade: { title: "Couldn't update the app", subject: 'this app', action: 'update' },
   start: { title: "Couldn't start the app", subject: 'this app', action: 'start' },
+  restart: { title: "Couldn't restart the app", subject: 'this app', action: 'restart' },
 };
 
 async function startJob(action: JobAction): Promise<void> {
@@ -394,6 +395,7 @@ async function startJob(action: JobAction): Promise<void> {
         disable: PackagesApi.stop,
         uninstall: PackagesApi.disable,
         upgrade: PackagesApi.upgrade,
+        restart: PackagesApi.restart,
       }[action];
       jobId = (await call(detail.value.name)).jobId;
     }
@@ -433,18 +435,11 @@ const startPackage = () => startJob('start');
 // Uninstall keeps the dialog because it un-enrols the app.
 const disablePackage = () => startJob('disable');
 
-async function restartPackage(): Promise<void> {
-  if (!detail.value) return;
-  busy.value = 'restart';
-  try {
-    await PackagesApi.restart(detail.value.name);
-    toast({ title: 'Restarting', description: `${heading.value} is restarting.`, variant: 'success', duration: 3000 });
-  } catch (e) {
-    toast({ title: "Couldn't restart the app", description: humanCopyForError(e, { subject: 'this app', action: 'restart' }), variant: 'destructive' });
-  } finally {
-    busy.value = null;
-  }
-}
+// Restart goes through the same job flow as the rest now that the
+// endpoint returns a JobRef: the log is the point, since a restart that
+// fails halfway used to report a cheerful "is restarting" toast and
+// nothing else.
+const restartPackage = () => startJob('restart');
 
 const SUCCESS_COPY: Record<JobAction, (n: string) => { title: string; description: string }> = {
   enable: (n) => ({ title: 'Installed', description: `${n} is up and running.` }),
@@ -452,6 +447,7 @@ const SUCCESS_COPY: Record<JobAction, (n: string) => { title: string; descriptio
   uninstall: (n) => ({ title: 'Uninstalled', description: `${n} has been stopped and removed. Its data is still on disk.` }),
   upgrade: (n) => ({ title: 'Updated', description: `${n} is running the latest version.` }),
   start: (n) => ({ title: 'Started', description: `${n} is up and running.` }),
+  restart: (n) => ({ title: 'Restarted', description: `${n} has been restarted.` }),
 };
 
 async function onJobSuccess(): Promise<void> {

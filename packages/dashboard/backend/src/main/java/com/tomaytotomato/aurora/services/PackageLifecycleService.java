@@ -171,6 +171,52 @@ public class PackageLifecycleService {
     });
   }
 
+  /**
+   * Restart: stop and start this package's containers, changing nothing
+   * about what is enrolled. 404 unknown, 403 core, 422 not installed.
+   *
+   * <p>A job rather than a synchronous 204 (which is what
+   * {@code openapi.yaml} used to specify) because a restart is unbounded:
+   * gluetun re-does a VPN handshake, Immich re-opens a database. Holding
+   * an HTTP request open for that and returning no log if it fails is
+   * worse than the streamed job every other lifecycle verb already gets.
+   *
+   * <p>Runs {@code scripts/restart.sh}, never {@code up.sh}. up.sh ends
+   * with {@code state_set_enabled "${pkgs[@]}"} and passes
+   * {@code --remove-orphans}, so {@code up.sh media} on a six-package box
+   * rewrites {@code enabled[]} to {@code [core, media]} and reaps the
+   * other four packages' containers. Restarting one app must not be able
+   * to uninstall four.
+   */
+  public JobService.Job restart(String name) {
+    Package pkg = requireExists(name);
+    requireNotCore(pkg);
+    requireEnabled(pkg);
+
+    List<String> argv = List.of("bash", "scripts/restart.sh", name);
+    return jobs.submitCommand(JobService.Kind.RESTART, name, repoRoot(), argv);
+  }
+
+  /**
+   * Upgrade: pull this package's images and recreate its containers.
+   * 404 unknown, 403 core, 422 not installed.
+   *
+   * <p>Scoped to the one package deliberately. The button lives on a
+   * single app's page, so updating all nineteen — including recreating the
+   * dashboard the click came from — would be a surprise rather than a
+   * feature. "Update everything" is a different job for a different page.
+   *
+   * <p>Same reason as {@link #restart} for not using up.sh.
+   */
+  public JobService.Job upgrade(String name) {
+    Package pkg = requireExists(name);
+    requireNotCore(pkg);
+    requireEnabled(pkg);
+
+    List<String> argv = List.of("bash", "scripts/upgrade.sh", name);
+    return jobs.submitCommand(JobService.Kind.UPDATE, name, repoRoot(), argv);
+  }
+
   // ------------------------------------------------------------------
   // Guards
   // ------------------------------------------------------------------

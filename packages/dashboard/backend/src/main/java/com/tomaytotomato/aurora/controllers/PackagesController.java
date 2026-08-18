@@ -74,6 +74,27 @@ public class PackagesController {
   }
 
   /**
+   * Restart: stop and start this package's containers. Returns a job, not
+   * a 204 — a restart is unbounded, and the streamed log is the point.
+   */
+  @PostMapping("/{name}/restart")
+  public ResponseEntity<Map<String, Object>> restart(@PathVariable String name) {
+    JobService.Job job = lifecycle.restart(name);
+    return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("jobId", job.id));
+  }
+
+  /**
+   * Upgrade: pull this package's images and recreate it. Scoped to the one
+   * package the button was pressed on — see
+   * {@link PackageLifecycleService#upgrade}.
+   */
+  @PostMapping("/{name}/upgrade")
+  public ResponseEntity<Map<String, Object>> upgrade(@PathVariable String name) {
+    JobService.Job job = lifecycle.upgrade(name);
+    return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("jobId", job.id));
+  }
+
+  /**
    * Uninstall: stop the package's containers and un-enrol it. Data is
    * preserved — see {@link PackageLifecycleService#uninstall}.
    */

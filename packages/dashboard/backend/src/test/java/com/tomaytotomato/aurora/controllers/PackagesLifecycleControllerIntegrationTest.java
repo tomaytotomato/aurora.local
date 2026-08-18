@@ -303,6 +303,116 @@ class PackagesLifecycleControllerIntegrationTest extends AuroraIntegrationTest {
     }
   }
 
+  // ------------------------------------------------------------------
+  // Restart (POST /packages/{name}/restart)
+  // ------------------------------------------------------------------
+
+  @Nested
+  @DisplayName("Restart")
+  class Restart {
+
+    @Test
+    @DisplayName("returns a job, not a 204, so a slow restart streams instead of blocking")
+    void restart_returns_a_job() throws Exception {
+      MvcResult result = mvc.perform(post("/api/packages/media/restart"))
+          .andExpect(status().isAccepted())
+          .andExpect(jsonPath("$.jobId").isNotEmpty())
+          .andReturn();
+
+      JobService.Job job = awaitTerminal(jobIdFrom(result));
+      assertThat(job.state).isEqualTo(JobService.State.SUCCESS);
+    }
+
+    @Test
+    @DisplayName("never shells out to up.sh, which would converge the box to one package")
+    void restart_does_not_use_up_sh() throws Exception {
+      // The whole reason restart.sh exists. up.sh ends with
+      // state_set_enabled "${pkgs[@]}" and runs --remove-orphans, so
+      // `up.sh media` on a six-package box rewrites enabled[] to
+      // [core, media] and reaps the other four packages' containers.
+      // Restarting one app must never be able to uninstall four.
+      MvcResult result = mvc.perform(post("/api/packages/media/restart"))
+          .andExpect(status().isAccepted())
+          .andReturn();
+      awaitTerminal(jobIdFrom(result));
+
+      var invocation = commands.firstMatching("scripts/restart.sh");
+      assertThat(invocation.argv()).containsExactly("bash", "scripts/restart.sh", "media");
+      assertThat(commands.invocations())
+          .noneMatch(i -> i.command().contains("up.sh"));
+    }
+
+    @Test
+    void unknown_package_is_a_404() throws Exception {
+      mvc.perform(post("/api/packages/nope/restart")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void core_packages_refuse_a_restart_from_here() throws Exception {
+      mvc.perform(post("/api/packages/core/restart")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void a_package_that_is_not_installed_cannot_be_restarted() throws Exception {
+      mvc.perform(post("/api/packages/photos/restart"))
+          .andExpect(status().isUnprocessableEntity());
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Upgrade (POST /packages/{name}/upgrade)
+  // ------------------------------------------------------------------
+
+  @Nested
+  @DisplayName("Upgrade")
+  class Upgrade {
+
+    @Test
+    void upgrade_returns_a_job() throws Exception {
+      MvcResult result = mvc.perform(post("/api/packages/media/upgrade"))
+          .andExpect(status().isAccepted())
+          .andExpect(jsonPath("$.jobId").isNotEmpty())
+          .andReturn();
+
+      JobService.Job job = awaitTerminal(jobIdFrom(result));
+      assertThat(job.state).isEqualTo(JobService.State.SUCCESS);
+    }
+
+    @Test
+    @DisplayName("upgrades the one package it was asked about, via upgrade.sh")
+    void upgrade_targets_one_package() throws Exception {
+      // Agreed explicitly: the button on one app's page updates that app,
+      // not the whole box. up.sh with the full enabled set would have
+      // pulled and recreated all nineteen, including the dashboard the
+      // click came from.
+      MvcResult result = mvc.perform(post("/api/packages/media/upgrade"))
+          .andExpect(status().isAccepted())
+          .andReturn();
+      awaitTerminal(jobIdFrom(result));
+
+      var invocation = commands.firstMatching("scripts/upgrade.sh");
+      assertThat(invocation.argv()).containsExactly("bash", "scripts/upgrade.sh", "media");
+      assertThat(commands.invocations())
+          .noneMatch(i -> i.command().contains("up.sh"));
+    }
+
+    @Test
+    void unknown_package_is_a_404() throws Exception {
+      mvc.perform(post("/api/packages/nope/upgrade")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void core_packages_refuse_an_upgrade_from_here() throws Exception {
+      mvc.perform(post("/api/packages/core/upgrade")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void a_package_that_is_not_installed_cannot_be_upgraded() throws Exception {
+      mvc.perform(post("/api/packages/photos/upgrade"))
+          .andExpect(status().isUnprocessableEntity());
+    }
+  }
+
   /**
    * Drift guard across the language boundary.
    *

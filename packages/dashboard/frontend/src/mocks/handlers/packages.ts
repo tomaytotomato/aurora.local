@@ -50,7 +50,11 @@ export const packagesHandlers = [
     state.running.delete(name);
     return HttpResponse.json({ jobId: createJob('stop', name).id }, { status: 202 });
   }),
-  http.post('/api/packages/:name/restart', () => noContent()),
+  // Returns a job like the other lifecycle verbs — the endpoint used to
+  // answer 204 and the frontend now reads a jobId off it.
+  http.post('/api/packages/:name/restart', ({ params }) =>
+    HttpResponse.json({ jobId: createJob('restart', String(params.name)).id }, { status: 202 }),
+  ),
   http.post('/api/packages/:name/upgrade', ({ params }) =>
     HttpResponse.json({ jobId: createJob('update', String(params.name)).id }, { status: 202 }),
   ),

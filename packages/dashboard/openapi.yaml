@@ -357,13 +357,12 @@ paths:
     post:
       tags: [packages]
       summary: Restart a package
-      parameters: [{ $ref: '#/components/parameters/PkgName' }]
-      responses:
-        '204': { description: Restarted. }
-  /packages/{name}/upgrade:
-    post:
-      tags: [packages]
-      summary: Pull latest images and recreate
+      description: >
+        Returns a job rather than a 204. A restart is unbounded — gluetun
+        re-does a VPN handshake, Immich re-opens a database — so holding an
+        HTTP request open for it and returning no log if it fails is worse
+        than the streamed job every other lifecycle verb gets. JobKind has
+        carried `restart` since before this endpoint was implemented.
       parameters: [{ $ref: '#/components/parameters/PkgName' }]
       responses:
         '202':
@@ -371,6 +370,28 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/JobRef' }
+        '403': { description: Core packages can't be restarted from here. }
+        '404': { description: Unknown package. }
+        '422': { description: Package is not installed. }
+  /packages/{name}/upgrade:
+    post:
+      tags: [packages]
+      summary: Pull latest images and recreate
+      description: >
+        Scoped to the one named package, not the whole box. The button
+        lives on a single app's page, so updating everything — including
+        recreating the dashboard the click came from — would be a surprise
+        rather than a feature.
+      parameters: [{ $ref: '#/components/parameters/PkgName' }]
+      responses:
+        '202':
+          description: Job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+        '403': { description: Core packages can't be upgraded from here. }
+        '404': { description: Unknown package. }
+        '422': { description: Package is not installed. }
 
   /packages/{name}/resources:
     get:
