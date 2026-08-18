@@ -38,7 +38,6 @@ const nav: NavItem[] = [
   { to: '/vpn', label: 'VPN', icon: 'M12 3 L4 6 V11 C4 16 7.5 19.5 12 21 C16.5 19.5 20 16 20 11 V6 Z M9 11.5 L11 13.5 L15 9.5' },
   { to: '/backup', label: 'Backup', icon: 'M4 7 C4 5.3 7.6 4 12 4 C16.4 4 20 5.3 20 7 M4 7 C4 8.7 7.6 10 12 10 C16.4 10 20 8.7 20 7 M4 7 V17 C4 18.7 7.6 20 12 20 C16.4 20 20 18.7 20 17 V7 M4 12 C4 13.7 7.6 15 12 15 C16.4 15 20 13.7 20 12', requiresCapability: 'backup' },
   { to: '/disks', label: 'Disks', icon: 'M3 6.5 A9 2.5 0 0 0 21 6.5 A9 2.5 0 0 0 3 6.5 M3 6.5 V17.5 A9 2.5 0 0 0 21 17.5 V6.5 M3 12 A9 2.5 0 0 0 21 12', requiresCapability: 'disks' },
-  { to: '/users', label: 'Users', icon: 'M16 20 V18 A3 3 0 0 0 13 15 H7 A3 3 0 0 0 4 18 V20 M10 11 A3.5 3.5 0 1 0 10 4 A3.5 3.5 0 0 0 10 11 M20 20 V18 A3 3 0 0 0 17.5 15.1 M15 4.2 A3.5 3.5 0 0 1 15 10.8' },
   { to: '/security', label: 'Security', icon: 'M12 3 L20 6 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V6 Z', requiresCapability: 'securityScanner', badgeKey: 'security' },
   // Phase D iter-10 (D9): Users management — admin-only. Hidden from
   // regular USER + GUEST sessions so it's not even in the tab order.

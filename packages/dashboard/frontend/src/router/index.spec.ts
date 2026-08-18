@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type RouteLocationNormalized } from 'vue-router';
 
-import { onboardingGuard } from './index';
+import { onboardingGuard, router } from './index';
 import { OnboardingApi, type OnboardingDraft } from '@/api/onboarding';
 import { AuthApi, type Session } from '@/api/auth';
 import { useOnboardingStore } from '@/stores/onboarding';
@@ -163,5 +163,24 @@ describe('onboardingGuard', () => {
     const result = await onboardingGuard(locationFor('/onboarding/done', { public: true, onboarding: true }));
 
     expect(result).toEqual({ path: '/' });
+  });
+});
+
+/**
+ * `/users` was registered twice — once ungated and once with
+ * `meta: { requiresAdmin: true }`. vue-router keeps both records and
+ * resolves the first, so the guard's `to.meta.requiresAdmin` check never
+ * saw the flag and the admin gate on that route was dead. What was left
+ * holding the line was the backend's 403 on data load, i.e. the "belt"
+ * the guard's own comment describes itself as the "braces" for.
+ */
+describe('the /users route', () => {
+  it('is registered exactly once', () => {
+    const users = router.getRoutes().filter((r) => r.path === '/users');
+    expect(users).toHaveLength(1);
+  });
+
+  it('carries requiresAdmin, so the guard can actually gate it', () => {
+    expect(router.resolve('/users').meta.requiresAdmin).toBe(true);
   });
 });

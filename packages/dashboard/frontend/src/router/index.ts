@@ -68,7 +68,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'packages', redirect: '/apps/catalogue' },
       { path: 'packages/:name', redirect: (to) => `/apps/${to.params.name}` },
       // User management (2026-08-06).
-      { path: 'users', component: () => import('@/views/UsersView.vue') },
       // VPN configuration — WireGuard-first (2026-08-06).
       { path: 'vpn', component: () => import('@/views/VpnView.vue') },
       // Backup (2026-08-08). Reports on Kopia rather than replacing it —

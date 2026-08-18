@@ -28,6 +28,51 @@ class HardeningControllerIntegrationTest extends AuroraIntegrationTest {
   @DisplayName("image pinning")
   class Pinning {
 
+    /**
+     * {@code scripts/pin.sh} writes one {@code pins.env} per package
+     * ({@code packages/<pkg>/pins.env} — see its header and line 149).
+     * This check looked for a single file at the repo root that nothing
+     * has ever written, so {@code pinsFileExists} was false on every box
+     * in existence, including one where {@code pin.sh apply} had just
+     * run. The frontend turns that flag into a Security-page finding
+     * ({@code api/hardening.ts:87,107}), so the page has been reporting
+     * "no pins file" as a fact about boxes that have one.
+     */
+    @Test
+    @DisplayName("a package's pins.env is what pin.sh actually writes, so that is what counts")
+    void reports_per_package_pins_files() throws Exception {
+      writeRepoFile("packages/alpha/compose.yml", composeWith("    image: caddy:2.8@sha256:aaaa"));
+      writeRepoFile("packages/alpha/pins.env", "IMAGE_CADDY=caddy:2.8@sha256:aaaa\n");
+
+      mvc.perform(get("/api/security/hardening"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.pinning.pinsFileExists").value(true))
+          .andExpect(jsonPath("$.pinning.generatedAt").exists());
+    }
+
+    @Test
+    @DisplayName("no pins.env anywhere still reports false, so the finding still fires")
+    void reports_no_pins_file_when_there_is_none() throws Exception {
+      writeRepoFile("packages/alpha/compose.yml", composeWith("    image: caddy:latest"));
+
+      mvc.perform(get("/api/security/hardening"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.pinning.pinsFileExists").value(false));
+    }
+
+    @Test
+    @DisplayName("a repo-root pins.env is not what pin.sh writes and does not count")
+    void a_root_pins_file_is_not_mistaken_for_the_real_thing() throws Exception {
+      // Guards the fix from being "reverted" by someone dropping a file
+      // at the root to make the finding go away.
+      writeRepoFile("packages/alpha/compose.yml", composeWith("    image: caddy:latest"));
+      writeRepoFile("pins.env", "IMAGE_CADDY=caddy:2.8\n");
+
+      mvc.perform(get("/api/security/hardening"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.pinning.pinsFileExists").value(false));
+    }
+
     @Test
     void counts_a_digest_pinned_image_as_pinned() throws Exception {
       writeRepoFile("packages/alpha/compose.yml",
@@ -80,9 +125,18 @@ class HardeningControllerIntegrationTest extends AuroraIntegrationTest {
           .andExpect(jsonPath("$.pinning.generatedAt").doesNotExist());
     }
 
+    /**
+     * This test used to write {@code pins.env} at the repo root and
+     * assert the flag went true — encoding the very bug above, since no
+     * tool writes that file. Rewritten against the path
+     * {@code scripts/pin.sh} actually uses. The assertion it was making
+     * is now covered from both directions by
+     * {@code reports_per_package_pins_files} and
+     * {@code a_root_pins_file_is_not_mistaken_for_the_real_thing}.
+     */
     @Test
     void reports_the_pins_file_when_it_is_there() throws Exception {
-      writeRepoFile("pins.env", "CADDY_DIGEST=sha256:aaaa\n");
+      writeRepoFile("packages/beta/pins.env", "IMAGE_CADDY=caddy:2.8@sha256:aaaa\n");
 
       mvc.perform(get("/api/security/hardening"))
           .andExpect(jsonPath("$.pinning.pinsFileExists").value(true))

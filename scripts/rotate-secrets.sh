@@ -109,7 +109,7 @@ for envf in "$REPO"/packages/*/.env; do
   [[ -f "$envf" ]] || continue
   pkg=$(basename "$(dirname "$envf")")
   weak_here=()
-  suggestions=()
+  weak_keys=()
   while IFS= read -r line; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ "$line" =~ ^[[:space:]]*$ ]] && continue
@@ -120,7 +120,7 @@ for envf in "$REPO"/packages/*/.env; do
     v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
     if weak_value "$k" "$v"; then
       weak_here+=("$k=<${v:-empty}>")
-      suggestions+=("$k=$(openssl rand -hex 24)")
+      weak_keys+=("$k")
     fi
   done < "$envf"
 
@@ -129,14 +129,25 @@ for envf in "$REPO"/packages/*/.env; do
     log "$pkg/.env — ${#weak_here[@]} weak value(s)"
     for w in "${weak_here[@]}"; do warn "  $w"; done
     echo
-    dim "  suggested replacements:"
-    for s in "${suggestions[@]}"; do dim "    $s"; done
+    # Names only. This block used to generate a replacement for every
+    # weak key and print all of them under "suggested replacements:" —
+    # in BOTH preview and apply mode, fifteen lines above a comment
+    # congratulating itself on never printing values. In apply mode those
+    # printed strings were the exact secrets being written to disk, so
+    # the tool whose job is keeping secrets out of logs put every fresh
+    # one into the terminal, scrollback and any CI capture. Generation
+    # now happens under --apply only, and nothing prints a value.
+    if (( APPLY )); then
+      dim "  rotating: ${weak_keys[*]}"
+    else
+      dim "  run with --apply to generate and write replacements: ${weak_keys[*]}"
+    fi
     echo
 
     if (( APPLY )); then
       cp -a "$envf" "$envf.bak"
-      for s in "${suggestions[@]}"; do
-        k="${s%%=*}"; newv="${s#*=}"
+      for k in "${weak_keys[@]}"; do
+        newv="$(openssl rand -hex 24)"
         # sed with | as delim (hex has no |). Only first match per key.
         sed -i "0,/^${k}=/{s|^${k}=.*|${k}=${newv}|}" "$envf"
       done
