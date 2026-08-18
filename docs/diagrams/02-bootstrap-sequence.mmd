@@ -1,0 +1,44 @@
+%% aurora.local — Bootstrap sequence — what happens on a fresh box, in order
+%% Source of truth for this diagram. See docs/ARCHITECTURE.md for the prose.
+sequenceDiagram
+    autonumber
+    actor User
+    participant Curl as curl / TTY
+    participant BS as bootstrap.sh
+    participant Ansible as host/site.yml
+    participant State as .state.yml
+    participant Render as scripts/lib/render.sh
+    participant Compose as docker compose
+
+    User->>Curl: curl -fsSL .../bootstrap.sh | bash
+    Curl->>BS: exec
+    BS->>BS: install prereqs<br/>(git, ansible, yq, whiptail)
+    BS->>BS: clone repo, re-exec
+
+    alt interactive TTY
+        BS->>User: whiptail: hostname / domain / TZ / user
+        BS->>User: whiptail checklist: pick packages
+    else headless
+        BS->>BS: read ENABLE_PACKAGES + env
+    end
+
+    BS->>State: write hostname, domain, enabled[], installed_at
+
+    BS->>Ansible: ansible-playbook host/site.yml -K --connection=local
+    Ansible->>Ansible: common / docker / firewall / ssh / fail2ban
+    Ansible->>Ansible: swap-file / storage-mount / avahi / uu
+    Ansible-->>BS: host ready
+
+    BS->>Compose: scripts/up.sh (with resolved deps)
+    Compose->>Compose: create aurora_net if missing
+    Compose->>Compose: seed .env from .env.example (first run)
+    Compose->>Compose: source every packages/*/.env into shell
+    Compose->>Compose: getent group docker → DOCKER_GID
+    Compose->>Render: render_all(enabled_pkgs)
+    Render->>Render: copy caddy.snippet → data/caddy/snippets/
+    Render->>Render: seed users_database.yml (if identity)
+    Render->>Render: source pins.env (if present)
+    Compose->>Compose: docker compose -p aurora -f pkg1 -f pkg2 ... up -d
+
+    Compose-->>User: containers running
+    Note over User,Compose: http(s)://<domain> reachable — Aurora serves the apex vhost

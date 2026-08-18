@@ -1,0 +1,132 @@
+%% aurora.local — Layered view — where everything sits, L7 client down to the host
+%% Source of truth for this diagram. See docs/ARCHITECTURE.md for the prose.
+graph TB
+    classDef hardware fill:#334155,stroke:#94a3b8,color:#fff
+    classDef os fill:#1e40af,stroke:#60a5fa,color:#fff
+    classDef ansible fill:#7c2d12,stroke:#f97316,color:#fff
+    classDef docker fill:#0e7490,stroke:#22d3ee,color:#fff
+    classDef control fill:#166534,stroke:#4ade80,color:#fff
+    classDef pkg fill:#581c87,stroke:#c084fc,color:#fff
+    classDef edge fill:#9f1239,stroke:#fb7185,color:#fff
+    classDef client fill:#713f12,stroke:#facc15,color:#000
+
+    subgraph L7["L7 — Client devices"]
+        Phone[📱 Phone]
+        Laptop[💻 Laptop]
+        TV[📺 TV / console]
+    end
+
+    subgraph L6["L6 — Edge (DNS + TLS + auth + dashboard)"]
+        AdGuard["🛡️ AdGuard Home<br/>LAN DNS + *.aurora.local rewrites"]
+        Caddy["🔐 Caddy<br/>:80/:443 + internal CA"]
+        Authelia["🔑 Authelia<br/>forward-auth SSO/2FA"]
+        Aurora["📊 Aurora<br/>dashboard, served at the apex vhost"]
+    end
+
+    subgraph L5["L5 — Packages (docker-compose bundles)"]
+        direction LR
+        subgraph Core["core"]
+            C1[caddy]
+        end
+        subgraph Privacy["privacy"]
+            P1[adguard]
+            P2[gluetun]
+        end
+        subgraph Media["media"]
+            M1[sonarr/radarr]
+            M2[prowlarr/bazarr]
+            M3[jellyseerr]
+            M4[qbittorrent]
+        end
+        subgraph Storage["storage"]
+            S1[samba]
+            S2[minidlna]
+        end
+        subgraph Monitoring["monitoring"]
+            MO1[prometheus]
+            MO2[grafana]
+            MO3[uptime-kuma]
+        end
+        subgraph More["+8 others"]
+            Photos[photos<br/>Immich]
+            Docs[documents<br/>Paperless]
+            Notes[notes<br/>SilverBullet]
+            Dev[dev<br/>code-server]
+            AI[ai<br/>Ollama]
+            HA[home-automation<br/>HomeAssistant]
+            ID[identity<br/>Authelia]
+            BK[backup<br/>Kopia]
+        end
+    end
+
+    subgraph L4["L4 — Installer & control plane"]
+        BS["bootstrap.sh<br/>install / add / remove / list / status"]
+        Scripts["scripts/*.sh<br/>up down status doctor health<br/>backup pin rotate-secrets"]
+        Lib["scripts/lib/*<br/>log · prompt · manifest · state · render · ops"]
+        State[".state.yml<br/>enabled pkgs + profiles"]
+        Manifests["packages/*/manifest.yml<br/>schema-validated metadata"]
+    end
+
+    subgraph L3["L3 — Container runtime"]
+        DockerEng["🐳 Docker Engine + compose plugin"]
+        Net["aurora_net<br/>shared bridge network"]
+        Proj["compose project: aurora"]
+    end
+
+    subgraph L2["L2 — Host provisioning (Ansible)"]
+        direction LR
+        R1[common]
+        R2[docker]
+        R3[firewall<br/>ufw]
+        R4[ssh-hardening]
+        R5[fail2ban]
+        R6[swap-file]
+        R7[storage-mount]
+        R8[avahi]
+        R9[unattended-<br/>upgrades]
+        R10[caddy-trust<br/>opt-in]
+    end
+
+    subgraph L1["L1 — *nix (Debian 12 / Ubuntu 24.04)"]
+        Kernel[kernel + systemd]
+        Apt[apt]
+        FS["ext4/btrfs + fstab"]
+        MDNS[avahi-daemon]
+    end
+
+    subgraph L0["L0 — Hardware"]
+        HW[Optiplex / NUC / VM]
+    end
+
+    L7 -.->|LAN DNS| AdGuard
+    L7 -.->|HTTPS| Caddy
+    AdGuard -->|answers *.aurora.local| Caddy
+    Caddy -->|forward_auth| Authelia
+    Caddy -->|reverse_proxy| L5
+    Caddy -->|apex vhost| Aurora
+
+    L5 --> Proj
+    Proj --> DockerEng
+    Net --> Proj
+
+    BS --> Scripts
+    Scripts --> Lib
+    Lib --> Manifests
+    Lib --> State
+    State --> Scripts
+    Scripts -->|docker compose up -d| Proj
+
+    L2 -->|installs| DockerEng
+    L2 -->|installs| Apt
+    L2 -->|configures| Kernel
+
+    L1 --> L0
+
+    class L0 hardware
+    class L1 os
+    class L2 ansible
+    class L3 docker
+    class L4 control
+    class L5 pkg
+    class L6 edge
+    class L7 client
