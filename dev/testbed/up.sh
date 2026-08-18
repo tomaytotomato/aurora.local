@@ -73,7 +73,8 @@ cmd_sync() {
   # generates at runtime is gitignored, so it exists in the VM and not in
   # the source, and --delete will therefore destroy it on the next sync:
   # per-package .env files (including their generated secrets), .state.yml,
-  # the inventory bootstrap.sh wrote, the disk-state files the host roles
+  # the inventory bootstrap.sh wrote, group_vars/all.yml (every host-level
+  # answer bootstrap.sh asked for), the disk-state files the host roles
   # collect, and data/ — which is every application's bind-mounted
   # persistent storage. Deleting that on a testbed costs a rebuild. The
   # same command pointed at a real box would take the photo library with
@@ -95,6 +96,7 @@ cmd_sync() {
     --exclude '.env' \
     --exclude '.state.yml' \
     --exclude 'inventory.ini' \
+    --exclude 'group_vars/all.yml' \
     --exclude 'data/' \
     --exclude 'packages/dashboard/state/' \
     --chown=bruce:bruce \
