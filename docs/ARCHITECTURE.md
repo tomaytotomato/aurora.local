@@ -197,37 +197,55 @@ graph LR
     classDef edge fill:#9f1239,stroke:#fb7185,color:#fff
     classDef app fill:#581c87,stroke:#c084fc,color:#fff
     classDef backend fill:#0e7490,stroke:#22d3ee,color:#fff
+    classDef data fill:#0f766e,stroke:#2dd4bf,color:#fff
 
     Phone["📱 sonarr.aurora.local"]
 
     subgraph LAN
-        Router[Router DHCP<br/>DNS = home box]
+        Router[Router DHCP<br/>DNS = this box]
     end
 
-    subgraph HomeBox["home box (aurora / whatever)"]
+    subgraph HomeBox["home box"]
         AG["AdGuard :53<br/>rewrite → LAN_IP"]
-        Cad["Caddy :443<br/>tls internal"]
+        Cad["Caddy :80/:443<br/>tls internal"]
         Aut["Authelia :9091<br/>forward_auth"]
+        Aurora["Aurora<br/>the apex vhost"]
         Son["sonarr:8989"]
         Prow["prowlarr:9696"]
         Rdt["rdtclient:6500"]
+        Kopia["kopia"]
+        Data["data/<br/>bind-mounted state"]
     end
 
     Phone -->|"1 DNS query"| Router
     Router -->|"2 forward"| AG
     AG -->|"3 answer LAN_IP"| Phone
     Phone -->|"4 HTTPS"| Cad
-    Cad -->|"5 (if import authelia)"| Aut
+    Cad -->|"5 only if the manifest sets sso.protect"| Aut
     Aut -->|"6 allowed + headers"| Cad
     Cad -->|"7 reverse_proxy on aurora_net"| Son
+    Cad -->|"bare domain"| Aurora
     Son -.->|indexer| Prow
     Son -.->|download client| Rdt
+    Son --> Data
+    Kopia -.->|"snapshots read-only,<br/>after any declared dump"| Data
 
     class Phone client
     class AG,Cad,Aut edge
-    class Son app
-    class Prow,Rdt backend
+    class Son,Aurora app
+    class Prow,Rdt,Kopia backend
+    class Data data
 ```
+
+Step 5 is conditional on the package's own manifest: `sso.protect` is what
+makes `CaddySnippetService` emit `import authelia` into that package's
+vhost. A package without it is reachable on the LAN with no login, which
+is a deliberate choice per package, not an oversight.
+
+Nothing reaches an app directly. Caddy is the only thing bound to 80 and
+443; every other container is reachable only by service name on
+`aurora_net`, which is why a package's compose file never publishes its
+own web port.
 
 ## 4. Control plane — what drives what
 
