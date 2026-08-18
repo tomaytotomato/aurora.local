@@ -24,12 +24,29 @@ if [[ ${#pkgs[@]} -eq 0 ]]; then
   [[ ${#pkgs[@]} -eq 0 ]] && pkgs=(core privacy media storage)
 fi
 
+# A retired package's name lingers in .state.yml, and dying on it here
+# meant one dangling entry stopped every other package being brought
+# down. Warn and skip; see manifest_filter_known.
+mapfile -t pkgs < <(manifest_filter_known "${pkgs[@]}")
+if [[ ${#pkgs[@]} -eq 0 ]]; then
+  die "no known packages to bring down"
+fi
+
 files=()
 for p in "${pkgs[@]}"; do
   f="$REPO/packages/$p/compose.yml"
-  [[ -f "$f" ]] || die "no compose.yml for package: $p"
+  # A package with a manifest but no compose.yml is a broken package
+  # rather than a retired one, so it is still worth saying out loud —
+  # but not worth abandoning the other packages over.
+  if [[ ! -f "$f" ]]; then
+    log_warn "package '$p' has a manifest but no compose.yml — skipping"
+    continue
+  fi
   files+=(-f "$f")
 done
+if [[ ${#files[@]} -eq 0 ]]; then
+  die "none of the requested packages has a compose.yml"
+fi
 
 # --------------------------------------------------------------------
 # Self-recreation guard

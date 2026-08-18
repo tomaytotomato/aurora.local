@@ -34,6 +34,45 @@ manifest_path() {
   printf '%s' "$p"
 }
 
+# manifest_exists PKG -> 0 if the package is installed in this repo
+#
+# The question manifest_path answers by dying, asked in a form a caller
+# can act on. Deliberately silent: callers decide whether an absent
+# package is a fatal error or something to warn about and move past.
+manifest_exists() {
+  [[ -f "$REPO/packages/$1/manifest.yml" ]]
+}
+
+# manifest_filter_known PKG... -> the subset that exists, one per line,
+# warning on stderr about each one that does not.
+#
+# A retired package leaves its name behind in .state.yml, and every path
+# that reads that file used to hand the dangling name straight to
+# manifest_path, which dies. One stale entry therefore made EVERY other
+# package unmanageable: up.sh and down.sh both aborted before touching
+# anything. Removing Forgejo demonstrated it, and it recurs every time a
+# package is retired.
+#
+# Warn and skip instead. Callers that end up with nothing left should say
+# so themselves — an empty set means something different to `up` than it
+# does to `down`.
+#
+# Note the trade-off: a mistyped name on the command line is warned about
+# rather than rejected, so `up.sh mediaa` reports a warning and brings up
+# nothing else it was not already asked for. Fail-fast on explicit
+# arguments was considered and rejected as two behaviours to explain; the
+# warning goes to stderr and names the package.
+manifest_filter_known() {
+  local pkg
+  for pkg in "$@"; do
+    if manifest_exists "$pkg"; then
+      printf '%s\n' "$pkg"
+    else
+      log_warn "no such package '$pkg' (no packages/$pkg/manifest.yml) — skipping"
+    fi
+  done
+}
+
 # manifest_list_packages -> newline-separated pkg names (sorted, excludes _*)
 manifest_list_packages() {
   local d

@@ -71,6 +71,19 @@ if state_exists; then
 fi
 
 # --------------------------------------------------------------------
+# Drop packages that are no longer in this repo
+# --------------------------------------------------------------------
+# Must happen before dependency resolution, not at the compose-file loop
+# further down: manifest_resolve_deps asks manifest_path for every name it
+# is given, and that dies on a package with no manifest. A single retired
+# package still listed in .state.yml therefore aborted the whole run
+# before anything started.
+mapfile -t pkgs < <(manifest_filter_known "${pkgs[@]}")
+if [[ ${#pkgs[@]} -eq 0 ]]; then
+  die "no known packages to bring up"
+fi
+
+# --------------------------------------------------------------------
 # Resolve deps
 # --------------------------------------------------------------------
 mapfile -t resolved < <(manifest_resolve_deps "${pkgs[@]}")
@@ -113,7 +126,13 @@ files=()
 env_files=()
 for p in "${pkgs[@]}"; do
   f="$REPO/packages/$p/compose.yml"
-  [[ -f "$f" ]] || die "no compose.yml for package: $p"
+  # A manifest with no compose.yml is a half-written package rather than
+  # a retired one. Same treatment as down.sh: say so, keep going, and let
+  # the packages that are intact start.
+  if [[ ! -f "$f" ]]; then
+    log_warn "package '$p' has a manifest but no compose.yml — skipping"
+    continue
+  fi
   files+=(-f "$f")
 
   env_ex="$REPO/packages/$p/.env.example"
