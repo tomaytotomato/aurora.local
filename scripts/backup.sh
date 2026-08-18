@@ -4,7 +4,7 @@
 # Snapshot the *configuration* of an aurora.local box into a timestamped
 # tarball. Deliberately does NOT back up the giant media/library data;
 # only the state that would be painful to recreate: env files, ansible
-# vars, homepage/caddy config, and each package's small config bind
+# vars, caddy config, and each package's small config bind
 # mounts (the *config* subdir of packages/*/data/*/ — see EXCLUDES).
 #
 # Bulk media, sonarr's Media/ dir, jellyfin's transcodes, etc. are all
@@ -49,7 +49,6 @@ INCLUDES=(
 # Glob-includes evaluated at pack time.
 GLOB_INCLUDES=(
   "packages/*/.env"
-  "packages/core/homepage/config"
   "packages/core/caddy/Caddyfile"
   "packages/privacy/adguard/rewrites.yaml"
   "packages/*/data/*/config"

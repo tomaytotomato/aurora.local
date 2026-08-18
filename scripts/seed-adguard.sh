@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
 # aurora.local / scripts/seed-adguard.sh
 #
-# Idempotent seeder for AdGuard Home. Ensures:
-#   1. The rewrites in packages/privacy/adguard/rewrites.yaml are
-#      present in the live AdGuardHome.yaml
-#   2. A dedicated 'homepage' user exists (bcrypted from
-#      HOMEPAGE_VAR_ADGUARD_PASS in packages/core/.env)
+# Idempotent seeder for AdGuard Home. Ensures the rewrites in
+# packages/privacy/adguard/rewrites.yaml are present in the live
+# AdGuardHome.yaml.
 #
 # Safe to run any time. Only ADDS missing rewrites; never removes.
-# Only creates the homepage user if it's not already there.
 #
-# Prereqs: sudo (config is root-owned inside the container), apache2-utils
-# (for htpasswd), python3 with yaml.
+# Prereqs: sudo (config is root-owned inside the container), python3 with
+# yaml. htpasswd/apache2-utils is no longer needed — it was only there to
+# bcrypt a password for the retired Homepage widget's AdGuard user.
 
 set -euo pipefail
 
@@ -60,36 +58,13 @@ with open(conf_path, 'w') as f:
 print(f"  added {added} rewrite(s); {len(conf['filtering']['rewrites'])} total")
 PY
 
-# ---- 2. Ensure homepage user exists -----------------------------------
-if [[ -n "${HOMEPAGE_VAR_ADGUARD_USER:-}" && -n "${HOMEPAGE_VAR_ADGUARD_PASS:-}" ]]; then
-  log "ensuring AdGuard user '$HOMEPAGE_VAR_ADGUARD_USER' exists"
+# Step 2 used to create a dedicated AdGuard user so Homepage's AdGuard
+# widget could query it. Homepage was retired months ago, so that user
+# had no consumer — it was an extra credentialed account on the LAN's DNS
+# server, with its password sitting in packages/core/.env, existing for
+# nothing. Removed along with the rest of the Homepage machinery.
 
-  # We DON'T want to check the plaintext-hash match — that's not how
-  # bcrypt works. Just check the username exists; if not, inject.
-  if sudo grep -qE "^\s*- name:\s*$HOMEPAGE_VAR_ADGUARD_USER\s*$" "$CONF"; then
-    echo "  user '$HOMEPAGE_VAR_ADGUARD_USER' already present"
-  else
-    command -v htpasswd >/dev/null || die "htpasswd missing — apt install apache2-utils"
-    # shellcheck disable=SC2016  # single-quoted sed pattern is intentional
-    HASH=$(htpasswd -bnBC 10 "" "$HOMEPAGE_VAR_ADGUARD_PASS" | tr -d ':\n' | sed 's/^\$2y/\$2a/')
-
-    sudo python3 - "$CONF" "$HOMEPAGE_VAR_ADGUARD_USER" "$HASH" <<'PY'
-import sys, yaml
-conf_path, name, phash = sys.argv[1], sys.argv[2], sys.argv[3]
-with open(conf_path) as f: conf = yaml.safe_load(f)
-conf.setdefault('users', [])
-if not any(u.get('name') == name for u in conf['users']):
-    conf['users'].append({'name': name, 'password': phash})
-with open(conf_path, 'w') as f:
-    yaml.safe_dump(conf, f, sort_keys=False, default_flow_style=False)
-print(f"  injected user '{name}'")
-PY
-  fi
-else
-  warn "HOMEPAGE_VAR_ADGUARD_{USER,PASS} unset in packages/core/.env; skipping user seed"
-fi
-
-# ---- 3. Restart AdGuard so it re-reads the config ---------------------
+# ---- 2. Restart AdGuard so it re-reads the config ---------------------
 if docker ps --format '{{.Names}}' | grep -q '^adguard$'; then
   log "restarting adguard container"
   docker restart adguard >/dev/null

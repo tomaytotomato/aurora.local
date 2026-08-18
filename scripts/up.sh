@@ -201,9 +201,10 @@ for ef in "${env_files[@]}"; do
   set +a
 done
 
-# Auto-detect the docker group's gid so core/homepage can read
-# /var/run/docker.sock without hard-coding a number that differs
-# per distro. Fall back to 998 (Debian) if the lookup fails.
+# Auto-detect the docker group's gid so the dashboard container can read
+# /var/run/docker.sock without hard-coding a number that differs per
+# distro (packages/dashboard/compose.yml runs as ${AURORA_UID}:${DOCKER_GID}).
+# Fall back to 998 (Debian) if the lookup fails.
 if [[ -z "${DOCKER_GID:-}" ]]; then
   DOCKER_GID="$(getent group docker 2>/dev/null | cut -d: -f3 || true)"
   DOCKER_GID="${DOCKER_GID:-998}"
@@ -212,7 +213,7 @@ fi
 
 # --------------------------------------------------------------------
 # Render per-package fragments into runtime layout (caddy snippets,
-# homepage services.yaml, identity users_database seed, pinned images).
+# identity users_database seed, pinned images).
 # --------------------------------------------------------------------
 render_all "${pkgs[@]}"
 

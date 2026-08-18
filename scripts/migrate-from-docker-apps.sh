@@ -45,7 +45,6 @@ declare -A SERVICES=(
   [rdtclient]=rdtclient
   [qbittorrent]=qbittorrent
   [minidlna]=minidlna
-  [homepage]=homepage/config
 )
 
 for svc in "${!SERVICES[@]}"; do
@@ -59,19 +58,10 @@ for svc in "${!SERVICES[@]}"; do
   fi
 done
 
-# Homepage config is special — data/homepage IS the mounted config dir,
-# but we've also got packages/core/homepage/config tracked in git with
-# our new opinionated defaults. Merge: prefer the new tracked configs,
-# keep the runtime `logs/` from the old dir.
-if [[ -d "$NEW/data/homepage" ]]; then
-  if [[ -d "$NEW/data/homepage/logs" ]]; then
-    echo "==> preserving homepage logs/"
-    mkdir -p "$NEW/packages/core/homepage/config/logs"
-    mv "$NEW/data/homepage/logs/"* "$NEW/packages/core/homepage/config/logs/" 2>/dev/null || true
-  fi
-  echo "==> archiving old homepage config -> data/homepage.pre-migration"
-  mv "$NEW/data/homepage" "$NEW/data/homepage.pre-migration"
-fi
+# The old layout's homepage/ config is deliberately not migrated:
+# Homepage was retired, and packages/core/homepage/ no longer exists to
+# migrate it into. Anything left in the old location stays where it is
+# rather than being moved somewhere nothing reads.
 
 if [[ -f "$OLD/.env" && ! -f "$NEW/packages/core/.env" ]]; then
   echo "==> copying $OLD/.env -> packages/core/.env"

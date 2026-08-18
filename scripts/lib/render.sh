@@ -5,7 +5,6 @@
 # the runtime files that `packages/core/` bind-mounts:
 #
 #   * data/caddy/snippets/<pkg>.caddy   — per-package Caddy vhosts
-#   * packages/core/homepage/config/services.yaml — base + fragments
 #   * data/identity/authelia/users_database.yml — seeded from example
 #
 # Called by scripts/up.sh. All functions idempotent and safe to re-run.
@@ -48,32 +47,6 @@ render_caddy_snippets() {
       log_info "pruned stale caddy snippet: $base"
     fi
   done
-}
-
-# --------------------------------------------------------------------
-# render_homepage_services <pkg> [<pkg>...]
-#
-# Writes packages/core/homepage/config/services.yaml =
-#   services.base.yaml + every enabled package's homepage.yml
-# --------------------------------------------------------------------
-render_homepage_services() {
-  local pkgs=("$@")
-  local cfg="$REPO/packages/core/homepage/config"
-  local base="$cfg/services.base.yaml"
-  local out="$cfg/services.yaml"
-
-  [[ -f "$base" ]] || { log_warn "missing services.base.yaml; skipping homepage merge"; return 0; }
-
-  {
-    cat "$base"
-    local p frag
-    for p in "${pkgs[@]}"; do
-      frag="$REPO/packages/$p/homepage.yml"
-      [[ -f "$frag" ]] || continue
-      printf '\n# ---- %s -----------------------------------------------\n' "$p"
-      cat "$frag"
-    done
-  } > "$out"
 }
 
 # --------------------------------------------------------------------
@@ -130,7 +103,6 @@ render_pins() {
 # --------------------------------------------------------------------
 render_all() {
   render_caddy_snippets "$@"
-  render_homepage_services "$@"
   render_identity_seed "$@"
   render_pins "$@"
 }
