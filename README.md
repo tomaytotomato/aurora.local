@@ -104,7 +104,7 @@ host/                     ansible for OS hardening
 packages/<name>/          per-stack compose + manifest + fragments
   compose.yml, manifest.yml, .env.example, README.md
   caddy.snippet           (optional) vhost fragments merged into Caddy
-  homepage.yml            (optional) dashboard tiles merged into Homepage
+  pins.env                (optional) image digests, written by scripts/pin.sh
   seed.sh                 (optional) idempotent post-up hook
 scripts/
   up.sh down.sh status.sh doctor.sh health.sh

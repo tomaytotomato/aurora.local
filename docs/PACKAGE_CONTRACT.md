@@ -12,7 +12,7 @@ Every `packages/<name>/` directory MUST contain:
 | `.env.example`     | yes      | Every variable referenced by `compose.yml`, with comments.   |
 | `README.md`        | yes      | Short human description + first-run notes.                   |
 | `caddy.snippet`    | no       | Vhost fragments imported by `packages/core/caddy/Caddyfile`. |
-| `homepage.yml`     | no       | Homepage services-group fragment.                            |
+| `pins.env`         | no       | Pinned image digests, written by `scripts/pin.sh`.           |
 | `seed.sh`          | no       | Idempotent post-up hook run by `scripts/up.sh`.              |
 
 ## manifest.yml schema
@@ -26,6 +26,22 @@ description: |                  # one paragraph, shown in the picker
 
 # Grouping in the interactive selector.
 category: media                 # core|privacy|media|storage|backup|monitoring|productivity|dev|ai|identity|home-automation
+
+# Upstream project, for the Source and Docs buttons on the app page.
+# source_url is REQUIRED of every shipped package — a package without one
+# renders a Source button that leads nowhere, and
+# PackagesServiceTests.everyRealManifestNamesItsUpstreamSource fails the
+# build over it. Name the package's headline service, not every image it
+# runs. homepage_url is optional: for a few packages the repository IS the
+# documentation, and inventing a homepage to fill the field would be worse
+# than omitting the button.
+source_url: https://github.com/Sonarr/Sonarr
+homepage_url: https://sonarr.tv
+
+# Hostname labels this package serves, without the domain. The preferred
+# discovery path for MdnsAliasService, which otherwise grep-parses
+# caddy.snippet for them.
+vhosts: [sonarr, radarr]
 
 # Hard dependencies on other packages. bootstrap.sh will refuse to
 # enable this one unless every dep is also selected.
