@@ -198,6 +198,15 @@ public class PackagesService {
   private static final java.util.regex.Pattern SECRET_HINT =
       java.util.regex.Pattern.compile("(SECRET|KEY|PASSWORD|TOKEN|PASS|PSK)");
 
+  /**
+   * One top-level block from a package manifest, for callers outside this
+   * class — {@link BackupService} needs the {@code backup:} block and
+   * should not re-implement manifest reading to get it.
+   */
+  Object readManifestBlockFor(String name, String block) {
+    return readManifestBlock(name, block);
+  }
+
   /** One top-level block from a package manifest, or null when absent. */
   private Object readManifestBlock(String name, String block) {
     Path p = Path.of(props.repoPath()).resolve("packages").resolve(name).resolve("manifest.yml");

@@ -113,6 +113,21 @@ public class SystemService {
     // never persisted, so there is nothing to rebuild a working file
     // from a second time. See dev/notes/vpn-progress.md.
     capabilities.put("vpn", true);
+    // Backup: deliberately FALSE, and stated rather than left absent so
+    // nobody has to guess whether the omission was a decision.
+    //
+    // BackupController ships the read half — GET /backup/status and
+    // /backup/sources, against the real kopia CLI — but the page also
+    // calls /backup/snapshots (GET and POST), /backup/snapshots/{id}/
+    // restore, PATCH /backup/sources/{id} and /backup/policy (GET and
+    // PUT), none of which exist. Flipping this true would reveal a page
+    // that 404s on six of its eight calls, including its Back up now and
+    // Restore buttons.
+    //
+    // BACKUP_PAGE_DESIGN.md §1 is the rule being followed here: a page
+    // that cannot be honest should not be reachable. Flip it when the
+    // write half lands, not before.
+    capabilities.put("backup", false);
     out.put("capabilities", capabilities);
     return out;
   }
