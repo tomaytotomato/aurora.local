@@ -57,3 +57,8 @@ post_install_notes: |
      (the named route is defined in identity/caddy.snippet).
   4. First login: https://auth.$DOMAIN — the wizard will guide
      TOTP / WebAuthn enrolment.
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/authelia/authelia
+homepage_url: https://www.authelia.com

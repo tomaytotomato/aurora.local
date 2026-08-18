@@ -72,3 +72,8 @@ post_install_notes: |
 
   Add scrape targets by editing prometheus/prometheus.yml then:
     docker exec prometheus killall -HUP prometheus
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/grafana/grafana
+homepage_url: https://grafana.com

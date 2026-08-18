@@ -32,3 +32,8 @@ post_install_notes: |
     ./scripts/get-caddy-root-cert.sh
   Aurora will be reachable on http://<hostname>.local/ and
   http://$DOMAIN/.
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/caddyserver/caddy
+homepage_url: https://caddyserver.com

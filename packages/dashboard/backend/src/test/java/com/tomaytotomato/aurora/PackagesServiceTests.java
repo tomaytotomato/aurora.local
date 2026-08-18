@@ -99,7 +99,9 @@ class PackagesServiceTests {
     Mockito.when(docker.listProjectContainers()).thenReturn(List.of());
     var props = new AuroraProperties("src/test/resources/fake-repo", null, List.of(), null);
 
-    var svc = new PackagesService(props, stateFiles, docker);
+    // mdns is only reached by detail() for the vhost list; find() never
+    // touches it, so null is honest about what this test exercises.
+    var svc = new PackagesService(props, stateFiles, docker, null);
     Package dashboard = svc.find("dashboard").orElseThrow();
 
     assertThat(dashboard.running())
@@ -135,5 +137,51 @@ class PackagesServiceTests {
     Map<String, Object> probe = (Map<String, Object>) probeRaw;
     assertThat(probe.get("kind")).isEqualTo("self");
     assertThat(probe.get("container")).isEqualTo("aurora");
+  }
+
+  /**
+   * Every shipped package must name its upstream source.
+   *
+   * <p>The app page renders Source and Docs buttons from
+   * {@code source_url} / {@code homepage_url}. Both lived only in the MSW
+   * fixtures for months, which is precisely why the reviewed page looked
+   * complete and a real box's did not — the buttons were there and led
+   * nowhere. A new package added without a source link would reintroduce
+   * exactly that, silently, and no other test would notice.
+   *
+   * <p>{@code homepage_url} is deliberately not required: for a few
+   * packages the repository <em>is</em> the documentation, and inventing a
+   * homepage to satisfy a test would be worse than omitting the button.
+   *
+   * <p>Guarded like the drift check above: no-ops in a sandbox that only
+   * mounts the backend directory.
+   */
+  @Test
+  void everyRealManifestNamesItsUpstreamSource() throws IOException {
+    Path packagesDir = Path.of("../../../packages");
+    if (!Files.isDirectory(packagesDir)) return;
+
+    List<String> missing = new java.util.ArrayList<>();
+    try (var dirs = Files.list(packagesDir)) {
+      for (Path dir : dirs.filter(Files::isDirectory).sorted().toList()) {
+        String name = dir.getFileName().toString();
+        // _template is a scaffold, not a shipped package; CI's schema
+        // check skips it for the same reason.
+        if (name.startsWith("_") || name.startsWith(".")) continue;
+        Path manifest = dir.resolve("manifest.yml");
+        if (!Files.isRegularFile(manifest)) continue;
+        Map<String, Object> m;
+        try (var in = Files.newInputStream(manifest)) {
+          m = new Yaml().load(in);
+        }
+        Object src = m == null ? null : m.get("source_url");
+        if (src == null || src.toString().isBlank()) missing.add(name);
+      }
+    }
+
+    assertThat(missing)
+        .as("these packages declare no source_url, so their app page's Source button "
+            + "would render with nothing behind it")
+        .isEmpty();
   }
 }

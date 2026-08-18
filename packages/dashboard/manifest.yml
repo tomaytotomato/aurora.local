@@ -47,3 +47,7 @@ post_install_notes: |
   3. Onboarding wizard walks you through domain, packages, DNS and TLS.
   4. Aurora's own admin URL is behind Authelia forward-auth when the
      `identity` package is enabled.
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/tomaytotomato/aurora.local

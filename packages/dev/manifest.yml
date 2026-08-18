@@ -49,3 +49,7 @@ post_install_notes: |
      /workspace/aurora.local will be owned by 1000:1000 on the host, which
      matches the default home_uid/home_gid. If your host user isn't 1000,
      override PUID/PGID in .env.
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/coder/code-server

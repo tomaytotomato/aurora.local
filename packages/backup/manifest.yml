@@ -38,3 +38,8 @@ post_install_notes: |
        -> Filesystem -> /repository, encryption password = KOPIA_PASSWORD.
     2. Add sources: /data/home/<you>/aurora.local, /data/etc, etc.
     3. Import policies/default-policy.json as a starting point.
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/kopia/kopia
+homepage_url: https://kopia.io

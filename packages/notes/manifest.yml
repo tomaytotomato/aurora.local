@@ -83,3 +83,8 @@ post_install_notes: |
   1. Set SB_USER + SB_PASSWORD in packages/notes/.env.
   2. First-run: https://notes.$DOMAIN/ — log in with those creds.
   3. Storage as above.
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/silverbulletmd/silverbullet
+homepage_url: https://silverbullet.md

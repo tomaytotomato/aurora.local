@@ -11,3 +11,12 @@ requires:
   host_roles: []
 required_env: []
 post_install_notes: ""
+# Mirrors the real packages/photos manifest: a path this package owns
+# plus the dump that has to run before it can be snapshotted safely.
+backup:
+  paths:
+    - data/photos/library
+  before:
+    - kind: postgres-dump
+      container: immich-postgres
+      description: Dumps the Immich database so the snapshot restores cleanly

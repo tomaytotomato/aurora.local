@@ -117,3 +117,8 @@ post_install_notes: |
   1. Set the download client(s) in Sonarr/Radarr Settings > Download Clients.
   2. Add Prowlarr as the indexer source in Sonarr/Radarr Settings > Indexers.
   3. Point Seerr at your Jellyfin/Plex server.
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/Sonarr/Sonarr
+homepage_url: https://sonarr.tv

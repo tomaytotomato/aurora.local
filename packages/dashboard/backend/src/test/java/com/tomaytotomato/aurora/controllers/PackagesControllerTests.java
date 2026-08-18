@@ -60,7 +60,7 @@ class PackagesControllerTests {
   @Test
   void detail_is_flat_not_wrapped_in_package_key() throws Exception {
     PackagesService packages = Mockito.mock(PackagesService.class);
-    Mockito.when(packages.find("identity")).thenReturn(Optional.of(identity(true, true)));
+    Mockito.when(packages.detail("identity")).thenReturn(Optional.of(identity(true, true)));
 
     mvc(packages).perform(get("/api/packages/identity"))
         .andExpect(status().isOk())
@@ -78,7 +78,7 @@ class PackagesControllerTests {
     // back true at the top level so the frontend's isCorePackage() lookup
     // (keyed on `name`) and its enabled/running badge both see real data.
     PackagesService packages = Mockito.mock(PackagesService.class);
-    Mockito.when(packages.find("identity")).thenReturn(Optional.of(identity(true, true)));
+    Mockito.when(packages.detail("identity")).thenReturn(Optional.of(identity(true, true)));
 
     mvc(packages).perform(get("/api/packages/identity"))
         .andExpect(status().isOk())
@@ -90,7 +90,7 @@ class PackagesControllerTests {
   @Test
   void unknown_package_is_404() throws Exception {
     PackagesService packages = Mockito.mock(PackagesService.class);
-    Mockito.when(packages.find("nope")).thenReturn(Optional.empty());
+    Mockito.when(packages.detail("nope")).thenReturn(Optional.empty());
 
     mvc(packages).perform(get("/api/packages/nope"))
         .andExpect(status().isNotFound());

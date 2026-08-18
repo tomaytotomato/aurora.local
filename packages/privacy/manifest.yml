@@ -45,3 +45,8 @@ post_install_notes: |
   2. Configure your router to hand out this box's IP as DNS.
   3. For VPN, fill packages/privacy/.env (see .env.example for
      Proton/Mullvad/Wireguard examples).
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/AdguardTeam/AdGuardHome
+homepage_url: https://adguard.com/en/adguard-home/overview.html

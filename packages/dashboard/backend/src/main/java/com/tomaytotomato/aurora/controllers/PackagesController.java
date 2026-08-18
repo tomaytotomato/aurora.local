@@ -46,7 +46,7 @@ public class PackagesController {
    */
   @GetMapping("/{name}")
   public ResponseEntity<Package> get(@PathVariable String name) {
-    return packages.find(name)
+    return packages.detail(name)
         .map(ResponseEntity::ok)
         .orElseGet(() -> ResponseEntity.notFound().build());
   }

@@ -33,3 +33,8 @@ probe:
 post_install_notes: |
   The "media" share is read-write and requires the SAMBA_USER/SAMBA_PASS
   credentials set in packages/storage/.env — it is not served as guest.
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/samba-team/samba
+homepage_url: https://www.samba.org

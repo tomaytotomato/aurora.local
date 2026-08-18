@@ -64,3 +64,8 @@ post_install_notes: |
   3. UPLOAD_LOCATION defaults to ../../data/photos/library — override
      in .env to point at bulk storage if you don't want your photos on
      the OS disk.
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/immich-app/immich
+homepage_url: https://immich.app

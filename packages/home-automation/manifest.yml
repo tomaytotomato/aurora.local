@@ -64,3 +64,8 @@ post_install_notes: |
   3. For Zigbee: plug in the USB coordinator, set ZIGBEE_ADAPTER in
      .env (e.g. /dev/serial/by-id/usb-...), then bring the stack up
      with the 'zigbee' profile (see scripts/up.sh --zigbee).
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/home-assistant/core
+homepage_url: https://www.home-assistant.io

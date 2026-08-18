@@ -177,7 +177,7 @@ class OnboardingServiceWarningsTests {
     // PackagesService needs docker only for enabled/running diffing, which
     // this test does not exercise. Pass null and it is not dereferenced by
     // readRequires / readWarnings.
-    PackagesService pkgs = new PackagesService(props, null, null);
+    PackagesService pkgs = new PackagesService(props, null, null, null);
     return new OnboardingService(null, null, null, null, null, pkgs, null, props);
   }
 

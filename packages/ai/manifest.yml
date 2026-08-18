@@ -72,3 +72,8 @@ post_install_notes: |
        70B models : ~48 GB (GPU/quantised only)
   5. GPU: use `./scripts/up.sh --gpu core ai` (requires NVIDIA Container
      Toolkit on the host).
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/ollama/ollama
+homepage_url: https://ollama.com

@@ -192,6 +192,22 @@
         "additionalProperties": true
       }
     },
-    "post_install_notes": { "type": "string" }
+    "post_install_notes": { "type": "string" },
+    "source_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Upstream source repository. Rendered as the Source button on the app page; omit rather than guess."
+    },
+    "homepage_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Upstream project homepage or documentation. Rendered as the Docs button on the app page."
+    },
+    "vhosts": {
+      "type": "array",
+      "description": "Hostname labels this package serves, without the domain (e.g. [photos]). The preferred discovery path for MdnsAliasService, which otherwise grep-parses caddy.snippet. additionalProperties:false meant no real manifest could carry this field even though the code has read it all along.",
+      "items": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9-]*$" },
+      "uniqueItems": true
+    }
   }
 }

@@ -1,6 +1,7 @@
-# For notes, manifest vhosts wins. This snippet also declares 'notes'
-# and a 'legacy' — the manifest set should MASK the caddy fallback so
-# 'legacy' does NOT appear in the discovered set (deduplicated) but
-# 'notes' remains sourced from manifest.
+# For notes, the manifest declares 'notes' and 'drafts'. This snippet
+# re-declares 'notes' and adds a 'legacy'. Discovery is the union: 'notes'
+# is deduplicated and keeps "manifest" as its source, while 'legacy' is
+# still discovered from here, because a vhost Caddy serves is one the
+# package answers on whether or not the manifest mentions it.
 http://notes.{$DOMAIN} { reverse_proxy silverbullet:3000 }
 http://legacy.{$DOMAIN} { reverse_proxy silverbullet:3000 }

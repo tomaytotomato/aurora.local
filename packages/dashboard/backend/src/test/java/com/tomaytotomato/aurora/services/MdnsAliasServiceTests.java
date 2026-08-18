@@ -79,11 +79,17 @@ class MdnsAliasServiceTests {
   @Test
   void discoverLabels_notes_prefers_manifest_over_caddy_snippet() {
     // fake-repo/packages/notes/manifest.yml declares vhosts: [notes, drafts].
-    // The caddy.snippet ALSO declares a 'legacy' vhost; because the manifest
-    // path runs first and putIfAbsent guards duplicates, 'notes' stays sourced
-    // from manifest and 'legacy' does NOT appear (manifest-declared package
-    // is trusted to be authoritative; caddy fallback only kicks in when the
-    // manifest list is missing entirely).
+    // The caddy.snippet ALSO declares a 'legacy' vhost. The discovered set is
+    // the UNION of both: the manifest path runs first so a label it declares
+    // keeps "manifest" as its source, but putIfAbsent only dedupes per label,
+    // so 'legacy' — unique to the snippet — is still discovered.
+    //
+    // The union is the behaviour you want: an alias that exists in Caddy but
+    // not in the manifest is still a hostname the package answers on, and
+    // failing to advertise it would leave a working vhost unreachable by
+    // name. (This comment previously claimed the manifest MASKS the snippet
+    // and that 'legacy' does not appear, which contradicted the assertion
+    // immediately below it and the code besides.)
     Map<String, LabelSource> labels = svc.discoverLabels("notes");
 
     assertThat(labels).containsOnlyKeys("notes", "drafts", "legacy");

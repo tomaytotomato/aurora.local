@@ -2,7 +2,9 @@ package com.tomaytotomato.aurora.services;
 
 import com.github.dockerjava.api.model.Container;
 import com.tomaytotomato.aurora.config.AuroraProperties;
+import com.tomaytotomato.aurora.domain.EnvVarSpec;
 import com.tomaytotomato.aurora.domain.Package;
+import com.tomaytotomato.aurora.domain.PackageBackupSpec;
 import com.tomaytotomato.aurora.domain.RepoState;
 import com.tomaytotomato.aurora.domain.SsoBlock;
 import org.slf4j.Logger;
@@ -34,11 +36,14 @@ public class PackagesService {
   private final AuroraProperties props;
   private final StateFileService stateFiles;
   private final DockerService docker;
+  private final MdnsAliasService mdns;
 
-  public PackagesService(AuroraProperties props, StateFileService stateFiles, DockerService docker) {
+  public PackagesService(AuroraProperties props, StateFileService stateFiles, DockerService docker,
+                         MdnsAliasService mdns) {
     this.props = props;
     this.stateFiles = stateFiles;
     this.docker = docker;
+    this.mdns = mdns;
   }
 
   public List<Package> list() {
@@ -69,6 +74,141 @@ public class PackagesService {
 
   public Optional<Package> find(String name) {
     return list().stream().filter(p -> p.name().equals(name)).findFirst();
+  }
+
+  /**
+   * The summary plus everything the app detail page renders: the README,
+   * the vhosts the package serves, what each of its environment variables
+   * is for, and its {@code backup:} block.
+   *
+   * <p>All of it derived, none of it duplicated into the manifest. The
+   * README is the README; the vhosts come from the same discovery
+   * {@link MdnsAliasService} advertises from, so a package cannot serve a
+   * hostname the page fails to list; the env specs come from
+   * {@code .env.example}, the only file that records what a variable is
+   * for. A manifest copy of any of it would be a second truth to drift.
+   */
+  public Optional<Package> detail(String name) {
+    return find(name).map(pkg -> pkg.withDetail(
+        readReadme(name).orElse(null),
+        vhostsFor(name),
+        envSpecs(name, pkg.requiredEnv()),
+        PackageBackupSpec.fromManifest(readManifestBlock(name, "backup"))
+    ));
+  }
+
+  /** Contents of {@code packages/<name>/README.md}, if it has one. */
+  Optional<String> readReadme(String name) {
+    Path p = Path.of(props.repoPath()).resolve("packages").resolve(name).resolve("README.md");
+    if (!Files.isRegularFile(p)) return Optional.empty();
+    try {
+      return Optional.of(Files.readString(p));
+    } catch (IOException e) {
+      log.warn("failed to read {}: {}", p, e.getMessage());
+      return Optional.empty();
+    }
+  }
+
+  /**
+   * Every hostname this package serves, fully qualified.
+   *
+   * <p>Reuses {@link MdnsAliasService#discoverLabels} rather than parsing
+   * caddy.snippet again: those aliases are what avahi actually advertises
+   * on the LAN, so deriving the page's list from anywhere else would let
+   * the two disagree. The labels are bare ({@code photos}); the page needs
+   * something a browser can open, so the domain is appended here.
+   */
+  List<String> vhostsFor(String name) {
+    RepoState state = stateFiles.readState();
+    String domain = state.domain() == null || state.domain().isBlank() ? "aurora.local" : state.domain();
+    return mdns.discoverLabels(name).keySet().stream()
+        .map(label -> label + "." + domain)
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * What each of the package's environment variables is for, parsed from
+   * {@code .env.example}: the key, the example value beside it, and the
+   * comment block immediately above it.
+   *
+   * <p>{@code required} comes from the manifest's {@code required_env},
+   * because a flat env file has no way to say "this one has no usable
+   * default". {@code secret} comes from the key's name — see
+   * {@link #looksLikeSecret}.
+   */
+  List<EnvVarSpec> envSpecs(String name, List<String> requiredEnv) {
+    String body = readEnvExample(name).orElse(null);
+    if (body == null) return List.of();
+    Set<String> required = new HashSet<>(requiredEnv == null ? List.of() : requiredEnv);
+
+    List<EnvVarSpec> out = new ArrayList<>();
+    List<String> pendingComment = new ArrayList<>();
+    for (String raw : body.split("\n", -1)) {
+      String line = raw.strip();
+      if (line.isEmpty()) {
+        // A blank line ends a comment block. Without this the file's
+        // header banner would be attributed to whichever key came first.
+        pendingComment.clear();
+        continue;
+      }
+      if (line.startsWith("#")) {
+        String text = line.substring(1).strip();
+        if (!text.isEmpty()) pendingComment.add(text);
+        continue;
+      }
+      int eq = line.indexOf('=');
+      if (eq <= 0) continue;
+      String key = line.substring(0, eq).strip();
+      String example = line.substring(eq + 1).strip();
+      out.add(new EnvVarSpec(
+          key,
+          example.isEmpty() ? null : example,
+          pendingComment.isEmpty() ? null : String.join(" ", pendingComment),
+          looksLikeSecret(key),
+          required.contains(key)
+      ));
+      pendingComment.clear();
+    }
+    return out;
+  }
+
+  /**
+   * Whether a variable name denotes a secret.
+   *
+   * <p>These two patterns are a port of {@code NON_SECRET_PATTERN} and
+   * {@code SECRET_HINT_PATTERN} in {@code scripts/rotate-secrets.sh},
+   * which is the established definition of the same question — that
+   * script decides what to generate on first boot and what to leave
+   * alone. Two copies of a rule is one more than anybody wants; keeping
+   * them in step is a manual obligation, and the alternative (shelling
+   * out to bash to classify a string) is worse. If you change one, change
+   * the other.
+   */
+  static boolean looksLikeSecret(String key) {
+    if (key == null || key.isBlank()) return false;
+    if (NOT_A_SECRET.matcher(key).matches()) return false;
+    return SECRET_HINT.matcher(key).find();
+  }
+
+  private static final java.util.regex.Pattern NOT_A_SECRET = java.util.regex.Pattern.compile(
+      "^(TZ|DOMAIN|LAN_IP|VPN_SERVICE_PROVIDER|VPN_TYPE|SERVER_COUNTRIES|SERVER_CITIES"
+          + "|OPENVPN_USER|HOMEPAGE_VAR_[A-Z]+_USER|.*_USER|FIREWALL.*"
+          + "|VPN_PORT_FORWARDING(_PROVIDER)?|PORT_FORWARD_ONLY|WIREGUARD_ADDRESSES)$");
+
+  private static final java.util.regex.Pattern SECRET_HINT =
+      java.util.regex.Pattern.compile("(SECRET|KEY|PASSWORD|TOKEN|PASS|PSK)");
+
+  /** One top-level block from a package manifest, or null when absent. */
+  private Object readManifestBlock(String name, String block) {
+    Path p = Path.of(props.repoPath()).resolve("packages").resolve(name).resolve("manifest.yml");
+    if (!Files.isRegularFile(p)) return null;
+    try (var in = Files.newInputStream(p)) {
+      Map<String, Object> m = new Yaml().load(in);
+      return m == null ? null : m.get(block);
+    } catch (IOException e) {
+      log.warn("failed to read {} from {}: {}", block, p, e.getMessage());
+      return null;
+    }
   }
 
   public Optional<String> readEnvExample(String name) {
@@ -270,7 +410,10 @@ public class PackagesService {
           str(m, "post_install_notes"),
           enabled,
           effectiveRunning,
-          SsoBlock.fromManifest(m.get("sso"))
+          SsoBlock.fromManifest(m.get("sso")),
+          str(m, "source_url"),
+          str(m, "homepage_url"),
+          null, null, null, null
       ));
     } catch (IOException e) {
       log.warn("failed to parse {}: {}", manifest, e.getMessage());

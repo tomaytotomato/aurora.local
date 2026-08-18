@@ -67,3 +67,8 @@ post_install_notes: |
   4. Hardware transcoding: uncomment the devices/group_add block in
      compose.yml, then set Playback > Transcoding to VAAPI/QSV. The
      reference box's Intel iGPU does QuickSync.
+
+# Upstream project. Rendered as the Source and Docs buttons on the
+# app page; the package's headline service, not every image it runs.
+source_url: https://github.com/jellyfin/jellyfin
+homepage_url: https://jellyfin.org

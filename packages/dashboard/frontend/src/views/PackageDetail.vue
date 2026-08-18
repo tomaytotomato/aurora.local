@@ -92,8 +92,10 @@ const backTo = computed(() => (isCore.value ? '/apps/core' : '/apps/catalogue'))
 const backLabel = computed(() => (isCore.value ? '← Core' : '← Apps'));
 const links = computed(() => (detail.value ? packageLinks(detail.value) : []));
 
-// readme is never populated yet; fall back to the same description the
-// header uses so the two never disagree.
+// The backend serves packages/<name>/README.md verbatim, heading and all,
+// so the leading `# Title` is stripped here rather than rendered above the
+// one the header already shows. Falls back to the description for a
+// package that ships no README.
 const readmeBody = computed(() => (detail.value?.readme ?? '').replace(/^#\s+.*\n+/, '').trim());
 const aboutBody = computed(() => readmeBody.value || (detail.value?.description ?? '').trim());
 
