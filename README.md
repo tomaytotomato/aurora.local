@@ -14,26 +14,39 @@ If you are wanting something more advanced there are many other alternatives out
 
 ## Quick start
 
-On a fresh box:
+Aurora installs in **two phases**:
+
+**Phase 1 — base setup** (one command, no questions asked). On a fresh box:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/tomaytotomato/aurora.local/main/bootstrap.sh | bash
 ```
 
-You'll get an interactive TUI: hostname, domain, timezone, LAN CIDR,
-then a package picker. Or drive it headless:
+It auto-detects everything it needs (hostname, user, LAN), prepares the
+host (Docker, firewall, mDNS, etc.), and brings up just the reverse proxy,
+single sign-on, and the Aurora dashboard. No prompts, no package picker.
+
+**Phase 2 — onboarding** (in the browser). When Phase 1 finishes, open
+Aurora and the first-run wizard walks you through the admin account,
+domain, DNS and TLS, then drops you on the dashboard — where you install
+media, storage, and everything else from the catalogue at your own pace.
 
 ```
-ENABLE_PACKAGES="core privacy media storage" \
-  DOMAIN=aurora.local \
-  bash bootstrap.sh
+http://<hostname>.local/     or     http://aurora.local/
+```
+
+Domain defaults to `aurora.local`. To override the first-run bring-up set
+(mainly for CI/power users):
+
+```
+ENABLE_PACKAGES="core privacy media storage" bash bootstrap.sh
 ```
 
 ## Commands
 
 | Command                               | What it does                                        |
 |---------------------------------------|-----------------------------------------------------|
-| `./bootstrap.sh`                      | Full install (interactive if TTY, else env-driven). |
+| `./bootstrap.sh`                      | Base setup (non-interactive): core + dashboard.     |
 | `./bootstrap.sh list`                 | List every available package.                       |
 | `./bootstrap.sh status`               | Host + container health + declared ports.           |
 | `./bootstrap.sh add <pkg>`            | Enable and start a package (resolves deps).         |
@@ -59,14 +72,14 @@ See [`docs/PACKAGE_CONTRACT.md`](docs/PACKAGE_CONTRACT.md).
 Every `packages/<name>/` ships a `compose.yml`, `.env.example`,
 `README.md`, and `manifest.yml` describing dependencies, ports,
 categories, and post-install notes. `bootstrap.sh` and `scripts/*.sh`
-use those manifests to resolve installs, pick packages in the TUI, and
-render status output.
+use those manifests to resolve installs and render status output; the
+dashboard catalogue uses them to install packages after onboarding.
 
 Current packages:
 
 | Package         | Category         | What                                                                       |
 |-----------------|------------------|----------------------------------------------------------------------------|
-| core            | core             | Caddy (HTTPS + reverse proxy). Aurora (`packages/dashboard`) is the dashboard |
+| core            | core             | Caddy (HTTPS + reverse proxy) + Authelia SSO/2FA. Aurora (`packages/dashboard`) is the dashboard |
 | privacy         | privacy          | AdGuard Home (LAN DNS) + Gluetun (VPN sidecar)                             |
 | media           | media            | Sonarr, Radarr, Bazarr, Prowlarr, Seerr, RDTClient, SABnzbd, qBittorrent |
 | storage         | storage          | Samba + MiniDLNA                                                           |
@@ -78,7 +91,6 @@ Current packages:
 | dev             | dev              | code-server + Postgres 16 + Redis 7                                        |
 | ai              | ai               | Ollama + Open-WebUI (CPU default, `--gpu` opt-in NVIDIA)                   |
 | home-automation | home-automation  | Home Assistant + Mosquitto + Zigbee2MQTT (`--zigbee`)                      |
-| identity        | identity         | Authelia SSO + 2FA (forward-auth for other packages)                       |
 
 Adding a new one is a copy of `packages/_template/` and a
 `./bootstrap.sh add <name>` away.

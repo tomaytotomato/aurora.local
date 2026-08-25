@@ -104,9 +104,11 @@ const diskRowsExtra = computed(() => Math.max(0, diskRows.value.length - 4));
     <div class="eyebrow mb-3">{{ store.stepEyebrow }}</div>
     <h1 class="mb-4">Welcome to Aurora.</h1>
     <p class="text-foreground text-base leading-relaxed mb-8">
-      Aurora is the admin panel for this box. It's opinionated on purpose — most homelab
+      Base setup is done — the proxy, single sign-on, and this dashboard are already
+      running. Now let's configure Aurora. It's opinionated on purpose — most homelab
       setups fail on the same handful of decisions, so we make them for you and get out
-      of your way.
+      of your way. When you're finished you'll land on the dashboard, where you can add
+      packages any time.
     </p>
 
     <div v-if="err">

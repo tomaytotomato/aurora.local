@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # aurora.local / bootstrap.sh
 #
-# Interactive or non-interactive installer for an aurora.local server.
+# Non-interactive installer for an aurora.local server (Phase 1 base setup).
 #
 # Modes:
-#   bash bootstrap.sh                          # interactive TUI
-#   ENABLE_PACKAGES="core media" bootstrap.sh  # non-interactive
+#   bash bootstrap.sh                          # base setup: core + dashboard
+#   ENABLE_PACKAGES="core media" bootstrap.sh  # override the bring-up set
 #   ./bootstrap.sh list                        # list all available packages
 #   ./bootstrap.sh status                      # show enabled + health
 #   ./bootstrap.sh add   <pkg> [<pkg>...]      # enable + up
@@ -56,7 +56,8 @@ usage() {
 aurora.local bootstrap v$BOOTSTRAP_VERSION
 
 Usage:
-  bootstrap.sh [install [PKG...]]   Full install (interactive if no args + tty).
+  bootstrap.sh [install [PKG...]]   Base setup (non-interactive). Brings up
+                                    core + dashboard, then open the web wizard.
   bootstrap.sh add PKG [PKG...]     Enable and start additional packages.
   bootstrap.sh remove PKG [PKG...]  Stop and disable packages.
   bootstrap.sh list                 List all packages available in this repo.
@@ -64,8 +65,8 @@ Usage:
   bootstrap.sh --help               This message.
 
 Environment:
-  ENABLE_PACKAGES="core privacy"    Skip package picker; use these.
-  HOMELOCAL_NONINTERACTIVE=1        Never prompt (use defaults/env only).
+  ENABLE_PACKAGES="core privacy"    Override the first-run bring-up set.
+  HOMELOCAL_NONINTERACTIVE=1        (No-op; setup is always non-interactive.)
   DOMAIN=aurora.local            Domain used for Caddy vhosts.
   HOME_TIMEZONE=Europe/London
   HOME_USER=$USER                   User owning bind-mounts.
@@ -126,10 +127,6 @@ _ensure_prereqs() {
   done
   # python3-yaml (fallback if yq download fails)
   python3 -c 'import yaml' 2>/dev/null || missing+=("python3-yaml")
-  # whiptail is nice-to-have; only require if interactive
-  if [[ $# -gt 0 && "$1" == "interactive" ]]; then
-    command -v whiptail >/dev/null 2>&1 || missing+=("whiptail")
-  fi
   if [[ ${#missing[@]} -gt 0 ]]; then
     log_step "installing: ${missing[*]}"
     sudo apt-get update -qq
@@ -138,7 +135,6 @@ _ensure_prereqs() {
     for m in "${missing[@]}"; do
       case "$m" in
         python3-yaml) pkgs+=("python3-yaml") ;;
-        whiptail)     pkgs+=("whiptail") ;;
         *)            pkgs+=("$m") ;;
       esac
     done
@@ -250,76 +246,58 @@ EOF
 }
 
 # --------------------------------------------------------------------
-# Interactive flow
+# Install (fully non-interactive — D1)
+#
+# Phase 1 of the two-phase install (docs/TWO_PHASE_INSTALL_PLAN.md): base
+# setup. There are NO prompts. Every host fact is auto-detected (with env
+# overrides for CI/headless), and first-run brings up ONLY core + the
+# dashboard — just enough that the browser can reach the Aurora wizard,
+# which owns Phase 2 (domain, secrets, DNS, TLS) and then hands off to the
+# dashboard where the user installs everything else at their own pace.
+#
+# The old interactive TUI (hostname/domain/tz/user/CIDR/IP prompts + a
+# package picker) is gone: the web wizard is the single place a human
+# answers questions. Package selection in particular is no longer a
+# first-run concern (D3) — the dashboard catalogue owns it.
 # --------------------------------------------------------------------
 
-_interactive_install() {
-  log_step "interactive setup"
+# Packages Phase 1 always brings up: the reverse proxy + SSO plane (core)
+# and the admin dashboard itself. Everything else is day-2 via the wizard
+# hand-off / dashboard catalogue.
+_BASE_PACKAGES=(core dashboard)
 
-  local default_host default_domain default_tz default_user default_cidr default_ip
-  default_host="${HOSTNAME:-$(hostname -s)}"
-  default_domain="${DOMAIN:-aurora.local}"
-  default_tz="${HOME_TIMEZONE:-$(cat /etc/timezone 2>/dev/null || echo Europe/London)}"
-  default_user="${HOME_USER:-$USER}"
-  default_cidr="${LAN_CIDR:-192.168.0.0/24}"
-  default_ip="${LAN_IP:-$(_detect_lan_ip)}"
-  default_ip="${default_ip:-192.168.0.110}"
+_install() {
+  log_step "base setup (non-interactive)"
 
-  local hostname domain tz user lan_cidr lan_ip
-  hostname=$(prompt_inputbox "Hostname"  "Server hostname (mdns *.local)" "$default_host")
-  domain=$(prompt_inputbox   "Domain"    "Domain for Caddy vhosts (e.g. aurora.local)" "$default_domain")
-  tz=$(prompt_inputbox       "Timezone"  "IANA timezone" "$default_tz")
-  user=$(prompt_inputbox     "User"      "Unix user owning bind-mounts" "$default_user")
-  lan_cidr=$(prompt_inputbox "LAN CIDR"  "LAN subnet (UFW allow-from)" "$default_cidr")
-  lan_ip=$(prompt_inputbox   "LAN IP"    "This box's LAN IP (AdGuard DNS bind)" "$default_ip")
+  # Auto-detect every host fact. Env vars override for CI/headless, but
+  # nothing ever prompts. Domain defaults to aurora.local permanently
+  # (D2): the web wizard owns the live runtime domain via core/.env, so
+  # group_vars only needs a sane ansible-side default.
+  local hostname="${HOSTNAME:-$(hostname -s)}"
+  local domain="${DOMAIN:-aurora.local}"
+  local tz="${HOME_TIMEZONE:-$(cat /etc/timezone 2>/dev/null || echo Europe/London)}"
+  local user="${HOME_USER:-${SUDO_USER:-$USER}}"
+  local lan_cidr="${LAN_CIDR:-$(_detect_lan_cidr)}"
+  local lan_ip="${LAN_IP:-$(_detect_lan_ip)}"
+  lan_ip="${lan_ip:-192.168.0.110}"
+  lan_cidr="${lan_cidr:-192.168.0.0/24}"
+
+  log_info "host=$hostname user=$user domain=$domain tz=$tz"
+  log_info "lan_ip=$lan_ip lan_cidr=$lan_cidr"
 
   _write_configs "$hostname" "$domain" "$tz" "$user" "$lan_cidr" "$lan_ip"
 
-  # Package picker
-  local -a checklist_args=()
-  local pkg title desc default_on
-  while IFS= read -r pkg; do
-    title=$(manifest_get title "$pkg")
-    desc="${title:-$pkg}"
-    # Default 'on' for core+privacy+media+storage (existing behaviour)
-    case "$pkg" in core|privacy|media|storage) default_on="on" ;; *) default_on="off" ;; esac
-    checklist_args+=("$pkg" "$desc" "$default_on")
-  done < <(_all_packages)
-
-  local selection
-  selection=$(prompt_checklist "Packages" "Space to toggle, Enter to confirm" "${checklist_args[@]}") \
-    || die "package selection cancelled"
-
-  # shellcheck disable=SC2206
-  local -a requested=($selection)
-  [[ ${#requested[@]} -eq 0 ]] && requested=(core)
-
-  # Init state before running host
+  # Seed .state.yml with just core (SSO/Authelia rides inside it). The
+  # wizard is the authority for the enabled set from here on; dashboard is
+  # forced into the compose bring-up below regardless.
   if ! state_exists; then
     state_init "$hostname" "$domain"
   fi
 
   _run_host_bootstrap
-  _run_up "${requested[@]}"
-}
-
-# --------------------------------------------------------------------
-# Non-interactive install
-# --------------------------------------------------------------------
-
-_noninteractive_install() {
-  log_step "non-interactive install"
-
-  local hostname="${HOSTNAME:-$(hostname -s)}"
-  local domain="${DOMAIN:-aurora.local}"
-  local tz="${HOME_TIMEZONE:-$(cat /etc/timezone 2>/dev/null || echo Europe/London)}"
-  local user="${HOME_USER:-$USER}"
-  local lan_cidr="${LAN_CIDR:-192.168.0.0/24}"
-  local lan_ip="${LAN_IP:-$(_detect_lan_ip)}"
-  lan_ip="${lan_ip:-192.168.0.110}"
-
-  _write_configs "$hostname" "$domain" "$tz" "$user" "$lan_cidr" "$lan_ip"
-
+  # First run brings up ONLY core + dashboard. Any positional args or
+  # ENABLE_PACKAGES are honoured as an escape hatch (mainly for tests /
+  # power users), but the default is deliberately minimal.
   local -a requested
   if [[ $# -gt 0 ]]; then
     requested=("$@")
@@ -327,15 +305,15 @@ _noninteractive_install() {
     # shellcheck disable=SC2206
     requested=($ENABLE_PACKAGES)
   else
-    requested=(core privacy media storage)
+    requested=("${_BASE_PACKAGES[@]}")
   fi
-
-  if ! state_exists; then
-    state_init "$hostname" "$domain"
-  fi
-
-  _run_host_bootstrap
   _run_up "${requested[@]}"
+}
+
+# Derive the LAN CIDR from the default route's src address + prefix.
+# Falls back to empty (caller defaults to 192.168.0.0/24).
+_detect_lan_cidr() {
+  ip -4 route 2>/dev/null | awk '/proto kernel/ && /src/ {print $1; exit}'
 }
 
 # --------------------------------------------------------------------
@@ -509,12 +487,7 @@ case "$CMD" in
     cmd_remove "$@"
     ;;
   install)
-    if [[ -n "${ENABLE_PACKAGES:-}" || -n "${HOMELOCAL_NONINTERACTIVE:-}" || ! -t 0 ]]; then
-      _ensure_prereqs
-      _noninteractive_install "$@"
-    else
-      _ensure_prereqs interactive
-      _interactive_install
-    fi
+    _ensure_prereqs
+    _install "$@"
     ;;
 esac
