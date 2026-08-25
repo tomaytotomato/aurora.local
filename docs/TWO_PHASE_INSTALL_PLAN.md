@@ -1,6 +1,9 @@
 # Aurora Install — Two-Phase Redesign Plan
 
-**Status:** approved (decisions locked 2026-08-25)
+**Status:** IMPLEMENTED (2026-08-25) — both passes landed on `feat/two-phase-core-sso`.
+See commits: Authelia→core migration + Phase-1 non-interactive bootstrap. Backend
+821 tests green, frontend 533 tests + typecheck + build green, shellcheck + compose
+config + manifest schema + openapi checks green.
 **Goal:** collapse the confusing overlap between `bootstrap.sh` (CLI) and the web
 onboarding wizard into two clean, non-overlapping phases with a single owner each.
 
