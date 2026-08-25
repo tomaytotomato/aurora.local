@@ -158,17 +158,18 @@ export interface JobRef {
  * than a category rule.
  *
  * The frontend does NOT own this list any more, whatever this comment used
- * to say: PackageLifecycleService.CORE_PACKAGES holds the identical three
- * names and 403s add/start/stop/remove for them, so hiding a button here
+ * to say: PackageLifecycleService.CORE_PACKAGES holds the identical name(s)
+ * and 403s add/start/stop/remove for them, so hiding a button here
  * and refusing the call there have to agree. Drift is guarded from both
  * sides — see core_package_set_has_not_drifted in
  * PackagesLifecycleControllerIntegrationTest, and the test below.
  *
- * Not to be confused with OnboardingService.MANDATORY_PACKAGES, which is
- * {core, storage}: that is what onboarding force-adds, and it leaves out
- * identity deliberately because enabling SSO is a question the wizard asks.
+ * Only `core` is protected now: it carries the reverse proxy + dashboard +
+ * always-on Authelia SSO. `storage` is a normal day-2 catalogue install
+ * (D5), and the old `identity` package no longer exists (SSO moved into
+ * core).
  */
-const CORE_PACKAGE_NAMES = ['core', 'identity', 'storage'] as const;
+const CORE_PACKAGE_NAMES = ['core'] as const;
 const CORE_PACKAGES: ReadonlySet<string> = new Set(CORE_PACKAGE_NAMES);
 
 export function isCorePackage(p: Pick<PackageSummary, 'name'>): boolean {
@@ -177,16 +178,15 @@ export function isCorePackage(p: Pick<PackageSummary, 'name'>): boolean {
 
 /**
  * What a first-run box gets with no interactive package picker (the
- * onboarding wizard's Packages step was removed — see OnboardingDomain.vue):
- * every core package except `identity`, whose enablement stays a deliberate
- * yes/no asked by the onboarding SSO step rather than forced on — see
- * the onboarding domain step. Used to seed `.state.yml`'s enabled[] once, early in
- * the wizard; the backend's `OnboardingService#install()` force-adds the
- * same names again as a belt-and-braces safety net if a step gets skipped
- * via the sidebar.
+ * onboarding wizard's Packages step was removed). Only `core` (which
+ * carries the proxy, dashboard, and always-on SSO) — everything else,
+ * including `storage`, is added later from the dashboard catalogue so a
+ * fresh box isn't overwhelmed (D3/D5). Used to seed `.state.yml`'s
+ * enabled[] once, early in the wizard; the backend's
+ * `OnboardingService#install()` force-adds the same name again as a
+ * belt-and-braces safety net if a step gets skipped via the sidebar.
  */
-export const MANDATORY_FIRST_RUN_PACKAGES: readonly string[] =
-  CORE_PACKAGE_NAMES.filter((n) => n !== 'identity');
+export const MANDATORY_FIRST_RUN_PACKAGES: readonly string[] = ['core'];
 
 /** Only non-core packages can be enabled/disabled from the dashboard. */
 export function isRemovable(p: Pick<PackageSummary, 'name'>): boolean {

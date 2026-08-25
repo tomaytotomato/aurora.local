@@ -4,7 +4,7 @@ package com.tomaytotomato.aurora.events;
  * Phase D iter-3 \u2014 emitted when Aurora's user set changes shape
  * (create / update / role change / password rotation / delete). Consumed
  * by {@link com.tomaytotomato.aurora.services.AutheliaService} to
- * re-project the users into {@code data/identity/authelia/users_database.yml}.
+ * re-project the users into {@code data/authelia/users_database.yml}.
  *
  * <p>Deliberately payload-free: the projector re-reads the full users
  * list each fire so a race between two mutations resolves to whichever

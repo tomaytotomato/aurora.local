@@ -1,11 +1,12 @@
 ###############################################################
 # Authelia users database — EXAMPLE                            #
 #                                                              #
-# scripts/lib/render.sh's render_identity_seed copies this file #
-# to data/authelia/users_database.yml automatically on #
-# any install with identity enabled, before Aurora has created  #
-# an admin user of its own — this is what lets Authelia boot on #
-# a genuinely fresh install with zero manual steps.             #
+# scripts/lib/render.sh's render_authelia_seed copies this file #
+# to data/authelia/users_database.yml automatically on            #
+# every fresh install (core is always enabled), before Aurora   #
+# has created an admin user of its own — this is what lets       #
+# Authelia boot on a genuinely fresh install with zero manual   #
+# steps.                                                        #
 #                                                              #
 # The password below is the literal string "changeme", hashed. #
 # It exists purely so Authelia's file backend has a schema-    #

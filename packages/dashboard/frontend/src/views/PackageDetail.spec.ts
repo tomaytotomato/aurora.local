@@ -209,10 +209,10 @@ describe('PackageDetail control panel', () => {
   it('a core package offers none of the four actions, however its enabled/running flags read', async () => {
     stubResponse({
       method: 'get',
-      url: '/packages/identity',
-      data: packageDetail({ name: 'identity', enabled: true, running: true }),
+      url: '/packages/core',
+      data: packageDetail({ name: 'core', enabled: true, running: true }),
     });
-    const { w } = await mountDetail('identity');
+    const { w } = await mountDetail('core');
     expect(w.find('[data-test="action-install"]').exists()).toBe(false);
     expect(w.find('[data-test="action-start"]').exists()).toBe(false);
     expect(w.find('[data-test="action-disable"]').exists()).toBe(false);
@@ -222,10 +222,10 @@ describe('PackageDetail control panel', () => {
   it('the status light reads running for a genuinely healthy core package (the real-box bug)', async () => {
     stubResponse({
       method: 'get',
-      url: '/packages/identity',
-      data: packageDetail({ name: 'identity', enabled: true, running: true }),
+      url: '/packages/core',
+      data: packageDetail({ name: 'core', enabled: true, running: true }),
     });
-    const { w } = await mountDetail('identity');
+    const { w } = await mountDetail('core');
     expect(w.find('[data-status-light="running"]').exists()).toBe(true);
     expect(w.find('[data-status-light="not-installed"]').exists()).toBe(false);
   });
@@ -399,10 +399,10 @@ describe('PackageDetail — preview vs installed view', () => {
   it('a core package gets the installed view even if its enabled flag were ever false', async () => {
     stubResponse({
       method: 'get',
-      url: '/packages/identity',
-      data: packageDetail({ name: 'identity', enabled: false, running: false }),
+      url: '/packages/core',
+      data: packageDetail({ name: 'core', enabled: false, running: false }),
     });
-    const { w } = await mountDetail('identity');
+    const { w } = await mountDetail('core');
 
     expect(w.find('[data-test="package-preview"]').exists()).toBe(false);
     expect(w.findAll('[role="tab"]').length).toBeGreaterThan(0);

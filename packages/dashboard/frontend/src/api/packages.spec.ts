@@ -27,16 +27,14 @@ function pkg(over: Partial<PackageSummary> & { name: string }): PackageSummary {
 }
 
 describe('isCorePackage / isRemovable', () => {
-  it('treats the curated platform set (core, identity, storage) as core and non-removable', () => {
-    for (const name of ['core', 'identity', 'storage']) {
-      const p = pkg({ name });
-      expect(isCorePackage(p)).toBe(true);
-      expect(isRemovable(p)).toBe(false);
-    }
+  it('treats core (proxy + dashboard + always-on SSO) as core and non-removable', () => {
+    const p = pkg({ name: 'core' });
+    expect(isCorePackage(p)).toBe(true);
+    expect(isRemovable(p)).toBe(false);
   });
 
-  it('treats every other app as removable', () => {
-    for (const name of ['media', 'photos', 'notes', 'ai']) {
+  it('treats every other app — including storage — as removable', () => {
+    for (const name of ['storage', 'media', 'photos', 'notes', 'ai']) {
       const p = pkg({ name });
       expect(isCorePackage(p)).toBe(false);
       expect(isRemovable(p)).toBe(true);
@@ -49,13 +47,13 @@ describe('splitByCore', () => {
     const list = [
       pkg({ name: 'core', category: 'core' }),
       pkg({ name: 'privacy', category: 'privacy' }),
-      pkg({ name: 'identity', category: 'identity' }),
+      pkg({ name: 'storage', category: 'storage' }),
       pkg({ name: 'media', category: 'media' }),
     ];
     const { core, apps } = splitByCore(list);
-    // identity is part of the curated core set, so it lands in `core`.
-    expect(core.map((p) => p.name)).toEqual(['core', 'identity']);
-    expect(apps.map((p) => p.name)).toEqual(['privacy', 'media']);
+    // Only `core` is in the curated core set now; storage is a normal app.
+    expect(core.map((p) => p.name)).toEqual(['core']);
+    expect(apps.map((p) => p.name)).toEqual(['privacy', 'storage', 'media']);
   });
 
   it('returns empty groups for an empty catalogue', () => {
@@ -143,10 +141,10 @@ describe('the core package set', () => {
     // Twin of core_package_set_has_not_drifted in
     // PackagesLifecycleControllerIntegrationTest. If these two disagree,
     // the UI either offers an action the API 403s or hides one it allows.
-    for (const name of ['core', 'identity', 'storage']) {
+    for (const name of ['core']) {
       expect(isCorePackage({ name })).toBe(true);
     }
-    for (const name of ['media', 'photos', 'vpn', 'backup']) {
+    for (const name of ['storage', 'media', 'photos', 'vpn', 'backup']) {
       expect(isCorePackage({ name })).toBe(false);
     }
   });

@@ -70,12 +70,10 @@ async function install(): Promise<void> {
     // Mark the resume-hint as done in case the user jumped straight to
     // Review via the sidebar. Deliberately does NOT re-send
     // enabled_packages here: unlike the old picker step, there is no
-    // local selection to reconfirm, and blindly resending a baseline list
-    // would silently clobber whatever the SSO step already decided about
-    // `identity` (and its secrets) if this ran after that. The mandatory
-    // baseline was already PATCHed once on Domain, and
-    // OnboardingService#install() (called below) force-adds it again as
-    // its own belt-and-braces if that step got skipped too.
+    // local selection to reconfirm. The mandatory baseline (just `core`)
+    // was already PATCHed once on Domain, and OnboardingService#install()
+    // (called below) force-adds it again as its own belt-and-braces if
+    // that step got skipped too.
     logLines.value.push('› Finalising the wizard draft…');
     await store.patchDraft({ step: 'done' });
     logLines.value.push('  ok');

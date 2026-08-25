@@ -89,11 +89,13 @@ import java.util.Set;
 public class PackageLifecycleService {
 
   /**
-   * The platform baseline: the reverse proxy + dashboard, the auth
-   * provider fronting sign-on for everything, and LAN file sharing. None
-   * of the four lifecycle verbs apply to any of them — see class javadoc.
+   * The platform baseline: the reverse proxy + dashboard + always-on
+   * Authelia SSO, all of which ship inside {@code core}. None of the four
+   * lifecycle verbs apply to it — see class javadoc. {@code storage} is
+   * NOT here any more (D5): LAN file sharing is a normal day-2 catalogue
+   * install the user can add or remove at will.
    */
-  public static final Set<String> CORE_PACKAGES = Set.of("core", "identity", "storage");
+  public static final Set<String> CORE_PACKAGES = Set.of("core");
 
   private final PackagesService packages;
   private final StateFileService stateFiles;

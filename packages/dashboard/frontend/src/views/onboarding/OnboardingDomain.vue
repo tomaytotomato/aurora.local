@@ -26,14 +26,12 @@ async function proceed(): Promise<void> {
     return;
   }
   // Seed .state.yml's enabled[] with the mandatory baseline here — this is
-  // the job the interactive package-picker step used to do (it PATCHed
-  // enabled_packages right before handing off to the SSO step). `identity`
-  // is deliberately left out: the very next step (SSO) decides whether
-  // Authelia is enabled, generates its secrets, and neutralises other
-  // packages' internal auth — none of that should be pre-empted here.
-  // OnboardingService#install() force-adds the same baseline again later
-  // as a belt-and-braces safety net if this step gets skipped via the
-  // sidebar.
+  // the job the interactive package-picker step used to do. The baseline
+  // is just `core` now (D5): SSO/Authelia ships inside core and is
+  // always-on, and storage + everything else is a day-2 catalogue install,
+  // so nothing extra is pre-empted here. OnboardingService#install()
+  // force-adds the same baseline again later as a belt-and-braces safety
+  // net if this step gets skipped via the sidebar.
   //
   // Union with whatever the server already reports, not a wholesale
   // replace: the host's own bootstrap (bootstrap.sh / scripts/up.sh)

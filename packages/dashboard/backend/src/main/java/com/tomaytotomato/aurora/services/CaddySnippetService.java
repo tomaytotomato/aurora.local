@@ -41,7 +41,7 @@ import java.util.regex.Pattern;
  * runs with {@code --watch} (see packages/core/compose.yml) so the
  * reload happens within ~2s of the atomic rename. Same pattern as
  * AutheliaService owning {@code users_database.yml} and
- * IdentitySecretsService owning {@code packages/identity/.env}.
+ * IdentitySecretsService owning {@code packages/core/.env}.
  *
  * <p><b>What the injection looks like.</b>
  *
@@ -76,7 +76,7 @@ import java.util.regex.Pattern;
  * gating and trusted-header rewrites live in Authelia's
  * {@code access_control.rules} + Caddy's {@code copy_headers} directive
  * — both handled by the reusable {@code (authelia)} snippet in
- * {@code packages/identity/caddy.snippet}. D6 only decides whether
+ * {@code packages/core/caddy.snippet}. D6 only decides whether
  * the vhost gets the {@code import} line at all; {@code min_role} +
  * {@code trusted_headers} land in D7 and D12.
  *
