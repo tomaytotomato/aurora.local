@@ -566,18 +566,15 @@ public class OnboardingService {
   // ------------------------------------------------------------------
 
   /**
-   * The packages every first-run box gets regardless of anything a client
-   * PATCHed — the reverse proxy ({@code core}) and LAN file sharing
-   * ({@code storage}). Mirrors the frontend's {@code isCorePackage()}
-   * authority (see {@code frontend/src/api/packages.ts}) minus {@code
-   * identity}: whether Authelia/SSO is enabled stays a deliberate yes/no
-   * asked by the onboarding SSO step (still a wizard step in its own
-   * right) rather than something this belt-and-braces forcing overrides.
-   * Forcing identity on here too would silently undo an operator's
-   * explicit "skip SSO" choice — and worse, do it without ever generating
-   * its secrets, since that only happens via {@code POST /onboarding/sso}.
+   * The package every first-run box gets regardless of anything a client
+   * PATCHed — just the reverse proxy + SSO plane ({@code core}). Authelia
+   * ships inside {@code core} and is always-on, so SSO needs no separate
+   * mandatory entry or wizard toggle. {@code storage} is deferred (D5):
+   * LAN file sharing is now something the user adds later from the
+   * dashboard catalogue rather than a forced first-run package, so the
+   * onboarding wizard stays minimal.
    */
-  private static final List<String> MANDATORY_PACKAGES = List.of("core", "storage");
+  private static final List<String> MANDATORY_PACKAGES = List.of("core");
 
   /**
    * Apply the wizard draft. In v0.1 this means:

@@ -42,11 +42,11 @@ class IdentitySecretsServiceIntegrationTest extends AuroraIntegrationTest {
         "");
   }
 
-  private static String stateWithoutIdentity() {
+  private static String stateWithoutCore() {
     return String.join("\n",
         "bootstrap_version: 1",
         "enabled:",
-        "  - core",
+        "  - media",
         "profiles: []",
         "");
   }
@@ -74,7 +74,7 @@ class IdentitySecretsServiceIntegrationTest extends AuroraIntegrationTest {
   @BeforeEach
   void seedIdentity() throws IOException {
     writeRepoFile(".state.yml", stateWithIdentityEnabled());
-    writeRepoFile("packages/identity/.env.example", envExample());
+    writeRepoFile("packages/core/.env.example", envExample());
   }
 
   @Nested
@@ -85,7 +85,7 @@ class IdentitySecretsServiceIntegrationTest extends AuroraIntegrationTest {
     void writes_three_real_secrets_into_the_repo_env_file() throws IOException {
       secrets.ensureSecrets();
 
-      String body = readRepoFile("packages/identity/.env");
+      String body = readRepoFile("packages/core/.env");
       for (String key : IdentitySecretsService.MANAGED_KEYS) {
         assertThat(valueOf(body, key)).hasSize(64).matches("[0-9a-f]{64}");
       }
@@ -100,7 +100,7 @@ class IdentitySecretsServiceIntegrationTest extends AuroraIntegrationTest {
           "identity.secrets.bootstrap");
 
       assertThat(rows).hasSize(1);
-      assertThat(rows.get(0).get("target")).isEqualTo("packages/identity/.env");
+      assertThat(rows.get(0).get("target")).isEqualTo("packages/core/.env");
       String diff = (String) rows.get(0).get("diff_json");
       assertThat(diff).contains("AUTHELIA_JWT_SECRET", "AUTHELIA_SESSION_SECRET",
           "AUTHELIA_STORAGE_ENCRYPTION_KEY");
@@ -124,19 +124,19 @@ class IdentitySecretsServiceIntegrationTest extends AuroraIntegrationTest {
     @Test
     void replaces_every_key_on_disk() throws IOException {
       secrets.ensureSecrets();
-      String before = valueOf(readRepoFile("packages/identity/.env"), "AUTHELIA_JWT_SECRET");
+      String before = valueOf(readRepoFile("packages/core/.env"), "AUTHELIA_JWT_SECRET");
 
       Set<String> rotated = secrets.rotateSecrets(7L);
 
       assertThat(rotated).containsExactlyInAnyOrderElementsOf(IdentitySecretsService.MANAGED_KEYS);
-      String after = valueOf(readRepoFile("packages/identity/.env"), "AUTHELIA_JWT_SECRET");
+      String after = valueOf(readRepoFile("packages/core/.env"), "AUTHELIA_JWT_SECRET");
       assertThat(after).isNotEqualTo(before);
     }
 
     @Test
     void records_the_acting_user_without_ever_recording_the_new_secret_value() throws IOException {
       secrets.rotateSecrets(7L);
-      String rotatedValue = valueOf(readRepoFile("packages/identity/.env"), "AUTHELIA_JWT_SECRET");
+      String rotatedValue = valueOf(readRepoFile("packages/core/.env"), "AUTHELIA_JWT_SECRET");
 
       List<Map<String, Object>> rows = jdbcTemplate.queryForList(
           "SELECT user_id, diff_json FROM audit_event WHERE action = ?",
@@ -150,9 +150,9 @@ class IdentitySecretsServiceIntegrationTest extends AuroraIntegrationTest {
     @Test
     void a_second_rotation_writes_a_second_audit_row_and_a_third_value() throws IOException {
       secrets.rotateSecrets(1L);
-      String first = valueOf(readRepoFile("packages/identity/.env"), "AUTHELIA_JWT_SECRET");
+      String first = valueOf(readRepoFile("packages/core/.env"), "AUTHELIA_JWT_SECRET");
       secrets.rotateSecrets(2L);
-      String second = valueOf(readRepoFile("packages/identity/.env"), "AUTHELIA_JWT_SECRET");
+      String second = valueOf(readRepoFile("packages/core/.env"), "AUTHELIA_JWT_SECRET");
 
       assertThat(second).isNotEqualTo(first);
       List<Map<String, Object>> rows = jdbcTemplate.queryForList(
@@ -168,13 +168,13 @@ class IdentitySecretsServiceIntegrationTest extends AuroraIntegrationTest {
   class IdentityEnabled {
 
     @Test
-    void true_when_the_real_state_file_lists_identity() {
+    void true_when_the_real_state_file_lists_core() {
       assertThat(secrets.identityEnabled()).isTrue();
     }
 
     @Test
-    void false_once_identity_is_removed_from_state() throws IOException {
-      writeRepoFile(".state.yml", stateWithoutIdentity());
+    void false_once_core_is_removed_from_state() throws IOException {
+      writeRepoFile(".state.yml", stateWithoutCore());
 
       assertThat(secrets.identityEnabled()).isFalse();
     }

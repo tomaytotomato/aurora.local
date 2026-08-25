@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
 
 /**
  * Phase D iter-4 \u2014 manage the three Authelia secrets in
- * {@code packages/identity/.env}.
+ * {@code packages/core/.env}.
  *
  * <p>Authelia refuses to start if any of these are missing or shorter
  * than 32 bytes, and rotating them invalidates every session cookie in
@@ -51,11 +51,11 @@ import java.util.regex.Pattern;
  * touch the audit log.
  *
  * <p><b>File shape.</b> Preserves the {@code .env.example} layout so
- * an operator peeking at {@code packages/identity/.env} still sees the
+ * an operator peeking at {@code packages/core/.env} still sees the
  * comments about SMTP + TZ. Only the three secret lines are mutated.
  * Written with {@code 0600} where the filesystem supports POSIX perms.
  *
- * <p><b>Threat model.</b> Whoever can read {@code packages/identity/.env}
+ * <p><b>Threat model.</b> Whoever can read {@code packages/core/.env}
  * can impersonate any Authelia session cookie. Aurora runs as the
  * invoking user + docker group; only that user has repo-root rw. Aurora
  * never surfaces these values via API, and audit rows only reveal
@@ -66,8 +66,11 @@ public class IdentitySecretsService {
 
   private static final Logger log = LoggerFactory.getLogger(IdentitySecretsService.class);
 
-  /** Package name matched against {@code .state.yml}'s enabled[] list. */
-  static final String IDENTITY_PACKAGE = "identity";
+  /**
+   * Package that owns the Authelia secrets. Authelia migrated into core
+   * (SSO always-on), so its {@code .env} is {@code packages/core/.env}.
+   */
+  static final String IDENTITY_PACKAGE = "core";
 
   /** Every secret Authelia mandates. Order matters for stable audit-log JSON. */
   static final List<String> MANAGED_KEYS = List.of(
@@ -98,16 +101,24 @@ public class IdentitySecretsService {
   @EventListener(ApplicationReadyEvent.class)
   public void onReady() {
     try {
-      if (!identityEnabled()) {
-        log.debug("identity secrets: skipping bootstrap \u2014 identity package not enabled");
+      // Authelia is core + always-on, so seed unconditionally — but only
+      // fill blanks in an ALREADY-EXISTING packages/core/.env. On a real
+      // box scripts/up.sh creates that file (from .env.example) and
+      // scripts/rotate-secrets.sh fills the secrets before the dashboard
+      // container ever starts, so this is a belt-and-braces backstop, not
+      // the primary path. Deliberately does NOT manufacture a .env from
+      // scratch: doing so at boot would write into a half-initialised repo
+      // (and pollute integration-test fixtures) for no real-world gain.
+      if (!java.nio.file.Files.exists(envPath())) {
+        log.debug("authelia secrets: packages/core/.env not present yet, skipping boot seed");
         return;
       }
-      log.info("identity secrets: ensuring bootstrap on startup");
+      log.info("authelia secrets: ensuring bootstrap on startup");
       ensureSecrets();
     } catch (Exception e) {
       // Same fail-closed pattern as AutheliaService \u2014 don't crash the
       // dashboard because we couldn't touch one .env file at boot.
-      log.warn("identity secrets bootstrap failed at startup: {}", e.getMessage());
+      log.warn("authelia secrets bootstrap failed at startup: {}", e.getMessage());
     }
   }
 
@@ -118,7 +129,7 @@ public class IdentitySecretsService {
    * Returns the set of keys we actually wrote (empty when the file was
    * already complete).
    *
-   * <p>Creates {@code packages/identity/.env} from {@code .env.example}
+   * <p>Creates {@code packages/core/.env} from {@code .env.example}
    * (or from a synthesised default) when the file doesn't exist. Preserves
    * comments + non-managed keys verbatim.
    *
@@ -141,9 +152,9 @@ public class IdentitySecretsService {
     if (!generated.isEmpty()) {
       writeEnv(envPath, lines);
       audit.record(null, "identity.secrets.bootstrap",
-          "packages/identity/.env",
+          "packages/core/.env",
           "{\"generated_keys\":" + jsonKeyArray(generated) + "}");
-      log.info("identity secrets: generated {} key{} on bootstrap ({})",
+      log.info("authelia secrets: generated {} key{} on bootstrap ({})",
           generated.size(), generated.size() == 1 ? "" : "s", generated);
     }
     return generated;
@@ -164,9 +175,9 @@ public class IdentitySecretsService {
     }
     writeEnv(envPath, lines);
     audit.record(actingUserId, "identity.secrets.rotate",
-        "packages/identity/.env",
+        "packages/core/.env",
         "{\"rotated_keys\":" + jsonKeyArray(rotated) + "}");
-    log.info("identity secrets: rotated {} keys (acting user {})", rotated.size(), actingUserId);
+    log.info("authelia secrets: rotated {} keys (acting user {})", rotated.size(), actingUserId);
     return rotated;
   }
 
@@ -253,7 +264,7 @@ public class IdentitySecretsService {
     // still gets a well-formed file. Keeps the same key order as
     // MANAGED_KEYS for stable diffs.
     List<String> lines = new ArrayList<>();
-    lines.add("# packages/identity/.env \u2014 managed by IdentitySecretsService");
+    lines.add("# packages/core/.env \u2014 managed by IdentitySecretsService");
     lines.add("TZ=Europe/London");
     lines.add("DOMAIN=aurora.local");
     for (String key : MANAGED_KEYS) lines.add(key + "=");

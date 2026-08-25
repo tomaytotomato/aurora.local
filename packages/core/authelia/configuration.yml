@@ -36,7 +36,7 @@ log:
 # both present, even when they agree: it refuses to reconcile them
 # and this field ends up unset ("option 'jwt_secret' is required").
 # compose.yml renames the container-facing env var to sidestep the
-# collision; packages/identity/.env still calls the secret
+# collision; packages/core/.env still calls the secret
 # AUTHELIA_JWT_SECRET everywhere outside the container.
 identity_validation:
   reset_password:
@@ -148,7 +148,7 @@ storage:
 # SMTP; otherwise it falls through to the filesystem notifier for
 # a self-contained local-only setup. In filesystem mode the 2FA-
 # enrolment / password-reset links land in
-#   data/identity/authelia/notification.txt
+#   data/authelia/notification.txt
 # on the host, so a single-user setup can bootstrap without email.
 notifier:
   disable_startup_check: false

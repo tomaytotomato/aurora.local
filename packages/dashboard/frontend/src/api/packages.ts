@@ -180,7 +180,7 @@ export function isCorePackage(p: Pick<PackageSummary, 'name'>): boolean {
  * onboarding wizard's Packages step was removed — see OnboardingDomain.vue):
  * every core package except `identity`, whose enablement stays a deliberate
  * yes/no asked by the onboarding SSO step rather than forced on — see
- * OnboardingSso.vue. Used to seed `.state.yml`'s enabled[] once, early in
+ * the onboarding domain step. Used to seed `.state.yml`'s enabled[] once, early in
  * the wizard; the backend's `OnboardingService#install()` force-adds the
  * same names again as a belt-and-braces safety net if a step gets skipped
  * via the sidebar.

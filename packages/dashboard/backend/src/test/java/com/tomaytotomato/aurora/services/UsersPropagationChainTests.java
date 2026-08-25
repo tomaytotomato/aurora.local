@@ -103,7 +103,7 @@ class UsersPropagationChainTests {
         Role.USER, "UTC", 42L);
 
     // 1. The users_database.yml file was written to the expected path.
-    Path yamlPath = repoRoot.resolve("data/identity/authelia/users_database.yml");
+    Path yamlPath = repoRoot.resolve("data/authelia/users_database.yml");
     assertThat(yamlPath).isRegularFile();
 
     // 2. The yaml is valid and has our user with the right groups.
@@ -148,7 +148,7 @@ class UsersPropagationChainTests {
 
     // After updateRole, the projector runs on ROLE_CHANGE — alice
     // should now cascade to [admins, users, guests].
-    Path yamlPath = repoRoot.resolve("data/identity/authelia/users_database.yml");
+    Path yamlPath = repoRoot.resolve("data/authelia/users_database.yml");
     String body = Files.readString(yamlPath, StandardCharsets.UTF_8);
     @SuppressWarnings("unchecked")
     Map<String, Object> root = (Map<String, Object>) new Yaml().load(body);
@@ -191,7 +191,7 @@ class UsersPropagationChainTests {
 
     usersService.delete(2L, 1L);
 
-    Path yamlPath = repoRoot.resolve("data/identity/authelia/users_database.yml");
+    Path yamlPath = repoRoot.resolve("data/authelia/users_database.yml");
     String body = Files.readString(yamlPath, StandardCharsets.UTF_8);
     @SuppressWarnings("unchecked")
     Map<String, Object> root = (Map<String, Object>) new Yaml().load(body);

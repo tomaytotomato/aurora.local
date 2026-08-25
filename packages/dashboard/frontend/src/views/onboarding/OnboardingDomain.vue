@@ -58,7 +58,7 @@ async function proceed(): Promise<void> {
   await store.patchDraft({
     domain: domain.value,
     enabled_packages: [...baseline],
-    step: 'sso',
+    step: 'secrets',
   });
   store.next();
   router.push(`/onboarding/${store.currentStep}`);

@@ -17,7 +17,7 @@ Every file here is:
 | `prompt.sh`   | `prompt_*`   | `whiptail`-backed `menu`, `checklist`, `inputbox`, `yesno`. Falls back to plain `read` in headless mode. |
 | `manifest.sh` | `manifest_*` | Parse `packages/*/manifest.yml` (yq if present, else python3+PyYAML). Also `manifest_exists` / `manifest_filter_known`, which answer "is this package still in the repo" without dying. |
 | `state.sh`    | `state_*`    | Read/write `.state.yml` at the repo root.                               |
-| `render.sh`   | `render_*`   | Stitch per-package fragments into the runtime layout: caddy snippets, the identity seed, pinned images. `render_all` is the one call `up.sh` makes. |
+| `render.sh`   | `render_*`   | Stitch per-package fragments into the runtime layout: caddy snippets, the authelia seed, pinned images. `render_all` is the one call `up.sh` makes. |
 | `ops.sh`      | *unprefixed* | Bare `log ok warn err die dim` for the operator-facing scripts (`doctor.sh`, `health.sh`, …), plus `has_cmd`, `load_group_vars` and friends. |
 
 ## Conventions

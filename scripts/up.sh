@@ -213,7 +213,7 @@ fi
 
 # --------------------------------------------------------------------
 # Render per-package fragments into runtime layout (caddy snippets,
-# identity users_database seed, pinned images).
+# authelia users_database seed (core/SSO), pinned images).
 # --------------------------------------------------------------------
 render_all "${pkgs[@]}"
 

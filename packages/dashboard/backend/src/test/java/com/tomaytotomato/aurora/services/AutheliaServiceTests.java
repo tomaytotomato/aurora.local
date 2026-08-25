@@ -178,7 +178,7 @@ class AutheliaServiceTests {
     int n = svc.reconcile(UserChangedEvent.STARTUP);
     assertThat(n).isEqualTo(1);
 
-    Path expected = repoRoot.resolve("data/identity/authelia/users_database.yml");
+    Path expected = repoRoot.resolve("data/authelia/users_database.yml");
     assertThat(expected).isRegularFile();
     String yaml = Files.readString(expected, StandardCharsets.UTF_8);
     assertThat(yaml).contains("bruce:");
@@ -191,10 +191,10 @@ class AutheliaServiceTests {
     Mockito.when(repo.findAll()).thenReturn(List.of(
         new AdminUser(1, "bruce", "$argon2id$hash", "UTC", "2026-01-01T00:00:00Z", Role.ADMIN)
     ));
-    assertThat(repoRoot.resolve("data/identity/authelia")).doesNotExist();
+    assertThat(repoRoot.resolve("data/authelia")).doesNotExist();
 
     svc.reconcile(UserChangedEvent.STARTUP);
-    assertThat(repoRoot.resolve("data/identity/authelia/users_database.yml")).exists();
+    assertThat(repoRoot.resolve("data/authelia/users_database.yml")).exists();
   }
 
   @Test
@@ -223,7 +223,7 @@ class AutheliaServiceTests {
     int n = svc.reconcile(UserChangedEvent.STARTUP);
 
     assertThat(n).isZero();
-    assertThat(repoRoot.resolve("data/identity/authelia")).doesNotExist();
+    assertThat(repoRoot.resolve("data/authelia")).doesNotExist();
     assertThat(svc.lastWriteAt()).isNull();
     assertThat(svc.lastError()).isNull();
   }
@@ -236,7 +236,7 @@ class AutheliaServiceTests {
     // so Authelia has a schema-valid (if unusable) placeholder admin to
     // boot from. reconcile() must not clobber that seed with an empty
     // block just because Aurora's own users table is still empty.
-    Path target = repoRoot.resolve("data/identity/authelia/users_database.yml");
+    Path target = repoRoot.resolve("data/authelia/users_database.yml");
     Files.createDirectories(target.getParent());
     Files.writeString(target, "users:\n  admin:\n    password: 'seed-placeholder'\n");
     Mockito.when(repo.findAll()).thenReturn(List.of());
@@ -283,7 +283,7 @@ class AutheliaServiceTests {
     Path blocker = repoRoot.resolve("blocker");
     Files.writeString(blocker, "not-a-dir");
     AuroraProperties badProps = new AuroraProperties(
-        blocker.toString(),  // \u2192 blocker/data/identity/authelia can't be created
+        blocker.toString(),  // \u2192 blocker/data/authelia can't be created
         "/proc",
         java.util.List.of(),
         new AuroraProperties.Docker("unix:///dev/null")
@@ -323,7 +323,7 @@ class AutheliaServiceTests {
       Mockito.verify(audit).record(Mockito.isNull(), action.capture(),
           target.capture(), diff.capture());
       assertThat(action.getValue()).isEqualTo("authelia.users.projected");
-      assertThat(target.getValue()).isEqualTo("data/identity/authelia/users_database.yml");
+      assertThat(target.getValue()).isEqualTo("data/authelia/users_database.yml");
       assertThat(diff.getValue()).contains("\"reason\":\"" + reason + "\"");
       assertThat(diff.getValue()).contains("\"user_count\":1");
     }

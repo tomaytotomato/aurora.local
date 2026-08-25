@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Phase D iter-5 — invariants over
- * {@code packages/identity/authelia/configuration.yml}.
+ * {@code packages/core/authelia/configuration.yml}.
  *
  * <p>The config file drives session cookie scoping + access-control
  * policy for the whole SSO surface. A silent edit that flips the apex
@@ -24,16 +24,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * enforcement time (SnakeYAML parse) rather than at review time.
  *
  * <p>Reads from a classpath test-resource copy of the config file
- * ({@code src/test/resources/identity/configuration.yml}). See that
+ * ({@code src/test/resources/core/configuration.yml}). See that
  * directory's README for the sync-with-source rule; a separate
  * {@link #snapshot_matches_source} test catches drift when the source
  * file is visible (local dev; not under the sandboxed maven container).
  */
 class AutheliaConfigurationInvariantsTests {
 
-  private static final String CLASSPATH_YML = "/identity/configuration.yml";
+  private static final String CLASSPATH_YML = "/core/configuration.yml";
   private static final Path SOURCE_FILE = Path.of(
-      "../../../packages/identity/authelia/configuration.yml"
+      "../../../packages/core/authelia/configuration.yml"
   );
 
   @SuppressWarnings("unchecked")
@@ -212,7 +212,7 @@ class AutheliaConfigurationInvariantsTests {
 
   @Test
   void snapshot_matches_source() throws IOException {
-    // Runs only when the sibling packages/identity/ tree is visible
+    // Runs only when the sibling packages/core/ tree is visible
     // (local `mvn test` outside the docker sandbox). The verify
     // script's container only mounts packages/dashboard/backend, so
     // this drift check silently passes there — acceptable, because
@@ -222,7 +222,7 @@ class AutheliaConfigurationInvariantsTests {
     try (var in = AutheliaConfigurationInvariantsTests.class.getResourceAsStream(CLASSPATH_YML)) {
       String snapshot = new String(in.readAllBytes(), StandardCharsets.UTF_8);
       assertThat(snapshot)
-          .as("src/test/resources/identity/configuration.yml is out of sync with the source file. Copy the file from packages/identity/authelia/configuration.yml.")
+          .as("src/test/resources/core/configuration.yml is out of sync with the source file. Copy the file from packages/core/authelia/configuration.yml.")
           .isEqualTo(source);
     }
   }

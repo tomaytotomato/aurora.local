@@ -43,10 +43,13 @@ class AuthControllerLogoutTests {
   }
 
   @Test
-  void logout_when_identity_disabled_returns_next_null() throws Exception {
+  void logout_when_core_absent_returns_next_null() throws Exception {
+    // Degenerate state with no core at all — SSO plane not present, so no
+    // Authelia logout bounce. (Real boxes always have core; this is the
+    // fail-safe path.)
     Mockito.when(stateFiles.readState()).thenReturn(new RepoState(
         1, "aurora", "aurora.local", null,
-        List.of("core", "media"), List.of()
+        List.of("media"), List.of()
     ));
 
     mvc.perform(post("/api/auth/logout"))
@@ -55,10 +58,10 @@ class AuthControllerLogoutTests {
   }
 
   @Test
-  void logout_when_identity_enabled_returns_authelia_logout_url_with_rd() throws Exception {
+  void logout_when_core_enabled_returns_authelia_logout_url_with_rd() throws Exception {
     Mockito.when(stateFiles.readState()).thenReturn(new RepoState(
         1, "aurora", "aurora.local", null,
-        List.of("core", "identity"), List.of()
+        List.of("core", "media"), List.of()
     ));
 
     mvc.perform(post("/api/auth/logout"))
@@ -68,10 +71,10 @@ class AuthControllerLogoutTests {
   }
 
   @Test
-  void ssoLogoutUrl_null_when_identity_not_in_enabled_list() {
+  void ssoLogoutUrl_null_when_core_not_in_enabled_list() {
     Mockito.when(stateFiles.readState()).thenReturn(new RepoState(
         1, "aurora", "aurora.local", null,
-        List.of("core"), List.of()
+        List.of("media"), List.of()
     ));
     assertThat(ctrl.ssoLogoutUrl()).isEmpty();
   }
@@ -88,7 +91,7 @@ class AuthControllerLogoutTests {
   void ssoLogoutUrl_null_when_domain_missing() {
     Mockito.when(stateFiles.readState()).thenReturn(new RepoState(
         1, "aurora", null, null,
-        List.of("core", "identity"), List.of()
+        List.of("core", "media"), List.of()
     ));
     assertThat(ctrl.ssoLogoutUrl()).isEmpty();
   }
@@ -97,7 +100,7 @@ class AuthControllerLogoutTests {
   void ssoLogoutUrl_url_encodes_the_redirect_target() {
     Mockito.when(stateFiles.readState()).thenReturn(new RepoState(
         1, "aurora", "home.example.com", null,
-        List.of("core", "identity"), List.of()
+        List.of("core", "media"), List.of()
     ));
     assertThat(ctrl.ssoLogoutUrl()).contains(
         "https://auth.home.example.com/logout?rd=https%3A%2F%2Fhome.example.com%2Flogin"

@@ -504,20 +504,6 @@ paths:
                   items: { type: string }
       responses:
         '204': { description: Saved. }
-  /onboarding/sso:
-    post:
-      tags: [onboarding]
-      summary: Set the single sign-on choice during the wizard
-      description: Phase D. Decides whether Authelia fronts the apps that support it.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-      responses:
-        '204': { description: Saved. }
 
   # ────────────────────────────── updates ─────────────────────────────
   # Read-only. Applying an update goes through

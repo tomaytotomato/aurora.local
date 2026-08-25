@@ -26,7 +26,6 @@ const routes: RouteRecordRaw[] = [
       // step is gone — first-run installs the mandatory set only (see
       // MANDATORY_FIRST_RUN_PACKAGES in api/packages.ts) and everything
       // else is added afterwards from the Apps catalogue.
-      { path: 'sso', component: () => import('@/views/onboarding/OnboardingSso.vue') },
       { path: 'secrets', component: () => import('@/views/onboarding/OnboardingSecrets.vue') },
       { path: 'dns', component: () => import('@/views/onboarding/OnboardingDns.vue') },
       { path: 'tls', component: () => import('@/views/onboarding/OnboardingTls.vue') },

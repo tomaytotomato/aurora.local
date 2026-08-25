@@ -62,27 +62,25 @@ public class AuthController {
     if (session != null) session.invalidate();
     SecurityContextHolder.clearContext();
 
-    // Phase D iter-14 (D13): if the identity package is enabled we
-    // return the Authelia logout URL so the SPA can bounce through it
-    // after killing the Aurora session. Otherwise there's a shared
-    // .{DOMAIN} `authelia_session` cookie sitting in the browser that
-    // outlives the Aurora sign-out — a shared-computer next-user could
-    // walk into notes.aurora.local without a login prompt.
-    //
-    // When identity is off we return next=null and the SPA does its
-    // usual local redirect to /login.
+    // Phase D iter-14 (D13): Authelia ships in core and is always-on, so
+    // we always return the Authelia logout URL (when a domain is set) so
+    // the SPA can bounce through it after killing the Aurora session.
+    // Otherwise there's a shared .{DOMAIN} `authelia_session` cookie
+    // sitting in the browser that outlives the Aurora sign-out — a
+    // shared-computer next-user could walk into notes.aurora.local
+    // without a login prompt.
     String next = ssoLogoutUrl().orElse(null);
     return new LogoutResponse(next);
   }
 
   /**
    * Compute {@code https://auth.{DOMAIN}/logout?rd=https://{DOMAIN}/login}
-   * when the identity package is enabled AND we have a domain. Empty
-   * otherwise. Package-private for tests.
+   * when core (and therefore Authelia SSO) is enabled AND we have a
+   * domain. Empty otherwise. Package-private for tests.
    */
   java.util.Optional<String> ssoLogoutUrl() {
     RepoState state = stateFiles.readState();
-    if (state.enabled() == null || !state.enabled().contains("identity")) {
+    if (state.enabled() == null || !state.enabled().contains("core")) {
       return java.util.Optional.empty();
     }
     String domain = state.domain();

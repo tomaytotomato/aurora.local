@@ -1,4 +1,4 @@
-# aurora.local / packages/identity / caddy.snippet
+# aurora.local / packages/core / caddy.snippet
 #
 # Phase D — Aurora manages the SSO surface. Two things live in this file:
 #
@@ -47,8 +47,8 @@
 #
 #   3. Downstream reverse_proxy directives in the vhost see a
 #      request with trustworthy Remote-* headers set. Services that
-#      support trusted-header auth (Grafana, Paperless, Forgejo) can
-#      key their session on Remote-User.
+#      support trusted-header auth (Grafana, Paperless) can key
+#      their session on Remote-User.
 (authelia) {
 	# 1. Strip any client-supplied trusted-header candidates.
 	request_header -Remote-User

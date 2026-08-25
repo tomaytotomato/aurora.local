@@ -2,7 +2,7 @@
 # Authelia users database — EXAMPLE                            #
 #                                                              #
 # scripts/lib/render.sh's render_identity_seed copies this file #
-# to data/identity/authelia/users_database.yml automatically on #
+# to data/authelia/users_database.yml automatically on #
 # any install with identity enabled, before Aurora has created  #
 # an admin user of its own — this is what lets Authelia boot on #
 # a genuinely fresh install with zero manual steps.             #

@@ -26,13 +26,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * files the service touches:
  * <ul>
  *   <li>{@code .state.yml} \u2014 minimal, only the {@code enabled:} field.</li>
- *   <li>{@code packages/identity/.env.example} \u2014 copied verbatim from
+ *   <li>{@code packages/core/.env.example} \u2014 copied verbatim from
  *       the repo so comments + non-managed keys survive a mutation.</li>
  * </ul>
  *
  * <p>Covers:
  * <ul>
- *   <li>Skip bootstrap when identity is disabled.</li>
+ *   <li>Skip bootstrap when core is absent.</li>
  *   <li>Fresh generation when {@code .env} doesn't exist yet.</li>
  *   <li>Idempotence \u2014 second call is a no-op.</li>
  *   <li>Partial generation \u2014 only missing/empty keys get filled.</li>
@@ -62,10 +62,11 @@ class IdentitySecretsServiceTests {
 
     // Seed a minimal .env.example so the template-copy path is exercised
     // the same way it will run on Bruce's box (where the real
-    // .env.example ships with comments + SMTP keys).
-    Path identityDir = repoRoot.resolve("packages/identity");
-    Files.createDirectories(identityDir);
-    Files.writeString(identityDir.resolve(".env.example"), String.join("\n",
+    // .env.example ships with comments + SMTP keys). Authelia's secrets
+    // now live in packages/core/.env (SSO migrated into core).
+    Path coreDir = repoRoot.resolve("packages/core");
+    Files.createDirectories(coreDir);
+    Files.writeString(coreDir.resolve(".env.example"), String.join("\n",
         "# Copy to .env and fill in.",
         "TZ=Europe/London",
         "DOMAIN=aurora.local",
@@ -81,25 +82,25 @@ class IdentitySecretsServiceTests {
         ""
     ), StandardCharsets.UTF_8);
 
-    // Default: identity is enabled. Override per-test as needed.
+    // Default: core is enabled (always is). Override per-test as needed.
     Mockito.when(state.readState()).thenReturn(new RepoState(
         1, "aurora", "aurora.local", null,
-        List.of("core", "identity"), List.of()
+        List.of("core", "media"), List.of()
     ));
   }
 
   // \u2500\u2500\u2500 identityEnabled ────────────────────────────────────────────────
 
   @Test
-  void identityEnabled_true_when_state_lists_identity() {
+  void identityEnabled_true_when_state_lists_core() {
     assertThat(svc.identityEnabled()).isTrue();
   }
 
   @Test
-  void identityEnabled_false_when_state_omits_identity() {
+  void identityEnabled_false_when_state_omits_core() {
     Mockito.when(state.readState()).thenReturn(new RepoState(
         1, "aurora", "aurora.local", null,
-        List.of("core", "media"), List.of()
+        List.of("media"), List.of()
     ));
     assertThat(svc.identityEnabled()).isFalse();
   }
@@ -186,7 +187,7 @@ class IdentitySecretsServiceTests {
     ArgumentCaptor<String> action = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<String> diff = ArgumentCaptor.forClass(String.class);
     Mockito.verify(audit).record(Mockito.isNull(), action.capture(),
-        Mockito.eq("packages/identity/.env"), diff.capture());
+        Mockito.eq("packages/core/.env"), diff.capture());
     assertThat(action.getValue()).isEqualTo("identity.secrets.bootstrap");
     assertThat(diff.getValue()).contains("AUTHELIA_JWT_SECRET");
     assertThat(diff.getValue()).contains("AUTHELIA_SESSION_SECRET");

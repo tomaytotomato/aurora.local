@@ -15,7 +15,6 @@ export type OnboardingStepId =
   | 'welcome'
   | 'admin'
   | 'domain'
-  | 'sso'
   | 'secrets'
   | 'dns'
   | 'tls'
@@ -234,20 +233,10 @@ export const OnboardingApi = {
     await http.post('/onboarding/complete');
   },
 
-  /**
-   * Phase D iter-11 (D10). Turn SSO on/off during onboarding.
-   * When {@code enable: true}, the backend:
-   *   1. Adds 'identity' to the enabled[] list in .state.yml.
-   *   2. Generates the three Authelia secrets and writes them to
-   *      packages/identity/.env with 0600 perms.
-   *   3. Records an audit row.
-   * When false: no-op on {@code enabled}, no secrets touched. The
-   * user can enable identity later from Packages.
-   */
-  async setSso(req: { enable: boolean }): Promise<void> {
-    // toast: false — form renders inline error via humanCopyForError.
-    await http.post('/onboarding/sso', req, { toast: false });
-  },
+  // SSO (Authelia) ships in core and is always-on — there is no wizard
+  // toggle for it any more. The old setSso() call + POST /onboarding/sso
+  // endpoint were removed when Authelia migrated into core.
+
   caddyRootCaUrl(): string {
     return '/api/system/caddy-root.crt';
   },

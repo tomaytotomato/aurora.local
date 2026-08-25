@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Phase D iter-8 (D7) — invariants over
- * {@code packages/identity/caddy.snippet}.
+ * {@code packages/core/caddy.snippet}.
  *
  * <p>This file is loaded by Caddy at startup + on every {@code --watch}
  * fsevent, and every Aurora-managed vhost with {@code sso.protect: true}
@@ -28,9 +28,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AutheliaCaddySnippetInvariantsTests {
 
-  private static final String CLASSPATH_SNIPPET = "/identity/caddy.snippet";
+  private static final String CLASSPATH_SNIPPET = "/core/caddy.snippet";
   private static final Path SOURCE_FILE = Path.of(
-      "../../packages/identity/caddy.snippet"
+      "../../packages/core/caddy.snippet"
   );
 
   private static String load() throws IOException {
@@ -75,7 +75,7 @@ class AutheliaCaddySnippetInvariantsTests {
 
   @Test
   void forward_auth_uses_authelia_container_and_correct_endpoint() throws IOException {
-    // Container name pinned so a rename in packages/identity/compose.yml
+    // Container name pinned so a rename in packages/core/compose.yml
     // triggers this test rather than a mysterious 502 from Caddy at
     // the first login attempt. Endpoint pinned so an Authelia version
     // bump that moves the path breaks here first.
@@ -115,7 +115,7 @@ class AutheliaCaddySnippetInvariantsTests {
       String trimmed = line.trim();
       if (trimmed.startsWith("#")) continue;
       assertThat(trimmed)
-          .as("packages/identity/caddy.snippet must not `import authelia`; line: %s", line)
+          .as("packages/core/caddy.snippet must not `import authelia`; line: %s", line)
           .doesNotStartWith("import authelia");
     }
   }
@@ -139,7 +139,7 @@ class AutheliaCaddySnippetInvariantsTests {
     String source = Files.readString(SOURCE_FILE, StandardCharsets.UTF_8);
     String snapshot = load();
     assertThat(snapshot)
-        .as("src/test/resources/identity/caddy.snippet is out of sync with the source file. Copy it from packages/identity/caddy.snippet.")
+        .as("src/test/resources/core/caddy.snippet is out of sync with the source file. Copy it from packages/core/caddy.snippet.")
         .isEqualTo(source);
   }
 }

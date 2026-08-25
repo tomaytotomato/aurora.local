@@ -5,7 +5,7 @@
 # the runtime files that `packages/core/` bind-mounts:
 #
 #   * data/caddy/snippets/<pkg>.caddy   — per-package Caddy vhosts
-#   * data/identity/authelia/users_database.yml — seeded from example
+#   * data/authelia/users_database.yml  — seeded from example (core/SSO)
 #
 # Called by scripts/up.sh. All functions idempotent and safe to re-run.
 
@@ -50,25 +50,28 @@ render_caddy_snippets() {
 }
 
 # --------------------------------------------------------------------
-# render_identity_seed
+# render_authelia_seed
 #
-# If identity is enabled, seed data/identity/authelia/users_database.yml
-# from the checked-in example (only if the real file doesn't exist).
+# Authelia ships in core (SSO always-on), so whenever core is in the
+# enabled set seed data/authelia/users_database.yml from the checked-in
+# example (only if the real file doesn't exist). This lets Authelia boot
+# before Aurora projects real users over it (it crash-loops on an empty
+# users: map).
 # --------------------------------------------------------------------
-render_identity_seed() {
+render_authelia_seed() {
   local pkgs=("$@")
   local want=0
   local p
-  for p in "${pkgs[@]}"; do [[ "$p" == "identity" ]] && want=1; done
+  for p in "${pkgs[@]}"; do [[ "$p" == "core" ]] && want=1; done
   [[ $want -eq 1 ]] || return 0
 
-  local src="$REPO/packages/identity/authelia/users_database.example.yml"
-  local dst_dir="$REPO/data/identity/authelia"
+  local src="$REPO/packages/core/authelia/users_database.example.yml"
+  local dst_dir="$REPO/data/authelia"
   local dst="$dst_dir/users_database.yml"
 
   mkdir -p "$dst_dir"
   if [[ -f "$src" && ! -f "$dst" ]]; then
-    log_info "seeding data/identity/authelia/users_database.yml from example"
+    log_info "seeding data/authelia/users_database.yml from example"
     install -m 0640 "$src" "$dst"
     log_warn "IMPORTANT: replace the example password hash in $dst"
     log_warn "generate one with:  docker run --rm authelia/authelia:latest \\"
@@ -103,6 +106,6 @@ render_pins() {
 # --------------------------------------------------------------------
 render_all() {
   render_caddy_snippets "$@"
-  render_identity_seed "$@"
+  render_authelia_seed "$@"
   render_pins "$@"
 }

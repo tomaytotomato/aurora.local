@@ -49,9 +49,7 @@ class OnboardingControllerPatchTests {
             mock(SystemService.class),
             mock(LaunchService.class),
             mock(StateFileService.class),
-            mock(com.tomaytotomato.aurora.services.IdentitySecretsService.class),
             mock(com.tomaytotomato.aurora.persistence.AuditEventRepo.class),
-            mock(com.tomaytotomato.aurora.services.PackagesService.class),
             mock(com.tomaytotomato.aurora.services.SessionService.class))).build();
 
     String body = JSON.writeValueAsString(Map.of("enabled_packages", List.of("../etc")));
@@ -77,9 +75,7 @@ class OnboardingControllerPatchTests {
             mock(SystemService.class),
             mock(LaunchService.class),
             mock(StateFileService.class),
-            mock(com.tomaytotomato.aurora.services.IdentitySecretsService.class),
             mock(com.tomaytotomato.aurora.persistence.AuditEventRepo.class),
-            mock(com.tomaytotomato.aurora.services.PackagesService.class),
             mock(com.tomaytotomato.aurora.services.SessionService.class))).build();
 
     String body = JSON.writeValueAsString(Map.of("enabled_packages", List.of("foo")));

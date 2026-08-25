@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <p><b>Why on-disk projection instead of an Authelia API call?</b>
  * Authelia's file-based auth backend reads {@code users_database.yml}
- * with {@code watch: true} (see {@code packages/identity/authelia/
+ * with {@code watch: true} (see {@code packages/core/authelia/
  * configuration.yml}) so a fresh write triggers an automatic reload
  * inside the container. This means Aurora doesn't need HTTP round-trips
  * to Authelia + doesn't need to know Authelia's internal auth surface;
@@ -41,9 +41,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * owns the avahi-publish subprocess fleet.
  *
  * <p><b>Path.</b> The compose file mounts
- * {@code data/identity/authelia:/data}, so the file's canonical host
+ * {@code data/authelia:/data}, so the file's canonical host
  * path is
- * {@code {aurora.repo-path}/data/identity/authelia/users_database.yml}.
+ * {@code {aurora.repo-path}/data/authelia/users_database.yml}.
  * Same as the mDNS service, we resolve via {@link AuroraProperties}.
  *
  * <p><b>Group mapping.</b> Aurora's {@link Role} enum projects into
@@ -73,7 +73,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * drift guard fixes it on the next tick).
  *
  * <p><b>Runtime contract.</b> Requires
- * {@code {repo}/data/identity/authelia/} to be writable by Aurora's
+ * {@code {repo}/data/authelia/} to be writable by Aurora's
  * UID (usually 1000). Missing directory is created at first write.
  * If the write ever fails, we log and skip \u2014 Authelia keeps the
  * previous version, so a transient disk error doesn't lock everyone
@@ -159,9 +159,10 @@ public class AutheliaService {
         // on an empty users: {} block ("users: non zero value
         // required") — not a graceful "nobody can log in", a fatal
         // crash loop. This is the normal state for the window between
-        // "identity is enabled" and "the onboarding wizard created the
+        // "core/SSO is running" and "the onboarding wizard created the
         // first admin", which every fresh install now passes through
-        // since identity became mandatory. Leave whatever's already on
+        // since Authelia ships in core and is always-on. Leave whatever's
+        // already on
         // disk alone (the seeded users_database.example.yml placeholder,
         // or an earlier real projection) rather than overwrite something
         // Authelia can boot from with something it can't. The next real
@@ -184,7 +185,7 @@ public class AutheliaService {
       // lastError() to the /api/authelia/status endpoint.
       if (USER_CHANGE_REASONS.contains(reason)) {
         audit.record(null, "authelia.users.projected",
-            "data/identity/authelia/users_database.yml",
+            "data/authelia/users_database.yml",
             "{\"reason\":\"" + reason + "\",\"user_count\":" + all.size() + "}");
       }
       return all.size();
@@ -204,7 +205,7 @@ public class AutheliaService {
   public Instant lastWriteAt() { return lastWriteAt.get(); }
   public String lastError() { return lastError.get(); }
   public Path usersDbPath() {
-    return Path.of(props.repoPath(), "data", "identity", "authelia", USERS_DB_FILENAME);
+    return Path.of(props.repoPath(), "data", "authelia", USERS_DB_FILENAME);
   }
 
   // \u2500\u2500\u2500 rendering \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500

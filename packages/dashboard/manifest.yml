@@ -11,8 +11,7 @@ category: core
 
 depends_on:
   - core
-recommends:
-  - identity
+recommends: []
 
 ports:
   - {port: 8090, proto: tcp, description: Aurora dashboard HTTP}
@@ -44,9 +43,12 @@ probe:
 post_install_notes: |
   1. Open the first-run wizard: https://$DOMAIN/
   2. Create the admin user (password for v0.1; passkey coming in v0.2).
-  3. Onboarding wizard walks you through domain, packages, DNS and TLS.
-  4. Aurora's own admin URL is behind Authelia forward-auth when the
-     `identity` package is enabled.
+  3. Onboarding wizard walks you through domain, DNS and TLS, then
+     drops you on the dashboard where you install packages.
+  4. SSO (Authelia) ships in core and runs from Day 0. The Aurora admin
+     plane keeps its own login and is deliberately NOT behind Authelia
+     forward-auth (so you can never be locked out of the control plane);
+     Authelia gates the other `*.$DOMAIN` service subdomains.
 
 # Upstream project. Rendered as the Source and Docs buttons on the
 # app page; the package's headline service, not every image it runs.
