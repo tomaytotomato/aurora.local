@@ -47,7 +47,7 @@ public class OnboardingService {
   // added here either; the resume-hint jumps straight past it into
   // "secrets", same as it always has (see setDomain()).
   private static final java.util.Set<String> VALID_STEPS = java.util.Set.of(
-      "welcome", "admin", "domain", "secrets", "dns", "tls", "review", "done"
+      "welcome", "admin", "domain", "dns", "tls", "review", "done"
   );
 
   private final AdminUserRepo users;
@@ -191,7 +191,6 @@ public class OnboardingService {
       case "welcome"  -> 0;
       case "admin"    -> 1;
       case "domain"   -> 2;
-      case "secrets"  -> 4;
       case "dns"      -> 5;
       case "tls"      -> 6;
       case "review"   -> 7;
@@ -909,13 +908,10 @@ public class OnboardingService {
     upsertCoreEnvDomain(normalized);
     audit.record(null, "onboarding.domain.set", "domain:" + normalized, null);
     // Advance the server-side step cursor forward but never backward.
-    //
-    // Used to jump to "packages" here, then "packages" itself jumped
-    // straight to "secrets" (skipping "sso" as a resumable hint value —
-    // that was already the case before the picker step was removed, and
-    // is left unchanged). Now that there is no picker step in between,
-    // domain jumps directly to the same "secrets" end-state in one go.
-    if (rank(currentStep()) < rank("secrets")) settings.put(KEY_STEP, "secrets");
+    // The secrets step was removed (every secret is auto-generated at
+    // install, and with no picker there was nothing to configure), so
+    // domain now hands off directly to "dns".
+    if (rank(currentStep()) < rank("dns")) settings.put(KEY_STEP, "dns");
   }
 
   public void setEnabledPackages(List<String> enabled) {
@@ -923,7 +919,7 @@ public class OnboardingService {
     stateFiles.writeEnabled(enabled == null ? List.of() : enabled);
     audit.record(null, "onboarding.packages.set", null,
         "{\"enabled\":" + toJsonArray(enabled) + "}");
-    if (rank(currentStep()) < rank("secrets")) settings.put(KEY_STEP, "secrets");
+    if (rank(currentStep()) < rank("dns")) settings.put(KEY_STEP, "dns");
   }
 
   public void markComplete() {

@@ -15,7 +15,6 @@ export type OnboardingStepId =
   | 'welcome'
   | 'admin'
   | 'domain'
-  | 'secrets'
   | 'dns'
   | 'tls'
   | 'review'

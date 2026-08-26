@@ -159,8 +159,13 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
   <div>
     <div class="eyebrow mb-3">{{ store.stepEyebrow }}</div>
     <h1 class="mb-4">Review and install.</h1>
-    <p class="text-foreground mb-8">
+    <p class="text-foreground mb-3">
       Here's what Aurora will do. Nothing has been written yet.
+    </p>
+    <p class="text-muted-foreground text-sm mb-8">
+      Aurora generates a strong value for anything that looks like a secret when it
+      installs, so there's nothing to enter. You can review or change any of them
+      later on an app's Config screen.
     </p>
 
     <Alert v-if="planErr" variant="warning" class="mb-6">

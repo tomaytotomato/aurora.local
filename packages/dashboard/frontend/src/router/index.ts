@@ -26,7 +26,10 @@ const routes: RouteRecordRaw[] = [
       // step is gone — first-run installs the mandatory set only (see
       // MANDATORY_FIRST_RUN_PACKAGES in api/packages.ts) and everything
       // else is added afterwards from the Apps catalogue.
-      { path: 'secrets', component: () => import('@/views/onboarding/OnboardingSecrets.vue') },
+      //
+      // 'secrets' removed: with no picker there was nothing to configure —
+      // every secret is auto-generated at install and reviewable on an
+      // app's Config screen. The reassurance moved to the Review step.
       { path: 'dns', component: () => import('@/views/onboarding/OnboardingDns.vue') },
       { path: 'tls', component: () => import('@/views/onboarding/OnboardingTls.vue') },
       { path: 'review', component: () => import('@/views/onboarding/OnboardingReview.vue') },
