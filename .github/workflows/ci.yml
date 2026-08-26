@@ -2,6 +2,7 @@ name: ci
 on:
   push:
     branches: [main, productionize, "wt/**"]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -208,3 +209,62 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - name: contract tests
         run: ./mvnw --batch-mode test -Dgroups=registry -DexcludedGroups=
+
+  # Build the dashboard image and publish it to GHCR. Gated on both test
+  # suites so a red build never ships an image, and scoped to main and
+  # release tags so pull requests (including from forks, which have no
+  # packages:write) never try to push. Multi-arch: the Dockerfile already
+  # handles TARGETARCH, and the target hardware is unknown (an amd64
+  # Optiplex today, an arm64 board tomorrow), so both are built.
+  #
+  # Image name is ghcr.io/<owner>/aurora — the name the codebase already
+  # anticipates (see UnpinnedImageTagsRule's javadoc), not the local
+  # build tag aurora-dashboard.
+  publish-image:
+    name: publish image (ghcr)
+    needs: [frontend, backend]
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: set up qemu (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+      - name: set up buildx
+        uses: docker/setup-buildx-action@v3
+      - name: log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/aurora
+          # main → edge + sha-<short>; a vX.Y.Z tag → X.Y.Z, X.Y, latest.
+          tags: |
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+      - name: build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/dashboard
+          file: packages/dashboard/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # A single-manifest image per arch, no attestation manifest — keeps
+          # the GHCR package listing from showing an "unknown/unknown" entry.
+          provenance: false
