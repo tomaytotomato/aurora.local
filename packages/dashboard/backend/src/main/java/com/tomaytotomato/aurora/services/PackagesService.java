@@ -399,7 +399,7 @@ public class PackagesService {
       // whether a docker compose project label points back at /packages/<name>/.
       // Without this, Aurora (started at bootstrap, not from packages/core/) is
       // never marked running by runningPackageNames() and the Packages card
-      // shows a Start button for Core. See logs/dashboard-bugs-2026-08-01.md.
+      // shows a Start button for Core.
       boolean effectiveRunning = running;
       if (!effectiveRunning && m.get("probe") instanceof Map probeMap) {
         Object kind = probeMap.get("kind");

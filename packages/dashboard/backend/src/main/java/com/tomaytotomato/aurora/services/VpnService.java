@@ -187,7 +187,7 @@ public class VpnService {
         // Not implemented in this iteration: Aurora has no real external
         // probe to ask "can a phone actually reach this box". Reporting
         // null (not checked) is the honest answer — see the class
-        // javadoc and dev/notes/vpn-progress.md.
+        // javadoc.
         null,
         now,
         now);

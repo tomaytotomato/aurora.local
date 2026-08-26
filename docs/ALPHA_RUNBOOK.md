@@ -107,8 +107,7 @@ From the catalogue in the dashboard, or from the shell:
     ./bootstrap.sh add <package>
 
 Proven on the testbed: `core`, `dashboard`. Coverage across the remaining
-seventeen packages was being broadened overnight; check
-`dev/notes/testbed-coverage-progress.md` on the branch for what was
+seventeen packages was being broadened overnight; verify what was
 actually proven versus assumed before relying on any given package.
 
 ## 6. Metrics check — **untested**

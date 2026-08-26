@@ -31,7 +31,7 @@ import java.util.concurrent.TimeoutException;
  * (and, in iter-3, the dashboard home) can render a living checklist without
  * the user typing anything.
  *
- * <p>Design constraints (see logs/ux-iteration-2.md §2a):
+ * <p>Design constraints:
  * <ul>
  *   <li>2-second hard timeout per probe. HttpClient connectTimeout(1s) +
  *       per-request timeout(2s) is the belt-and-braces.</li>

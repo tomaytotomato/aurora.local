@@ -55,7 +55,7 @@ public class MetricsSamplerService {
 
   private static final Logger log = LoggerFactory.getLogger(MetricsSamplerService.class);
 
-  /** Sample cadence. 30s per DASHBOARD_BRIEF §4.2 (v0.3 update). */
+  /** Sample cadence. 30s (v0.3 update). */
   public static final long SAMPLE_INTERVAL_MS = 30_000L;
 
   /** Delay before the first sample fires so app boot is not gated on IO. */

@@ -83,7 +83,7 @@ class SystemServiceInfoTests {
 
   @Test
   void info_capabilitiesFlagsMetricsTrueAsOfIter22() {
-    // UX_SPEC_DASHBOARD.md §4.5 + §6: the metrics fetch is gated on this
+    // the metrics fetch is gated on this
     // capability flag so DashboardHome doesn't 404 when the backend has
     // no timeseries endpoint. iter-1 kept it false; iter-10 shipped
     // MetricsSamplerService + MetricsRepo + /api/metrics/last24h; iter-22

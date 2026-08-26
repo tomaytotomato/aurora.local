@@ -25,7 +25,6 @@ import { useOnboardingStore } from '@/stores/onboarding';
  * first place). These tests pin that ordering directly against the
  * component rather than just the API layer, since the bug was entirely in
  * *when* the frontend called things, not in what the backend accepts.
- * See dev/notes/onboarding-409-progress.md.
  */
 
 class FakeEventSource {

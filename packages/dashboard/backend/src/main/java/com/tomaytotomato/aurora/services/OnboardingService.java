@@ -470,9 +470,9 @@ public class OnboardingService {
 
   /**
    * Plain-English copy for the auto-added hard dependencies and any
-   * manifest bugs {@link #resolveDependencies} turned up. Per
-   * docs/UX_SPEC.md P4 every line is a full sentence ending in
-   * punctuation and never carries an internal rule-id token.
+   * manifest bugs {@link #resolveDependencies} turned up. Every line
+   * is a full sentence ending in punctuation and never carries an
+   * internal rule-id token.
    *
    * <p>{@code core} is skipped in the auto-add loop on purpose: the two
    * dedicated core messages in {@link #plan(List)} already tell that

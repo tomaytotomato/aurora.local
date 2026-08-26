@@ -256,8 +256,6 @@ watch(() => route.path, (path, prev) => {
          so the collapsed top bar stays compact on tablet. -->
     <div class="hidden lg:block px-6 py-5 border-t border-border/60">
       <div class="eyebrow mb-2">Documentation</div>
-      <a href="/docs/DASHBOARD_BRIEF.md" class="text-xs text-muted-foreground">Brief</a>
-      <span class="mx-2 text-muted-foreground">·</span>
       <a href="/docs/PACKAGE_CONTRACT.md" class="text-xs text-muted-foreground">Packages</a>
     </div>
   </aside>

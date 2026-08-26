@@ -246,7 +246,7 @@ class OnboardingServiceDependencyResolutionTests {
 
     @Test
     void everyDependencyWarningIsAFullSentenceEndingInPunctuation() {
-      // docs/UX_SPEC.md P4: warnings render as full sentences, no
+      // warnings render as full sentences, no
       // internal rule-id tokens leaking into user-facing copy.
       var broken = pkg("broken", List.of("ghost", "broken"), List.of());
       var byName = byName(broken);

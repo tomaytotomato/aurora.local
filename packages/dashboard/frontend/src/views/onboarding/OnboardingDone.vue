@@ -71,9 +71,9 @@ const canGoToDashboard = computed(() => onboardingCommitted.value);
  * Commit onboarding once there is nothing left that could still fail:
  * either the launch stream reported success, or there were no packages to
  * start in the first place. This is deliberately the *only* place
- * POST /onboarding/complete is called — see OnboardingReview.vue and
- * dev/notes/onboarding-409-progress.md for why it can no longer happen
- * before the launch. A failed or cancelled launch never reaches here, so
+ * POST /onboarding/complete is called — see OnboardingReview.vue for
+ * why it can no longer happen before the launch. A failed or cancelled
+ * launch never reaches here, so
  * onboarding stays incomplete and the backend guard keeps letting the user
  * retry `startServices()`.
  */

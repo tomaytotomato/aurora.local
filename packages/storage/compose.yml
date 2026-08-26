@@ -23,7 +23,7 @@ services:
     # only ever defined one share ("media") — dperson/samba's repeatable
     # `-s` scheme was never actually exercised beyond one entry. A second
     # share would need the image's mounted smb.conf/users.conf route
-    # instead; see dev/notes/samba-swap-progress.md.
+    # instead.
     #
     # No nmbd/wsdd/Avahi in this image (its only two installed packages
     # are samba and libauth-samba) — the host's own avahi-daemon handles

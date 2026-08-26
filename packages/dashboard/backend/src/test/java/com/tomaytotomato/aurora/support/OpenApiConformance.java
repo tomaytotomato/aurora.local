@@ -85,13 +85,12 @@ import java.util.Set;
  *
  * openapi.yaml is out of bounds for this piece of work — it belongs to a
  * separate, concurrent change — so the handful of genuine violations this
- * check found while it was being built are reported, not fixed (see
- * {@code dev/notes/api-contract-testing-progress.md}). Each is carved out
- * as narrowly as possible: a single named field on a single named
- * operation, never "stop checking this endpoint". A registry entry
+ * check found while it was being built are reported, not fixed. Each is
+ * carved out as narrowly as possible: a single named field on a single
+ * named operation, never "stop checking this endpoint". A registry entry
  * silencing an operation wholesale would have silenced this class's own
- * proof that it works — see the progress log entry for how that nearly
- * happened here.
+ * proof that it works, which nearly happened while this check was being
+ * built.
  */
 public final class OpenApiConformance implements ResultMatcher {
 

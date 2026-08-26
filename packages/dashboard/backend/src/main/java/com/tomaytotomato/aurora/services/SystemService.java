@@ -49,7 +49,7 @@ public class SystemService {
    * <p>{@code capabilities.metrics} is deliberately {@code false} in iter-1:
    * the frontend gates the metrics fetch on this flag so no 404 is issued
    * from {@code /dashboard/home} until a real timeseries backend lands
-   * (UX_SPEC_DASHBOARD §6 non-goal).
+   * (a documented non-goal for now).
    */
   public Map<String, Object> info() {
     Map<String, Object> out = new LinkedHashMap<>();
@@ -77,7 +77,7 @@ public class SystemService {
     out.put("dockerVersion", docker.version().orElse(null));
     out.put("containerCount", dockerContainerCount());
     // Capability flags let the frontend gate feature fetches without
-    // hard-coding a version check. See UX_SPEC_DASHBOARD §4.5.
+    // hard-coding a version check.
     Map<String, Object> capabilities = new LinkedHashMap<>();
     // B2 (iter-10) shipped MetricsSamplerService + MetricsRepo + /api/
     // metrics/last24h; iter-22 flips this capability true so the
@@ -111,7 +111,7 @@ public class SystemService {
     // exception: GET /vpn/peers/{id}/config and .../qrcode return 409 for
     // any peer after its creation response — a peer's private key is
     // never persisted, so there is nothing to rebuild a working file
-    // from a second time. See dev/notes/vpn-progress.md.
+    // from a second time.
     capabilities.put("vpn", true);
     // Backup: deliberately FALSE, and stated rather than left absent so
     // nobody has to guess whether the omission was a decision.

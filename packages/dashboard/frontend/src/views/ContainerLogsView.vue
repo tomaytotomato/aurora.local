@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // B3 (v0.3, iter-12): snapshot log-tail viewer for a single container.
 // Renders the last N lines returned by GET /api/containers/{id}/logs
-// as a <pre>-mono block. No live SSE follow (v0.4 promotion, per
-// RALPH_TASK_V02_V03.md B3). Refresh button re-hits the endpoint.
+// as a <pre>-mono block. No live SSE follow (v0.4 promotion).
+// Refresh button re-hits the endpoint.
 //
-// UX contract (DASHBOARD_BRIEF §M3):
+// UX contract:
 //   - Empty state ("No log lines yet.") — fresh container, no output.
 //   - Error state — 400 (bad shape) / 404 (no such container) / 5xx.
 //   - Truncated banner — surfaced when the backend hit LOG_BYTES_CAP.

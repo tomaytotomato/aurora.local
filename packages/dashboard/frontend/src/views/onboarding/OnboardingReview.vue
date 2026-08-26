@@ -87,8 +87,8 @@ async function install(): Promise<void> {
     // Deliberately no /complete call here. The backend refuses to launch
     // (or install, or patch) once onboarding.complete = true, and the Done
     // page still has to call POST /onboarding/launch after this. Committing
-    // here would win the race against that call every time — see
-    // dev/notes/onboarding-409-progress.md. OnboardingDone.vue commits once
+    // here would win the race against that call every time.
+    // OnboardingDone.vue commits once
     // the launch has actually succeeded (or there was nothing to launch),
     // so a failed launch leaves onboarding retryable instead of stranding
     // the user past the point of no return.

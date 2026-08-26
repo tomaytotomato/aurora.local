@@ -46,8 +46,7 @@ const overrideDisagreementCounts: Record<string, number> = {};
 //   • Stripe Dashboard's "Send test webhook" button (Nick Craver 2019 talk)
 //   • Vercel's "Redeploy" action (optimistic transition then fast-poll)
 //   • Linear's issue-state cycling (button locked until server ack + probe)
-// See docs/UX_SPEC_DASHBOARD.md §2.1 for the local contract, and
-// components/onboarding/ChecklistItem.vue for the CTA disabled + spinner
+// See components/onboarding/ChecklistItem.vue for the CTA disabled + spinner
 // side that consumes this state via `service.state === 'starting'`.
 // -------------------------------------------------------------------------
 const pendingStarts = ref<Record<string, number>>({});

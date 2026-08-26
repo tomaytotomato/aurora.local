@@ -114,8 +114,7 @@ pauses and asks. The human owns every live rebuild.
 
 This is why the repo carries so much narrative history: briefings,
 overnight reports, phase handovers. Those are the loop reporting for
-duty. They are archived under `docs/history/`; this document is what
-they were all circling.
+duty; this document is what they were all circling.
 
 ## The stack
 

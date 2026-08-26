@@ -8,8 +8,8 @@ import { OnboardingApi, type InstallPlan, type InstallResult, type OnboardingDra
 import { useOnboardingStore } from '@/stores/onboarding';
 
 /**
- * Regression coverage for the onboarding launch/complete ordering bug (see
- * dev/notes/onboarding-409-progress.md). This view used to call
+ * Regression coverage for the onboarding launch/complete ordering bug.
+ * This view used to call
  * POST /onboarding/complete right after install(), which flips
  * onboarding.complete = true before OnboardingDone.vue ever gets a chance
  * to call POST /onboarding/launch — and the backend refuses to launch once

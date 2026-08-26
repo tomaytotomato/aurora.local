@@ -6,8 +6,8 @@
  *
  * Deliberately not a Tabs region: Config, Network and Logs all describe
  * something running, and nothing is running yet. Rather than render those
- * tabs empty (or, worse, erroring — see dev/notes/detail-page-truth-progress.md
- * for the Network tab's real-404 history), this page shows only what is
+ * tabs empty (or, worse, erroring — the Network tab had a real history
+ * of 404s), this page shows only what is
  * honestly knowable pre-install: what the app is, what installing it would
  * cost (`PackageImpactPanel`, already built and already used one dialog
  * over from here for exactly this), the version it would install (a tag,

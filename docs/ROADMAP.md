@@ -85,7 +85,7 @@ Removed: `packages/git/` (compose, manifest, caddy snippet, homepage
 fragment, README, `.env.example`, `pins.env.example`), the `git`
 row from the root README's package table, the Forgejo node from the
 layered-view diagram in `docs/ARCHITECTURE.md`, and every prose mention
-of Forgejo in `docs/DASHBOARD_BRIEF.md` and `packages/identity/README.md`
+of Forgejo in `packages/identity/README.md`
 + `packages/identity/caddy.snippet` (it was one of the three services
 using Authelia's trusted-header auth, alongside Grafana and Paperless).
 Dashboard mock fixtures (`packages.ts`, `proxy.ts`, `backup.ts`,
@@ -95,10 +95,10 @@ something that no longer exists. No other package's manifest named
 `git` in `depends_on` or `recommends`, so no dangling dependency was
 left behind.
 
-Deliberately left alone: `docs/history/RALPH_TASK_D_AUTHELIA.md` and
-`docs/history/PHASE_D_HANDOVER.md`, which record what Phase D actually
-did at the time (Forgejo was a real target then); rewriting history
-docs to erase a since-removed package would misrepresent what happened.
+Deliberately left alone at the time: the Phase D history docs, which
+recorded what Phase D actually did (Forgejo was a real target then);
+rewriting history docs to erase a since-removed package would have
+misrepresented what happened.
 Also left: a handful of prose mentions of "Forgejo" in backend/frontend
 code comments (`SsoBlock.java`, `AutheliaCaddySnippetInvariantsTests.java`,
 a backend test fixture `caddy.snippet`, `OnboardingSso.vue`) that list
@@ -150,7 +150,7 @@ choice sits on every install. `dperson/samba:latest` has no release
 in roughly five years and, unlike Forgejo, no version tags at all —
 only `latest` and a handful of stale architecture-named tags — so it
 cannot be pinned even to a frozen version the way `git`'s Forgejo pin
-was. `dev/notes/pinnable-versions-progress.md` already flagged this
+was. Earlier version-pinning research already flagged this
 as "no safe pin at all" and recommended the owner consider a
 maintained alternative as a separate decision. This is that research.
 **No change has been made to `packages/storage/compose.yml`** — this

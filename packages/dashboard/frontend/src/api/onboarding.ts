@@ -145,8 +145,8 @@ export const OnboardingApi = {
 
   /**
    * Partial update. Server rejects with 409 if no admin exists yet or the
-   * wizard has already been committed. Public otherwise (v0.1 punt — see
-   * DASHBOARD_BRIEF §Post-admin unauth risk).
+   * wizard has already been committed. Public otherwise (v0.1 punt on the
+   * post-admin unauth risk).
    */
   async patch(fields: OnboardingPatch): Promise<OnboardingDraft> {
     const { data } = await http.patch<OnboardingDraft>('/onboarding', fields);

@@ -59,7 +59,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 // Format bytes to human-readable. Renders an em-dash for missing/NaN inputs
-// so the dashboard never emits "NaN KB" (UX_SPEC_DASHBOARD.md D2).
+// so the dashboard never emits "NaN KB".
 export function humanBytes(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n) || n < 0) return '—';
   if (n < 1024) return `${n} B`;
@@ -75,7 +75,7 @@ export function humanBytes(n: number | null | undefined): string {
 
 // Human-friendly uptime. Renders em-dash for missing/NaN inputs.
 // <60s -> "just booted", <1h -> "12m", <48h -> "6h 42m", ≥2d -> "12d 5h".
-// UX_SPEC_DASHBOARD.md §2.3: "uptime NaNh" is banned; the empty state is "—".
+// "uptime NaNh" is banned; the empty state is "—".
 export function humanUptime(sec: number | null | undefined): string {
   if (sec === null || sec === undefined || !Number.isFinite(sec) || sec < 0) return '—';
   const s = Math.floor(sec);

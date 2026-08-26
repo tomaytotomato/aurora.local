@@ -44,9 +44,8 @@ import DoneChecklist from '@/components/onboarding/DoneChecklist.vue';
 const route = useRoute();
 const photoBg = computed<boolean>(() => Boolean(route.meta?.photoBg));
 
-// iter-dash-1 dashboard-home. Closes the four blockers captured in
-// logs/dashboard-bugs-2026-08-01.md and enforces the empty/error state
-// contracts from docs/UX_SPEC_DASHBOARD.md §§4-5.
+// iter-dash-1 dashboard-home. Closes four dashboard-home blockers and
+// enforces the empty/error state contracts.
 //
 // D-rules enforced in this template (search the file for "D<n>"):
 //   D1 — no raw axios strings in the DOM.
@@ -228,7 +227,7 @@ setTimeout(() => {
 }, 3000);
 
 // ---- packages card + count semantics -------------------------------
-// UX_SPEC_DASHBOARD.md §4.3 + iter-3 B4: numerator = `.running` boolean
+// iter-3 B4: numerator = `.running` boolean
 // (was `.status === 'running'` — wire never emitted `.status`, so this
 // always resolved to 0). Denominator = enabled_packages.length.
 const runningCount = computed(() => {
@@ -244,7 +243,7 @@ const packagesCount = computed(() => {
   return { text: `${d} enabled \u00b7 ${n} running`, tone: 'neutral' as const };
 });
 
-// Health pill aggregation for the header (UX_SPEC_DASHBOARD.md §3.1).
+// Health pill aggregation for the header.
 // iter-3 V3: lifted into `composables/useHealthPill.ts` so this view and
 // TopBar share the same derived state. Degraded transitions land with
 // the media sub-checklist (BL1).
@@ -662,7 +661,7 @@ function pickMetric(key: string): void {
            iter-dash-polish-2 P6 (BLOCKER): the `Review checks →` link was
            removed. /security is a stub with hard-coded findings + a
            fabricated score; sending Sarah there manufactures information.
-           No CTA per UX_SPEC_DASHBOARD.md §4.4.
+           No CTA here.
            iter-dash-polish-2 P3 + P4: h3 promoted to the empty-state
            headline; body wrapped in the centred glyph pattern so the
            card reads as a designed empty state, not a stub. -->

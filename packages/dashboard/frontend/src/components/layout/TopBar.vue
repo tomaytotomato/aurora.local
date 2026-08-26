@@ -29,7 +29,7 @@ const router = useRouter();
 const { theme, toggle: toggleTheme } = useTheme();
 const { pill: healthPill } = useHealthPill();
 
-// UX_SPEC_DASHBOARD.md §3.1 + D3/D4/D10 + iter-3 B2: hostname/domain source
+// iter-3 B2: hostname/domain source
 // of truth is .state.yml (via /api/system). Delegated to lib/identity.ts
 // which encodes the dedup rule (avoid `aurora.aurora.local` when the
 // hostname is already the leading label of the domain).
@@ -127,7 +127,7 @@ async function signOut(): Promise<void> {
           aria-hidden="true"
         >·</span>
         <!--
-          UX_SPEC_DASHBOARD.md D5: `Back to Homepage` removed. Homepage was
+          `Back to Homepage` removed. Homepage was
           retired in v0.1 (see packages/core/compose.yml). The dashboard IS
           the home. iter-20 (Phase C.10.7): username + Sign-out consolidated
           into a DropdownMenu so future account items (Preferences, Change

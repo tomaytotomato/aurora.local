@@ -15,7 +15,7 @@ declare module 'axios' {
   }
 }
 
-// Thin axios wrapper. Same-origin, cookie-auth. See DASHBOARD_BRIEF §8.
+// Thin axios wrapper. Same-origin, cookie-auth.
 export const http: AxiosInstance = axios.create({
   baseURL: '/api',
   withCredentials: true,

@@ -69,5 +69,4 @@ packages/dashboard/
 
 ## Version
 
-v0.1 — MVP scaffold. See [DASHBOARD_BRIEF.md](../../docs/DASHBOARD_BRIEF.md)
-for the full roadmap (M1 through M5).
+v0.1 — MVP scaffold, with a roadmap spanning M1 through M5.
