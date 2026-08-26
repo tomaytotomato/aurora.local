@@ -1,0 +1,122 @@
+name: mail
+title: Mail (docker-mailserver + Roundcube webmail)
+description: |
+  A self-hosted mail server — Postfix (SMTP), Dovecot (IMAP), Rspamd and
+  Fail2ban in one container (docker-mailserver) — with Roundcube as the
+  webmail front end at mail.$DOMAIN. Accounts are plain files on disk;
+  no external provider holds your mail.
+
+# No "mail"/"communications" category exists in the schema enum. This is
+# the secretary/comms corner of the box, and productivity is its nearest
+# home (same as notes/memos).
+category: productivity
+
+depends_on:
+  - core
+# Aurora's own certs come from Caddy; a real deliverable mailbox wants
+# storage for the maildir and, ideally, the backup package driving it.
+recommends:
+  - storage
+  - backup
+profiles: {}
+
+# Roundcube is the only vhost. The SMTP/IMAP ports are host-published so
+# a phone's Mail app (and the wider internet, if you choose to expose
+# them) can reach Dovecot/Postfix directly — Caddy only fronts HTTP.
+vhosts: [mail]
+
+ports:
+  - {port: 25,   proto: tcp, description: SMTP (inbound MX / server-to-server)}
+  - {port: 143,  proto: tcp, description: IMAP (STARTTLS)}
+  - {port: 465,  proto: tcp, description: Submission (implicit TLS)}
+  - {port: 587,  proto: tcp, description: Submission (STARTTLS)}
+  - {port: 993,  proto: tcp, description: IMAPS (implicit TLS)}
+  - {port: 8030, proto: tcp, description: Roundcube webmail (proxied at mail.$DOMAIN)}
+
+requires:
+  # Rspamd alone wants ~500MB; Postfix + Dovecot + Roundcube on top.
+  # ClamAV is off by default (it would roughly double this); turn it on
+  # only if the box has the headroom.
+  min_ram_mb: 2048
+  min_disk_gb: 5
+  host_roles: []
+  # First boot generates Rspamd/DKIM state and pulls two images before
+  # Dovecot answers. Give the launcher room before it calls it dead.
+  start_budget_seconds: 120
+
+# A runaway mail filter should not take the box with it. Rspamd is the
+# hungry one; this ceiling is generous enough for normal home volumes.
+resources:
+  mem_limit_mb: 2560
+  cpus: 2.0
+
+# The mailboxes are the whole point and are not re-downloadable, so
+# unlike the media library they are backed up. Roundcube's sqlite holds
+# only contacts/preferences but is cheap to keep.
+backup:
+  paths:
+    - data/mail/maildata
+    - data/mail/config
+    - data/mail/roundcube
+
+# The webmail login IS the mailbox credential, so Authelia is deliberately
+# NOT put in front of mail.$DOMAIN — it would add a second login with
+# nothing to provision from it. No `sso:` block: SSO stays off and the
+# service owns its own auth.
+
+# Blank on first run is fine (compose has defaults); these are the values
+# most people will want to set before going live.
+required_env:
+  - MAIL_HOSTNAME
+  - MAIL_POSTMASTER
+
+probe:
+  kind: docker
+  container: roundcube
+  external_url: "http://mail.{domain}/"
+
+warnings:
+  - id: mail_low_ram
+    if: { ram_below_mb: 2048 }
+    message: 'The mail stack (Postfix + Dovecot + Rspamd + Roundcube) wants ~2 GB. Aurora sees less than that; expect Rspamd to be the first thing OOM-killed.'
+
+post_install_notes: |
+  Mail is the hardest thing to self-host well, and none of it is Aurora's
+  to fix for you. Read this before pointing a real domain at the box.
+
+  ## 1. Create the first account
+  The container ships with no mailboxes. Add one (this also becomes the
+  account you log into Roundcube with):
+
+      docker exec -it mailserver setup email add you@$DOMAIN
+      docker exec -it mailserver setup alias add postmaster@$DOMAIN you@$DOMAIN
+
+  ## 2. Webmail
+  https://mail.$DOMAIN/ — log in with the full address and the password
+  you just set. Roundcube talks to Dovecot/Postfix over the internal
+  aurora_net; the encrypted hop is your browser to Caddy.
+
+  ## 3. Actually delivering mail (the hard part)
+  A mailbox on the LAN works immediately. Sending to the outside world
+  and being trusted by it needs things only your domain and ISP can give:
+
+    - Most residential ISPs block outbound port 25, so server-to-server
+      delivery fails. A relay (or a VPS smarthost) is the usual answer.
+    - A PTR/reverse-DNS record on your public IP, matching MAIL_HOSTNAME.
+    - SPF, DKIM and DMARC records at your DNS provider. Generate the DKIM
+      key once the domain is set:
+          docker exec -it mailserver setup config dkim
+      then publish the printed TXT record.
+
+  Until those exist, treat this as an internal mailbox, not a public one.
+
+  ## 4. TLS between Roundcube and the mail server
+  Out of the box the internal IMAP/SMTP hop is unencrypted (fine on the
+  trusted docker network). Once you set SSL_TYPE and give docker-mailserver
+  a certificate, switch ROUNDCUBEMAIL_DEFAULT_HOST / _SMTP_SERVER in
+  packages/mail/.env to the tls:// forms and bump the ports to 993/465.
+
+# Upstream project. Rendered as the Source and Docs buttons on the app
+# page; the headline service, not every image it runs.
+source_url: https://github.com/docker-mailserver/docker-mailserver
+homepage_url: https://docker-mailserver.github.io/docker-mailserver/latest/

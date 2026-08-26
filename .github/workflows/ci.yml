@@ -73,6 +73,7 @@ jobs:
           - "core privacy"
           - "core media"
           - "core storage"
+          - "core mail"
           - "core privacy media"
           - "core privacy media storage"
     steps:
