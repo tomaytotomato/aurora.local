@@ -153,9 +153,12 @@ class OnboardingLaunchOrderingIntegrationTest extends AuroraIntegrationTest {
   void a_failed_launch_leaves_onboarding_incomplete_and_retryable() throws Exception {
     createAdmin();
     install();
-    // Deliberately no scripts/up.sh staged: LaunchService fails the job
-    // immediately with "scripts/up.sh not found", the same shape of
-    // failure a real broken checkout would hit.
+    // Force a failed converge: core has a compose file, but `docker compose
+    // up` returns non-zero — the same shape of failure a real broken
+    // bring-up hits. (Since the converge moved into Java, "no up.sh" is no
+    // longer how a launch fails.)
+    writeRepoFile("packages/core/compose.yml", "name: aurora-core\n");
+    commands.stubFailure("up -d", 1);
 
     String jobId = startLaunchExpecting202();
     LaunchService.Job job = awaitTerminal(jobId);
@@ -169,9 +172,10 @@ class OnboardingLaunchOrderingIntegrationTest extends AuroraIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.complete").value(false));
 
-    // Retry: stage a working script and launch again. Must succeed (202),
-    // proving the failed attempt didn't leave the box permanently stuck.
-    stageSucceedingUpSh();
+    // Retry: let the bring-up succeed this time (clear the failing stub).
+    // Must succeed (202), proving the failed attempt didn't leave the box
+    // permanently stuck.
+    commands.reset();
     String retryJobId = startLaunchExpecting202();
     LaunchService.Job retryJob = awaitTerminal(retryJobId);
     assertThat(retryJob.state).isEqualTo(LaunchService.State.SUCCESS);

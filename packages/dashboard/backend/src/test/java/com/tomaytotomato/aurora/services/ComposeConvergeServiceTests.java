@@ -38,6 +38,19 @@ class ComposeConvergeServiceTests {
     }
   }
 
+  /** A package with a manifest declaring its hard dependencies. */
+  private static void writeManifest(Path repo, String name, String... dependsOn) throws IOException {
+    Path dir = repo.resolve("packages").resolve(name);
+    Files.createDirectories(dir);
+    Files.writeString(dir.resolve("compose.yml"), "name: aurora-" + name + "\n");
+    StringBuilder m = new StringBuilder("name: ").append(name).append('\n');
+    if (dependsOn.length > 0) {
+      m.append("depends_on:\n");
+      for (String d : dependsOn) m.append("  - ").append(d).append('\n');
+    }
+    Files.writeString(dir.resolve("manifest.yml"), m.toString());
+  }
+
   private static ComposeConvergeService service(Path repo, FakeCommandRunner runner) {
     return new ComposeConvergeService(props(repo), runner);
   }
@@ -241,6 +254,82 @@ class ComposeConvergeServiceTests {
 
       assertThat(exit).isZero();
       assertThat(runner.ran("compose", "-p", "aurora", "up", "-d", "--remove-orphans")).isTrue();
+    }
+  }
+
+  @Nested
+  class FullConverge {
+
+    private ComposeConvergeService withState(Path repo, FakeCommandRunner runner) throws IOException {
+      var state = new StateFileService(props(repo));
+      Files.writeString(state.stateFile(), "enabled: []\n");
+      return new ComposeConvergeService(props(repo), runner, state);
+    }
+
+    @Test
+    void resolvesTheDependencyClosureDependencyFirst(@TempDir Path repo) throws IOException {
+      writeManifest(repo, "core");
+      writeManifest(repo, "media", "core"); // media depends on core
+      var svc = new ComposeConvergeService(props(repo), new FakeCommandRunner());
+
+      assertThat(svc.resolveClosure(List.of("media")))
+          .as("a dependency must precede the package that needs it")
+          .containsExactly("core", "media");
+    }
+
+    @Test
+    void dropsAnUnknownPackageRatherThanDyingOnIt(@TempDir Path repo) throws IOException {
+      writeManifest(repo, "core");
+      var svc = new ComposeConvergeService(props(repo), new FakeCommandRunner());
+
+      // a retired package still listed in state must not abort the converge
+      assertThat(svc.resolveClosure(List.of("core", "forgejo"))).containsExactly("core");
+    }
+
+    @Test
+    void seedsAMissingEnvFromItsExample(@TempDir Path repo) throws Exception {
+      writeManifest(repo, "core");
+      Files.writeString(repo.resolve("packages/core/.env.example"), "AUTHELIA_JWT_SECRET=\n");
+      var svc = withState(repo, new FakeCommandRunner());
+
+      svc.converge(List.of("core"), false, line -> {}, new CommandRunner.CancelToken());
+
+      assertThat(repo.resolve("packages/core/.env")).exists();
+    }
+
+    @Test
+    void bringsTheResolvedSetUpAndRecordsItInState(@TempDir Path repo) throws Exception {
+      writeManifest(repo, "core");
+      writeManifest(repo, "media", "core");
+      var runner = new FakeCommandRunner();
+      var state = new StateFileService(props(repo));
+      Files.writeString(state.stateFile(), "enabled: []\n");
+      var svc = new ComposeConvergeService(props(repo), runner, state);
+
+      int exit = svc.converge(List.of("media"), false, line -> {}, new CommandRunner.CancelToken());
+
+      assertThat(exit).isZero();
+      assertThat(runner.ran("compose", "-p", "aurora", "up", "-d", "--remove-orphans")).isTrue();
+      assertThat(state.readState().enabled())
+          .as("the converge records the fully-resolved set it brought up")
+          .containsExactly("core", "media");
+    }
+
+    @Test
+    void doesNotRecordStateWhenTheComposeUpFailed(@TempDir Path repo) throws Exception {
+      writeManifest(repo, "core");
+      var runner = new FakeCommandRunner();
+      runner.stubFailure("up -d", 7); // compose up fails
+      var state = new StateFileService(props(repo));
+      Files.writeString(state.stateFile(), "enabled: []\n");
+      var svc = new ComposeConvergeService(props(repo), runner, state);
+
+      int exit = svc.converge(List.of("core"), false, line -> {}, new CommandRunner.CancelToken());
+
+      assertThat(exit).isEqualTo(7);
+      assertThat(state.readState().enabled())
+          .as("a failed bring-up must not claim the package is enabled")
+          .isEmpty();
     }
   }
 }

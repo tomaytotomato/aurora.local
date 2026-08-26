@@ -100,6 +100,14 @@ public class LaunchService {
    */
   private final CommandRunner commands;
 
+  /**
+   * The Java-native converge ({@link ComposeConvergeService}). When present,
+   * {@link #run} uses it and {@code scripts/up.sh} is never touched — this is
+   * the production path. Null only in the legacy unit-test constructors,
+   * which stage a fake {@code up.sh} and exercise the fallback below.
+   */
+  private final Converger converger;
+
   private final Map<String, Job> jobs = new ConcurrentHashMap<>();
   private final AtomicReference<String> activeJobId = new AtomicReference<>(null);
 
@@ -132,15 +140,27 @@ public class LaunchService {
     this(props, audit, packages, currentUser, new ProcessCommandRunner());
   }
 
-  @Autowired
+  /**
+   * Legacy test constructor: no {@link Converger}, so {@link #run} takes the
+   * {@code scripts/up.sh} fallback path the existing suites stage a fake
+   * script for.
+   */
   public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
                        com.tomaytotomato.aurora.services.CurrentUserService currentUser,
                        CommandRunner commands) {
+    this(props, audit, packages, currentUser, commands, null);
+  }
+
+  @Autowired
+  public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
+                       com.tomaytotomato.aurora.services.CurrentUserService currentUser,
+                       CommandRunner commands, Converger converger) {
     this.props = props;
     this.audit = audit;
     this.packages = packages;
     this.currentUser = currentUser;
     this.commands = commands;
+    this.converger = converger;
     // Fires every 15s. Cheap; iterates active job's emitters only.
     heartbeat.scheduleAtFixedRate(this::sendHeartbeats, 15, 15, TimeUnit.SECONDS);
   }
@@ -236,6 +256,41 @@ public class LaunchService {
   // ------------------------------------------------------------------
 
   private void run(Job job) {
+    if (converger != null) {
+      runViaConverger(job);
+    } else {
+      runViaUpSh(job);
+    }
+  }
+
+  /**
+   * Production path: hand the converge to {@link ComposeConvergeService}.
+   * The dashboard runs this from inside its own container, so selfLaunch is
+   * always true — the guard excludes the dashboard's own service from
+   * {@code up -d} so it is never recreated mid-launch.
+   */
+  private void runViaConverger(Job job) {
+    try {
+      int exit = converger.converge(job.packages, true, line -> onLine(job, line), job.cancelToken);
+      finish(job, exit == 0 ? State.SUCCESS : State.FAILED, exit,
+          exit == 0 ? null : "install exited " + exit);
+    } catch (CommandCancelledException e) {
+      finishClassified(job, "This launch was cancelled.", "cancelled");
+    } catch (CommandTimeoutException e) {
+      finishClassified(job,
+          "This launch produced no output for a while and Aurora stopped it automatically. "
+              + "The container engine or a package may be stuck.",
+          "stalled");
+    } catch (IOException e) {
+      finish(job, State.FAILED, -1, "could not start the install: " + e.getMessage());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      finish(job, State.FAILED, -1, "reader interrupted: " + e.getMessage());
+    }
+  }
+
+  /** Legacy fallback for the unit tests that stage a fake {@code up.sh}. */
+  private void runViaUpSh(Job job) {
     Path repo = Path.of(props.repoPath());
     Path upSh = repo.resolve("scripts/up.sh");
     if (!Files.isRegularFile(upSh)) {

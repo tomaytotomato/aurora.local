@@ -3,15 +3,20 @@ package com.tomaytotomato.aurora.services;
 import com.tomaytotomato.aurora.config.AuroraProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -53,7 +58,7 @@ import java.util.function.Consumer;
  * </ul>
  */
 @Service
-public class ComposeConvergeService {
+public class ComposeConvergeService implements Converger {
 
   private static final Logger log = LoggerFactory.getLogger(ComposeConvergeService.class);
 
@@ -68,10 +73,24 @@ public class ComposeConvergeService {
 
   private final AuroraProperties props;
   private final CommandRunner commands;
+  /**
+   * Nullable: the compose-planning tests exercise this class without state.
+   * When present, {@link #converge} reads compose profiles from
+   * {@code .state.yml} and records the resolved enabled set back into it.
+   */
+  private final StateFileService stateFiles;
 
-  public ComposeConvergeService(AuroraProperties props, CommandRunner commands) {
+  @Autowired
+  public ComposeConvergeService(AuroraProperties props, CommandRunner commands,
+                                StateFileService stateFiles) {
     this.props = props;
     this.commands = commands;
+    this.stateFiles = stateFiles;
+  }
+
+  /** Test convenience for the pure compose-planning suite (no state). */
+  ComposeConvergeService(AuroraProperties props, CommandRunner commands) {
+    this(props, commands, null);
   }
 
   /**
@@ -297,5 +316,162 @@ public class ComposeConvergeService {
       return 0;
     }
     return commands.stream(p.workingDir(), p.env(), p.argv(), onLine, cancelToken);
+  }
+
+  // ------------------------------------------------------------------
+  // Full converge (the Converger seam) — the Java replacement for
+  // scripts/up.sh's orchestration.
+  // ------------------------------------------------------------------
+
+  @Override
+  public int converge(List<String> requestedPackages, boolean selfLaunch,
+                      Consumer<String> onLine, CommandRunner.CancelToken cancelToken)
+      throws IOException, InterruptedException {
+    List<String> resolved = resolveClosure(requestedPackages);
+    if (resolved.isEmpty()) {
+      onLine.accept("[aurora] no known packages to bring up");
+      return 0;
+    }
+    if (!resolved.equals(requestedPackages)) {
+      onLine.accept("[aurora] resolved package set: " + String.join(", ", resolved));
+    }
+
+    ensureNetwork();
+    seedEnvFiles(resolved, onLine);
+    // A freshly-seeded .env ships every secret blank; several services treat
+    // an empty required secret as fatal. Generate real ones before `up`.
+    runSecretsRotation(onLine, cancelToken);
+
+    ComposePlan p = plan(resolved, stateProfiles(), selfLaunch);
+    if (p.composeFiles().isEmpty()) {
+      onLine.accept("[aurora] no compose files to bring up");
+      return 0;
+    }
+    Map<String, String> env = new LinkedHashMap<>(p.env());
+    env.put("DOCKER_GID", detectDockerGid());
+
+    onLine.accept("[aurora] bringing up: " + String.join(", ", resolved));
+    int exit = commands.stream(p.workingDir(), env, p.argv(), onLine, cancelToken);
+
+    if (exit == 0) {
+      if (stateFiles != null && Files.exists(stateFiles.stateFile())) {
+        stateFiles.writeEnabled(resolved);
+      }
+      runSeedHooks(resolved, onLine, cancelToken);
+    }
+    return exit;
+  }
+
+  /**
+   * The dependency closure of a requested set: every hard {@code depends_on}
+   * pulled in transitively, dependency-first (a dependency always precedes
+   * the package that needed it), with unknown names dropped. Mirrors
+   * {@code manifest_filter_known} + {@code manifest_resolve_deps} in
+   * scripts/lib/manifest.sh.
+   */
+  List<String> resolveClosure(List<String> requested) {
+    Path pkgs = Path.of(props.repoPath()).resolve("packages");
+    LinkedHashSet<String> out = new LinkedHashSet<>();
+    Set<String> onPath = new HashSet<>();
+    for (String name : requested) {
+      walkDependsOn(name, pkgs, out, onPath);
+    }
+    return new ArrayList<>(out);
+  }
+
+  private void walkDependsOn(String name, Path pkgs, LinkedHashSet<String> out, Set<String> onPath) {
+    if (out.contains(name) || onPath.contains(name)) return; // resolved, or a cycle guard
+    Path manifest = pkgs.resolve(name).resolve("manifest.yml");
+    if (!Files.isRegularFile(manifest)) {
+      log.warn("dropping '{}' — no manifest (retired or misspelled)", name);
+      return;
+    }
+    onPath.add(name);
+    for (String dep : dependsOf(manifest)) {
+      walkDependsOn(dep, pkgs, out, onPath);
+    }
+    onPath.remove(name);
+    out.add(name);
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<String> dependsOf(Path manifest) {
+    try (var in = Files.newInputStream(manifest)) {
+      Object loaded = new Yaml().load(in);
+      if (loaded instanceof Map<?, ?> m && m.get("depends_on") instanceof List<?> deps) {
+        List<String> out = new ArrayList<>();
+        for (Object d : deps) if (d != null) out.add(d.toString());
+        return out;
+      }
+    } catch (IOException | RuntimeException e) {
+      log.warn("could not read depends_on from {}: {}", manifest, e.getMessage());
+    }
+    return List.of();
+  }
+
+  /** Seed each package's {@code .env} from {@code .env.example} when absent. */
+  void seedEnvFiles(List<String> resolved, Consumer<String> onLine) {
+    Path repo = Path.of(props.repoPath());
+    for (String p : resolved) {
+      Path example = repo.resolve("packages").resolve(p).resolve(".env.example");
+      Path real = repo.resolve("packages").resolve(p).resolve(".env");
+      if (Files.isRegularFile(example) && !Files.exists(real)) {
+        try {
+          Files.copy(example, real);
+          onLine.accept("[aurora] seeded " + p + "/.env from .env.example");
+        } catch (IOException e) {
+          log.warn("could not seed {}/.env: {}", p, e.getMessage());
+        }
+      }
+    }
+  }
+
+  /**
+   * Generate real secrets for any newly-seeded {@code .env}. Still a leaf
+   * shell helper (scripts/rotate-secrets.sh); reimplementing the
+   * secret-shaped-key heuristic in Java is a later slice. Best-effort — a
+   * non-zero exit is surfaced but does not abort the converge.
+   */
+  void runSecretsRotation(Consumer<String> onLine, CommandRunner.CancelToken cancelToken)
+      throws IOException, InterruptedException {
+    Path script = Path.of(props.repoPath()).resolve("scripts/rotate-secrets.sh");
+    if (!Files.isRegularFile(script)) return;
+    int exit = commands.stream(Path.of(props.repoPath()), Map.of(),
+        List.of("bash", script.toString(), "--apply"), onLine, cancelToken);
+    if (exit != 0) onLine.accept("[aurora] secret generation exited " + exit + " (continuing)");
+  }
+
+  /** Run any package's idempotent post-up {@code seed.sh}. Best-effort. */
+  void runSeedHooks(List<String> resolved, Consumer<String> onLine, CommandRunner.CancelToken cancelToken)
+      throws IOException, InterruptedException {
+    Path repo = Path.of(props.repoPath());
+    for (String p : resolved) {
+      Path seed = repo.resolve("packages").resolve(p).resolve("seed.sh");
+      if (Files.isRegularFile(seed) && Files.isExecutable(seed)) {
+        onLine.accept("[aurora] running " + p + "/seed.sh");
+        int exit = commands.stream(repo, Map.of(), List.of("bash", seed.toString()), onLine, cancelToken);
+        if (exit != 0) onLine.accept("[aurora] " + p + "/seed.sh exited " + exit + " (continuing)");
+      }
+    }
+  }
+
+  /**
+   * The docker group's gid, so the dashboard container can read
+   * {@code /var/run/docker.sock}. Falls back to Debian's 998 like
+   * {@code up.sh} does.
+   */
+  String detectDockerGid() {
+    var r = commands.run(List.of("getent", "group", "docker"));
+    if (r.ok() && !r.firstLine().isBlank()) {
+      String[] parts = r.firstLine().split(":");
+      if (parts.length >= 3 && !parts[2].isBlank()) return parts[2].trim();
+    }
+    return "998";
+  }
+
+  private List<String> stateProfiles() {
+    if (stateFiles == null) return List.of();
+    var profiles = stateFiles.readState().profiles();
+    return profiles == null ? List.of() : profiles;
   }
 }

@@ -96,6 +96,65 @@ class LaunchServiceTests {
     assertEquals("aurora-dashboard", invocation.env().get("AURORA_LAUNCHED_BY"));
   }
 
+  /**
+   * Production wiring: when a {@link Converger} is injected, the launch goes
+   * through it (Java converge) and {@code scripts/up.sh} is never touched.
+   * No fake up.sh is staged here on purpose.
+   */
+  @Test
+  void delegates_to_the_converger_when_one_is_wired(@TempDir Path repo) throws Exception {
+    var recorder = new RecordingConverger(0, List.of("[aurora] bringing up: core"));
+    var svc = new LaunchService(props(repo), Mockito.mock(AuditEventRepo.class),
+        null, null, new FakeCommandRunner(), recorder);
+
+    LaunchService.Job job = svc.startLaunch(List.of("core", "media"));
+    awaitTerminal(job);
+
+    assertEquals(LaunchService.State.SUCCESS, job.state);
+    assertEquals(0, job.exitCode);
+    assertEquals(List.of("core", "media"), recorder.requested);
+    assertTrue(recorder.selfLaunch, "the dashboard runs the converge from inside its own container");
+    @SuppressWarnings("unchecked")
+    List<String> tail = (List<String>) job.toStatusMap().get("tail");
+    assertTrue(tail.stream().anyMatch(s -> s.contains("bringing up: core")));
+  }
+
+  @Test
+  void converger_nonzero_exit_fails_the_job(@TempDir Path repo) throws Exception {
+    var recorder = new RecordingConverger(7, List.of("boom"));
+    var svc = new LaunchService(props(repo), Mockito.mock(AuditEventRepo.class),
+        null, null, new FakeCommandRunner(), recorder);
+
+    LaunchService.Job job = svc.startLaunch(List.of("core"));
+    awaitTerminal(job);
+
+    assertEquals(LaunchService.State.FAILED, job.state);
+    assertEquals(7, job.exitCode);
+    assertNotNull(job.failureReason);
+  }
+
+  /** Records what the launch asked the converge to do, and replays lines. */
+  static final class RecordingConverger implements Converger {
+    private final int exit;
+    private final List<String> lines;
+    volatile List<String> requested;
+    volatile boolean selfLaunch;
+
+    RecordingConverger(int exit, List<String> lines) {
+      this.exit = exit;
+      this.lines = lines;
+    }
+
+    @Override
+    public int converge(List<String> requested, boolean selfLaunch,
+                        java.util.function.Consumer<String> onLine, CommandRunner.CancelToken token) {
+      this.requested = requested;
+      this.selfLaunch = selfLaunch;
+      lines.forEach(onLine);
+      return exit;
+    }
+  }
+
   @Test
   void failure_path_reports_nonzero_exit(@TempDir Path repo) throws Exception {
     stageFakeUpSh(repo, "echo 'oh no'\nexit 7\n");
