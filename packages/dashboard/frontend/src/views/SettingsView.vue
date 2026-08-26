@@ -10,6 +10,7 @@ import Button from '@/components/ui/Button.vue';
 import NotificationsCard from '@/components/NotificationsCard.vue';
 import ProxyRoutesCard from '@/components/ProxyRoutesCard.vue';
 import SettingsPortabilityCard from '@/components/SettingsPortabilityCard.vue';
+import TlsRootCard from '@/components/TlsRootCard.vue';
 import {
   Alert,
   AlertDescription,
@@ -173,6 +174,14 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           <div class="flex justify-between"><dt class="text-muted-foreground">Docker</dt><dd class="font-mono">{{ info.dockerVersion }}</dd></div>
         </dl>
       </Card>
+
+      <!-- TLS root CA. Sits directly after System because it is
+           another piece of "what this box IS" — the fingerprint
+           an operator can eyeball against what their keychain
+           trusts. Also fulfils OnboardingTls.vue's promise that
+           the root can be re-downloaded "from Settings → TLS"
+           without having to run the wizard again. -->
+      <TlsRootCard />
 
       <!-- Reverse-proxy routes. Sits directly above LAN aliases because
            the two are the same idea at different layers: this one is
