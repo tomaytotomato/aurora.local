@@ -2,7 +2,7 @@
 import { useSystemStore } from '@/stores/system';
 import { computed, onMounted, ref } from 'vue';
 import { usePackagesStore } from '@/stores/packages';
-import { dockerStructureFor, packageIconUrl, splitByCore } from '@/api/packages';
+import { dockerStructureFor, packageFallbackIcon, packageIconUrl, splitByCore } from '@/api/packages';
 import { categoryLabel, packageLabel } from '@/lib/packageName';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
@@ -98,7 +98,7 @@ const appsNav = computed(() => {
         <Card hover class="h-full p-8 flex flex-col">
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-start gap-3">
-              <AppIcon :src="packageIconUrl(pkg)" :label="packageLabel(pkg)" />
+              <AppIcon :src="packageIconUrl(pkg)" :fallback-icon="packageFallbackIcon(pkg)" :label="packageLabel(pkg)" />
               <div>
                 <div class="eyebrow mb-1">{{ categoryLabel(pkg.category) }}</div>
                 <h3 class="card-title text-foreground">{{ packageLabel(pkg) }}</h3>

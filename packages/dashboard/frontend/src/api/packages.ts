@@ -259,6 +259,27 @@ export function packageIconUrl(p: Pick<PackageSummary, 'icon'>): string | null {
   return p.icon ? `/icons/${p.icon}.svg` : null;
 }
 
+/**
+ * oh-vue-icons Simple Icons brand name to fall back to when a package
+ * declares a known icon slug but ships no bundled SVG. Most packages have
+ * a full-colour SVG (see public/icons/README.md), so this rarely fires; it
+ * lets a missing file degrade to a real brand glyph before the plain
+ * initial tile. Only slugs whose icon is registered in
+ * src/plugins/icons.ts may appear here — an unregistered name renders
+ * nothing.
+ */
+const OH_VUE_ICON_BY_SLUG: Record<string, string> = {
+  jellyfin: 'si-jellyfin',
+  grafana: 'si-grafana',
+  'adguard-home': 'si-adguard',
+  'home-assistant': 'si-homeassistant',
+  roundcube: 'si-roundcube',
+};
+
+export function packageFallbackIcon(p: Pick<PackageSummary, 'icon'>): string | null {
+  return p.icon ? (OH_VUE_ICON_BY_SLUG[p.icon] ?? null) : null;
+}
+
 export type DockerStructure = 'container' | 'compose';
 
 /**

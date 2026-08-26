@@ -21,6 +21,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.{test,spec}.ts'],
+    setupFiles: ['./src/test-setup.ts'],
     globals: false,
     // Keep the run fast — the whole point of the bootstrap is a
     // sub-2s smoke check on every FE commit.

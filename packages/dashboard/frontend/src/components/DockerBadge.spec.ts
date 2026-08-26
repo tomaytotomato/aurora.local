@@ -23,13 +23,15 @@ describe('DockerBadge', () => {
     expect(compose.attributes('title')).toMatch(/multi-service Docker Compose/);
   });
 
-  it('draws the whale for a single container and the octopus for a compose stack', () => {
+  it('draws the Docker whale for a single container and stacked layers for a compose stack', () => {
     const container = mount(DockerBadge, { props: { structure: 'container' } });
     expect(container.find('[data-slot="docker-whale"]').exists()).toBe(true);
-    expect(container.find('[data-slot="docker-octopus"]').exists()).toBe(false);
+    expect(container.find('[data-icon="si-docker"]').exists()).toBe(true);
+    expect(container.find('[data-slot="docker-layers"]').exists()).toBe(false);
 
     const compose = mount(DockerBadge, { props: { structure: 'compose' } });
-    expect(compose.find('[data-slot="docker-octopus"]').exists()).toBe(true);
+    expect(compose.find('[data-slot="docker-layers"]').exists()).toBe(true);
+    expect(compose.find('[data-icon="fa-layer-group"]').exists()).toBe(true);
     expect(compose.find('[data-slot="docker-whale"]').exists()).toBe(false);
   });
 

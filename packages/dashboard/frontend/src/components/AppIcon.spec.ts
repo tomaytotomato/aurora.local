@@ -23,4 +23,23 @@ describe('AppIcon', () => {
     expect(w.find('img').exists()).toBe(false);
     expect(w.find('[data-slot="app-icon-fallback"]').text()).toBe('N');
   });
+
+  it('uses the oh-vue-icons brand glyph when there is no SVG but a fallback icon is named', () => {
+    const w = mount(AppIcon, { props: { src: null, label: 'Roundcube', fallbackIcon: 'si-roundcube' } });
+    expect(w.find('img').exists()).toBe(false);
+    expect(w.find('[data-slot="app-icon-ovi"]').exists()).toBe(true);
+    expect(w.find('[data-icon="si-roundcube"]').exists()).toBe(true);
+    expect(w.find('[data-slot="app-icon-fallback"]').exists()).toBe(false);
+  });
+
+  it('falls back past a missing SVG to the brand glyph, then to the initial', async () => {
+    const withIcon = mount(AppIcon, {
+      props: { src: '/icons/missing.svg', label: 'Roundcube', fallbackIcon: 'si-roundcube' },
+    });
+    await withIcon.find('img').trigger('error');
+    expect(withIcon.find('[data-slot="app-icon-ovi"]').exists()).toBe(true);
+
+    const noIcon = mount(AppIcon, { props: { src: null, label: 'Photos', fallbackIcon: null } });
+    expect(noIcon.find('[data-slot="app-icon-fallback"]').text()).toBe('P');
+  });
 });
