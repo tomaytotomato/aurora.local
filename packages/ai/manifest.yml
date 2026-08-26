@@ -6,6 +6,7 @@ description: |
   compose profile (requires the gpu-nvidia host role, TBD).
 
 category: ai
+icon: ollama
 
 depends_on:
   - core

@@ -7,6 +7,7 @@ description: |
   Azure, SFTP or WebDAV from the UI without changing this package.
 
 category: backup
+icon: kopia
 
 depends_on:
   - core

@@ -6,6 +6,7 @@ description: |
   handles requests, Flaresolverr rides shotgun on Cloudflare challenges.
 
 category: media
+icon: prowlarr
 
 depends_on:
   - core

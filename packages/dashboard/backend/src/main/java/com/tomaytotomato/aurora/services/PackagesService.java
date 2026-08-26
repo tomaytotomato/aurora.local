@@ -422,6 +422,7 @@ public class PackagesService {
           SsoBlock.fromManifest(m.get("sso")),
           str(m, "source_url"),
           str(m, "homepage_url"),
+          str(m, "icon"),
           null, null, null, null
       ));
     } catch (IOException e) {

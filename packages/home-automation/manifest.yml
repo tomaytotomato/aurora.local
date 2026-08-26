@@ -10,6 +10,7 @@ description: |
   SSDP, HomeKit, Chromecast). It is therefore NOT attached to aurora_net.
 
 category: home-automation
+icon: home-assistant
 
 depends_on:
   - core

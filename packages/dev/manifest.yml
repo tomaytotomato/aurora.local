@@ -8,6 +8,7 @@ description: |
   aurora_net at postgres:5432 and redis:6379.
 
 category: dev
+icon: dev
 
 depends_on:
   - core

@@ -9,6 +9,7 @@ description: |
   declaring `sso.protect: true` is gated behind it.
 
 category: core
+icon: caddy
 
 depends_on: []
 recommends: []

@@ -2028,6 +2028,11 @@ components:
           type: [string, 'null']
         homepageUrl:
           type: [string, 'null']
+        # Bundled-icon slug (e.g. `jellyfin`); the frontend resolves it to
+        # /icons/<slug>.svg. Nullable — a manifest without one falls back to
+        # a category tile, so the card never breaks on a missing logo.
+        icon:
+          type: [string, 'null']
         # The five fields below were served by the backend and documented
         # nowhere, so every packages response had to be stripped before it
         # could be validated. The frontend reads all of them, so the spec

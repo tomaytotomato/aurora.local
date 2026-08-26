@@ -203,6 +203,11 @@
       "format": "uri",
       "description": "Upstream project homepage or documentation. Rendered as the Docs button on the app page."
     },
+    "icon": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Bundled-icon slug, resolved by the dashboard to /icons/<slug>.svg (assets live in packages/dashboard/frontend/public/icons/). Omit to fall back to a category tile."
+    },
     "vhosts": {
       "type": "array",
       "description": "Hostname labels this package serves, without the domain (e.g. [photos]). The preferred discovery path for MdnsAliasService, which otherwise grep-parses caddy.snippet. additionalProperties:false meant no real manifest could carry this field even though the code has read it all along.",

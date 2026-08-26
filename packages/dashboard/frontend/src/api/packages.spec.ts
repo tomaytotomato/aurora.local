@@ -3,6 +3,7 @@ import {
   dockerStructureFor,
   isCorePackage,
   isRemovable,
+  packageIconUrl,
   packageLinks,
   splitByCore,
   splitCatalogue,
@@ -158,6 +159,17 @@ describe('packageLinks', () => {
   it('treats a null URL the same as a missing one', () => {
     const p = pkg({ name: 'x', sourceUrl: null, homepageUrl: null });
     expect(packageLinks(p)).toEqual([]);
+  });
+});
+
+describe('packageIconUrl', () => {
+  it('resolves a slug to a bundled /icons path', () => {
+    expect(packageIconUrl(pkg({ name: 'media', icon: 'jellyfin' }))).toBe('/icons/jellyfin.svg');
+  });
+
+  it('is null when the manifest declares no icon', () => {
+    expect(packageIconUrl(pkg({ name: 'x' }))).toBeNull();
+    expect(packageIconUrl(pkg({ name: 'x', icon: null }))).toBeNull();
   });
 });
 

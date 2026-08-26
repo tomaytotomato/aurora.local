@@ -8,6 +8,7 @@ description: |
   place.
 
 category: core
+icon: aurora
 
 depends_on:
   - core

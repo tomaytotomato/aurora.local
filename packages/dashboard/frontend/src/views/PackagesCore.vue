@@ -2,12 +2,13 @@
 import { useSystemStore } from '@/stores/system';
 import { computed, onMounted, ref } from 'vue';
 import { usePackagesStore } from '@/stores/packages';
-import { dockerStructureFor, splitByCore } from '@/api/packages';
+import { dockerStructureFor, packageIconUrl, splitByCore } from '@/api/packages';
 import { categoryLabel, packageLabel } from '@/lib/packageName';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Button from '@/components/ui/Button.vue';
 import Skeleton from '@/components/ui/Skeleton.vue';
+import AppIcon from '@/components/AppIcon.vue';
 import DockerBadge from '@/components/DockerBadge.vue';
 import SectionNav from '@/components/layout/SectionNav.vue';
 
@@ -96,9 +97,12 @@ const appsNav = computed(() => {
       >
         <Card hover class="h-full p-8 flex flex-col">
           <div class="flex items-start justify-between mb-3">
-            <div>
-              <div class="eyebrow mb-1">{{ categoryLabel(pkg.category) }}</div>
-              <h3 class="card-title text-foreground">{{ packageLabel(pkg) }}</h3>
+            <div class="flex items-start gap-3">
+              <AppIcon :src="packageIconUrl(pkg)" :label="packageLabel(pkg)" />
+              <div>
+                <div class="eyebrow mb-1">{{ categoryLabel(pkg.category) }}</div>
+                <h3 class="card-title text-foreground">{{ packageLabel(pkg) }}</h3>
+              </div>
             </div>
             <Badge tone="info">core</Badge>
           </div>

@@ -8,6 +8,7 @@ description: |
   toolkit (split, merge, sign, redact, etc.).
 
 category: productivity
+icon: paperless-ngx
 
 depends_on:
   - core

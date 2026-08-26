@@ -7,6 +7,7 @@ description: |
   other packages (e.g. qBittorrent in media/torrent profile).
 
 category: privacy
+icon: adguard-home
 
 depends_on:
   - core

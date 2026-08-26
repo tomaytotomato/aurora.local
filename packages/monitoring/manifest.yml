@@ -8,6 +8,7 @@ description: |
   grafana/provisioning/dashboards/ and they load on start.
 
 category: monitoring
+icon: grafana
 
 depends_on:
   - core

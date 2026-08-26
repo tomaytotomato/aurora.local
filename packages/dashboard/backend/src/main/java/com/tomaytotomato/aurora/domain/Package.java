@@ -24,9 +24,12 @@ import java.util.Map;
  * string fields ({@code readme}, {@code title}) whose schema would reject
  * an explicit null.
  *
- * <p>{@code sourceUrl} and {@code homepageUrl} are deliberately
- * <em>summary</em> fields, matching the spec: the catalogue renders the
- * Source and Docs links without a detail fetch per card.
+ * <p>{@code sourceUrl}, {@code homepageUrl} and {@code icon} are
+ * deliberately <em>summary</em> fields, matching the spec: the catalogue
+ * renders the Source and Docs links and the app logo without a detail
+ * fetch per card. {@code icon} is a bundled-icon slug (e.g. {@code
+ * jellyfin}), which the frontend resolves to {@code /icons/<slug>.svg};
+ * null when the manifest declares none, so the card falls back.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record Package(
@@ -46,6 +49,7 @@ public record Package(
     SsoBlock sso,
     String sourceUrl,
     String homepageUrl,
+    String icon,
     String readme,
     List<String> vhosts,
     List<EnvVarSpec> envVars,
@@ -78,7 +82,7 @@ public record Package(
   ) {
     this(name, title, description, category, dependsOn, recommends, profiles, ports,
         requires, requiredEnv, postInstallNotes, enabled, running, sso,
-        null, null, null, null, null, null);
+        null, null, null, null, null, null, null);
   }
 
   /**
@@ -97,7 +101,7 @@ public record Package(
   ) {
     return new Package(name, title, description, category, dependsOn, recommends, profiles,
         ports, requires, requiredEnv, postInstallNotes, enabled, running, sso,
-        sourceUrl, homepageUrl, readme, vhosts, envVars, backup);
+        sourceUrl, homepageUrl, icon, readme, vhosts, envVars, backup);
   }
 
   /**

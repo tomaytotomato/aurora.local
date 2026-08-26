@@ -2,6 +2,7 @@ name: photos
 title: Photos
 description: fixture — not enabled, used to test the install/enable transition
 category: media
+icon: immich
 depends_on: [core]
 recommends: []
 profiles: {}

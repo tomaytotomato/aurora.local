@@ -6,6 +6,7 @@ description: |
   alternative to SilverBullet.
 
 category: productivity
+icon: memos
 
 depends_on:
   - core

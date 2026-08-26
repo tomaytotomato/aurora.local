@@ -6,6 +6,7 @@ description: |
   Redis + a machine-learning worker for CLIP / face detection.
 
 category: productivity
+icon: immich
 
 depends_on:
   - core

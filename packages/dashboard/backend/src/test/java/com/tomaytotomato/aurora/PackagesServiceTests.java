@@ -37,6 +37,26 @@ class PackagesServiceTests {
     assertThat(media.enabled()).isTrue(); // fake-repo state has media enabled
   }
 
+  @Test
+  void parsesTheManifestIconWhenDeclared() {
+    Package photos = packages.list().stream()
+        .filter(p -> "photos".equals(p.name()))
+        .findFirst().orElseThrow();
+    assertThat(photos.icon())
+        .as("photos fixture declares `icon: immich`, which the card renders as a logo")
+        .isEqualTo("immich");
+  }
+
+  @Test
+  void iconIsNullWhenTheManifestDeclaresNone() {
+    Package core = packages.list().stream()
+        .filter(p -> "core".equals(p.name()))
+        .findFirst().orElseThrow();
+    assertThat(core.icon())
+        .as("a manifest with no icon field serialises no icon, so the card falls back")
+        .isNull();
+  }
+
   /**
    * B1 (iter-3): a package with probe.kind == 'self' means "the dashboard
    * itself". Even when no docker container carries a compose project label

@@ -48,6 +48,9 @@ export interface PackageSummary {
   sourceUrl?: string | null;
   /** Upstream project homepage or docs site. Same optionality as above. */
   homepageUrl?: string | null;
+  /** Bundled-icon slug (e.g. `jellyfin`), resolved to /icons/<slug>.svg by
+   * `packageIconUrl`. Absent on manifests that declare no icon. */
+  icon?: string | null;
 }
 
 /** Derive a status label from the on-wire booleans. */
@@ -244,6 +247,16 @@ export function packageLinks(p: Pick<PackageSummary, 'sourceUrl' | 'homepageUrl'
   if (p.sourceUrl) links.push({ label: 'Source', url: p.sourceUrl });
   if (p.homepageUrl) links.push({ label: 'Docs', url: p.homepageUrl });
   return links;
+}
+
+/**
+ * Where the card should load a package's logo from, or null when the
+ * manifest declares no icon (the card then falls back to a category tile).
+ * Icons are bundled under the dashboard's public/icons/ so they render on a
+ * LAN box with no internet.
+ */
+export function packageIconUrl(p: Pick<PackageSummary, 'icon'>): string | null {
+  return p.icon ? `/icons/${p.icon}.svg` : null;
 }
 
 export type DockerStructure = 'container' | 'compose';
