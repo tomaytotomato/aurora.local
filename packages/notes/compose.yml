@@ -11,15 +11,52 @@ networks:
 
 services:
   silverbullet:
-    image: ghcr.io/silverbulletmd/silverbullet:latest
+    # Pinned to 2.9.0 rather than `:latest` — 2.10 ("MultiSpace") is the
+    # newer tag but breaks single-space auth boot with a fatal client
+    # error ("Could not process config and no cached copy"). Aurora's
+    # default is Authelia forward-auth on notes.$DOMAIN, so SB_USER
+    # stays absent and either release boots — but pinning to the last
+    # pre-MultiSpace release means a box that opts into standalone
+    # auth (README Option B) doesn't fall into the trap either. See
+    # packages/notes/pins.env.example for the sha256 digest and the
+    # trail of upstream issues. Bump deliberately when 2.10.x ships a
+    # fix or when we finish the deeper `sso.disable_env` wiring so
+    # Aurora guarantees SB_USER absence on installs.
+    image: ghcr.io/silverbulletmd/silverbullet:2.9.0@sha256:82e76a800920370d83e2f50c6946d3c420954b0bd417dbb96f7911513fa05620
     container_name: silverbullet
     restart: unless-stopped
     networks: [aurora_net]
     environment:
       - TZ=${TZ:-Europe/London}
-      # Built-in HTTP basic auth. SilverBullet reads user:password
-      # from SB_USER / SB_PASSWORD env; falls back to open if unset.
-      - SB_USER=${SB_USER}:${SB_PASSWORD}
+      # SilverBullet's built-in single-user basic-auth reads its
+      # credentials from SB_USER (colon-joined `user:password`, per
+      # https://silverbullet.md/Authentication). It's an *optional*
+      # wall: when SB_USER is *absent* from the container env the
+      # server boots in unconfigured/open mode, and Aurora's default
+      # is to gate notes.$DOMAIN with Authelia forward-auth at Caddy
+      # instead — so the service runs open internally.
+      #
+      # Pass-through short form (`- SB_USER`, no `=`) is the only
+      # docker-compose shape that gives us that. When SB_USER isn't
+      # exported by up.sh (packages/notes/.env leaves it commented
+      # out by default), compose omits the key from the container
+      # entirely and SilverBullet takes the unconfigured path.
+      #
+      # Do NOT change these to `- SB_USER=${SB_USER}` or
+      # `- SB_USER=${SB_USER}:${SB_PASSWORD}`: both render as the
+      # empty string / `:` when the .env values are blank, and
+      # SilverBullet 2.10 treats an *empty* SB_USER as "auth on" —
+      # the client then 302s /index.json to /.auth (HTML), boot
+      # tries to parse it as JSON, and you get:
+      #
+      #   Could not process config and no cached copy, please
+      #   connect to the Internet
+      #
+      # See SilverBullet issues #1724 / #1752 and PR #1750 for the
+      # boot-time failure mode. See packages/notes/.env.example for
+      # how to turn standalone auth back on.
+      - SB_USER
+      - SB_PASSWORD
     volumes:
       - ../../data/notes/silverbullet:/space
     # SilverBullet listens on 3000 internally; publish as 3030 to
