@@ -95,3 +95,27 @@ https://auth.{$DOMAIN} {
 	import no_hsts
 	reverse_proxy authelia:9091
 }
+
+# ---- Stalwart admin UI + JMAP (mail-admin.{$DOMAIN}) ----------------
+# Stalwart's HTTP surface: the setup wizard, admin console and JMAP,
+# served on :8080 inside aurora_net (never host-published, so it never
+# fights Caddy for :443).
+#
+# Gated with a hand-written `import authelia`. core has NO sso: block on
+# purpose — an sso: block would gate every core vhost including the apex
+# dashboard and could lock the operator out of the control plane, so the
+# admin UI opts in here per-vhost instead. CaddySnippetService copies
+# authored snippets through verbatim, so this import survives regen.
+#
+# Admin-only is enforced by an access_control rule for this exact host in
+# packages/core/authelia/configuration.yml (subject group:admins), not by
+# this file — `import authelia` only requires *an* authenticated session.
+http://mail-admin.{$DOMAIN} {
+	import authelia
+	reverse_proxy stalwart:8080
+}
+https://mail-admin.{$DOMAIN} {
+	tls internal
+	import authelia
+	reverse_proxy stalwart:8080
+}

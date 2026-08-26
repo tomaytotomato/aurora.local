@@ -73,7 +73,8 @@ jobs:
           - "core privacy"
           - "core media"
           - "core storage"
-          - "core mail"
+          - "core roundcube"
+          - "core snappymail"
           - "core privacy media"
           - "core privacy media storage"
     steps:

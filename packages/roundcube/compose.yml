@@ -1,0 +1,45 @@
+# aurora.local / packages/roundcube
+#
+# Roundcube webmail — a front end only. The mail server (Stalwart) lives
+# in packages/core; this connects to it over IMAP/SMTP on aurora_net.
+# The default of the `webmail` variant group (SnappyMail is the lighter
+# alternative).
+#
+# Bind-mount source paths resolve against packages/core/ (the first -f
+# file), NOT this directory — see docs/PACKAGE_CONTRACT.md. Hence
+# ../../data/roundcube/... rather than ./data.
+
+name: aurora-roundcube
+
+networks:
+  aurora_net:
+    external: true
+
+services:
+  roundcube:
+    image: roundcube/roundcubemail:latest
+    container_name: roundcube
+    restart: unless-stopped
+    networks: [aurora_net]
+    environment:
+      - TZ=${TZ:-Europe/London}
+      # sqlite keeps contacts/prefs without a second database container.
+      - ROUNDCUBEMAIL_DB_TYPE=sqlite
+      # Point at Stalwart in core. Stalwart requires TLS before it accepts
+      # a PLAIN/LOGIN password, so use STARTTLS (tls://) on 143 / 587
+      # rather than a bare plaintext connection. Stalwart's cert is
+      # internal; if the handshake fails verification on first run see the
+      # README for the one-line imap/smtp verify override.
+      - ROUNDCUBEMAIL_DEFAULT_HOST=${WEBMAIL_IMAP_HOST:-tls://stalwart}
+      - ROUNDCUBEMAIL_DEFAULT_PORT=${WEBMAIL_IMAP_PORT:-143}
+      - ROUNDCUBEMAIL_SMTP_SERVER=${WEBMAIL_SMTP_HOST:-tls://stalwart}
+      - ROUNDCUBEMAIL_SMTP_PORT=${WEBMAIL_SMTP_PORT:-587}
+      - ROUNDCUBEMAIL_PLUGINS=archive,zipdownload,managesieve
+      - ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE=25M
+    volumes:
+      - ../../data/roundcube/db:/var/roundcube/db
+      - ../../data/roundcube/config:/var/roundcube/config
+    # No host port on purpose. Roundcube serves on :80, reachable only via
+    # Caddy at mail.$DOMAIN — which is gated by Authelia (see manifest
+    # sso:). Publishing a host port here would let any LAN device reach the
+    # webmail directly and walk straight around the Authelia gate.

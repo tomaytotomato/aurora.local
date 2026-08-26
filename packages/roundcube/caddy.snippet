@@ -1,0 +1,14 @@
+# aurora.local / packages/roundcube / caddy.snippet
+#
+# Roundcube webmail at mail.$DOMAIN. The mail server (Stalwart) and its
+# SMTP/IMAP ports live in packages/core; this only fronts the web UI.
+# CaddySnippetService injects `import authelia` here from the manifest
+# sso: block, so the vhost is gated.
+
+http://mail.{$DOMAIN} {
+	reverse_proxy roundcube:80
+}
+https://mail.{$DOMAIN} {
+	tls internal
+	reverse_proxy roundcube:80
+}

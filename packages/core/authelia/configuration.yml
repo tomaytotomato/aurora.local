@@ -101,6 +101,13 @@ access_control:
     - domain: '{{ env "DOMAIN" }}'
       policy: bypass
 
+    # Stalwart's mail admin UI is powerful (create/delete any mailbox),
+    # so restrict it to admins. Must precede the *.DOMAIN wildcard below —
+    # Authelia takes the first matching rule.
+    - domain: 'mail-admin.{{ env "DOMAIN" }}'
+      policy: two_factor
+      subject: 'group:admins'
+
     # Default for every *.DOMAIN subdomain: require 2FA. Package
     # manifests that want a laxer policy override via the sso.min_role
     # field (which the Caddy snippet renderer translates to a

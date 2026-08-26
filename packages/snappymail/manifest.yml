@@ -1,0 +1,73 @@
+name: snappymail
+title: SnappyMail (webmail)
+description: |
+  SnappyMail is a light, fast webmail client — the lower-footprint
+  alternative to Roundcube in the `webmail` group. A front end only; it
+  connects to the mail server (Stalwart) in the core stack over IMAP.
+  Note it has shipped no tagged release since October 2024 (see the
+  README) — chosen deliberately for its weight, not its release cadence.
+
+category: productivity
+
+depends_on:
+  - core
+recommends: []
+
+# Alternative to Roundcube in the same group; Roundcube is the default.
+variant_group: webmail
+
+profiles: {}
+
+# Its own vhost so it doesn't collide with Roundcube's mail.$DOMAIN when
+# both are enabled (variants are not mutually exclusive at runtime).
+vhosts: [snappymail]
+
+ports: []
+
+requires:
+  min_ram_mb: 128
+  min_disk_gb: 1
+  host_roles: []
+
+# Config, contacts and the admin password. The mail itself is Stalwart's
+# (backed up by core).
+backup:
+  paths:
+    - data/snappymail
+
+# Gated behind Authelia, same model as Roundcube: Authelia proves the
+# person (password + 2FA), SnappyMail then authenticates the mailbox over
+# IMAP. trusted_headers false — IMAP still needs the mailbox password.
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: false
+
+required_env: []
+
+probe:
+  kind: docker
+  container: snappymail
+  external_url: "http://snappymail.{domain}/"
+
+post_install_notes: |
+  ## Maintenance warning
+  SnappyMail's last tagged release is v2.38.2 (October 2024). Commits
+  continue but there has been no security release in a long time. It is
+  the lighter, nicer client; that gap is a risk you are taking on
+  deliberately for a public-facing PHP app. Roundcube is the safer default.
+
+  ## First-run
+  1. Create a mailbox on Stalwart (https://mail-admin.$DOMAIN/).
+  2. `./scripts/up.sh core snappymail`
+  3. Add Stalwart as an IMAP domain in the SnappyMail admin panel:
+     https://snappymail.$DOMAIN/?admin — the admin password is written to
+     data/snappymail/_data_/_default_/admin_password.txt on first boot.
+     Point IMAP/SMTP at `stalwart` with STARTTLS (Stalwart requires TLS
+     before it accepts a password).
+  4. Sign in at https://snappymail.$DOMAIN/ (Authelia first, then the
+     mailbox password).
+
+# Upstream project. Rendered as the Source and Docs buttons on the app page.
+source_url: https://github.com/the-djmaze/snappymail
+homepage_url: https://snappymail.eu

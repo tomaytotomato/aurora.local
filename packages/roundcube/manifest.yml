@@ -1,0 +1,81 @@
+name: roundcube
+title: Roundcube (webmail)
+description: |
+  Roundcube webmail for the box's mailboxes. A front end only — the mail
+  server (Stalwart) lives in the core stack; this connects to it over
+  IMAP/SMTP. The default webmail; SnappyMail is the lighter alternative
+  in the same group.
+
+category: productivity
+
+# The mail server is in core, so that is the only hard dependency.
+depends_on:
+  - core
+recommends: []
+
+# The default webmail variant. SnappyMail (packages/snappymail) is the
+# lighter alternative; the picker offers the `webmail` group as one choice.
+variant_group: webmail
+variant_default: true
+
+profiles: {}
+
+# Only vhost. No host port — the webmail is reachable solely via Caddy,
+# behind Authelia (see sso: below).
+vhosts: [mail]
+
+ports: []
+
+requires:
+  min_ram_mb: 256
+  min_disk_gb: 1
+  host_roles: []
+
+# Roundcube's sqlite holds contacts/preferences only — the mail itself is
+# Stalwart's (backed up by core). Cheap to keep so the address book and
+# settings survive a rebuild.
+backup:
+  paths:
+    - data/roundcube
+
+# Authelia gates mail.$DOMAIN at the edge (password + 2FA, per the
+# *.$DOMAIN two_factor rule in core's access control). trusted_headers is
+# false because Roundcube can't auto-login from Remote-User alone: IMAP
+# still needs the mailbox password, which Authelia doesn't hold, and
+# Stalwart's internal directory is separate from Authelia. So this is
+# defence in depth — Authelia proves you're an Aurora user before you ever
+# reach the webmail, then Roundcube authenticates the mailbox itself. No
+# disable_env: Roundcube must keep its own login, so nothing is blanked.
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: false
+
+required_env: []
+
+probe:
+  kind: docker
+  container: roundcube
+  external_url: "http://mail.{domain}/"
+
+post_install_notes: |
+  ## Prerequisite: a mailbox on Stalwart
+  This is only the webmail. Create the mailbox on the mail server first
+  (see the core README / Stalwart admin at https://mail-admin.$DOMAIN/),
+  then sign in here with that address and its password.
+
+  ## Access
+  https://mail.$DOMAIN/ — Authelia (password + 2FA) gates the front door,
+  then Roundcube asks for the mailbox password. Two logins, by design:
+  Authelia authenticates the person, Roundcube opens the IMAP session.
+
+  ## Internal TLS to Stalwart
+  Roundcube reaches Stalwart over STARTTLS on aurora_net (tls://stalwart).
+  If Stalwart's internal certificate fails verification on first run, drop
+  a one-liner in packages/roundcube/config to skip peer verification for
+  that internal hop — the untrusted hop (browser to Caddy) is still HTTPS.
+
+# Upstream project. Rendered as the Source and Docs buttons on the app
+# page; the headline service, not every image it runs.
+source_url: https://github.com/roundcube/roundcubemail
+homepage_url: https://roundcube.net

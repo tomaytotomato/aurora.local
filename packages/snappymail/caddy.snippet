@@ -1,0 +1,13 @@
+# aurora.local / packages/snappymail / caddy.snippet
+#
+# SnappyMail webmail at snappymail.$DOMAIN. Front end only; the mail
+# server (Stalwart) and its ports live in packages/core. CaddySnippetService
+# injects `import authelia` here from the manifest sso: block.
+
+http://snappymail.{$DOMAIN} {
+	reverse_proxy snappymail:8888
+}
+https://snappymail.{$DOMAIN} {
+	tls internal
+	reverse_proxy snappymail:8888
+}

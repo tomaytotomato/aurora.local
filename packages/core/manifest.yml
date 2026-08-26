@@ -7,6 +7,9 @@ description: |
   Authelia provides SSO + 2FA from Day 0: the auth.$DOMAIN portal and
   the reusable (authelia) forward-auth route live here, and any package
   declaring `sso.protect: true` is gated behind it.
+  Stalwart is the box's mail server (SMTP/IMAP/JMAP), always present so
+  the system can send and receive mail; its admin UI sits behind Authelia
+  at mail-admin.$DOMAIN. Webmail frontends live in their own packages.
 
 category: core
 icon: caddy
@@ -19,10 +22,21 @@ ports:
   - {port: 80,  proto: tcp, description: Caddy HTTP}
   - {port: 443, proto: tcp, description: Caddy HTTPS}
   - {port: 9091, proto: tcp, description: Authelia HTTP (internal to aurora_net)}
+  # Stalwart mail server. Published on the host — Caddy is HTTP-only and
+  # cannot proxy these; native clients authenticate to Stalwart directly.
+  - {port: 25,   proto: tcp, description: Stalwart SMTP (inbound MX)}
+  - {port: 143,  proto: tcp, description: Stalwart IMAP (STARTTLS)}
+  - {port: 465,  proto: tcp, description: Stalwart submission (implicit TLS)}
+  - {port: 587,  proto: tcp, description: Stalwart submission (STARTTLS)}
+  - {port: 993,  proto: tcp, description: Stalwart IMAPS}
+  - {port: 4190, proto: tcp, description: Stalwart ManageSieve}
+  # Stalwart's HTTP admin UI + JMAP are NOT host-published: reachable only
+  # via Caddy at mail-admin.$DOMAIN, behind Authelia (admins only).
 
 requires:
-  min_ram_mb: 512
-  min_disk_gb: 1
+  # Bumped from 512: Stalwart budgets ~1 GB on top of Caddy + Authelia.
+  min_ram_mb: 1536
+  min_disk_gb: 2
   host_roles: []
 
 # Authelia SSO ships in core, so its secrets are required env for the
@@ -32,6 +46,23 @@ required_env:
   - AUTHELIA_JWT_SECRET
   - AUTHELIA_SESSION_SECRET
   - AUTHELIA_STORAGE_ENCRYPTION_KEY
+  # Stalwart recovery admin password (secret-shaped: rotate-secrets.sh
+  # generates it on first bring-up) and the hostname Stalwart calls itself.
+  - STALWART_ADMIN_SECRET
+  - MAIL_HOSTNAME
+
+# Stalwart's embedded store has no online export yet; the supported backup
+# is stop-the-server-then-copy the data directory. Both paths under
+# data/stalwart are owned by core.
+backup:
+  paths:
+    - data/stalwart/etc
+    - data/stalwart/lib
+  before:
+    - kind: command
+      description: Stop Stalwart so its embedded store is quiescent before the copy (no online export exists yet).
+      container: stalwart
+      command: "docker stop stalwart"
 
 probe:
   kind: self

@@ -1,0 +1,31 @@
+# aurora.local / packages/snappymail
+#
+# SnappyMail webmail — the lighter alternative to Roundcube in the
+# `webmail` variant group. Front end only; connects to the mail server
+# (Stalwart, in packages/core) over IMAP on aurora_net.
+#
+# Bind-mount source paths resolve against packages/core/ (the first -f
+# file) — see docs/PACKAGE_CONTRACT.md.
+
+name: aurora-snappymail
+
+networks:
+  aurora_net:
+    external: true
+
+services:
+  snappymail:
+    image: djmaze/snappymail:latest
+    container_name: snappymail
+    restart: unless-stopped
+    networks: [aurora_net]
+    environment:
+      - TZ=${TZ:-Europe/London}
+    volumes:
+      # Config, contacts and the admin password live here. IMAP servers
+      # (Stalwart) are added through the admin panel on first run — see
+      # the README; SnappyMail has no compose-level IMAP config.
+      - ../../data/snappymail:/var/lib/snappymail
+    # Serves on :8888. No host port on purpose — reachable only via Caddy
+    # at snappymail.$DOMAIN, behind Authelia. A published port would walk
+    # around that gate on the LAN.

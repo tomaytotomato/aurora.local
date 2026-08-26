@@ -148,6 +148,48 @@ services:
       retries: 3
       start_period: 15s
 
+  # Stalwart — all-in-one mail server (SMTP/IMAP/JMAP) in one Rust binary,
+  # no Postfix/Dovecot/Rspamd sidecars. In core so the box always has a
+  # mail substrate: system notifications, and the future agent/secretary,
+  # can rely on it being present like storage.
+  #
+  # Webmail is deliberately NOT here — the frontends (Roundcube,
+  # SnappyMail) are their own variant packages that connect to this over
+  # IMAP on aurora_net. Stalwart's own HTTP (admin UI + JMAP) is proxied
+  # by Caddy at mail-admin.${DOMAIN}, gated to admins (see caddy.snippet).
+  stalwart:
+    image: stalwartlabs/stalwart:v0.16
+    container_name: stalwart
+    restart: unless-stopped
+    hostname: ${MAIL_HOSTNAME:-mail.aurora.local}
+    networks: [aurora_net]
+    # Mail protocols on the host — Caddy is HTTP-only and cannot proxy
+    # these. Native clients (Apple Mail, Thunderbird, phones) and inbound
+    # server-to-server SMTP reach Stalwart directly with the mailbox
+    # credential. POP3 (110/995) left off; IMAP is the default. Stalwart's
+    # HTTP (admin/JMAP) is NOT published — Caddy reaches it on :8080 over
+    # aurora_net, so it never fights Caddy for :443.
+    ports:
+      - "25:25"       # inbound SMTP / MX
+      - "143:143"     # IMAP (STARTTLS)
+      - "465:465"     # submission, implicit TLS
+      - "587:587"     # submission, STARTTLS
+      - "993:993"     # IMAPS
+      - "4190:4190"   # ManageSieve
+    environment:
+      - TZ=${TZ:-Europe/London}
+      # Declarative bootstrap: seed the recovery admin rather than scraping
+      # the first-boot log for temporary credentials. Add STALWART_ADMIN_SECRET
+      # to packages/core/.env so rotate-secrets.sh generates a real one; the
+      # default below only exists so a fresh testbed boots — change it.
+      - STALWART_RECOVERY_ADMIN=admin:${STALWART_ADMIN_SECRET:-aurora-change-me}
+    volumes:
+      # v0.16: a tiny JSON at /etc/stalwart describes only the datastore;
+      # everything else lives in the DB, edited via the admin UI/API. One
+      # data directory under /var/lib/stalwart — the whole backup surface.
+      - ../../data/stalwart/etc:/etc/stalwart
+      - ../../data/stalwart/lib:/var/lib/stalwart
+
   # Homepage retired in v0.1 — Aurora is the single landing page.
   # If you want the tile-grid dashboard back, restore this block and
   # re-add the $DOMAIN vhost in packages/core/caddy/Caddyfile.
