@@ -32,7 +32,16 @@ const title = computed(() =>
     data-test="docker-badge"
     :data-structure="structure"
   >
-    <svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" fill="currentColor" aria-hidden="true" data-slot="docker-whale">
+    <!-- Docker Compose's unofficial mascot is an octopus (it herds many
+         containers), so a compose stack gets the octopus and a single
+         container keeps the whale. Same 24×24 box, currentColor, so both
+         sit identically inline. The octopus eyes are punched out with
+         fill-rule="evenodd" rather than drawn in a second colour, which
+         keeps it a single monochrome glyph. -->
+    <svg v-if="structure === 'compose'" viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" fill="currentColor" fill-rule="evenodd" aria-hidden="true" data-slot="docker-octopus">
+      <path d="M6 11 a6 6 0 0 1 12 0 v1 q-1.5 2.5 -3 0 q-1.5 2.5 -3 0 q-1.5 2.5 -3 0 q-1.5 2.5 -3 0 z M9.1 9.5 a0.9 0.9 0 1 0 1.8 0 a0.9 0.9 0 1 0 -1.8 0 z M13.1 9.5 a0.9 0.9 0 1 0 1.8 0 a0.9 0.9 0 1 0 -1.8 0 z" />
+    </svg>
+    <svg v-else viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" fill="currentColor" aria-hidden="true" data-slot="docker-whale">
       <rect x="4" y="9.2" width="3" height="3" rx="0.4" />
       <rect x="8" y="9.2" width="3" height="3" rx="0.4" />
       <rect x="12" y="9.2" width="3" height="3" rx="0.4" />
