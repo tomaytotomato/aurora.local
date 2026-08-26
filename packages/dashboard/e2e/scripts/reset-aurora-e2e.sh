@@ -93,7 +93,7 @@ DOCKER_GID="$DOCKER_GID" \
 docker compose -p "$PROJECT" \
   -f "$DASHBOARD_DIR/compose.yml" \
   -f "$SCRIPT_DIR/compose.e2e.yml" \
-  up -d aurora adguard
+  up -d --build aurora adguard
 
 log "waiting for http://localhost:$HOST_PORT/api/health ..."
 for i in $(seq 1 60); do

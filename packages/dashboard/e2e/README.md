@@ -35,6 +35,7 @@ fresh box.
   host libraries manually. On Debian/Ubuntu:
   `sudo npx playwright install-deps chromium`. Without them Chromium
   may fail to launch with a shared-library error.
-- The reset script requires the `aurora-dashboard:${AURORA_VERSION:-0.1.0}`
-  image to already exist locally (built by the live deploy). If it
-  doesn't, `docker compose -f ../compose.yml build aurora` first.
+- The reset script builds the dashboard image from source (`up -d --build`),
+  so it needs no prebuilt image and never touches GHCR — the published
+  `ghcr.io/tomaytotomato/aurora` image the box pulls is deliberately not
+  in the loop here, keeping e2e a pure source-build check.

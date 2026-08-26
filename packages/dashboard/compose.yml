@@ -24,8 +24,16 @@ services:
       # ../../data volume paths already rely on.
       context: ../dashboard
       dockerfile: Dockerfile
-    image: aurora-dashboard:${AURORA_VERSION:-0.1.0}
-    pull_policy: never
+    image: ghcr.io/tomaytotomato/aurora:${AURORA_VERSION:-0.1.0}
+    # `missing`: use a locally-built image if one is present, otherwise pull
+    # the published image from GHCR. A released box has never built locally,
+    # so up.sh's `docker compose pull` fetches the published tag; dev, e2e
+    # and the Lima testbed build from the `build:` block above via
+    # `docker compose build` / `up --build`, and that local image is then
+    # used in place of a pull. The pinned tag comes from AURORA_VERSION
+    # (packages/dashboard/.env, default 0.1.0), so the box only moves when
+    # that value is deliberately bumped — cut a matching vX.Y.Z release tag.
+    pull_policy: missing
     container_name: aurora
     restart: unless-stopped
     networks: [aurora_net]
