@@ -75,6 +75,25 @@ post_install_notes: |
   Aurora will be reachable on http://<hostname>.local/ and
   http://$DOMAIN/.
 
+  ## Mail server (Stalwart) first-run
+  Stalwart boots in bootstrap mode with no config: only its setup UI on
+  :8080 is live, and the mail protocol listeners (25/143/…) do NOT start
+  until you finish the wizard. Complete it once:
+
+  1. Sign into Aurora (so you have an Authelia session with 2FA — the
+     admin UI is admin-only and gated).
+  2. Open https://mail-admin.$DOMAIN/ and log in as the recovery admin
+     (user `admin`, the STALWART_ADMIN_SECRET you set in packages/core/.env).
+  3. In the datastore step choose **SQLite + filesystem blobs**, not the
+     default RocksDB — on a small box RocksDB shows memory and disk
+     amplification.
+  4. Add your domain and create the first mailbox. That starts the SMTP/
+     IMAP listeners; the webmail packages (roundcube / snappymail) can
+     then authenticate against it.
+
+  Backups: Stalwart has no online export yet, so the manifest's backup
+  block stops the container before copying data/stalwart.
+
 # Upstream project. Rendered as the Source and Docs buttons on the
 # app page; the package's headline service, not every image it runs.
 source_url: https://github.com/caddyserver/caddy
