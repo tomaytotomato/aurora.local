@@ -47,8 +47,10 @@ WORKDIR /app
 # Runtime dependencies for the /api/onboarding/launch endpoint:
 #   - bash: scripts/up.sh starts with #!/usr/bin/env bash
 #   - docker-cli + docker-cli-compose: up.sh shells out to `docker compose`
-#   - avahi-tools: iter-3 P1c mdns-audit.sh (avahi-browse + avahi-resolve)
-#   - bind-tools: iter-3 P1c mdns-audit.sh (dig +short @224.0.0.251 :5353)
+#   - avahi-tools: MdnsAliasService shells avahi-publish to register the
+#     per-vhost aliases against the host avahi-daemon (see the D-Bus mounts
+#     in compose.yml)
+#   - bind-tools: dig, for mDNS resolution checks (@224.0.0.251 :5353)
 #   - ca-certificates: TLS verification for the yq download below (and future
 #     runtime https calls). Without it wget --https-only fails on Alpine.
 # Also install /var/log/aurora as a writable log destination for LaunchService.

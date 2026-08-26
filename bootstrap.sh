@@ -248,7 +248,7 @@ EOF
 # --------------------------------------------------------------------
 # Install (fully non-interactive — D1)
 #
-# Phase 1 of the two-phase install (docs/TWO_PHASE_INSTALL_PLAN.md): base
+# Phase 1 of the two-phase install (docs/history/TWO_PHASE_INSTALL_PLAN.md): base
 # setup. There are NO prompts. Every host fact is auto-detected (with env
 # overrides for CI/headless), and first-run brings up ONLY core + the
 # dashboard — just enough that the browser can reach the Aurora wizard,
