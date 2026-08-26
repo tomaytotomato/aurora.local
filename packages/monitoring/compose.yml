@@ -7,7 +7,7 @@
 #     auto-provisioned from grafana/provisioning/ so a fresh volume
 #     comes up already pointed at Prometheus.
 #   - Uptime-Kuma is a separate, self-contained blackbox monitor for
-#     "is the URL up" style checks (used by the Homepage dashboard).
+#     "is the URL up" style checks.
 #
 # All services join aurora_net so Caddy can front them on subdomains.
 

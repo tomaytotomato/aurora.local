@@ -95,6 +95,32 @@ Current packages:
 Adding a new one is a copy of `packages/_template/` and a
 `./bootstrap.sh add <name>` away.
 
+## Containers & releases
+
+Aurora itself (the Vue frontend and Spring Boot backend) is one container.
+The frontend is compiled and baked into the backend jar at build time, so a
+single JVM serves the API and the dashboard on `:8090`; Caddy fronts it at
+the apex domain. Everything else is an off-the-shelf image pulled from its
+own registry.
+
+The dashboard image is published to
+[`ghcr.io/tomaytotomato/aurora`](https://github.com/tomaytotomato/aurora.local/pkgs/container/aurora),
+built and pushed by CI (`.github/workflows/ci.yml`) only when the test
+suites are green:
+
+| Trigger              | Tags published                         |
+|----------------------|----------------------------------------|
+| push to `main`       | `edge`, `sha-<short>`                   |
+| release tag `vX.Y.Z` | `X.Y.Z`, `X.Y`, `latest`               |
+
+Images are multi-arch (`linux/amd64` and `linux/arm64`), so the same tag
+runs on an Intel box or an ARM board. A released box pulls the pinned
+`AURORA_VERSION` tag (`packages/dashboard/.env`, default `0.1.0`); it only
+moves when you bump that value, so an upgrade is a deliberate act. To cut a
+release, tag it: `git tag v0.1.0 && git push origin v0.1.0`. Dev, e2e and
+the Lima testbed build from source instead, so hacking on the dashboard
+never depends on the registry.
+
 ## State
 
 `.state.yml` (gitignored) at the repo root records the current
@@ -105,27 +131,23 @@ set.
 ## Layout
 
 ```
-bootstrap.sh              installer entrypoint
-docs/
-  PACKAGE_CONTRACT.md     package schema
-  OPERATIONS.md           operator handbook (backup/pin/health cadence)
-host/                     ansible for OS hardening
-  roles/
-    common, docker, firewall, ssh-hardening, fail2ban
-    swap-file, storage-mount, avahi, unattended-upgrades, caddy-trust
-packages/<name>/          per-stack compose + manifest + fragments
-  compose.yml, manifest.yml, .env.example, README.md
-  caddy.snippet           (optional) vhost fragments merged into Caddy
-  pins.env                (optional) image digests, written by scripts/pin.sh
-  seed.sh                 (optional) idempotent post-up hook
-scripts/
-  up.sh down.sh status.sh doctor.sh health.sh
-  backup.sh pin.sh rotate-secrets.sh
-  lib/                    log, prompt, manifest, state, render, ops
-group_vars/all.yml        ansible vars (gitignored)
-inventory.ini             ansible inventory (gitignored)
-.state.yml                installer state (gitignored)
-.github/
-  workflows/ci.yml        shellcheck + yamllint + ansible-lint + compose + schema
-  schema/manifest.schema.json
+bootstrap.sh        installer entrypoint (base setup + add/remove/status)
+packages/<name>/    per-stack compose + manifest + .env.example + README
+  dashboard/        Aurora itself: Spring Boot backend + Vue frontend
+scripts/            up/down/status/doctor/health/backup + lib/
+host/               Ansible for OS hardening (Docker, firewall, mDNS, ...)
+docs/               architecture, operations, package contract, diagrams
+.github/            CI and the manifest schema
 ```
+
+The full tree and how the pieces fit is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Docs
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the box is put together, with diagrams in [`docs/diagrams/`](docs/diagrams/).
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — the operator handbook: backup, pin, health and secret-rotation cadence.
+- [`docs/PACKAGE_CONTRACT.md`](docs/PACKAGE_CONTRACT.md) — what a package manifest may declare.
+- [`docs/ALPHA_RUNBOOK.md`](docs/ALPHA_RUNBOOK.md) — bringing a fresh box online, step by step.
+- [`docs/SPLIT_TUNNEL.md`](docs/SPLIT_TUNNEL.md) — the privacy package's VPN split-tunnel setup.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — what is done and what is next.

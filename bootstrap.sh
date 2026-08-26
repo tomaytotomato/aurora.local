@@ -447,8 +447,8 @@ cmd_remove() {
   done
 
   # Re-render fragments for the remaining enabled set so stale caddy
-  # snippets and homepage groups don't linger. Sourced late to avoid
-  # pulling render.sh in for commands that don't need it.
+  # snippets don't linger. Sourced late to avoid pulling render.sh in for
+  # commands that don't need it.
   # shellcheck source=scripts/lib/render.sh
   . "$REPO/scripts/lib/render.sh"
   local remaining=()
@@ -456,8 +456,7 @@ cmd_remove() {
   if [[ ${#remaining[@]} -gt 0 ]]; then
     log_step "re-rendering fragments for: ${remaining[*]}"
     render_caddy_snippets "${remaining[@]}"
-    render_homepage_services "${remaining[@]}"
-    # Nudge caddy + homepage to reload the trimmed config.
+    # Nudge caddy to reload the trimmed config.
     docker kill --signal SIGUSR1 caddy 2>/dev/null || true
   fi
 }
