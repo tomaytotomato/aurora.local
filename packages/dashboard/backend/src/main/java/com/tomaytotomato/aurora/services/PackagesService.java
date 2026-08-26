@@ -192,7 +192,7 @@ public class PackagesService {
 
   private static final java.util.regex.Pattern NOT_A_SECRET = java.util.regex.Pattern.compile(
       "^(TZ|DOMAIN|LAN_IP|VPN_SERVICE_PROVIDER|VPN_TYPE|SERVER_COUNTRIES|SERVER_CITIES"
-          + "|OPENVPN_USER|HOMEPAGE_VAR_[A-Z]+_USER|.*_USER|FIREWALL.*"
+          + "|OPENVPN_USER|.*_USER|FIREWALL.*"
           + "|VPN_PORT_FORWARDING(_PROVIDER)?|PORT_FORWARD_ONLY|WIREGUARD_ADDRESSES)$");
 
   private static final java.util.regex.Pattern SECRET_HINT =

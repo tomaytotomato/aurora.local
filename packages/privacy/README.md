@@ -11,5 +11,5 @@
 1. Copy `.env.example` to `.env`; pick a VPN provider and paste creds.
 2. `./scripts/up.sh privacy`
 3. Visit `http://<lan-ip>:3000` for AdGuard's setup wizard.
-4. `./scripts/seed-adguard.sh` seeds the `*.aurora.local` rewrites and a
-   default admin user matching `HOMEPAGE_VAR_ADGUARD_USER/PASS`.
+4. `./scripts/seed-adguard.sh` seeds the `*.aurora.local` DNS rewrites.
+   Set the AdGuard admin account in the setup wizard (step 3).

@@ -73,7 +73,7 @@ requires:
 # will refuse to start until the user has filled these in (heuristic:
 # any KEY=  with empty RHS is treated as unset).
 required_env:
-  - HOMEPAGE_VAR_SONARR_KEY     # optional list; blank ok on first run
+  - SONARR_API_KEY              # optional list; blank ok on first run
 
 # Post-install one-liners printed to the user.
 post_install_notes: |
