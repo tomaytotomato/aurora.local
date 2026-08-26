@@ -84,14 +84,29 @@ MAIL_SMTP_PORT=465
 
 then `./scripts/up.sh core mail` to re-render.
 
-## No SSO
+## SSO (defence in depth)
 
-Unlike `notes`, this package is **not** put behind Authelia. The webmail
-login is the mailbox credential itself, so a forward-auth wall in front
-would only add a second, redundant login. That is a deliberate choice in
-`manifest.yml` (no `sso:` block), not an omission.
+`mail.$DOMAIN` is gated behind Authelia (`sso: protect: true` in
+`manifest.yml`). Reaching the webmail is therefore two steps:
+
+1. **Authelia** — sign in as an Aurora user (password + 2FA, per core's
+   `*.$DOMAIN` two-factor rule).
+2. **Roundcube** — sign in to the mailbox itself with the IMAP password.
+
+The two logins are not redundant: Authelia authenticates *the person*
+(and hides the webmail from any unauthenticated device on the LAN), while
+Roundcube needs the actual mailbox password to open the IMAP session.
+`trusted_headers` is `false` because Roundcube can't auto-provision from
+Authelia's `Remote-User` header alone — IMAP still needs that password,
+and Dovecot and Authelia don't share a user backend. Header-based
+single-login would need Dovecot to trust a master password or both to
+share an LDAP/OIDC backend; neither ships here.
 
 ## Ports
 
 See `manifest.yml`. SMTP/IMAP (25/143/465/587/993) are published on the
-host; webmail is on 8030 behind Caddy at `mail.$DOMAIN`.
+host so native mail clients can reach Dovecot/Postfix directly (they
+authenticate with the mailbox password; Authelia does not gate those).
+Webmail has **no** host port: it is reachable only via Caddy at
+`mail.$DOMAIN`, behind Authelia. That is deliberate — a published webmail
+port would bypass the Authelia gate on the LAN.

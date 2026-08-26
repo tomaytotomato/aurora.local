@@ -31,7 +31,9 @@ ports:
   - {port: 465,  proto: tcp, description: Submission (implicit TLS)}
   - {port: 587,  proto: tcp, description: Submission (STARTTLS)}
   - {port: 993,  proto: tcp, description: IMAPS (implicit TLS)}
-  - {port: 8030, proto: tcp, description: Roundcube webmail (proxied at mail.$DOMAIN)}
+  # Roundcube webmail has no host port: it is reachable only via Caddy at
+  # mail.$DOMAIN, behind the Authelia gate (see sso: below). Publishing it
+  # would bypass that gate on the LAN.
 
 requires:
   # Rspamd alone wants ~500MB; Postfix + Dovecot + Roundcube on top.
@@ -59,10 +61,18 @@ backup:
     - data/mail/config
     - data/mail/roundcube
 
-# The webmail login IS the mailbox credential, so Authelia is deliberately
-# NOT put in front of mail.$DOMAIN — it would add a second login with
-# nothing to provision from it. No `sso:` block: SSO stays off and the
-# service owns its own auth.
+# Authelia gates mail.$DOMAIN at the edge (password + 2FA, per the
+# *.$DOMAIN two_factor rule in core's access control). trusted_headers is
+# false because Roundcube can't auto-login from Remote-User alone: IMAP
+# still needs the mailbox password, which Authelia doesn't hold, and
+# Dovecot and Authelia don't share a user backend. So this is defence in
+# depth — Authelia proves you're an Aurora user before you ever reach the
+# webmail, then Roundcube authenticates the mailbox itself. No disable_env:
+# Roundcube must keep its own login, so nothing is blanked.
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: false
 
 # Blank on first run is fine (compose has defaults); these are the values
 # most people will want to set before going live.

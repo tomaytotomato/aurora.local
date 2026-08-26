@@ -82,7 +82,7 @@ services:
     volumes:
       - ../../data/mail/roundcube/db:/var/roundcube/db
       - ../../data/mail/roundcube/config:/var/roundcube/config
-    # Roundcube serves on :80; publish 8030 (free) and let Caddy proxy
-    # mail.$DOMAIN to it.
-    ports:
-      - "8030:80"
+    # No host port on purpose. Roundcube serves on :80, reachable only via
+    # Caddy at mail.$DOMAIN — which is gated by Authelia (see manifest
+    # sso:). Publishing a host port here would let any LAN device reach the
+    # webmail directly and walk straight around the Authelia gate.
