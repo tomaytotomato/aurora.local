@@ -35,6 +35,18 @@ export interface ServiceStartResponse {
   started_at: string;
 }
 
+/**
+ * Whether opening this row would just load the dashboard the operator is
+ * already looking at. The `core` package is Caddy plus the apex domain, so
+ * its Open target is Aurora itself; the checklist shows its status but
+ * offers no Open button rather than a control that reloads the current
+ * page. Pure predicate so the row's behaviour is testable without mounting
+ * it — see services.spec.ts.
+ */
+export function opensThisDashboard(s: Pick<ServiceStatus, 'package'>): boolean {
+  return s.package === 'core';
+}
+
 export const ServicesApi = {
   async status(): Promise<ServicesStatusResponse> {
     const res = await http.get<ServicesStatusResponse>('/services/status');

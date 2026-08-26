@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { ServiceStatus } from '@/api/services';
+import { opensThisDashboard, type ServiceStatus } from '@/api/services';
 import StorageMountPanel from '@/components/StorageMountPanel.vue';
 import { useSystemStore } from '@/stores/system';
 
@@ -53,6 +53,13 @@ const ctaLabel = computed<string>(() => {
 });
 
 const ctaDisabled = computed(() => props.service.state === 'starting');
+
+// The core row (Caddy + the apex domain) opens the dashboard you are
+// already on, so it shows status only — an Open button here would just
+// reload the current page. See opensThisDashboard / services.spec.ts.
+const suppressOpen = computed(
+  () => props.service.state === 'running' && opensThisDashboard(props.service),
+);
 
 // Human-readable pill text (visible copy — data-status carries the enum).
 const pillText = computed(() => {
@@ -154,7 +161,9 @@ function onPrimary() {
         data-test="storage-mount-toggle"
         @click="showMountPanel = !showMountPanel"
       >{{ showMountPanel ? 'Hide mount steps' : 'How to mount' }}</button>
-      <template v-if="ctaLabel === 'Open' || ctaLabel === 'Finish setup'">
+      <!-- Core opens the dashboard itself; render no CTA for it. -->
+      <template v-if="suppressOpen" />
+      <template v-else-if="ctaLabel === 'Open' || ctaLabel === 'Finish setup'">
         <a
           v-if="service.open_url"
           :href="service.open_url"
