@@ -67,19 +67,30 @@ class CaddySnippetServiceTests {
   // ─── render() pure function ───────────────────────────────────────────
 
   @Test
-  void render_injects_import_authelia_after_every_vhost_header_when_protected() {
+  void render_gates_https_vhosts_with_authelia_and_redirects_http_to_https() {
     SsoBlock sso = new SsoBlock(true, Role.USER, false, java.util.List.of());
     String out = CaddySnippetService.render(NOTES_SRC, "notes", sso);
 
-    // Both http:// and https:// vhosts get the import line.
-    long injections = out.lines().filter(l -> l.trim().equals("import authelia")).count();
-    assertThat(injections).isEqualTo(2);
+    // Only the https:// vhost gets `import authelia`. The http://
+    // vhost gets a permanent redirect instead, because Authelia's
+    // forward-auth endpoint rejects any check whose request scheme
+    // isn't https/wss with a raw HTTP 400 (Authelia discussion
+    // #8731 and issue #3483 — the scheme check is unconditional,
+    // guarding the Secure-flagged session cookie).
+    long imports = out.lines().filter(l -> l.trim().equals("import authelia")).count();
+    assertThat(imports).isEqualTo(1);
 
-    // Injection lands INSIDE the block, right after the header line.
+    long redirs = out.lines()
+        .filter(l -> l.trim().equals("redir https://{host}{uri} permanent"))
+        .count();
+    assertThat(redirs).isEqualTo(1);
+
+    // Directive lands INSIDE its block, right after the header line.
     String[] lines = out.split("\\R");
     for (int i = 0; i < lines.length; i++) {
       if (lines[i].contains("http://notes.{$DOMAIN} {")) {
-        assertThat(lines[i + 1].trim()).isEqualTo("import authelia");
+        assertThat(lines[i + 1].trim())
+            .isEqualTo("redir https://{host}{uri} permanent");
       }
       if (lines[i].contains("https://notes.{$DOMAIN} {")) {
         assertThat(lines[i + 1].trim()).isEqualTo("import authelia");
@@ -122,9 +133,14 @@ class CaddySnippetServiceTests {
         ""
     );
     String out = CaddySnippetService.render(src, "x", new SsoBlock(true, Role.USER, false, java.util.List.of()));
-    long injections = out.lines().filter(l -> l.trim().equals("import authelia")).count();
-    // Only the real (non-commented) vhost header receives the injection.
-    assertThat(injections).isEqualTo(1);
+    // The (uncommented) http:// vhost gets a redirect to https;
+    // the commented pseudo-vhost is left alone. `import authelia`
+    // never appears because there's no https:// vhost in this source.
+    long redirs = out.lines()
+        .filter(l -> l.trim().equals("redir https://{host}{uri} permanent"))
+        .count();
+    assertThat(redirs).isEqualTo(1);
+    assertThat(out).doesNotContain("import authelia");
   }
 
   @Test
@@ -132,10 +148,10 @@ class CaddySnippetServiceTests {
     // Caddy tolerates any indent but consistent formatting reads
     // better in a debug session — the injected line matches the
     // surrounding block's leading whitespace shape.
-    String src = "http://x.{$DOMAIN} {\n\treverse_proxy x:80\n}\n";
+    String src = "https://x.{$DOMAIN} {\n\treverse_proxy x:80\n}\n";
     String out = CaddySnippetService.render(src, "x", new SsoBlock(true, Role.USER, false, java.util.List.of()));
-    // Because the header line uses a leading empty indent, the
-    // injection uses a single tab (matches the source's inner indent).
+    // Header line uses a leading empty indent, so the injection
+    // uses a single tab (matches the source's inner indent).
     assertThat(out).contains("\timport authelia");
   }
 

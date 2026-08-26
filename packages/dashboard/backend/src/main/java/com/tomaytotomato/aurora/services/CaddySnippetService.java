@@ -62,7 +62,7 @@ import java.util.regex.Pattern;
  * # sso: protect=true min_role=user trusted_headers=false
  *
  * http://notes.{$DOMAIN} {
- *     import authelia
+ *     redir https://{host}{uri} permanent
  *     reverse_proxy silverbullet:3000
  * }
  * https://notes.{$DOMAIN} {
@@ -71,6 +71,16 @@ import java.util.regex.Pattern;
  *     reverse_proxy silverbullet:3000
  * }
  * </pre>
+ *
+ * <p>The http:// vhost gets a permanent redirect to https:// instead of
+ * {@code import authelia}: Authelia's forward-auth endpoint rejects
+ * any request whose {@code X-Forwarded-Proto} is not {@code https}
+ * (or {@code wss}) with a raw HTTP 400, because the session cookie
+ * it hands out is {@code Secure}-flagged and can only cross a TLS
+ * hop. Injecting {@code import authelia} into an http:// vhost
+ * therefore turns plain HTTP into a 400 for every request — not the
+ * SSO redirect an operator would expect. See Authelia discussion
+ * #8731 and issue #3483.
  *
  * <p><b>What Aurora does NOT emit.</b> Per-vhost {@code min_role}
  * gating and trusted-header rewrites live in Authelia's
@@ -97,9 +107,11 @@ public class CaddySnippetService {
 
   private static final Logger log = LoggerFactory.getLogger(CaddySnippetService.class);
 
-  /** Matches the vhost header line {@code http(s)://…{$DOMAIN} {}. */
+  /** Matches the vhost header line {@code http(s)://…{$DOMAIN} {}. Captures
+   *  (1) leading indent, (2) full match up to the brace, (3) the scheme so
+   *  we can tell {@code http} vhosts apart from {@code https} for SSO. */
   private static final Pattern VHOST_HEADER = Pattern.compile(
-      "^(\\s*)(https?://[A-Za-z0-9][A-Za-z0-9.\\-]*\\{\\$DOMAIN}(?:[^{]*)?)\\{\\s*$"
+      "^(\\s*)((https?)://[A-Za-z0-9][A-Za-z0-9.\\-]*\\{\\$DOMAIN}(?:[^{]*)?)\\{\\s*$"
   );
 
   /**
@@ -221,7 +233,30 @@ public class CaddySnippetService {
           // whitespace but consistent formatting reads better in a
           // debug session.
           String indent = m.group(1);
-          out.append(indent).append('\t').append("import authelia\n");
+          String scheme = m.group(3);
+          if ("http".equals(scheme)) {
+            // Authelia's forward-auth rejects requests whose
+            // X-Forwarded-Proto is not `https`/`wss` with a raw
+            // HTTP 400 (see Authelia discussion #8731 and issue
+            // #3483 — the scheme check is unconditional and
+            // exists so the session cookie, which is Secure-flagged,
+            // can be transmitted safely). Injecting `import authelia`
+            // into an http:// vhost therefore turns the plain-HTTP
+            // route into a 400 for every request. Aurora runs Caddy
+            // with `auto_https disable_redirects` at the global level
+            // (to dodge HSTS lockouts on the apex + LAN-IP vhosts),
+            // so http:// is still bound and reachable — but for an
+            // SSO'd vhost the only sensible response is to redirect
+            // the client onto https:// where the forward-auth handshake
+            // actually works. Emit that redirect and skip the
+            // `import authelia` line: Caddy's `redir` short-circuits
+            // the request so the reverse_proxy directive that follows
+            // never fires.
+            out.append(indent).append('\t')
+                .append("redir https://{host}{uri} permanent\n");
+          } else {
+            out.append(indent).append('\t').append("import authelia\n");
+          }
         }
       }
     }
