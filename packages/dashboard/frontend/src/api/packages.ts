@@ -177,6 +177,21 @@ export function isCorePackage(p: Pick<PackageSummary, 'name'>): boolean {
 }
 
 /**
+ * Packages that are always installed and are not apps the owner chooses —
+ * Aurora itself (`dashboard`) is the admin plane you are looking at, not a
+ * card in its own marketplace. They are hidden from every catalogue
+ * surface so Aurora never advertises itself as installable.
+ *
+ * Mirrors PackagesService.INFRASTRUCTURE_PACKAGES on the backend; the two
+ * lists exist for the same reason and must agree.
+ */
+const INFRASTRUCTURE_PACKAGES: ReadonlySet<string> = new Set(['dashboard']);
+
+export function isInfrastructurePackage(p: Pick<PackageSummary, 'name'>): boolean {
+  return INFRASTRUCTURE_PACKAGES.has(p.name);
+}
+
+/**
  * What a first-run box gets with no interactive package picker (the
  * onboarding wizard's Packages step was removed). Only `core` (which
  * carries the proxy, dashboard, and always-on SSO) — everything else,
@@ -197,7 +212,10 @@ export function isRemovable(p: Pick<PackageSummary, 'name'>): boolean {
 export function splitByCore(list: PackageSummary[]): { core: PackageSummary[]; apps: PackageSummary[] } {
   const core: PackageSummary[] = [];
   const apps: PackageSummary[] = [];
-  for (const p of list) (isCorePackage(p) ? core : apps).push(p);
+  for (const p of list) {
+    if (isInfrastructurePackage(p)) continue;
+    (isCorePackage(p) ? core : apps).push(p);
+  }
   return { core, apps };
 }
 

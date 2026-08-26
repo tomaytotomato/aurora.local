@@ -59,6 +59,21 @@ describe('splitByCore', () => {
   it('returns empty groups for an empty catalogue', () => {
     expect(splitByCore([])).toEqual({ core: [], apps: [] });
   });
+
+  // Aurora is the dashboard, not an app you install — its `dashboard`
+  // package is infrastructure and must never surface as a card on either
+  // the Core page or the Apps catalogue. Mirrors the backend's
+  // PackagesService.INFRASTRUCTURE_PACKAGES.
+  it('drops the dashboard infrastructure package from both halves', () => {
+    const list = [
+      pkg({ name: 'core', category: 'core' }),
+      pkg({ name: 'dashboard', category: 'core' }),
+      pkg({ name: 'media' }),
+    ];
+    const { core, apps } = splitByCore(list);
+    expect(core.map((p) => p.name)).toEqual(['core']);
+    expect(apps.map((p) => p.name)).toEqual(['media']);
+  });
 });
 
 describe('dockerStructureFor', () => {
@@ -104,6 +119,16 @@ describe('splitCatalogue', () => {
 
   it('returns empty groups for an empty catalogue', () => {
     expect(splitCatalogue([])).toEqual({ installed: [], marketplace: [] });
+  });
+
+  it('never lists the dashboard package as a marketplace app', () => {
+    const list = [
+      pkg({ name: 'dashboard', category: 'core', enabled: false }),
+      pkg({ name: 'photos', enabled: false }),
+    ];
+    const { installed, marketplace } = splitCatalogue(list);
+    expect(installed).toEqual([]);
+    expect(marketplace.map((p) => p.name)).toEqual(['photos']);
   });
 });
 
