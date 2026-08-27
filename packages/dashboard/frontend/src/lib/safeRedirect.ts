@@ -53,8 +53,16 @@ export function isSafeRedirect(value: string): boolean {
   // Control characters (NUL, newline, tab) are stripped or normalised
   // inconsistently across browsers and are only ever present in an
   // attempt to smuggle a scheme past a naive check.
+  //
+  // U+2028/U+2029 (LINE/PARAGRAPH SEPARATOR) are in the same family but
+  // outside the C0/C1 ranges: they are JS line terminators, so a value
+  // carrying one is harmless here (both current sinks are router.push
+  // and an encodeURIComponent'd query) but becomes a break-out the
+  // moment someone interpolates a redirect target into inline script or
+  // a JSON island. Rejected now so that future sink cannot inherit a
+  // hole from this helper.
   // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f]/.test(value)) return false;
+  if (/[\u0000-\u001f\u007f\u2028\u2029]/.test(value)) return false;
 
   // Sending someone back to /login after they just logged in is a loop.
   // Covers the bare path and any query/hash suffix ('/login?from=…').

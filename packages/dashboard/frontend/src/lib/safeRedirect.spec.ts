@@ -99,4 +99,15 @@ describe('isSafeRedirect', () => {
     expect(isSafeRedirect('/login')).toBe(false);
     expect(isSafeRedirect('')).toBe(false);
   });
+
+  // Unicode line terminators. Not exploitable through either current
+  // sink (router.push treats them as ordinary path characters, and the
+  // interceptor encodeURIComponent's the value), but they are JS line
+  // terminators and would break out of a string literal if a future
+  // caller ever interpolated a redirect target into inline script.
+  // Rejected at the helper so no such caller can inherit the hole.
+  it('rejects Unicode line separators', () => {
+    expect(safeRedirect('/\u2028evil')).toBe('/');
+    expect(safeRedirect('/\u2029evil')).toBe('/');
+  });
 });
