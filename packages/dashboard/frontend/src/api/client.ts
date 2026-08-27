@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance, AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { toast } from '@/composables/useToast';
+import { isSafeRedirect } from '@/lib/safeRedirect';
 
 // Extend AxiosRequestConfig so callers can opt out of the global
 // interceptor's user-visible toast on 5xx / network failures. Set
@@ -46,6 +47,28 @@ export function _resetToastDedupe(): void {
 
 // Global 401 hook + toast-on-server-failure hook. Kept as one interceptor
 // so the ordering (401 short-circuit before toast) stays obvious.
+
+/**
+ * Where the user is right now, as a relative path.
+ *
+ * Read from `window.location` rather than the router deliberately.
+ * Importing the router here would be a cycle (router -> stores -> api ->
+ * client), and under `createWebHistory` vue-router drives navigation
+ * through `history.pushState`, which updates `window.location`
+ * synchronously — so the two agree.
+ *
+ * The one case where they can disagree is a 401 arriving while a
+ * navigation is already in flight: `pushState` has run for the
+ * destination but the destination's own data fetch is what 401'd. In
+ * that case we capture the destination, not the origin, which is the
+ * more useful of the two anyway — it is the page the user was trying to
+ * reach and will want resumed after signing in.
+ */
+function currentRelativeLocation(): string {
+  const { pathname, search, hash } = window.location;
+  return `${pathname}${search}${hash}`;
+}
+
 http.interceptors.response.use(
   (r) => r,
   (err: AxiosError) => {
@@ -55,7 +78,24 @@ http.interceptors.response.use(
     if (status === 401) {
       const path = window.location.pathname;
       if (path !== '/login' && !path.startsWith('/onboarding')) {
-        window.location.href = '/login';
+        // Carry the current location across the bounce so a session that
+        // expires mid-use returns the user to the page they were on.
+        // Without this the interceptor navigated to a bare '/login' and
+        // the destination was simply lost: being on /apps/roundcube when
+        // the session died, signing in, and landing on the dashboard
+        // home. Note this is a *separate* defect from LoginView ignoring
+        // ?from= — fixing only one of the two leaves the round-trip
+        // broken, because there has to be a `from` to honour before
+        // honouring it means anything.
+        //
+        // Same ?from= contract the router guard uses (router/index.ts)
+        // and the same allow-list vet. pathname+search+hash is
+        // same-origin by construction, but isSafeRedirect() also
+        // filters the /login self-loop.
+        const here = currentRelativeLocation();
+        window.location.href = isSafeRedirect(here)
+          ? `/login?from=${encodeURIComponent(here)}`
+          : '/login';
       }
       return Promise.reject(err);
     }

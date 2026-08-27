@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
+import { safeRedirect } from '@/lib/safeRedirect';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
@@ -11,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui';
 import AuroraBackground from '@/components/AuroraBackground.vue';
 import AuroraCredit from '@/components/AuroraCredit.vue';
 
+const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const onboarding = useOnboardingStore();
@@ -48,7 +50,13 @@ async function submit(): Promise<void> {
   busy.value = true;
   try {
     await auth.login(username.value, password.value);
-    router.push('/');
+    // Resume the page the auth guard interrupted (it parks the intended
+    // destination in ?from= — see router/index.ts). This used to be a
+    // hard-coded push('/'), which threw the destination away and landed
+    // everyone on the dashboard home. safeRedirect() vets the value
+    // first: `from` is attacker-controllable, so an unvetted push here
+    // is an open redirect.
+    router.push(safeRedirect(route.query.from));
   } catch (e) {
     // iter-39: humane copy per §5 contract — no axios strings, no
     // e.message leaked into the DOM (that path used to expose
