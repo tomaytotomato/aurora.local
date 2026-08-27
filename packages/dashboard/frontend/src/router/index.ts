@@ -62,6 +62,14 @@ const routes: RouteRecordRaw[] = [
       { path: 'apps', redirect: '/apps/catalogue' },
       { path: 'apps/catalogue', component: () => import('@/views/PackagesCatalogue.vue') },
       { path: 'apps/core', component: () => import('@/views/PackagesCore.vue') },
+      // Per-service detail for a Core service. The static slug ('services')
+      // sits between 'core' and the parameter so /apps/core/:name never
+      // needs to arbitrate between "this is a per-service view" and "this
+      // is one of the future core-scoped tabs" (settings, backups, etc).
+      {
+        path: 'apps/core/services/:service',
+        component: () => import('@/views/CoreServiceDetail.vue'),
+      },
       // Your own compose files (2026-08-08). Deliberately a third page
       // rather than a filter on the catalogue: these are not curated and
       // must never read as though they were. See

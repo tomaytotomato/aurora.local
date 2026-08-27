@@ -290,6 +290,33 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SsoEnrollment' }
+  /sso/notifications:
+    get:
+      tags: [sso]
+      summary: Recent Authelia notifier entries
+      description: >-
+        Newest-first list of the last N notifications Authelia wrote to
+        its filesystem notifier (data/authelia/notification.txt). Every
+        entry can carry an OTP or a link that binds an authenticator to
+        an account, so the endpoint is authenticated -- serving it
+        anonymously would hand any LAN client a standing takeover
+        primitive.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: >-
+            Entries to return, capped at 20. Non-positive values fall
+            back to 5.
+          schema: { type: integer, minimum: 1, maximum: 20, default: 5 }
+      responses:
+        '200':
+          description: Notifications, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SsoNotification' }
 
   # ───────────────────────────── packages ─────────────────────────────
   /packages:
@@ -3141,3 +3168,39 @@ components:
         autheliaUp:
           type: boolean
           description: False when Authelia's database could not be read -- not yet started.
+
+    SsoNotification:
+      type: object
+      required: [date, recipient, subject, otp, urls, body]
+      properties:
+        date:
+          type: string
+          description: >-
+            Authelia-formatted timestamp, verbatim. Kept as a string
+            because Authelia's format has drifted across releases and
+            parsing it strictly would break the panel on upgrade; the UI
+            formats it client-side.
+        recipient:
+          type: string
+          description: >-
+            The {Name email} bracket Authelia writes, verbatim. Preserved
+            unparsed so a future field addition is not silently dropped.
+        subject:
+          type: string
+        otp:
+          type: string
+          nullable: true
+          description: >-
+            One-time code when the notification contains one; null for
+            enrollment links, password-reset links, or any notification
+            that carries no lone alphanumeric token.
+        urls:
+          type: array
+          items: { type: string }
+          description: Every URL in the body, in document order.
+        body:
+          type: string
+          description: >-
+            Notification message body with the Date/Recipient/Subject
+            headers stripped so the raw-details view does not repeat
+            what the structured fields already show.
