@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
+import { AuthApi } from '@/api/auth';
 import { useSystemStore } from '@/stores/system';
 import { AuditApi, type AuditEvent } from '@/api/audit';
 import { MdnsApi, type MdnsAlias } from '@/api/mdns';
@@ -14,7 +15,9 @@ import {
   Alert,
   AlertDescription,
   Badge,
+  Dialog,
   Input,
+  Label,
   Skeleton,
   Table,
   TableHeader,
@@ -41,6 +44,74 @@ async function signOut(): Promise<void> {
     return;
   }
   router.push('/login');
+}
+
+// ── Change password ─────────────────────────────────────────────
+//
+// Bug context: the Security page's "Fix it →" links for weak-admin
+// findings landed on /settings#account where there was nothing but a
+// Sign out button — the operator was told to rotate and given nowhere
+// to do it. This dialog is what makes those links useful.
+//
+// Shape mirrors UsersView's Rotate-password dialog with one extra field:
+// the current password. The backend requires it, and a self-service
+// flow that skipped it would leave a stolen session cookie enough on
+// its own to take the account over.
+
+const showChangePassword = ref(false);
+const pwForm = ref({ current: '', next: '', confirm: '' });
+const pwBusy = ref(false);
+const pwErr = ref<string | null>(null);
+
+function openChangePassword(): void {
+  pwForm.value = { current: '', next: '', confirm: '' };
+  pwErr.value = null;
+  showChangePassword.value = true;
+}
+
+async function submitChangePassword(): Promise<void> {
+  pwErr.value = null;
+  if (pwForm.value.next !== pwForm.value.confirm) {
+    pwErr.value = 'The two new-password fields do not match.';
+    return;
+  }
+  if (pwForm.value.next.length < 12) {
+    pwErr.value = 'New password must be at least 12 characters.';
+    return;
+  }
+  if (pwForm.value.next === pwForm.value.current) {
+    pwErr.value = 'New password matches the current one.';
+    return;
+  }
+  pwBusy.value = true;
+  try {
+    await AuthApi.changePassword(pwForm.value.current, pwForm.value.next);
+    showChangePassword.value = false;
+    toast({
+      title: 'Password changed',
+      description: 'You stay signed in — use the new one next time.',
+      variant: 'success',
+      duration: 4000,
+    });
+  } catch (err) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 401) {
+      // The one 401 that is a domain answer, not a session signal: the
+      // current-password field is wrong. Say so. Anything vaguer
+      // ("sign in again") pretends to be a session issue and sends
+      // the operator hunting for the wrong problem.
+      pwErr.value = 'That current password does not match. Try again.';
+    } else if (status === 400) {
+      pwErr.value = 'That new password was rejected. Pick a different one.';
+    } else {
+      pwErr.value = humanCopyForError(err, {
+        subject: 'your password',
+        action: 'change',
+      });
+    }
+  } finally {
+    pwBusy.value = false;
+  }
 }
 
 // iter-31 audit-log viewer. Backend endpoint sorts newest first; the
@@ -141,19 +212,31 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
     </div>
 
     <div class="space-y-6 max-w-2xl">
-      <Card class="p-8">
+      <Card class="p-8" id="account">
         <h3 class="card-title mb-1">Account</h3>
         <p class="card-subtitle mb-4">
           Signed in as <span class="font-mono text-foreground">{{ auth.session?.username ?? '—' }}</span>.
         </p>
-        <Button variant="secondary" size="sm" @click="signOut">Sign out</Button>
+        <div class="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            data-test="settings-change-password"
+            @click="openChangePassword"
+          >Change password</Button>
+          <Button variant="secondary" size="sm" @click="signOut">Sign out</Button>
+        </div>
       </Card>
 
       <Card class="p-8">
         <h3 class="card-title mb-1">Second factor</h3>
         <p class="card-subtitle mb-3">Passkey</p>
         <Alert variant="info">
-          <AlertDescription>Passkey sign-in isn't set up on this box yet.</AlertDescription>
+          <AlertDescription>
+            Passkey sign-in isn't wired up on this box yet. Second
+            factors for every gated service (mail, notes, backup, …) are
+            managed by Aurora SSO on the sign-in portal, not here.
+          </AlertDescription>
         </Alert>
       </Card>
 
@@ -332,5 +415,71 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
         </Table>
       </Card>
     </div>
+
+    <!-- Change-password dialog. Lives at the end of the template so
+         the Card grid above stays unaffected by the modal's DOM
+         insertion order. -->
+    <Dialog
+      :open="showChangePassword"
+      data-test="settings-password-dialog"
+      @update:open="(v: boolean) => { if (!v) showChangePassword = false; }"
+    >
+      <template #title>Change your password</template>
+      <template #description>
+        You stay signed in on this box after the change. Next time you
+        sign in — here or on any app protected by Aurora SSO — use the
+        new one.
+      </template>
+
+      <div class="space-y-4">
+        <Alert v-if="pwErr" variant="destructive" data-test="settings-password-error">
+          <AlertDescription>{{ pwErr }}</AlertDescription>
+        </Alert>
+
+        <div>
+          <Label for="pw-current">Current password</Label>
+          <Input
+            id="pw-current"
+            v-model="pwForm.current"
+            type="password"
+            autocomplete="current-password"
+            data-test="settings-password-current"
+          />
+        </div>
+        <div>
+          <Label for="pw-next">New password</Label>
+          <Input
+            id="pw-next"
+            v-model="pwForm.next"
+            type="password"
+            autocomplete="new-password"
+            data-test="settings-password-new"
+          />
+          <p class="text-xs text-muted-foreground mt-1">
+            At least 12 characters.
+          </p>
+        </div>
+        <div>
+          <Label for="pw-confirm">Confirm new password</Label>
+          <Input
+            id="pw-confirm"
+            v-model="pwForm.confirm"
+            type="password"
+            autocomplete="new-password"
+            data-test="settings-password-confirm"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <Button variant="ghost" :disabled="pwBusy" @click="showChangePassword = false">Cancel</Button>
+        <Button
+          variant="primary"
+          :loading="pwBusy"
+          data-test="settings-password-submit"
+          @click="submitChangePassword"
+        >Change password</Button>
+      </template>
+    </Dialog>
   </section>
 </template>

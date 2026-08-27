@@ -38,7 +38,9 @@ class AuthControllerLogoutTests {
   void setUp() {
     auth = Mockito.mock(AuthService.class);
     stateFiles = Mockito.mock(StateFileService.class);
-    ctrl = new AuthController(auth, stateFiles, new SessionService());
+    ctrl = new AuthController(auth, stateFiles, new SessionService(),
+        Mockito.mock(com.tomaytotomato.aurora.services.CurrentUserService.class),
+        Mockito.mock(com.tomaytotomato.aurora.services.UsersService.class));
     mvc = MockMvcBuilders.standaloneSetup(ctrl).build();
   }
 

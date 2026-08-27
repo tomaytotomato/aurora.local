@@ -3,8 +3,10 @@ package com.tomaytotomato.aurora.controllers;
 import com.tomaytotomato.aurora.domain.AdminUser;
 import com.tomaytotomato.aurora.domain.RepoState;
 import com.tomaytotomato.aurora.services.AuthService;
+import com.tomaytotomato.aurora.services.CurrentUserService;
 import com.tomaytotomato.aurora.services.SessionService;
 import com.tomaytotomato.aurora.services.StateFileService;
+import com.tomaytotomato.aurora.services.UsersService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -34,11 +36,17 @@ public class AuthController {
   private final AuthService auth;
   private final StateFileService stateFiles;
   private final SessionService sessions;
+  private final CurrentUserService currentUser;
+  private final UsersService users;
 
-  public AuthController(AuthService auth, StateFileService stateFiles, SessionService sessions) {
+  public AuthController(AuthService auth, StateFileService stateFiles,
+                        SessionService sessions, CurrentUserService currentUser,
+                        UsersService users) {
     this.auth = auth;
     this.stateFiles = stateFiles;
     this.sessions = sessions;
+    this.currentUser = currentUser;
+    this.users = users;
   }
 
   @PostMapping("/login")
@@ -117,6 +125,68 @@ public class AuthController {
   }
 
   public record LoginReq(@NotBlank String username, @NotBlank String password) {}
+
+  /**
+   * Self-service password change for the currently signed-in operator.
+   *
+   * <p><b>Why not reuse {@code POST /users/{id}/password}.</b> That
+   * endpoint is for admin-driven rotation — an admin rotates someone
+   * else's password, hands them the new value, and the plaintext is
+   * echoed back to the admin (see {@code UsersController.resetPassword}).
+   * The security shape here is opposite: the caller supplies both the
+   * old and the new plaintext themselves, we verify the old before
+   * writing the new, and we return nothing. Conflating the two would
+   * either leak echo of self-chosen passwords into API responses or
+   * require the admin path to ask for the current password nobody
+   * knows.
+   *
+   * <p><b>Why require the current password.</b> A stolen session
+   * cookie is an existing threat we already model against (secure,
+   * HttpOnly, SameSite=Lax); requiring the current password on rotate
+   * caps the blast radius of that theft — the attacker still cannot
+   * lock the real operator out of their own box. Same reason every
+   * other password-change flow on the internet does this.
+   *
+   * <p>Return shape is deliberately empty on success: nothing to log,
+   * nothing to echo, no plaintext ever leaves this method. The audit
+   * row lives in {@link UsersService#rotatePassword} where every other
+   * password rotation on the box is recorded.
+   */
+  @PostMapping("/password")
+  public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordReq req) {
+    String username = currentUser.currentUsername()
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "not signed in"));
+    Optional<AdminUser> user = auth.authenticate(username, req.currentPassword());
+    if (user.isEmpty()) {
+      // Deliberately not "wrong password" — same 401 the login route
+      // would return, same amount of information.
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "current password is wrong");
+    }
+    if (req.newPassword() == null || req.newPassword().length() < 12) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "new password must be at least 12 characters");
+    }
+    if (req.newPassword().equals(req.currentPassword())) {
+      // Not a hard invariant of the auth model, but a good ergonomic
+      // guard — an operator who "rotates" to the same password is
+      // usually the victim of a form-fill mistake. Cheap to catch, and
+      // the message tells them what happened.
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "new password matches the current one");
+    }
+    try {
+      users.rotatePassword(user.get().id(), req.newPassword().toCharArray(),
+          user.get().id());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+    return ResponseEntity.noContent().build();
+  }
+
+  public record ChangePasswordReq(
+      @NotBlank String currentPassword,
+      @NotBlank String newPassword
+  ) {}
 
   /**
    * SPA-facing session shape. Stable contract; add fields, never rename.

@@ -223,7 +223,15 @@ public class MdnsAliasService {
       published.put(full, p);
       publishedAt.put(full, Instant.now());
       failureReasons.remove(full);
-      audit.record(null, "mdns.alias.publish", full,
+      // recordIfChanged, not record: reconcile() runs on startup and on
+      // a 60s timer, and spawn happens either because we have never seen
+      // this alias or because the previous publisher process died. In
+      // the second case the diff row is byte-identical to the previous
+      // one — same package, same source, same target IP — and adding
+      // another audit line just says "we noticed this again" without
+      // carrying new information. Change-only recording keeps the
+      // Settings > Recent activity feed reading as change, not noise.
+      audit.recordIfChanged(null, "mdns.alias.publish", full,
           "{\"package\":\"" + src.pkg() + "\",\"source\":\"" + src.source() + "\",\"target_ip\":\"" + targetIp + "\"}");
     }
 

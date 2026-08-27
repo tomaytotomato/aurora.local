@@ -77,6 +77,18 @@ http.interceptors.response.use(
 
     if (status === 401) {
       const path = window.location.pathname;
+      // Some endpoints treat 401 as a domain answer, not a session
+      // signal — the change-password endpoint returns 401 for "wrong
+      // current password", and forwarding that to /login would sign
+      // the operator out (invalidating the correct session) as
+      // punishment for one wrong keystroke. The signal for those
+      // endpoints stays inline on the form.
+      const requestUrl = (config.url ?? '').toString();
+      const isChangePassword =
+        requestUrl.endsWith('/auth/password') || requestUrl.includes('/auth/password?');
+      if (isChangePassword) {
+        return Promise.reject(err);
+      }
       if (path !== '/login' && !path.startsWith('/onboarding')) {
         // Carry the current location across the bounce so a session that
         // expires mid-use returns the user to the page they were on.

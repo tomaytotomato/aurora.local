@@ -106,6 +106,27 @@ paths:
       summary: Log out; clears the session cookie
       responses:
         '204': { description: Logged out. }
+  /auth/password:
+    post:
+      tags: [auth]
+      summary: Self-service password change for the current operator
+      description: >-
+        Rotate the signed-in operator's password after verifying the
+        current one. Distinct from POST /users/{id}/password: that one
+        is admin-driven and echoes the new plaintext back so the admin
+        can hand it over; this one requires the caller to prove
+        knowledge of the current password and returns nothing. Requires
+        the new password to be at least 12 characters and different
+        from the current one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordReq' }
+      responses:
+        '204': { description: Password rotated. }
+        '400': { description: New password is too short, matches the current one, or was rejected by the user-service validator. }
+        '401': { description: Not signed in, or the current password did not verify. }
 
   # ──────────────────────────── onboarding ────────────────────────────
   /onboarding:
@@ -1978,6 +1999,27 @@ components:
           oneOf:
             - { $ref: '#/components/schemas/UserRole' }
             - { type: 'null' }
+
+    ChangePasswordReq:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          description: >
+            The current password, plaintext. Verified against the stored
+            bcrypt hash before anything else happens; a mismatch is a
+            401. Deliberately not marked minLength: 12 because
+            historically-hashed passwords may be shorter and the caller
+            has to be able to type whatever they typed at onboarding.
+        newPassword:
+          type: string
+          minLength: 12
+          description: >
+            The new password, plaintext. Must be at least 12 characters
+            and different from the current one; UsersService applies its
+            standard validate step on top (banned words, entropy shape).
 
     OnboardingStepId:
       type: string

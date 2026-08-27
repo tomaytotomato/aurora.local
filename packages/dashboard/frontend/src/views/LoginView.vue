@@ -21,7 +21,6 @@ const username = ref('');
 const password = ref('');
 const err = ref<string | null>(null);
 const busy = ref(false);
-const passkeyToast = ref<string | null>(null);
 
 // Onboarding CTA gate: only surface the "Start onboarding" link when the
 // wizard is not yet complete (or the box is in bootstrap_mode from a
@@ -80,11 +79,6 @@ async function submit(): Promise<void> {
     busy.value = false;
   }
 }
-
-function passkey(): void {
-  passkeyToast.value = "Passkey sign-in isn't available yet. Use your password.";
-  setTimeout(() => (passkeyToast.value = null), 4000);
-}
 </script>
 
 <template>
@@ -114,9 +108,6 @@ function passkey(): void {
       <Alert v-if="err" variant="destructive" class="mb-4">
         <AlertDescription>{{ err }}</AlertDescription>
       </Alert>
-      <Alert v-if="passkeyToast" variant="info" class="mb-4">
-        <AlertDescription>{{ passkeyToast }}</AlertDescription>
-      </Alert>
 
       <form class="space-y-4" @submit.prevent="submit">
         <div>
@@ -130,9 +121,14 @@ function passkey(): void {
         <Button type="submit" variant="primary" size="lg" class="w-full" :loading="busy">
           Sign in
         </Button>
-        <Button type="button" variant="secondary" size="lg" class="w-full" @click="passkey">
-          Sign in with passkey
-        </Button>
+        <!--
+          The old "Sign in with passkey" button lived here and did
+          nothing except surface a 4-second toast. Auth plan v2 §5 M1
+          flagged it: "Remove the fake passkey button. Shipping a button
+          that lies is worse than shipping nothing." When passkey login
+          lands (M3), it comes back with real WebAuthn behind it. Until
+          then, the login page shows only the door that actually works.
+        -->
       </form>
 
       <p

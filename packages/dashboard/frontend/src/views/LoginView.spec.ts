@@ -157,3 +157,22 @@ describe('LoginView session-expiry round-trip', () => {
     expect(router.currentRoute.value.fullPath).not.toBe('/');
   });
 });
+
+/**
+ * Regression pin for the fake-passkey button removal (QA sweep,
+ * 27 Aug 2026). Auth plan v2 §5 M1 said "Shipping a button that lies
+ * is worse than shipping nothing." The button used to sit next to
+ * Sign in and only surface a 4-second toast. Post-removal, the login
+ * page should offer exactly one door: the password form.
+ */
+describe('LoginView UI surface', () => {
+  it('does not render a passkey button until real passkey login lands', async () => {
+    const { w } = await mountLogin();
+    const buttons = w.findAll('button').map((b) => b.text().toLowerCase());
+    // Sign-in button still present.
+    expect(buttons).toContain('sign in');
+    // No passkey-anything on this page.
+    expect(buttons.some((t) => t.includes('passkey'))).toBe(false);
+    expect(w.text().toLowerCase()).not.toContain('passkey');
+  });
+});

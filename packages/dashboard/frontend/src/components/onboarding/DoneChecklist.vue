@@ -211,7 +211,20 @@ const displayServices = computed<ServiceStatus[]>(() => {
 });
 
 const showBringingUp = computed(() =>
-  displayServices.value.some((s) => s.state === 'failed' || s.state === 'not-started'),
+  displayServices.value.some((s) => s.state === 'starting'),
+);
+
+// A separate mode for the banner: when at least one row is asking the
+// operator to actually click Start (or acknowledge a failure), the
+// "nothing for you to type" copy is a lie — there is very much
+// something for you to do. Kept as its own flag so the same set of
+// display services can be in "still starting" and "needs a click" at
+// the same time (some starting, some failed) without either half
+// silencing the other. Priority when both are true goes to the actionable
+// copy: telling the operator to wait is fine, telling them to wait
+// while a Start button glows is not.
+const showNeedsStart = computed(() =>
+  displayServices.value.some((s) => s.state === 'not-started' || s.state === 'failed'),
 );
 
 function onMarkDone(pkg: string): void {
@@ -292,7 +305,14 @@ async function onStart(pkg: string): Promise<void> {
 <template>
   <div data-checklist="get-started" :class="reconnecting ? 'opacity-70 transition-opacity' : ''">
     <div
-      v-if="showBringingUp"
+      v-if="showNeedsStart"
+      data-banner="needs-start"
+      class="border border-border rounded-lg p-3 mb-3 bg-muted text-sm text-foreground"
+    >
+      Some of these need a click below to come up.
+    </div>
+    <div
+      v-else-if="showBringingUp"
       data-banner="bringing-up"
       class="border border-border rounded-lg p-3 mb-3 bg-muted text-sm text-foreground"
     >

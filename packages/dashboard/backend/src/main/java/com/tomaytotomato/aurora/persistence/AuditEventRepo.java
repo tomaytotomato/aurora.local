@@ -29,6 +29,62 @@ public class AuditEventRepo {
   }
 
   /**
+   * Insert only when the newest row for {@code (action, target)} has a
+   * different {@code diff_json} than the one supplied. Used by callers
+   * whose events are "state now looks like X" heartbeats — the mdns
+   * publisher re-audits on every restart even when the alias set has
+   * not changed since the last audit, and the log fills up with rows
+   * that carry no new information.
+   *
+   * <p>The uniqueness check is scoped to {@code (action, target)} — two
+   * different aliases changing to the same target IP each get their
+   * own row — and to the immediately previous row — a temporary
+   * change and a change back to the earlier value still records twice.
+   * That is the honest thing to do: the log is meant to show change,
+   * and "changed and changed back" is a change.
+   *
+   * @return true when the row was inserted, false when suppressed as a duplicate
+   */
+  public boolean recordIfChanged(Long userId, String action, String target, String diffJson) {
+    String prior = lastDiff(action, target);
+    if (prior != null && prior.equals(diffJson == null ? "" : diffJson)) {
+      return false;
+    }
+    if (prior == null && (diffJson == null || diffJson.isEmpty())) {
+      // First-ever record for this (action, target) with a null-ish
+      // diff: still record so the log carries the "we noticed this
+      // target for the first time" milestone.
+      record(userId, action, target, diffJson);
+      return true;
+    }
+    record(userId, action, target, diffJson);
+    return true;
+  }
+
+  /**
+   * Newest {@code diff_json} for the given {@code (action, target)} pair,
+   * or null when nothing has been recorded yet. Empty-string diffs are
+   * returned verbatim (they mean "we recorded an event but had no diff
+   * to attach") so callers can distinguish that from "no prior row".
+   */
+  String lastDiff(String action, String target) {
+    try {
+      List<String> rows = jdbc.query(
+          "SELECT COALESCE(diff_json, '') FROM audit_event "
+              + "WHERE action = ? AND target = ? "
+              + "ORDER BY ts DESC, id DESC LIMIT 1",
+          (rs, i) -> rs.getString(1),
+          action, target);
+      return rows.isEmpty() ? null : rows.get(0);
+    } catch (Exception e) {
+      log.warn("audit lastDiff failed: {}", e.getMessage());
+      // Fail open: if we cannot check, record the event. Better a
+      // duplicate row than a swallowed one.
+      return null;
+    }
+  }
+
+  /**
    * iter-30 (v0.3 followup): paged audit-event query. Supports optional
    * action-prefix, actor-id, and time-range filters so a settings-side
    * viewer can render "who suppressed what" or "launches since {ts}".
