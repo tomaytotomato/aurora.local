@@ -30,6 +30,7 @@ import JobLogPanel from '@/components/JobLogPanel.vue';
 import PackageResourcesCard from '@/components/PackageResourcesCard.vue';
 import PackageImpactPanel from '@/components/PackageImpactPanel.vue';
 import PackagePreview from '@/components/PackagePreview.vue';
+import MarkdownBlock from '@/components/MarkdownBlock.vue';
 import { Alert, AlertDescription, Button, Dialog, Input, Label, Skeleton } from '@/components/ui';
 
 const route = useRoute();
@@ -98,6 +99,25 @@ const links = computed(() => (detail.value ? packageLinks(detail.value) : []));
 // package that ships no README.
 const readmeBody = computed(() => (detail.value?.readme ?? '').replace(/^#\s+.*\n+/, '').trim());
 const aboutBody = computed(() => readmeBody.value || (detail.value?.description ?? '').trim());
+// The About body is markdown when it came from README.md and plain text
+// when it fell back to the manifest description. MarkdownBlock renders
+// both fine (plain text is a valid degenerate markdown document), so we
+// key off which one we actually used rather than sniffing for #/*.
+const aboutIsMarkdown = computed(() => !!readmeBody.value);
+
+// Primary CTA target for an installed + running app: the first vhost
+// Caddy is serving for it. vhostsFor() in PackagesService already
+// appends the current domain, so these are full FQDNs like
+// `notes.aurora.local`. https:// because Caddy issues a cert via the
+// core CA on every managed vhost; the trust-root install lives on the
+// Done page and in Settings > Reach. When the package has no vhost
+// (Samba, backup jobs, other backend-only apps) the button just does
+// not render — there is nothing to open in a browser.
+const openUrl = computed<string | null>(() => {
+  if (!detail.value?.enabled || !detail.value?.running) return null;
+  const host = (detail.value.vhosts ?? [])[0];
+  return host ? `https://${host}/` : null;
+});
 
 function portLabel(p: Record<string, unknown>): string {
   const host = p.host ?? p.port ?? '?';
@@ -528,10 +548,24 @@ onMounted(async () => {
   <section>
     <div class="mb-8 on-photo">
       <router-link :to="backTo" class="text-xs text-white/70 no-underline hover:text-white">{{ backLabel }}</router-link>
-      <div class="flex items-baseline gap-3 mt-4">
+      <div class="flex items-baseline gap-3 mt-4 flex-wrap">
         <h1>{{ heading }}</h1>
         <StatusLight :state="lightState" class="bg-card" />
         <Badge v-if="isCore" tone="info" class="bg-card">core</Badge>
+        <!-- Primary CTA: take the user straight to the app they just
+             installed. Deliberately not in the actions Card below with
+             Restart / Update / Disable / Uninstall — that group is
+             maintenance, this one is "go use the thing". The button is
+             absent (rather than disabled) when the app is not running
+             or has no vhost, so the hero doesn't advertise a dead link. -->
+        <a
+          v-if="openUrl"
+          :href="openUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="ml-auto inline-flex items-center gap-1.5 rounded-md bg-white/95 text-slate-900 hover:bg-white px-3 py-1.5 text-sm font-medium no-underline shadow-sm"
+          data-test="package-open"
+        >Open {{ heading }} <span aria-hidden="true">↗</span></a>
       </div>
       <p v-if="detail" class="mt-2">{{ detail.description }}</p>
       <!-- VPN has a bespoke config surface at its own route; peer/QR
@@ -698,10 +732,17 @@ onMounted(async () => {
           </Card>
         </div>
         <div v-else class="grid grid-cols-2 gap-4">
-          <Card class="col-span-2">
+          <Card class="col-span-2" data-test="package-about-card">
             <div class="eyebrow mb-1">About</div>
             <h3 class="mb-3">What this is</h3>
-            <p v-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
+            <!-- Package READMEs are authored markdown; the fallback
+                 description from the manifest is plain text. Both go
+                 through MarkdownBlock so headings, code and links
+                 render properly — previously this was `{{ aboutBody }}`
+                 inside a whitespace-pre-line paragraph, which surfaced
+                 raw `##` and `[text](url)` to the user. -->
+            <MarkdownBlock v-if="aboutBody && aboutIsMarkdown" :source="aboutBody" />
+            <p v-else-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
             <p v-else class="text-sm text-muted-foreground">No description yet.</p>
           </Card>
           <!-- Versions. Absent entirely when the updates domain has

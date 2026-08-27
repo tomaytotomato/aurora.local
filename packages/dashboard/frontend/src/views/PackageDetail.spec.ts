@@ -539,3 +539,111 @@ describe('PackageDetail — preview vs installed view', () => {
     expect(w.find('[data-test="package-details-card"]').exists()).toBe(true);
   });
 });
+
+/**
+ * The "go use the thing" CTA and the About-tab markdown renderer.
+ *
+ * Both exist because a freshly-installed app left the user stranded:
+ * the only buttons on the page were maintenance actions (Restart /
+ * Update / Disable / Uninstall) with no way to actually open the app,
+ * and the About card printed the package README as raw markdown —
+ * literal `##` and `[text](url)` on screen.
+ */
+describe('PackageDetail open CTA', () => {
+  it('links to the first vhost when the app is enabled and running', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/roundcube',
+      data: packageDetail({
+        name: 'roundcube',
+        title: 'Roundcube (webmail)',
+        enabled: true,
+        running: true,
+        vhosts: ['mail.aurora.local', 'webmail.aurora.local'],
+      }),
+    });
+    const { w } = await mountDetail('roundcube');
+
+    const cta = w.find('[data-test="package-open"]');
+    expect(cta.exists()).toBe(true);
+    // https:// — Caddy issues a cert on every managed vhost.
+    expect(cta.attributes('href')).toBe('https://mail.aurora.local/');
+    // New tab, and never hand the opener window over.
+    expect(cta.attributes('target')).toBe('_blank');
+    expect(cta.attributes('rel')).toContain('noopener');
+  });
+
+  it('is absent while the app is installed but not running', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/roundcube',
+      data: packageDetail({
+        name: 'roundcube',
+        enabled: true,
+        running: false,
+        vhosts: ['mail.aurora.local'],
+      }),
+    });
+    const { w } = await mountDetail('roundcube');
+    expect(w.find('[data-test="package-open"]').exists()).toBe(false);
+  });
+
+  it('is absent for a backend-only app that serves no vhost', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/storage',
+      data: packageDetail({ name: 'storage', enabled: true, running: true, vhosts: [] }),
+    });
+    const { w } = await mountDetail('storage');
+    expect(w.find('[data-test="package-open"]').exists()).toBe(false);
+  });
+});
+
+describe('PackageDetail about card', () => {
+  it('renders README markdown as HTML rather than printing the source', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/notes',
+      data: packageDetail({
+        name: 'notes',
+        readme: '# notes\n\n## First-run\n\nSet `SB_USER` and read [the docs](https://silverbullet.md/).',
+      }),
+    });
+    const { w } = await mountDetail('notes');
+
+    const html = w.find('[data-test="package-about-card"]').html();
+    // Heading/code/link became real elements...
+    expect(html).toContain('<h2');
+    expect(html).toContain('<code>SB_USER</code>');
+    expect(html).toContain('href="https://silverbullet.md/"');
+    // ...and the raw markdown punctuation is gone from the text.
+    const text = w.text();
+    expect(text).toContain('First-run');
+    expect(text).not.toContain('## First-run');
+    expect(text).not.toContain('[the docs]');
+  });
+
+  it('strips script tags from README HTML', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/evil',
+      data: packageDetail({
+        name: 'evil',
+        readme: '# evil\n\nHello\n\n<script>window.pwned = 1</script>\n',
+      }),
+    });
+    const { w } = await mountDetail('evil');
+    expect(w.html()).not.toContain('<script>');
+    expect(w.html()).not.toContain('window.pwned');
+  });
+
+  it('falls back to the plain manifest description when there is no README', async () => {
+    stubResponse({
+      method: 'get',
+      url: '/packages/photos',
+      data: packageDetail({ name: 'photos', description: 'Photo library.', readme: undefined }),
+    });
+    const { w } = await mountDetail('photos');
+    expect(w.text()).toContain('Photo library.');
+  });
+});

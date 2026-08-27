@@ -19,7 +19,15 @@ COPY frontend/package.json ./
 RUN npm install --no-audit --no-fund --loglevel=error --legacy-peer-deps
 
 COPY frontend/ ./
-RUN npm run build
+# The MSW service worker lives in public/ so `npm run dev:mock` can serve
+# it, which means Vite copies it into dist/ on every build. Shipping a
+# request-interceptor worker in the production image is a footgun: any
+# browser that ever registered it (a dev:mock session against the same
+# origin) keeps serving mocked API responses over the real backend, and
+# the symptom — "my change isn't showing up" — looks like a stale build
+# rather than a stale worker. Prod never starts it (main.ts gates on
+# VITE_USE_MOCKS), so drop the file rather than leave it fetchable.
+RUN npm run build && rm -f dist/mockServiceWorker.js
 
 # ─────────────────────────────────────────────────────────────
 # Stage 2 · Backend (Spring Boot 4 + Java 25)
