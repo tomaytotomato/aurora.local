@@ -6,6 +6,7 @@ import { findCoreService, resolveOpenUrl } from '@/api/core-services';
 import { SsoApi, type SsoNotification } from '@/api/sso';
 import { StalwartApi, type StalwartAdminCredential } from '@/api/stalwart';
 import { useSystemStore } from '@/stores/system';
+import { copyToClipboard } from '@/lib/utils';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
@@ -241,17 +242,23 @@ async function saveStalwartSecret(): Promise<void> {
 async function copyStalwartSecret(): Promise<void> {
   const secret = stalwartCred.value?.secret;
   if (!secret) return;
-  try {
-    await navigator.clipboard.writeText(secret);
-    stalwartCopied.value = true;
-    window.setTimeout(() => { stalwartCopied.value = false; }, 2000);
-  } catch {
-    // Clipboard denied (insecure origin, no user gesture). The value
-    // is on screen already; failing loudly would suggest the reveal
-    // itself failed, which it did not.
+  // copyToClipboard tries the Clipboard API first (secure contexts
+  // only) and falls back to a hidden-textarea + execCommand('copy')
+  // path that works on plain HTTP. The dashboard usually lives at
+  // http://aurora.local on the LAN, where navigator.clipboard is
+  // undefined — without the fallback the Copy button used to silently
+  // do nothing (Bruce's report, 2026-08-27). Returns a boolean so we
+  // can render an honest 'Copy failed' state instead of pretending
+  // it worked.
+  const ok = await copyToClipboard(secret);
+  if (ok) {
+    stalwartCopied.value = 'ok';
+  } else {
+    stalwartCopied.value = 'fail';
   }
+  window.setTimeout(() => { stalwartCopied.value = null; }, 2500);
 }
-const stalwartCopied = ref(false);
+const stalwartCopied = ref<'ok' | 'fail' | null>(null);
 
 // Reset reveal state when the operator navigates between services so
 // leaving Stalwart and coming back does not still render a stale
@@ -366,20 +373,20 @@ function stateLabel(info: ContainerInfo | null): string {
 }
 
 const copied = ref<string | null>(null);
+const copiedFail = ref<string | null>(null);
 async function copyOtp(otp: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(otp);
+  // See copyStalwartSecret for the http://aurora.local / secure-context
+  // rationale. Same failure mode; same fix.
+  const ok = await copyToClipboard(otp);
+  if (ok) {
     copied.value = otp;
-    window.setTimeout(() => {
-      if (copied.value === otp) copied.value = null;
-    }, 2000);
-  } catch {
-    // Clipboard is blocked on insecure origins (this page ships over
-    // HTTP on the LAN by default) and in some browsers without a user
-    // gesture. The OTP is on screen in a select-all block so failing
-    // quietly is fine — a red toast here would suggest the OTP was
-    // wrong, which it isn't.
+  } else {
+    copiedFail.value = otp;
   }
+  window.setTimeout(() => {
+    if (copied.value === otp) copied.value = null;
+    if (copiedFail.value === otp) copiedFail.value = null;
+  }, 2500);
 }
 
 /**
@@ -545,7 +552,7 @@ function toggleBody(i: number): void {
               size="sm"
               data-test="stalwart-admin-copy"
               @click="copyStalwartSecret"
-            >{{ stalwartCopied ? 'Copied' : 'Copy' }}</Button>
+            >{{ stalwartCopied === 'ok' ? 'Copied' : stalwartCopied === 'fail' ? 'Copy failed' : 'Copy' }}</Button>
             <Button
               v-if="stalwartRevealed && stalwartCred && !stalwartEditing"
               variant="secondary"
@@ -765,7 +772,7 @@ function toggleBody(i: number): void {
                   variant="secondary"
                   data-test="authelia-notification-copy"
                   @click="copyOtp(n.otp)"
-                >{{ copied === n.otp ? 'Copied' : 'Copy code' }}</Button>
+                >{{ copied === n.otp ? 'Copied' : copiedFail === n.otp ? 'Copy failed' : 'Copy code' }}</Button>
               </div>
               <p class="text-xs text-muted-foreground mt-2">
                 Type this into the code prompt Authelia is showing in your

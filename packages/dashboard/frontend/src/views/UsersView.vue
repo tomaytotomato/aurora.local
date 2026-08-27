@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useUsersStore } from '@/stores/users';
 import type { Role, UserSummary } from '@/api/users';
 import { humanCopyForError } from '@/lib/http-error-copy';
+import { copyToClipboard } from '@/lib/utils';
 import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
@@ -198,20 +199,21 @@ async function submitRotatePassword(): Promise<void> {
 // copy, so if this disappears before the admin reads it the only remedy
 // is another rotation.
 const issued = ref<{ username: string; password: string } | null>(null);
-const copied = ref(false);
+const copied = ref<'ok' | 'fail' | null>(null);
 
 async function copyIssued(): Promise<void> {
   if (!issued.value) return;
-  try {
-    await navigator.clipboard.writeText(issued.value.password);
-    copied.value = true;
-    window.setTimeout(() => { copied.value = false; }, 2000);
-  } catch {
-    // Clipboard is blocked on insecure origins and in some browsers
-    // without a user gesture. The password is on screen and selectable,
-    // so failing quietly is fine — an error toast here would imply the
-    // user creation failed, which it did not.
-  }
+  // copyToClipboard tries the Clipboard API first (secure contexts
+  // only) and falls back to a hidden-textarea + execCommand('copy')
+  // path that works on plain HTTP. The dashboard usually lives at
+  // http://aurora.local on the LAN, where navigator.clipboard is
+  // undefined — without the fallback the Copy button silently did
+  // nothing (Bruce's report, 2026-08-27). Returns a boolean so we
+  // can render an honest 'Copy failed' state instead of pretending
+  // it worked.
+  const ok = await copyToClipboard(issued.value.password);
+  copied.value = ok ? 'ok' : 'fail';
+  window.setTimeout(() => { copied.value = null; }, 2500);
 }
 
 // ─── delete ────────────────────────────────────────────────────────
@@ -558,7 +560,7 @@ function formatCreatedAt(iso: string): string {
 
       <template #footer>
         <Button variant="secondary" data-test="users-issued-copy" @click="copyIssued">
-          {{ copied ? 'Copied' : 'Copy password' }}
+          {{ copied === 'ok' ? 'Copied' : copied === 'fail' ? 'Copy failed' : 'Copy password' }}
         </Button>
         <Button data-test="users-issued-done" @click="issued = null">Done</Button>
       </template>
