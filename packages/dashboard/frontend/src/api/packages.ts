@@ -307,10 +307,27 @@ export const PackagesApi = {
     return data;
   },
   async env(name: string, reveal = false): Promise<Record<string, string>> {
-    const { data } = await http.get<Record<string, string>>(`/packages/${name}/env`, {
-      params: reveal ? { reveal: 1 } : {},
-    });
-    return data;
+    try {
+      const { data } = await http.get<Record<string, string>>(`/packages/${name}/env`, {
+        params: reveal ? { reveal: 1 } : {},
+      });
+      return data;
+    } catch (e: unknown) {
+      // A package that declares no required_env and ships no .env.example
+      // has genuinely nothing to configure. The backend answers 404 for
+      // its /env endpoint in that case, which the Config tab used to
+      // render as "Aurora can't find this app's configuration on this
+      // box any more." — a scary error copy for a package that is
+      // deliberately configuration-free. Fold 404 into an empty map so
+      // the Config tab hits its "nothing to configure" empty state
+      // instead of the destructive alert.
+      const status =
+        e && typeof e === 'object' && 'response' in e
+          ? (e as { response?: { status?: number } }).response?.status
+          : undefined;
+      if (status === 404) return {};
+      throw e;
+    }
   },
   async setEnv(name: string, vars: Record<string, string>): Promise<void> {
     await http.put(`/packages/${name}/env`, vars);

@@ -93,6 +93,12 @@ class PackagesLifecycleControllerIntegrationTest extends AuroraIntegrationTest {
     labels.put("com.docker.compose.project.config_files", "/repo/packages/" + pkg + "/compose.yml");
     Mockito.when(c.getLabels()).thenReturn(labels);
     Mockito.when(c.getNames()).thenReturn(new String[] {"/" + pkg});
+    // PackagesService.runningPackageNames() now insists on state ==
+    // "running" so a restart-looping container no longer counts as
+    // "running" (see the QA-sweep commit that flipped this). This
+    // stub is what a healthy, up container looks like; tests that
+    // need a not-running one build their own factory.
+    Mockito.when(c.getState()).thenReturn("running");
     return c;
   }
 

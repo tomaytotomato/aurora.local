@@ -17,6 +17,16 @@ profiles: {}
 ports:
   - {port: 51515, proto: tcp, description: Kopia server UI/API}
 
+# The compose service is called `kopia` (see compose.yml); the package
+# is called `backup`. Without an explicit override,
+# StatusProbeService would look up a container called `backup`, never
+# find it, and permanently report the package as "not started" —
+# which then bubbled into a hero pill that lied about the health of
+# the box. Same convention every other package uses when its service
+# name differs from its package name.
+probe:
+  container: kopia
+
 requires:
   min_ram_mb: 512
   min_disk_gb: 20

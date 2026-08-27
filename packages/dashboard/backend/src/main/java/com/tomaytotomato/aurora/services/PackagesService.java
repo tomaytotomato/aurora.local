@@ -364,6 +364,18 @@ public class PackagesService {
     // convention in aurora.local is that each package's compose sets
     // `name: aurora-<pkg>`. Use the label directly for v0.1: it's more
     // reliable than parsing service names.
+    //
+    // "Running" means state == "running". A container that is
+    // restart-looping (state == "restarting", exit=1, come-back-in-a-second)
+    // used to slip through here because it appears in `docker ps -a` and
+    // its config_files label still points at packages/<name>/. That let
+    // Aurora tell the operator "backup is running" while the container
+    // was dying every three seconds — and worse, the Open CTA on the
+    // detail page rendered a link to https://backup.aurora.local/ which
+    // 502s the moment you click it. Restricting to actually-running is
+    // the honest read of "running"; the more nuanced probe layer
+    // (StatusProbeService) is what the /services/status surface uses
+    // for the finer distinctions (starting/failed/not-started).
     Set<String> out = new HashSet<>();
     List<Container> containers;
     try {
@@ -374,6 +386,8 @@ public class PackagesService {
     }
     for (Container c : containers) {
       if (c.getLabels() == null) continue;
+      String state = c.getState();
+      if (state == null || !"running".equalsIgnoreCase(state)) continue;
       String cfg = c.getLabels().get("com.docker.compose.project.config_files");
       if (cfg == null) continue;
       // config_files is comma-separated absolute paths; last element wins

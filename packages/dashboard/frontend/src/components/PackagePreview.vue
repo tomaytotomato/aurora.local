@@ -22,6 +22,7 @@ import type { PackageDetail } from '@/api/packages';
 import type { PackageUpdate } from '@/api/updates';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
+import MarkdownBlock from '@/components/MarkdownBlock.vue';
 import PackageImpactPanel from '@/components/PackageImpactPanel.vue';
 import PackageResourcesCard from '@/components/PackageResourcesCard.vue';
 
@@ -30,11 +31,16 @@ const props = defineProps<{
   update?: PackageUpdate | null;
 }>();
 
-// Same readme-falls-back-to-description rule as the installed Overview's
-// About card (detail-page-truth-progress.md, fault 3) — the two must never
-// disagree about whether this app has a description.
 const readmeBody = computed(() => (props.detail.readme ?? '').replace(/^#\s+.*\n+/, '').trim());
 const aboutBody = computed(() => readmeBody.value || (props.detail.description ?? '').trim());
+// When the About text came from the manifest README it is authored
+// markdown and needs MarkdownBlock — otherwise Notes-style READMEs
+// surface `## First-run` and `[SilverBullet](https://…)` as raw text,
+// which is what shipped before this fix. The description fallback is
+// plain prose, so a Notes-style README triggers markdown but a manifest
+// description does not. Matches PackageDetail.vue's `aboutIsMarkdown` —
+// the two paths must not disagree about the same field.
+const aboutIsMarkdown = computed(() => !!readmeBody.value);
 
 const envSpecs = computed(() => props.detail.envVars ?? []);
 
@@ -50,7 +56,14 @@ const hasImages = computed(() => (props.update?.images.length ?? 0) > 0);
     <Card class="col-span-2">
       <div class="eyebrow mb-1">About</div>
       <h3 class="mb-3">What this is</h3>
-      <p v-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
+      <!-- Same rendering rule as PackageDetail's installed About card:
+           README bodies are authored markdown (fenced code, headings,
+           links); manifest description fallbacks are plain prose.
+           MarkdownBlock is safe on both, but a paragraph is cheaper
+           and preserves author-intended line breaks for the plain-text
+           branch. -->
+      <MarkdownBlock v-if="aboutBody && aboutIsMarkdown" :source="aboutBody" />
+      <p v-else-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
       <p v-else class="text-sm text-muted-foreground">No description yet.</p>
     </Card>
 

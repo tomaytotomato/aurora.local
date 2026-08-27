@@ -699,6 +699,17 @@ onMounted(async () => {
     <PackagePreview v-if="detail && !installed" :detail="detail" :update="update" />
 
     <!--
+      A hard load error stops here. We already show the operator-facing
+      message in the actions card above ("Aurora can't find this
+      package on this box any more."); the tabbed region below would
+      just render five never-resolving skeleton cards under that error,
+      which reads as "loading + broken at the same time" — a genuinely
+      confusing state, and the reason /apps/nonexistent used to look
+      half-alive rather than plainly gone.
+    -->
+    <template v-else-if="err"></template>
+
+    <!--
       The tabbed region sits over the app-wide aurora photo. The tab
       strip stays transparent and uses on-photo-tabs for legible triggers
       (same as PackagesCatalogue's Installed/Marketplace tabs and

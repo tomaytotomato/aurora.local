@@ -59,6 +59,7 @@ function makeRouter(service: string) {
       { path: '/', component: { template: '<div />' } },
       { path: '/apps/catalogue', component: { template: '<div />' } },
       { path: '/apps/core', component: { template: '<div />' } },
+      { path: '/settings', component: { template: '<div />' } },
       { path: '/apps/core/services/:service', component: { template: '<div />' } },
       {
         path: '/containers/:id/logs',
@@ -157,5 +158,33 @@ describe('CoreServiceDetail', () => {
     const facts = wrapper.find('[data-test="core-service-facts"]');
     expect(facts.text()).toContain('example/authelia:latest');
     expect(facts.text()).toContain('Up 5 minutes');
+  });
+
+  it('URL-typing a disabled service (aurora) redirects to Settings', async () => {
+    // Aurora is disabled in the CORE_SERVICES catalogue: the grid card
+    // hints "go to Settings", and this direct-URL path has to honour
+    // the same contract or the hint becomes a lie the moment the
+    // operator bookmarks the detail URL.
+    vi.spyOn(SsoApi, 'notifications').mockResolvedValue([]);
+    const router = makeRouter('aurora');
+    const replace = vi.spyOn(router, 'replace');
+    await router.isReady();
+    mount(CoreServiceDetail, {
+      global: { plugins: [createPinia(), router] },
+    });
+    await flushPromises();
+    expect(replace).toHaveBeenCalledWith('/settings');
+  });
+
+  it('unknown service slug redirects back to /apps/core', async () => {
+    vi.spyOn(SsoApi, 'notifications').mockResolvedValue([]);
+    const router = makeRouter('nope');
+    const replace = vi.spyOn(router, 'replace');
+    await router.isReady();
+    mount(CoreServiceDetail, {
+      global: { plugins: [createPinia(), router] },
+    });
+    await flushPromises();
+    expect(replace).toHaveBeenCalledWith('/apps/core');
   });
 });

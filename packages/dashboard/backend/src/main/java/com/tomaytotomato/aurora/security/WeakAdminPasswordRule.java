@@ -13,56 +13,81 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * B4 rule 1: flags admin credentials protected by weak argon2 parameters.
+ * B4 rule 1: flags admin credentials protected by weak bcrypt parameters.
  *
- * <p>Aurora stores admin passwords as argon2id hashes via argon2-jvm.
- * The hash string encodes the KDF parameters:
+ * <p>Aurora stores admin passwords as bcrypt hashes via
+ * {@link org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder}.
+ * The hash string encodes the cost:
  * <pre>
- *   $argon2id$v=19$m=65536,t=2,p=1$SALT$HASH
+ *   $2a$12$SALT/HASH
+ *   ^^^ ^^
+ *   |   +-- log2 rounds ("cost"); 12 => 4096 rounds ~= 250 ms on a Core i5-6500T
+ *   +------ algorithm variant (2, 2a, 2b, 2y are all bcrypt)
  * </pre>
- * {@code m} = memory in KiB, {@code t} = iterations, {@code p} = parallelism.
- * OWASP's 2024 password storage guidance (updated Jan 2025) recommends
- * argon2id with:
- * <ul>
- *   <li>m &ge; 19456 KiB (19 MiB); we use 15360 as the floor because a
- *       small homelab box sometimes trims memory to fit alongside the
- *       docker stack, and 15 MiB is still meaningfully above the trivial
- *       default of 8 MiB.</li>
- *   <li>t &ge; 2 iterations.</li>
- *   <li>p &ge; 1 (always true).</li>
- * </ul>
  *
- * <p>Any admin whose stored hash falls below either threshold is
- * flagged HIGH. Rationale: an attacker who exfiltrates the SQLite
- * database can brute-force weak-parameter argon2 hashes on commodity
- * hardware; strong parameters are the last line of defence for an
- * offline attack.
+ * <p><b>Why bcrypt on a homelab appliance.</b> Aurora is designed to
+ * co-project user hashes into Authelia's {@code users_database.yml}
+ * (see {@link com.tomaytotomato.aurora.services.AutheliaService}), and
+ * Authelia's {@code file_password} is pinned to bcrypt cost 12
+ * ({@code packages/core/authelia/configuration.yml}). The two sides
+ * must verify against the same hash without a rehash-on-first-login
+ * dance, so Aurora writes bcrypt at the same cost. Argon2id was queued
+ * for v0.2 ({@link com.tomaytotomato.aurora.services.AuthService}
+ * javadoc) but has not shipped, and switching Aurora without also
+ * switching Authelia would lock every user out of every service
+ * (see the UNIFIED_AUTH_PLAN risk table).
  *
- * <p>What this rule can't check:
+ * <p><b>What weak means here.</b> OWASP's password-storage cheat sheet
+ * (last updated 2024) recommends bcrypt cost 10 as a floor; the auth
+ * plan pins 12 as Aurora's operational baseline because bcrypt-10 is
+ * over a decade old as a default. Cost below 12 is flagged HIGH: it
+ * means the operator is running a downgraded encoder or a hash
+ * migrated in from an older backup that predates the pin.
+ *
+ * <p><b>What this rule cannot check.</b>
  * <ul>
  *   <li>Password entropy of the plaintext. That check has to live in
  *       {@code AuthService.setPassword()} because we don't keep the
  *       plaintext once the hash is written.</li>
- *   <li>Reuse across services. Aurora has one admin.</li>
+ *   <li>Reuse across services. Aurora has one admin plane; every
+ *       downstream service authenticates through Authelia against the
+ *       same hash the projector writes.</li>
  * </ul>
+ *
+ * <p><b>Forward compatibility.</b> When argon2id ships, this rule's
+ * parser should recognise both prefixes and evaluate each with its own
+ * thresholds. The current implementation deliberately fails closed on
+ * an unrecognised prefix (HIGH "unknown format") so the operator
+ * investigates rather than a mid-flight algorithm swap slipping through
+ * as silent success.
  */
 @Component
 public class WeakAdminPasswordRule implements SecurityRule {
 
   private static final Logger log = LoggerFactory.getLogger(WeakAdminPasswordRule.class);
 
-  /** Minimum memory-cost (KiB) below which we flag a hash. */
-  static final int MIN_MEMORY_KIB = 15_360;
-
-  /** Minimum iteration count. */
-  static final int MIN_ITERATIONS = 2;
+  /**
+   * Minimum bcrypt cost accepted without flagging.
+   *
+   * <p>12 matches the {@code BCRYPT_COST} constant in
+   * {@link com.tomaytotomato.aurora.services.AuthService} and the
+   * {@code file_password} cost pinned in Authelia's configuration.
+   * Bumping this value requires changing all three in the same commit
+   * so re-hashed passwords still verify against Authelia; see the
+   * "Argon2id migration breaks SSO" risk row in
+   * {@code docs/UNIFIED_AUTH_PLAN.md}.
+   */
+  static final int MIN_BCRYPT_COST = 12;
 
   /**
-   * Argon2 parameter pattern. The parameters segment is fixed shape;
-   * everything before is the algorithm + version.
+   * bcrypt hash shape.
+   *
+   * <p>Spring Security's {@code BCryptPasswordEncoder} writes {@code $2a$}
+   * by default; other variants ({@code $2b$}, {@code $2y$}) are equally
+   * valid bcrypt and covered by the same pin. The cost is the two-digit
+   * group between the second and third {@code $}.
    */
-  private static final Pattern PARAMS =
-      Pattern.compile("\\$argon2id?\\$v=\\d+\\$m=(\\d+),t=(\\d+),p=(\\d+)\\$");
+  private static final Pattern BCRYPT = Pattern.compile("^\\$2[aby]\\$(\\d{2})\\$");
 
   private final AdminUserRepo admins;
 
@@ -81,11 +106,11 @@ public class WeakAdminPasswordRule implements SecurityRule {
       Optional<com.tomaytotomato.aurora.domain.AdminUser> maybe = admins.findFirst();
       if (maybe.isEmpty()) return List.of();
       String hash = maybe.get().passwordHash();
-      Params p = parse(hash);
-      if (p == null) {
-        // Unparseable hash (bcrypt-shaped, corrupted, or a future algorithm)
-        // \u2014 flag as HIGH so the operator investigates rather than
-        // silently pass.
+      Integer cost = parseCost(hash);
+      if (cost == null) {
+        // Unparseable hash (corrupted, or a future algorithm that
+        // slipped past this rule) — flag as HIGH so the operator
+        // investigates rather than silently pass.
         return List.of(new SecurityFinding(
             id() + ":" + maybe.get().username(),
             SecurityFinding.HIGH,
@@ -98,22 +123,13 @@ public class WeakAdminPasswordRule implements SecurityRule {
         ));
       }
       List<SecurityFinding> findings = new ArrayList<>(1);
-      List<String> weakBits = new ArrayList<>(2);
-      if (p.memoryKib < MIN_MEMORY_KIB) {
-        weakBits.add("memory cost (" + p.memoryKib + " KiB below "
-            + MIN_MEMORY_KIB + " KiB)");
-      }
-      if (p.iterations < MIN_ITERATIONS) {
-        weakBits.add("iteration count (" + p.iterations + " below "
-            + MIN_ITERATIONS + ")");
-      }
-      if (!weakBits.isEmpty()) {
+      if (cost < MIN_BCRYPT_COST) {
         findings.add(new SecurityFinding(
             id() + ":" + maybe.get().username(),
             SecurityFinding.HIGH,
             "Admin password uses weak protection parameters",
-            "The admin password is stored with argon2 parameters below the "
-                + "OWASP 2024 recommendation: " + String.join(" and ", weakBits)
+            "The admin password is stored with bcrypt cost " + cost
+                + ", below Aurora's baseline of " + MIN_BCRYPT_COST
                 + ". Rotate the admin password on the Settings page to "
                 + "re-hash with the current defaults.",
             "/settings#account"
@@ -126,21 +142,19 @@ public class WeakAdminPasswordRule implements SecurityRule {
     }
   }
 
-  /** Package-private for tests. */
-  static Params parse(String hash) {
+  /**
+   * Parse the bcrypt cost from a hash. Returns null if the hash does
+   * not match the bcrypt shape (algorithm swap, corruption, empty).
+   * Package-private for tests.
+   */
+  static Integer parseCost(String hash) {
     if (hash == null) return null;
-    Matcher m = PARAMS.matcher(hash);
+    Matcher m = BCRYPT.matcher(hash);
     if (!m.find()) return null;
     try {
-      return new Params(
-          Integer.parseInt(m.group(1)),
-          Integer.parseInt(m.group(2)),
-          Integer.parseInt(m.group(3))
-      );
+      return Integer.parseInt(m.group(1));
     } catch (NumberFormatException e) {
       return null;
     }
   }
-
-  record Params(int memoryKib, int iterations, int parallelism) {}
 }

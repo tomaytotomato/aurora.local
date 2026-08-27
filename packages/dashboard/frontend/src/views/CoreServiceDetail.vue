@@ -32,10 +32,23 @@ const service = computed(() => findCoreService(String(route.params.service ?? ''
 // Bounce unknown slugs back to the Core index. This is the same failure
 // mode PackageDetail handles by rendering "not found"; here the set is
 // static and tiny, so getting one wrong is nearly always a stale link.
+//
+// Disabled services (Aurora — the dashboard itself) also bounce, but to
+// their hinted destination rather than to Core. The grid already tells
+// the operator "go to Settings"; URL-typing has to honour that same
+// contract or else the hint becomes a lie the moment the operator
+// bookmarks the URL.
 watch(
   service,
   (svc) => {
-    if (!svc) void router.replace('/apps/core');
+    if (!svc) {
+      void router.replace('/apps/core');
+    } else if (svc.disabled) {
+      // Same target the disabled-card hint links to. Kept as replace()
+      // so the browser back button lands on Core (where the operator
+      // came from) rather than trapping them in a redirect ping-pong.
+      void router.replace('/settings');
+    }
   },
   { immediate: true },
 );
