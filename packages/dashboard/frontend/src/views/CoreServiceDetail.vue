@@ -2,8 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
-import { findCoreService } from '@/api/core-services';
+import { findCoreService, resolveOpenUrl } from '@/api/core-services';
 import { SsoApi, type SsoNotification } from '@/api/sso';
+import { useSystemStore } from '@/stores/system';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
@@ -86,6 +87,37 @@ const notificationsErr = ref<string | null>(null);
 const notificationsLoading = ref(false);
 
 const isAuthelia = computed(() => service.value?.key === 'authelia');
+
+// Domain comes from /api/system.info — same source Overview and
+// Settings both read. Kept as a store rather than fetched here because
+// the store already hydrates on app boot; a fresh fetch on this route
+// would race the container fetch and blink an unresolved CTA between
+// mount and hydration.
+const system = useSystemStore();
+
+/**
+ * The URL for the service's own UI, or null when we should hide the
+ * CTA. Hidden while the container isn't running (a link to an
+ * unreachable backend just 502s under Caddy), when the service has no
+ * template (Caddy has no browser UI), or before the system store has
+ * hydrated a domain (the first paint would otherwise render
+ * `https://mail-admin.//`).
+ */
+const openUrl = computed<string | null>(() => {
+  if (!service.value) return null;
+  return resolveOpenUrl(
+    service.value,
+    container.value?.state === 'running',
+    system.info?.domain,
+  );
+});
+
+/** Label for the Open CTA. Falls back to "Open <service label>". */
+const openLabel = computed<string>(() => {
+  const s = service.value;
+  if (!s) return 'Open';
+  return s.openLabel ?? `Open ${s.label}`;
+});
 
 async function loadNotifications(): Promise<void> {
   if (!isAuthelia.value) return;
@@ -228,6 +260,22 @@ function toggleBody(i: number): void {
           <Badge :tone="stateTone(container)" data-test="core-service-state">
             {{ stateLabel(container) }}
           </Badge>
+          <!--
+            Open CTA. Same white-pill shape marketplace apps get in
+            PackageDetail's hero, and same visibility rule: absent (not
+            disabled) when the service has no UI, is not running, or
+            has no resolved domain. Hiding beats greying-out because a
+            dead CTA reads as "broken" while a missing one just reads
+            as "nothing to open from here", which is the truth.
+          -->
+          <a
+            v-if="openUrl"
+            :href="openUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ml-auto inline-flex items-center gap-1.5 rounded-md bg-white/95 text-slate-900 hover:bg-white px-3 py-1.5 text-sm font-medium no-underline shadow-sm"
+            data-test="core-service-open"
+          >{{ openLabel }} <span aria-hidden="true">↗</span></a>
         </div>
         <p class="max-w-2xl">{{ service.description }}</p>
       </div>

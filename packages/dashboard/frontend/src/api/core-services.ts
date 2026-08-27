@@ -45,6 +45,27 @@ export interface CoreService {
    */
   package: 'core' | 'dashboard';
   /**
+   * URL template for the service's own user-facing UI. Rendered as the
+   * "Open <service>" CTA in the detail hero — the same shape marketplace
+   * apps get from their manifest vhosts (see PackageDetail.openUrl). The
+   * literal token {@code {domain}} is substituted with the current
+   * .state.yml domain at render time so a hostname change (or a
+   * different box on the same repo) doesn't leave a stale link.
+   *
+   * <p>Omitted entirely when the service has no interactive web UI —
+   * Caddy publishes an admin API on :2019 but doesn't expose it outside
+   * the compose network, and hiding the button reads better than
+   * disabling it. Same reasoning marketplace apps without vhosts use.
+   */
+  openUrl?: string;
+  /**
+   * Label for the Open CTA. Defaults to `Open <label>` when omitted.
+   * Overrides let us say "Open Aurora SSO" instead of "Open Authelia"
+   * where the product name we picked (Aurora SSO) diverges from the
+   * container name (authelia).
+   */
+  openLabel?: string;
+  /**
    * When set, the card is non-clickable and the copy explains why.
    * Reserved for services whose "details" surface is meaningless because
    * you are already looking at them (Aurora → this dashboard).
@@ -73,6 +94,10 @@ export const CORE_SERVICES: readonly CoreService[] = [
     icon: 'caddy',
     container: 'caddy',
     package: 'core',
+    // No openUrl on purpose: Caddy's admin API sits on :2019 inside the
+    // compose network, unpublished, and there is no browser UI on the
+    // other end. Rendering a dead link reads worse than not rendering
+    // one at all.
   },
   {
     key: 'aurora',
@@ -93,6 +118,11 @@ export const CORE_SERVICES: readonly CoreService[] = [
     icon: 'authelia',
     container: 'authelia',
     package: 'core',
+    // The sign-in portal, where operators enrol a passkey / TOTP and
+    // reset their own password. Same URL the wizard hands out on the
+    // "Set up SSO" step — the two paths agree.
+    openUrl: 'https://auth.{domain}/',
+    openLabel: 'Open Aurora SSO',
   },
   {
     key: 'stalwart',
@@ -101,10 +131,37 @@ export const CORE_SERVICES: readonly CoreService[] = [
     icon: 'stalwart',
     container: 'stalwart',
     package: 'core',
+    // Stalwart's HTTP surface: setup wizard, admin console, JMAP.
+    // Served on :8080 inside the compose net; Caddy fronts it at
+    // mail-admin behind Authelia (admins only). Matches
+    // packages/core/manifest.yml post_install_notes.
+    openUrl: 'https://mail-admin.{domain}/',
+    openLabel: 'Open mail admin',
   },
 ] as const;
 
 /** Look up a service by its route slug. Returns undefined for unknown slugs. */
 export function findCoreService(key: string): CoreService | undefined {
   return CORE_SERVICES.find((s) => s.key === key);
+}
+
+/**
+ * Resolve {@link CoreService.openUrl} against the current domain.
+ *
+ * <p>Returns null when the service has no template, when the container
+ * is not running (a link to an unreachable UI just 502s under Caddy),
+ * or when the domain is not yet known — the wizard sets it during
+ * onboarding and rendering the hero before that would emit
+ * {@code https://mail-admin.//}. Same shape marketplace apps use for
+ * their Open CTA (see PackageDetail.openUrl).
+ */
+export function resolveOpenUrl(
+  service: CoreService,
+  containerRunning: boolean,
+  domain: string | null | undefined,
+): string | null {
+  if (!service.openUrl) return null;
+  if (!containerRunning) return null;
+  if (!domain) return null;
+  return service.openUrl.replace('{domain}', domain);
 }

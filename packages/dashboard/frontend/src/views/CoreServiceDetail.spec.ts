@@ -6,6 +6,7 @@ import { createRouter, createMemoryHistory } from 'vue-router';
 import CoreServiceDetail from './CoreServiceDetail.vue';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { SsoApi, type SsoNotification } from '@/api/sso';
+import { useSystemStore } from '@/stores/system';
 
 /**
  * The Core-service detail view: shared shell for Caddy/Authelia/Stalwart,
@@ -186,5 +187,117 @@ describe('CoreServiceDetail', () => {
     });
     await flushPromises();
     expect(replace).toHaveBeenCalledWith('/apps/core');
+  });
+
+  // ── Open CTA ──────────────────────────────────────────────────────────────────────
+  //
+  // Bruce landed on /apps/core/services/stalwart and asked "how do I
+  // actually reach the thing?" — the detail page carried no CTA into
+  // the service's own UI, so operators had to guess the subdomain from
+  // the manifest. Marketplace apps have had an Open CTA in their hero
+  // since 1347c92; these tests pin the same contract for Core.
+
+  async function mountWithDomain(service: string, domain: string | null) {
+    setActivePinia(createPinia());
+    if (domain) {
+      // Seed the store rather than let it hydrate: the view treats an
+      // absent domain as "hide the CTA" (a first-paint before /api/system
+      // resolves would otherwise emit https://<subdomain>.//). Tests
+      // that want the CTA visible have to populate this up front.
+      const store = useSystemStore();
+      store.info = {
+        hostname: 'aurora',
+        domain,
+        lanIp: '192.168.0.110',
+        kernel: '7.0.0',
+        dockerVersion: '29.6',
+        distro: 'Ubuntu 26.04 LTS',
+        cpuCount: 4,
+        uptimeSeconds: 100,
+        capabilities: { notifications: false, customStacks: false },
+      } as never;
+    }
+    vi.spyOn(ContainersApi, 'list').mockResolvedValue([
+      container('authelia'),
+      container('caddy'),
+      container('stalwart'),
+    ]);
+    vi.spyOn(SsoApi, 'notifications').mockResolvedValue([]);
+    const router = makeRouter(service);
+    await router.isReady();
+    const wrapper = mount(CoreServiceDetail, {
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+    return wrapper;
+  }
+
+  it("renders Stalwart's Open CTA pointing at mail-admin.<domain>", async () => {
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+    const cta = wrapper.find('[data-test="core-service-open"]');
+    expect(cta.exists()).toBe(true);
+    expect(cta.attributes('href')).toBe('https://mail-admin.aurora.local/');
+    expect(cta.text()).toContain('Open mail admin');
+    // target=_blank + noopener are the same safety pair marketplace
+    // apps use for their Open CTA; pin them so a refactor does not
+    // quietly widen the surface.
+    expect(cta.attributes('target')).toBe('_blank');
+    expect(cta.attributes('rel')).toContain('noopener');
+  });
+
+  it("renders Authelia's Open CTA as 'Open Aurora SSO'", async () => {
+    // openLabel override: the container is called 'authelia' but the
+    // product name in the UI is 'Aurora SSO'. Pinned so a well-meaning
+    // rename does not quietly diverge from the wizard's copy.
+    const wrapper = await mountWithDomain('authelia', 'example.com');
+    const cta = wrapper.find('[data-test="core-service-open"]');
+    expect(cta.exists()).toBe(true);
+    expect(cta.attributes('href')).toBe('https://auth.example.com/');
+    expect(cta.text()).toContain('Open Aurora SSO');
+  });
+
+  it('hides the Open CTA for Caddy (no user-facing UI)', async () => {
+    // Caddy's admin API is on :2019, unpublished. A CTA that 404s the
+    // moment you click it reads worse than no CTA at all.
+    const wrapper = await mountWithDomain('caddy', 'aurora.local');
+    expect(wrapper.find('[data-test="core-service-open"]').exists()).toBe(false);
+  });
+
+  it('hides the Open CTA while the domain is not yet known', async () => {
+    // First-paint before /api/system hydrates: rendering the CTA at
+    // that point would emit https://mail-admin.// and be a broken link
+    // for the first few hundred milliseconds after mount.
+    const wrapper = await mountWithDomain('stalwart', null);
+    expect(wrapper.find('[data-test="core-service-open"]').exists()).toBe(false);
+  });
+
+  it('hides the Open CTA when the container is not running', async () => {
+    // A link into a service whose container is exited (or restarting)
+    // just 502s under Caddy. Same visibility rule marketplace apps
+    // apply in PackageDetail.openUrl.
+    setActivePinia(createPinia());
+    const store = useSystemStore();
+    store.info = {
+      hostname: 'aurora',
+      domain: 'aurora.local',
+      lanIp: '192.168.0.110',
+      kernel: '7.0.0',
+      dockerVersion: '29.6',
+      distro: 'Ubuntu 26.04 LTS',
+      cpuCount: 4,
+      uptimeSeconds: 100,
+      capabilities: { notifications: false, customStacks: false },
+    } as never;
+    vi.spyOn(ContainersApi, 'list').mockResolvedValue([
+      { ...container('stalwart'), state: 'exited' },
+    ]);
+    vi.spyOn(SsoApi, 'notifications').mockResolvedValue([]);
+    const router = makeRouter('stalwart');
+    await router.isReady();
+    const wrapper = mount(CoreServiceDetail, {
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+    expect(wrapper.find('[data-test="core-service-open"]').exists()).toBe(false);
   });
 });
