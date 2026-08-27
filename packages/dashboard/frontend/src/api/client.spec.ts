@@ -172,3 +172,95 @@ describe('axios interceptor — toast on failure', () => {
     nowSpy.mockRestore();
   });
 });
+
+/**
+ * Session-expiry bounce.
+ *
+ * Bruce's reproduction: sitting on /apps/roundcube, already signed in;
+ * the aurora container was recreated underneath him (image rebuild),
+ * which invalidated the server-side session; the next request 401'd and
+ * he was bounced to the login page — correct so far — but after signing
+ * in he landed on the dashboard home instead of back on
+ * /apps/roundcube.
+ *
+ * The bounce itself is correct behaviour and is NOT what these pin.
+ * What they pin is that the bounce carries `?from=` so the destination
+ * survives the round-trip. This is a distinct defect from LoginView
+ * ignoring `?from=`: fixing only the view leaves the flow broken,
+ * because with a bare '/login' there is no `from` for the view to
+ * honour.
+ */
+describe('401 bounce preserves the current location', () => {
+  /**
+   * Swap window.location for a plain object. jsdom's own location is
+   * non-configurable and assigning .href triggers a real navigation
+   * ("Not implemented: navigation"), so tests capture the assignment
+   * instead.
+   */
+  function stubLocation(href: string): { current: () => string } {
+    const url = new URL(href, 'http://aurora.local');
+    const fake = {
+      pathname: url.pathname,
+      search: url.search,
+      hash: url.hash,
+      href: url.href,
+    };
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: fake,
+    });
+    return { current: () => fake.href };
+  }
+
+  let restore: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    restore = Object.getOwnPropertyDescriptor(window, 'location');
+  });
+
+  afterEach(() => {
+    if (restore) Object.defineProperty(window, 'location', restore);
+  });
+
+  it('sends the user to /login?from=<where they were> on 401', async () => {
+    const loc = stubLocation('/apps/roundcube');
+    installAdapter({ status: 401 });
+
+    await expect(http.get('/packages/roundcube')).rejects.toBeInstanceOf(AxiosError);
+
+    expect(loc.current()).toContain('/login');
+    expect(loc.current()).toContain(`from=${encodeURIComponent('/apps/roundcube')}`);
+  });
+
+  it('preserves query and hash on the interrupted page', async () => {
+    const loc = stubLocation('/apps/catalogue?tab=installed#media');
+    installAdapter({ status: 401 });
+
+    await expect(http.get('/packages')).rejects.toBeInstanceOf(AxiosError);
+
+    expect(loc.current()).toContain(
+      `from=${encodeURIComponent('/apps/catalogue?tab=installed#media')}`,
+    );
+  });
+
+  it('does not redirect when the user is already on /login', async () => {
+    const loc = stubLocation('/login');
+    installAdapter({ status: 401 });
+
+    await expect(http.get('/auth/session')).rejects.toBeInstanceOf(AxiosError);
+
+    // Untouched — a 401 from the session probe on the login page is
+    // normal, not a reason to navigate.
+    expect(loc.current()).toBe('http://aurora.local/login');
+  });
+
+  it('does not redirect out of the onboarding wizard', async () => {
+    const loc = stubLocation('/onboarding/admin');
+    installAdapter({ status: 401 });
+
+    await expect(http.get('/onboarding/status')).rejects.toBeInstanceOf(AxiosError);
+
+    expect(loc.current()).toBe('http://aurora.local/onboarding/admin');
+  });
+});
