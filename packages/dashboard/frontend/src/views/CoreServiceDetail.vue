@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { findCoreService, resolveOpenUrl } from '@/api/core-services';
 import { SsoApi, type SsoNotification } from '@/api/sso';
+import { StalwartApi, type StalwartAdminCredential } from '@/api/stalwart';
 import { useSystemStore } from '@/stores/system';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
@@ -87,6 +88,87 @@ const notificationsErr = ref<string | null>(null);
 const notificationsLoading = ref(false);
 
 const isAuthelia = computed(() => service.value?.key === 'authelia');
+const isStalwart = computed(() => service.value?.key === 'stalwart');
+
+// ── Stalwart recovery-admin credential (reveal panel) ──────────────────
+//
+// Bruce landed on Stalwart's mail-admin console for the first time
+// and had to shell into the box to `cat packages/core/.env` for the
+// recovery admin password. Panel powers a hidden-by-default reveal
+// so the plaintext lives on-screen only when the operator asks for
+// it.
+//
+// The lazy fetch matters: pulling the secret on mount would
+// materialise it in memory even for operators who never click
+// Reveal. First render never asks; the click is what triggers the
+// GET. The response is cached in `stalwartCred` for the lifetime of
+// the panel so a subsequent "Copy password" click does not need a
+// second round trip.
+const stalwartCred = ref<StalwartAdminCredential | null>(null);
+const stalwartRevealed = ref(false);
+const stalwartLoading = ref(false);
+const stalwartErr = ref<string | null>(null);
+
+async function toggleStalwartReveal(): Promise<void> {
+  if (!isStalwart.value) return;
+  if (stalwartRevealed.value) {
+    // Hide again without discarding the fetched value — a follow-up
+    // reveal on the same page should not incur another round trip.
+    stalwartRevealed.value = false;
+    return;
+  }
+  if (stalwartCred.value) {
+    stalwartRevealed.value = true;
+    return;
+  }
+  stalwartLoading.value = true;
+  stalwartErr.value = null;
+  try {
+    stalwartCred.value = await StalwartApi.adminSecret();
+    stalwartRevealed.value = true;
+  } catch (e) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    if (status === 403) {
+      // The endpoint is admin-only — non-admin sessions can still see
+      // the rest of the page, they just cannot see the credential.
+      // Say so plainly.
+      stalwartErr.value = 'Only admins can reveal the recovery password.';
+    } else {
+      stalwartErr.value = humanCopyForError(e, {
+        subject: "Stalwart's recovery password",
+        action: 'load',
+      });
+    }
+  } finally {
+    stalwartLoading.value = false;
+  }
+}
+
+async function copyStalwartSecret(): Promise<void> {
+  const secret = stalwartCred.value?.secret;
+  if (!secret) return;
+  try {
+    await navigator.clipboard.writeText(secret);
+    stalwartCopied.value = true;
+    window.setTimeout(() => { stalwartCopied.value = false; }, 2000);
+  } catch {
+    // Clipboard denied (insecure origin, no user gesture). The value
+    // is on screen already; failing loudly would suggest the reveal
+    // itself failed, which it did not.
+  }
+}
+const stalwartCopied = ref(false);
+
+// Reset reveal state when the operator navigates between services so
+// leaving Stalwart and coming back does not still render a stale
+// plaintext under the Reveal button.
+watch(isStalwart, (nowStalwart) => {
+  if (!nowStalwart) {
+    stalwartRevealed.value = false;
+    stalwartCred.value = null;
+    stalwartErr.value = null;
+  }
+});
 
 // Domain comes from /api/system.info — same source Overview and
 // Settings both read. Kept as a store rather than fetched here because
@@ -320,6 +402,83 @@ function toggleBody(i: number): void {
         </router-link>
       </div>
     </Card>
+
+    <!-- Stalwart-specific: reveal the recovery-admin credential.
+         Bruce landed on the mail-admin console for the first time and
+         had to shell in to read packages/core/.env for the password.
+         The credential is hidden by default and only fetched when the
+         operator clicks Reveal, so the plaintext never touches this
+         page for anyone who never asks. Admin-only on the server. -->
+    <div v-if="isStalwart" data-test="stalwart-admin-panel" class="mb-6">
+      <div class="mb-3 on-photo">
+        <h2 class="mb-1">Recovery admin</h2>
+        <p class="text-sm">
+          Sign in to the mail-admin console with these credentials the
+          first time you visit. Kept in
+          <code class="font-mono">packages/core/.env</code>. Only admins can reveal it.
+        </p>
+      </div>
+
+      <Card class="p-6">
+        <dl class="grid grid-cols-1 sm:grid-cols-[max-content_1fr] gap-x-6 gap-y-3 text-sm">
+          <dt class="text-muted-foreground">Username</dt>
+          <dd class="font-mono text-foreground" data-test="stalwart-admin-username">
+            {{ stalwartCred?.username ?? 'admin' }}
+          </dd>
+
+          <dt class="text-muted-foreground">Password</dt>
+          <dd class="flex items-center gap-3 flex-wrap">
+            <code
+              class="font-mono text-foreground select-all"
+              data-test="stalwart-admin-secret"
+            >{{ stalwartRevealed && stalwartCred ? stalwartCred.secret : '••••••••••••••' }}</code>
+            <Button
+              variant="secondary"
+              size="sm"
+              :loading="stalwartLoading"
+              data-test="stalwart-admin-reveal"
+              @click="toggleStalwartReveal"
+            >{{ stalwartRevealed ? 'Hide' : 'Reveal' }}</Button>
+            <Button
+              v-if="stalwartRevealed && stalwartCred"
+              variant="secondary"
+              size="sm"
+              data-test="stalwart-admin-copy"
+              @click="copyStalwartSecret"
+            >{{ stalwartCopied ? 'Copied' : 'Copy' }}</Button>
+          </dd>
+        </dl>
+
+        <Alert
+          v-if="stalwartErr"
+          variant="destructive"
+          class="mt-4"
+          data-test="stalwart-admin-error"
+        >
+          <AlertDescription>{{ stalwartErr }}</AlertDescription>
+        </Alert>
+
+        <!-- The DEFAULT source is the compose fallback (aurora-change-me)
+             which every attacker on the LAN already knows. Say so
+             prominently and point at the rotation path. -->
+        <Alert
+          v-if="stalwartRevealed && stalwartCred?.source === 'DEFAULT'"
+          variant="destructive"
+          class="mt-4"
+          data-test="stalwart-admin-default-warning"
+        >
+          <AlertDescription>
+            This is the compose fallback — every box that skipped
+            rotation runs with the same value. Set
+            <code class="font-mono">STALWART_ADMIN_SECRET</code> in
+            <code class="font-mono">packages/core/.env</code> and run
+            <code class="font-mono">./scripts/rotate-secrets.sh --apply</code>
+            to fix, then recreate the Stalwart container so compose
+            picks up the new value.
+          </AlertDescription>
+        </Alert>
+      </Card>
+    </div>
 
     <!-- Authelia-specific: notifications from the filesystem notifier.
          This is the whole reason /apps/core got a proper detail view:

@@ -6,6 +6,7 @@ import { createRouter, createMemoryHistory } from 'vue-router';
 import CoreServiceDetail from './CoreServiceDetail.vue';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { SsoApi, type SsoNotification } from '@/api/sso';
+import { StalwartApi } from '@/api/stalwart';
 import { useSystemStore } from '@/stores/system';
 
 /**
@@ -299,5 +300,154 @@ describe('CoreServiceDetail', () => {
     });
     await flushPromises();
     expect(wrapper.find('[data-test="core-service-open"]').exists()).toBe(false);
+  });
+
+  // ── Stalwart recovery-admin reveal panel ─────────────────────────────────────
+  //
+  // The whole panel exists because Bruce landed on the mail-admin
+  // console for the first time and had to shell in to read the
+  // recovery-admin password out of packages/core/.env. These tests
+  // pin the shape that keeps that story from regressing.
+
+  async function mountStalwartPanel(): Promise<ReturnType<typeof mount>> {
+    setActivePinia(createPinia());
+    vi.spyOn(ContainersApi, 'list').mockResolvedValue([container('stalwart')]);
+    vi.spyOn(SsoApi, 'notifications').mockResolvedValue([]);
+    const router = makeRouter('stalwart');
+    await router.isReady();
+    const wrapper = mount(CoreServiceDetail, {
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+    return wrapper;
+  }
+
+  it('renders the reveal panel only for Stalwart', async () => {
+    vi.spyOn(SsoApi, 'notifications').mockResolvedValue([]);
+    const caddy = await mountDetail('caddy');
+    expect(caddy.find('[data-test="stalwart-admin-panel"]').exists()).toBe(false);
+
+    const stalwart = await mountStalwartPanel();
+    expect(stalwart.find('[data-test="stalwart-admin-panel"]').exists()).toBe(true);
+  });
+
+  it('does not fetch the secret on mount', async () => {
+    // Lazy on purpose: an operator who never clicks Reveal never has
+    // the plaintext in memory. Same reasoning UsersView applies to
+    // its issued-password modal.
+    const spy = vi.spyOn(StalwartApi, 'adminSecret').mockResolvedValue({
+      username: 'admin',
+      secret: 'unused-during-mount',
+      source: 'ENV',
+    });
+    await mountStalwartPanel();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('clicking Reveal fetches the secret and shows it', async () => {
+    vi.spyOn(StalwartApi, 'adminSecret').mockResolvedValue({
+      username: 'admin',
+      secret: 'abc123-strong-value',
+      source: 'ENV',
+    });
+    const wrapper = await mountStalwartPanel();
+
+    // Pre-click: masked value visible, real value not on the page.
+    const before = wrapper.find('[data-test="stalwart-admin-secret"]').text();
+    expect(before).not.toContain('abc123-strong-value');
+
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="stalwart-admin-secret"]').text())
+      .toContain('abc123-strong-value');
+  });
+
+  it('Reveal button toggles to Hide once revealed, and back again', async () => {
+    vi.spyOn(StalwartApi, 'adminSecret').mockResolvedValue({
+      username: 'admin',
+      secret: 'abc123-strong-value',
+      source: 'ENV',
+    });
+    const wrapper = await mountStalwartPanel();
+
+    const btn = wrapper.find('[data-test="stalwart-admin-reveal"]');
+    expect(btn.text()).toBe('Reveal');
+
+    await btn.trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-test="stalwart-admin-reveal"]').text()).toBe('Hide');
+
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-test="stalwart-admin-reveal"]').text()).toBe('Reveal');
+    // Value hidden again.
+    expect(wrapper.find('[data-test="stalwart-admin-secret"]').text())
+      .not.toContain('abc123-strong-value');
+  });
+
+  it('shows the rotate-me warning when source=DEFAULT', async () => {
+    vi.spyOn(StalwartApi, 'adminSecret').mockResolvedValue({
+      username: 'admin',
+      secret: 'aurora-change-me',
+      source: 'DEFAULT',
+    });
+    const wrapper = await mountStalwartPanel();
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click');
+    await flushPromises();
+
+    const warn = wrapper.find('[data-test="stalwart-admin-default-warning"]');
+    expect(warn.exists()).toBe(true);
+    expect(warn.text().toLowerCase()).toContain('compose fallback');
+    expect(warn.text()).toContain('STALWART_ADMIN_SECRET');
+  });
+
+  it('does not show the rotate-me warning for a real ENV value', async () => {
+    vi.spyOn(StalwartApi, 'adminSecret').mockResolvedValue({
+      username: 'admin',
+      secret: 'abc123-strong-value',
+      source: 'ENV',
+    });
+    const wrapper = await mountStalwartPanel();
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="stalwart-admin-default-warning"]').exists())
+      .toBe(false);
+  });
+
+  it('403 from the endpoint yields a role-specific error', async () => {
+    // A logged-in USER can reach /apps/core/services/stalwart but the
+    // reveal endpoint refuses. The error copy has to say why so the
+    // operator does not just re-click hoping for a different answer.
+    const err = { response: { status: 403 } };
+    vi.spyOn(StalwartApi, 'adminSecret').mockRejectedValue(err);
+    const wrapper = await mountStalwartPanel();
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click');
+    await flushPromises();
+
+    const errNode = wrapper.find('[data-test="stalwart-admin-error"]');
+    expect(errNode.exists()).toBe(true);
+    expect(errNode.text().toLowerCase()).toContain('admin');
+  });
+
+  it('caches the fetched secret — a re-reveal does not re-fetch', async () => {
+    // A follow-up reveal on the same visit must not trigger another
+    // GET; caching is what makes Hide + Reveal cheap.
+    const spy = vi.spyOn(StalwartApi, 'adminSecret').mockResolvedValue({
+      username: 'admin',
+      secret: 'abc123-strong-value',
+      source: 'ENV',
+    });
+    const wrapper = await mountStalwartPanel();
+
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click'); // Hide
+    await flushPromises();
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click'); // Reveal again
+    await flushPromises();
+
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });

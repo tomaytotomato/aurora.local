@@ -339,6 +339,28 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/SsoNotification' }
 
+  # ────────────────────── core services (stalwart) ──────────────────
+  /services/stalwart/admin-secret:
+    get:
+      tags: [services]
+      summary: Reveal the Stalwart recovery-admin credential
+      description: >-
+        Read-only accessor for the recovery-admin credential the
+        Stalwart mail-admin console needs on first-run. Reads
+        packages/core/.env for STALWART_ADMIN_SECRET; falls back to the
+        compose default (aurora-change-me) when the .env line is blank
+        or absent and flags the response accordingly so the UI can
+        prompt the operator to rotate. Admin-only: the plaintext is a
+        bearer capability that unlocks the mail server's admin plane.
+      responses:
+        '200':
+          description: Current recovery-admin credential.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StalwartAdminCredential' }
+        '401': { description: Not signed in. }
+        '403': { description: Signed in but not an admin. }
+
   # ───────────────────────────── packages ─────────────────────────────
   /packages:
     get:
@@ -3246,3 +3268,30 @@ components:
             Notification message body with the Date/Recipient/Subject
             headers stripped so the raw-details view does not repeat
             what the structured fields already show.
+
+    StalwartAdminCredential:
+      type: object
+      required: [username, secret, source]
+      properties:
+        username:
+          type: string
+          description: >-
+            The fixed user side of the recovery credential. Always
+            "admin" today; kept as a field so a future Stalwart release
+            that renames the recovery user is a spec change rather than
+            a client-code change.
+        secret:
+          type: string
+          description: >-
+            Plaintext password Stalwart is running with. When source is
+            DEFAULT this is the every-box-knows-it compose fallback and
+            the UI should surface a rotate-me hint; when source is ENV
+            it is whatever the operator set in packages/core/.env.
+        source:
+          type: string
+          enum: [ENV, DEFAULT]
+          description: >-
+            Where the value came from. ENV means a real value in
+            packages/core/.env. DEFAULT means the .env line is missing
+            or blank and Stalwart is running with the compose fallback
+            (aurora-change-me), which is public knowledge.
