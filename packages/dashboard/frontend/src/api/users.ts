@@ -25,14 +25,38 @@ export interface UserSummary {
 
 export interface CreateUserRequest {
   username: string;
-  password: string;
+  /**
+   * Optional. Omit (or send blank) and Aurora generates a strong
+   * passphrase, returned once as `CreatedUser.generatedPassword`.
+   */
+  password?: string;
   role: Role;
   tz?: string | null;
 }
 
 export interface UpdateUserRequest {
   role?: Role;
+  /** Password is optional — omit it and Aurora generates a strong one. */
   password?: string;
+}
+
+/**
+ * Result of creating a user.
+ *
+ * `generatedPassword` is non-null only when Aurora chose the password,
+ * i.e. the caller left it blank. It is returned exactly once and stored
+ * nowhere — the plaintext does not exist server-side after this response,
+ * so a lost value means a reset, not a lookup. Show it, let the admin copy
+ * it, and do not persist it client-side either.
+ */
+export interface CreatedUser {
+  user: UserSummary;
+  generatedPassword: string | null;
+}
+
+export interface GeneratedPassword {
+  password: string | null;
+  generated: boolean;
 }
 
 export const UsersApi = {
@@ -41,10 +65,21 @@ export const UsersApi = {
     return data;
   },
 
-  async create(req: CreateUserRequest): Promise<UserSummary> {
+  async create(req: CreateUserRequest): Promise<CreatedUser> {
     // toast: false — the form renders its own inline error copy via
     // humanCopyForError; the global 5xx toast would double-announce.
-    const { data } = await http.post<UserSummary>('/users', req, { toast: false });
+    const { data } = await http.post<CreatedUser>('/users', req, { toast: false });
+    return data;
+  },
+
+  /**
+   * Reset a password. Omit `password` to have Aurora generate one, which
+   * is the intended path: an admin-chosen password is known to the admin
+   * and tends to travel by chat and never get changed.
+   */
+  async resetPassword(id: number, password?: string): Promise<GeneratedPassword> {
+    const { data } = await http.post<GeneratedPassword>(
+      `/users/${id}/password`, password ? { password } : {}, { toast: false });
     return data;
   },
 

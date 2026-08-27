@@ -1549,18 +1549,49 @@ paths:
           application/json:
             schema:
               type: object
-              required: [username, role, password]
+              required: [username, role]
               properties:
                 username: { type: string }
                 role: { $ref: '#/components/schemas/UserRole' }
-                password: { type: string, minLength: 8 }
+                password:
+                  type: string
+                  minLength: 8
+                  description: >-
+                    Optional. Omit or leave blank and Aurora generates a strong
+                    passphrase, returned once as generatedPassword.
       responses:
         '201':
           description: Created.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/User' }
+              schema: { $ref: '#/components/schemas/CreatedUser' }
         '409': { description: Username already taken. }
+  /users/{id}/password:
+    post:
+      tags: [users]
+      summary: Reset a password, generating one when none is supplied
+      description: >-
+        Separate from PUT /users/{id} because this returns a secret, and
+        conflating "here is the updated user" with "here is a plaintext
+        credential" invites the latter into logs and caches that only ever
+        expected the former. The plaintext is returned exactly once and is
+        stored nowhere.
+      parameters: [{ $ref: '#/components/parameters/UserId' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password: { type: string, minLength: 8 }
+      responses:
+        '200':
+          description: Rotated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GeneratedPassword' }
+        '404': { description: No such user. }
   /users/{id}:
     get:
       tags: [users]
@@ -3058,6 +3089,32 @@ components:
         role: { $ref: '#/components/schemas/UserRole' }
         tz: { type: string }
         createdAt: { type: string, format: date-time }
+
+    CreatedUser:
+      type: object
+      required: [user, generatedPassword]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        generatedPassword:
+          type: string
+          nullable: true
+          description: >-
+            Non-null only when Aurora generated the password. Returned once
+            and stored nowhere, so a lost value means a reset, not a lookup.
+            Null when the caller supplied their own -- we never echo back a
+            secret the client already holds.
+
+    GeneratedPassword:
+      type: object
+      required: [password, generated]
+      properties:
+        password:
+          type: string
+          nullable: true
+          description: Null when the caller supplied the password.
+        generated:
+          type: boolean
+          description: Whether Aurora chose the password.
 
     SsoEnrollment:
       type: object

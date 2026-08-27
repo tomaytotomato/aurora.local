@@ -89,20 +89,31 @@ async function submitCreate(): Promise<void> {
   createBusy.value = true;
   createErr.value = null;
   try {
-    await users.create({
+    const created = await users.create({
       username: createForm.value.username.trim(),
-      password: createForm.value.password,
+      // Blank means "generate one". The backend decides, and returns the
+      // plaintext exactly once when it did.
+      password: createForm.value.password || undefined,
       role: createForm.value.role,
       tz: createForm.value.tz.trim() || null,
     });
-    toast({
-      title: 'User created',
-      description: `${createForm.value.username.trim()} can now sign in.`,
-      variant: 'success',
-      duration: 4000,
-    });
+    const username = createForm.value.username.trim();
     showCreate.value = false;
     resetCreateForm();
+
+    if (created.generatedPassword) {
+      // Modal, not a toast. This is the only time this value will ever
+      // exist — nothing stores the plaintext — so it must not be
+      // dismissible by a 4-second timer while the admin is looking away.
+      issued.value = { username, password: created.generatedPassword };
+    } else {
+      toast({
+        title: 'User created',
+        description: `${username} can now sign in.`,
+        variant: 'success',
+        duration: 4000,
+      });
+    }
   } catch (err) {
     createErr.value = humanCopyForError(err, { subject: 'user', action: 'create' });
   } finally {
@@ -157,18 +168,49 @@ async function submitRotatePassword(): Promise<void> {
   if (!rotatingPassword.value) return;
   pwBusy.value = true;
   pwErr.value = null;
+  const username = rotatingPassword.value.username;
   try {
-    await users.update(rotatingPassword.value.id, { password: pwForm.value.password });
-    toast({
-      description: `Password rotated for ${rotatingPassword.value.username}.`,
-      variant: 'success',
-      duration: 3000,
-    });
+    // Blank generates one, same contract as create.
+    const res = await users.resetPassword(
+      rotatingPassword.value.id, pwForm.value.password || undefined);
     rotatingPassword.value = null;
+
+    if (res.generated && res.password) {
+      issued.value = { username, password: res.password };
+    } else {
+      toast({
+        description: `Password rotated for ${username}.`,
+        variant: 'success',
+        duration: 3000,
+      });
+    }
   } catch (err) {
     pwErr.value = humanCopyForError(err, { subject: 'password', action: 'rotate' });
   } finally {
     pwBusy.value = false;
+  }
+}
+
+// ─── issued credential ─────────────────────────────────────
+//
+// Shown after Aurora generates a password. Held in a ref rather than a
+// toast because it is unrecoverable: the server hashed it and kept no
+// copy, so if this disappears before the admin reads it the only remedy
+// is another rotation.
+const issued = ref<{ username: string; password: string } | null>(null);
+const copied = ref(false);
+
+async function copyIssued(): Promise<void> {
+  if (!issued.value) return;
+  try {
+    await navigator.clipboard.writeText(issued.value.password);
+    copied.value = true;
+    window.setTimeout(() => { copied.value = false; }, 2000);
+  } catch {
+    // Clipboard is blocked on insecure origins and in some browsers
+    // without a user gesture. The password is on screen and selectable,
+    // so failing quietly is fine — an error toast here would imply the
+    // user creation failed, which it did not.
   }
 }
 
@@ -338,16 +380,18 @@ function formatCreatedAt(iso: string): string {
         </div>
 
         <div>
-          <Label for="create-password">Password</Label>
+          <Label for="create-password">Password <span class="text-muted-foreground font-normal">(optional)</span></Label>
           <Input
             id="create-password"
             v-model="createForm.password"
             type="password"
             autocomplete="new-password"
+            placeholder="Leave blank to generate one"
             data-test="users-create-password"
           />
           <p class="text-xs text-muted-foreground mt-1">
-            At least 12 characters. Use a password manager.
+            Leave blank and Aurora generates a strong passphrase you can hand over
+            once. If you set one yourself: at least 12 characters.
           </p>
         </div>
 
@@ -487,6 +531,36 @@ function formatCreatedAt(iso: string): string {
           data-test="users-delete-confirm"
           @click="submitDelete"
         >Delete</Button>
+      </template>
+    </Dialog>
+
+    <!-- Generated credential, shown once.
+
+         Not a toast: the server hashed this and kept no copy, so if it
+         vanishes on a timer while the admin looks away the only remedy is
+         another rotation. Requires an explicit dismissal, and says plainly
+         that it will not be shown again. -->
+    <Dialog :open="issued !== null" @update:open="(v: boolean) => { if (!v) issued = null; }">
+      <template #title>Password for {{ issued?.username }}</template>
+      <template #description>
+        Copy this now — it is not stored anywhere and cannot be shown again.
+        If you lose it, rotate the password to get a new one.
+      </template>
+
+      <div class="border border-border rounded-lg p-4 bg-muted/40" data-test="users-issued-password">
+        <code class="font-mono text-sm break-all select-all text-foreground">{{ issued?.password }}</code>
+      </div>
+
+      <p class="text-xs text-muted-foreground mt-3">
+        {{ issued?.username }} can change this after signing in. They will also need
+        to register a passkey the first time they use an app.
+      </p>
+
+      <template #footer>
+        <Button variant="secondary" data-test="users-issued-copy" @click="copyIssued">
+          {{ copied ? 'Copied' : 'Copy password' }}
+        </Button>
+        <Button data-test="users-issued-done" @click="issued = null">Done</Button>
       </template>
     </Dialog>
   </section>

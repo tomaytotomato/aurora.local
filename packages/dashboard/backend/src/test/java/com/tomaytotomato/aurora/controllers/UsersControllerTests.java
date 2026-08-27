@@ -156,8 +156,11 @@ class UsersControllerTests {
         "alice", "reallystrong-2026", "user", null));
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    assertThat(response.getBody().username()).isEqualTo("alice");
-    assertThat(response.getBody().role()).isEqualTo(Role.USER);
+    assertThat(response.getBody().user().username()).isEqualTo("alice");
+    assertThat(response.getBody().user().role()).isEqualTo(Role.USER);
+    // Caller supplied a password, so nothing is echoed back: we never
+    // return a secret the client already holds.
+    assertThat(response.getBody().generatedPassword()).isNull();
 
     // Password char[] handed to AuthService, hashed, then persisted.
     Mockito.verify(auth).hash(Mockito.any());
