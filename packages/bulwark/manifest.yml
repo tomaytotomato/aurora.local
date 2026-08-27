@@ -1,0 +1,90 @@
+name: bulwark
+title: Bulwark (webmail)
+description: |
+  Bulwark is a self-hosted webmail suite (mail + calendar + contacts +
+  files) built for the JMAP protocol and Stalwart. A front end only — the
+  mail server (Stalwart) lives in the core stack; this connects to it over
+  JMAP on aurora_net. Alternative to Roundcube in the `webmail` group;
+  Roundcube remains the default.
+
+category: productivity
+icon: bulwark
+
+# The mail server is in core, so that is the only hard dependency.
+depends_on:
+  - core
+recommends: []
+
+# Alternative to Roundcube in the same group; Roundcube is the default
+# webmail. Same shape as snappymail: participant, not default.
+variant_group: webmail
+
+profiles: {}
+
+# Its own vhost so it doesn't collide with Roundcube's mail.$DOMAIN when
+# both are enabled (variants are not mutually exclusive at runtime).
+vhosts: [bulwark]
+
+# No host port — the webmail is reachable solely via Caddy, behind
+# Authelia (see sso: below).
+ports: []
+
+requires:
+  # Next.js + Node runtime; heavier than PHP webmails.
+  min_ram_mb: 512
+  min_disk_gb: 1
+  host_roles: []
+
+# All four data directories the container writes to: user settings
+# (encrypted), admin-authored config (config.json, policy.json, plugins,
+# themes, branding uploads), admin runtime state (audit log, setup token,
+# login timestamps) and telemetry consent + instance id. Mail itself is
+# Stalwart's, backed up by core.
+backup:
+  paths:
+    - data/bulwark
+
+# Authelia gates bulwark.$DOMAIN at the edge (password + 2FA, per the
+# *.$DOMAIN two_factor rule in core's access control). trusted_headers is
+# false because Bulwark can't auto-login from Remote-User alone: JMAP
+# still needs the mailbox password, which Authelia doesn't hold, and
+# Stalwart's directory is separate from Authelia. Defence in depth —
+# Authelia proves you're an Aurora user before you ever reach the webmail,
+# then Bulwark authenticates the mailbox itself. No disable_env: Bulwark
+# must keep its own login, so nothing is blanked. Bulwark also has native
+# OAuth2/OIDC support that could later point at Authelia directly, but the
+# current wiring keeps the same convention as Roundcube/SnappyMail.
+sso:
+  protect: true
+  min_role: user
+  trusted_headers: false
+
+required_env: []
+
+probe:
+  kind: docker
+  container: bulwark
+  external_url: "http://bulwark.{domain}/"
+
+post_install_notes: |
+  ## Prerequisite: a mailbox on Stalwart
+  This is only the webmail. Create the mailbox on the mail server first
+  (see the core README / Stalwart admin at https://mail-admin.$DOMAIN/),
+  then sign in here with that address and its password.
+
+  ## First-run setup wizard
+  On first launch Bulwark shows a web-based setup wizard. The JMAP
+  endpoint is pre-filled from JMAP_SERVER_URL in packages/bulwark/.env
+  (defaults to http://stalwart:8080 on aurora_net); accept it, set an
+  admin password, and finish. The wizard writes to data/bulwark/admin/.
+
+  ## Access
+  https://bulwark.$DOMAIN/ — Authelia (password + 2FA) gates the front
+  door, then Bulwark asks for the mailbox password. Two logins, by
+  design: Authelia authenticates the person, Bulwark opens the JMAP
+  session.
+
+# Upstream project. Rendered as the Source and Docs buttons on the app
+# page.
+source_url: https://github.com/bulwarkmail/webmail
+homepage_url: https://bulwarkmail.org

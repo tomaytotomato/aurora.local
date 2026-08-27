@@ -1,0 +1,13 @@
+# aurora.local / packages/bulwark / caddy.snippet
+#
+# Bulwark webmail at bulwark.$DOMAIN. Front end only; the mail server
+# (Stalwart) and its ports live in packages/core. CaddySnippetService
+# injects `import authelia` here from the manifest sso: block.
+
+http://bulwark.{$DOMAIN} {
+	reverse_proxy bulwark:3000
+}
+https://bulwark.{$DOMAIN} {
+	tls internal
+	reverse_proxy bulwark:3000
+}
