@@ -249,12 +249,47 @@ paths:
           content:
             text/event-stream:
               schema: { type: string }
+  /onboarding/sso:
+    get:
+      tags: [onboarding]
+      summary: Second-factor enrollment progress
+      description: >-
+        Drives the wizard's "Set up SSO" step. Readable without a session
+        because the step runs before POST /onboarding/complete establishes
+        one. pendingUrl is withheld once onboarding is complete: it is a
+        bearer capability that lets whoever opens it bind an authenticator
+        to an account, so after that point the authenticated
+        GET /sso/status serves it instead.
+      responses:
+        '200':
+          description: Enrollment status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SsoEnrollment' }
+
   /onboarding/complete:
     post:
       tags: [onboarding]
       summary: Commit the wizard
       responses:
         '204': { description: Completed. }
+
+  # ─────────────────────────────── sso ────────────────────────────────
+  /sso/status:
+    get:
+      tags: [sso]
+      summary: Second-factor enrollment state
+      description: >-
+        Authenticated counterpart to GET /onboarding/sso. This is the
+        variant allowed to return a pending registration link, because by
+        this point the box has real users and such a link must not be
+        readable by an anonymous LAN client.
+      responses:
+        '200':
+          description: Enrollment status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SsoEnrollment' }
 
   # ───────────────────────────── packages ─────────────────────────────
   /packages:
@@ -3023,3 +3058,29 @@ components:
         role: { $ref: '#/components/schemas/UserRole' }
         tz: { type: string }
         createdAt: { type: string, format: date-time }
+
+    SsoEnrollment:
+      type: object
+      required: [enrolled, factorCount, passkeyCount, pendingUrl, pendingAt, autheliaUp]
+      properties:
+        enrolled:
+          type: boolean
+          description: At least one usable second factor (WebAuthn or TOTP) is registered.
+        factorCount: { type: integer }
+        passkeyCount:
+          type: integer
+          description: WebAuthn credentials specifically, so the UI can say "passkey".
+        pendingUrl:
+          type: string
+          nullable: true
+          description: >-
+            Most recent registration link Authelia emitted to its filesystem
+            notifier. Null when none is pending, or when withheld because
+            onboarding is already complete.
+        pendingAt:
+          type: string
+          nullable: true
+          format: date-time
+        autheliaUp:
+          type: boolean
+          description: False when Authelia's database could not be read -- not yet started.

@@ -8,6 +8,7 @@ import com.tomaytotomato.aurora.services.PackageNameValidator;
 import com.tomaytotomato.aurora.services.StateFileService;
 import com.tomaytotomato.aurora.services.SystemService;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -50,7 +51,8 @@ class OnboardingControllerPatchTests {
             mock(LaunchService.class),
             mock(StateFileService.class),
             mock(com.tomaytotomato.aurora.persistence.AuditEventRepo.class),
-            mock(com.tomaytotomato.aurora.services.SessionService.class))).build();
+            mock(com.tomaytotomato.aurora.services.SessionService.class),
+            mock(com.tomaytotomato.aurora.services.SsoEnrollmentService.class))).build();
 
     String body = JSON.writeValueAsString(Map.of("enabled_packages", List.of("../etc")));
     mvc.perform(patch("/api/onboarding")
@@ -76,7 +78,8 @@ class OnboardingControllerPatchTests {
             mock(LaunchService.class),
             mock(StateFileService.class),
             mock(com.tomaytotomato.aurora.persistence.AuditEventRepo.class),
-            mock(com.tomaytotomato.aurora.services.SessionService.class))).build();
+            mock(com.tomaytotomato.aurora.services.SessionService.class),
+            mock(com.tomaytotomato.aurora.services.SsoEnrollmentService.class))).build();
 
     String body = JSON.writeValueAsString(Map.of("enabled_packages", List.of("foo")));
     mvc.perform(patch("/api/onboarding")

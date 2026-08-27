@@ -3,6 +3,7 @@ package com.tomaytotomato.aurora.controllers;
 import com.tomaytotomato.aurora.services.LaunchService;
 import com.tomaytotomato.aurora.services.OnboardingService;
 import com.tomaytotomato.aurora.services.SessionService;
+import com.tomaytotomato.aurora.services.SsoEnrollmentService;
 import com.tomaytotomato.aurora.services.StateFileService;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.services.SystemService;
@@ -57,6 +58,7 @@ public class OnboardingController {
   private final StateFileService stateFiles;
   private final AuditEventRepo audit;
   private final SessionService sessions;
+  private final SsoEnrollmentService sso;
 
   /**
    * TD5: when true, exposes {@code POST /api/onboarding/reset}. Bound from
@@ -69,13 +71,49 @@ public class OnboardingController {
 
   public OnboardingController(OnboardingService onboarding, SystemService system,
                               LaunchService launcher, StateFileService stateFiles,
-                              AuditEventRepo audit, SessionService sessions) {
+                              AuditEventRepo audit, SessionService sessions,
+                              SsoEnrollmentService sso) {
     this.onboarding = onboarding;
     this.system = system;
     this.launcher = launcher;
     this.stateFiles = stateFiles;
     this.audit = audit;
     this.sessions = sessions;
+    this.sso = sso;
+  }
+
+  /**
+   * Second-factor enrollment state for the wizard's "Set up SSO" step.
+   *
+   * <p>Polled while the operator completes registration in the Authelia
+   * portal, so the step can advance on its own instead of asking them to
+   * tell us when they are done.
+   *
+   * <p><b>Why this is readable without a session, and what is withheld.</b>
+   * The step runs before {@code /complete}, so no session exists yet and
+   * {@code requireAdmin()} would refuse it. But the pending registration
+   * link is a bearer capability: whoever opens it first can register
+   * <em>their</em> authenticator against the admin account. Serving it to
+   * anonymous callers forever would hand any LAN client a standing
+   * account-takeover primitive, and {@code /api/onboarding/**} is
+   * {@code permitAll} in {@link com.tomaytotomato.aurora.config.SecurityConfig}.
+   *
+   * <p>So the link is returned <em>only while onboarding is incomplete</em> —
+   * a window that ends the moment the wizard finishes, and during which
+   * the box has no users to compromise beyond the one being set up right
+   * now by the person standing at it. Once complete, this endpoint still
+   * reports counts (useful, not sensitive) but redacts the URL; the
+   * authenticated {@code GET /api/sso/status} serves it thereafter.
+   */
+  @GetMapping("/sso")
+  public SsoEnrollmentService.EnrollmentStatus ssoStatus() {
+    var status = sso.status();
+    if (onboarding.isComplete()) {
+      return new SsoEnrollmentService.EnrollmentStatus(
+          status.enrolled(), status.factorCount(), status.passkeyCount(),
+          null, null, status.autheliaUp());
+    }
+    return status;
   }
 
   // --- canonical shape ------------------------------------------------

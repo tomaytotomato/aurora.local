@@ -43,6 +43,11 @@ export const STEPS: OnboardingStepId[] = [
   'dns',
   'tls',
   'review',
+  // 'sso' sits after 'review' because review is what launches core —
+  // Authelia does not exist as a running service until then, so an
+  // enrollment step placed any earlier would be asking the operator to
+  // register against a container that is not up. See OnboardingSso.vue.
+  'sso',
   'done',
 ];
 
@@ -53,6 +58,7 @@ export const STEP_LABELS: Record<OnboardingStepId, string> = {
   dns: 'DNS story',
   tls: 'Trust the root CA',
   review: 'Review & install',
+  sso: 'Set up SSO',
   done: 'Done',
 };
 

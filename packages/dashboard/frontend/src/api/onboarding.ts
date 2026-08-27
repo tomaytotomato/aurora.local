@@ -18,9 +18,28 @@ export type OnboardingStepId =
   | 'dns'
   | 'tls'
   | 'review'
+  | 'sso'
   | 'done';
 
 export type DnsMode = 'adguard' | 'router' | 'mdns';
+
+/**
+ * Where the operator is in second-factor setup.
+ *
+ * Mirrors SsoEnrollmentService.EnrollmentStatus on the backend.
+ */
+export interface SsoEnrollment {
+  /** At least one usable second factor (WebAuthn or TOTP) is registered. */
+  enrolled: boolean;
+  factorCount: number;
+  /** WebAuthn specifically, so the UI can say "passkey" not "second factor". */
+  passkeyCount: number;
+  /** Most recent registration link, or null when none is pending/withheld. */
+  pendingUrl: string | null;
+  pendingAt: string | null;
+  /** False when Authelia's database could not be read — not yet started. */
+  autheliaUp: boolean;
+}
 
 /** Full draft returned by GET /onboarding. Everything nullable so a fresh
  *  install can hydrate cleanly. */
@@ -232,9 +251,24 @@ export const OnboardingApi = {
     await http.post('/onboarding/complete');
   },
 
+  /**
+   * Second-factor enrollment state, for the "Set up SSO" step.
+   *
+   * <p>Readable without a session while onboarding is still running — the
+   * step happens before POST /complete establishes one. The backend
+   * withholds `pendingUrl` once onboarding is complete, because that link
+   * lets whoever opens it bind an authenticator to an account; after that
+   * point Settings reads the authenticated /sso/status instead.
+   */
+  async ssoStatus(): Promise<SsoEnrollment> {
+    const { data } = await http.get<SsoEnrollment>('/onboarding/sso');
+    return data;
+  },
+
   // SSO (Authelia) ships in core and is always-on — there is no wizard
   // toggle for it any more. The old setSso() call + POST /onboarding/sso
-  // endpoint were removed when Authelia migrated into core.
+  // endpoint were removed when Authelia migrated into core. The GET above
+  // is unrelated: it reports enrollment progress, it does not toggle SSO.
 
   caddyRootCaUrl(): string {
     return '/api/system/caddy-root.crt';

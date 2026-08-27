@@ -33,6 +33,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'dns', component: () => import('@/views/onboarding/OnboardingDns.vue') },
       { path: 'tls', component: () => import('@/views/onboarding/OnboardingTls.vue') },
       { path: 'review', component: () => import('@/views/onboarding/OnboardingReview.vue') },
+      { path: 'sso', component: () => import('@/views/onboarding/OnboardingSso.vue') },
       { path: 'done', component: () => import('@/views/onboarding/OnboardingDone.vue') },
     ],
   },

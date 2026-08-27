@@ -6,6 +6,7 @@ import com.tomaytotomato.aurora.services.OnboardingService;
 import com.tomaytotomato.aurora.services.StateFileService;
 import com.tomaytotomato.aurora.services.SystemService;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -47,7 +48,8 @@ class OnboardingControllerResetTests {
         mock(LaunchService.class),
         mock(StateFileService.class),
         mock(com.tomaytotomato.aurora.persistence.AuditEventRepo.class),
-            mock(com.tomaytotomato.aurora.services.SessionService.class));
+        mock(com.tomaytotomato.aurora.services.SessionService.class),
+        mock(com.tomaytotomato.aurora.services.SsoEnrollmentService.class));
     ReflectionTestUtils.setField(c, "e2eMode", e2eMode);
     return MockMvcBuilders.standaloneSetup(c).build();
   }
