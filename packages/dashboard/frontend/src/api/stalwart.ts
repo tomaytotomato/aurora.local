@@ -45,4 +45,15 @@ export const StalwartApi = {
     );
     return data;
   },
+
+  /**
+   * Rotate the recovery-admin secret. Admin-only on the backend; the
+   * plaintext is not echoed back — the reveal panel refetches through
+   * {@link adminSecret} on success so the operator can eyeball that the
+   * write landed. The caller surfaces 400 / 403 inline, not as a
+   * global toast (this is a form submit, not a background call).
+   */
+  async updateAdminSecret(secret: string): Promise<void> {
+    await http.put('/services/stalwart/admin-secret', { secret }, { toast: false });
+  },
 };

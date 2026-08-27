@@ -450,4 +450,213 @@ describe('CoreServiceDetail', () => {
 
     expect(spy).toHaveBeenCalledTimes(1);
   });
+
+  // ── Edit-password flow ───────────────────────────────────────────────
+  //
+  // Bruce landed on Stalwart's mail-admin console, saw the compose
+  // fallback, and had no way to rotate it from the dashboard — he
+  // had to shell in and edit packages/core/.env. These tests pin the
+  // shape that lets the reveal panel own that rotation end to end.
+
+  it('does not show the Edit button before Reveal', async () => {
+    // The whole point of Edit is "change what I can see". Before
+    // Reveal there is nothing to compare against and the panel still
+    // shows the masked bullets, so the CTA would misdirect.
+    vi.spyOn(StalwartApi, 'adminSecret').mockResolvedValue({
+      username: 'admin',
+      secret: 'abc123-strong-value',
+      source: 'ENV',
+    });
+    const wrapper = await mountStalwartPanel();
+    expect(wrapper.find('[data-test="stalwart-admin-edit"]').exists()).toBe(false);
+  });
+
+  it('shows the Edit button once revealed', async () => {
+    vi.spyOn(StalwartApi, 'adminSecret').mockResolvedValue({
+      username: 'admin',
+      secret: 'abc123-strong-value',
+      source: 'ENV',
+    });
+    const wrapper = await mountStalwartPanel();
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-test="stalwart-admin-edit"]').exists()).toBe(true);
+  });
+
+  it('does not show the Edit button on non-Stalwart services', async () => {
+    // Rotation is Stalwart-specific today — the other core services
+    // do not have an equivalent reveal panel and would render an
+    // orphaned button that goes nowhere.
+    vi.spyOn(SsoApi, 'notifications').mockResolvedValue([]);
+    const wrapper = await mountDetail('caddy');
+    expect(wrapper.find('[data-test="stalwart-admin-edit"]').exists()).toBe(false);
+  });
+
+  async function openEditForm(): Promise<ReturnType<typeof mount>> {
+    vi.spyOn(StalwartApi, 'adminSecret').mockResolvedValue({
+      username: 'admin',
+      secret: 'abc123-strong-value',
+      source: 'ENV',
+    });
+    const wrapper = await mountStalwartPanel();
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[data-test="stalwart-admin-edit"]').trigger('click');
+    await flushPromises();
+    return wrapper;
+  }
+
+  it('Save calls the API with the new secret and refreshes the credential', async () => {
+    // Two contracts: (1) the PUT is fired with the new value; (2) the
+    // panel refetches through adminSecret() so a stale cached value
+    // cannot silently lie about the outcome.
+    vi.spyOn(StalwartApi, 'adminSecret')
+      .mockResolvedValueOnce({
+        username: 'admin',
+        secret: 'abc123-strong-value',
+        source: 'ENV',
+      })
+      .mockResolvedValueOnce({
+        username: 'admin',
+        secret: 'brand-new-strong-value',
+        source: 'ENV',
+      });
+    const put = vi.spyOn(StalwartApi, 'updateAdminSecret').mockResolvedValue(undefined);
+
+    const wrapper = await mountStalwartPanel();
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[data-test="stalwart-admin-edit"]').trigger('click');
+    await flushPromises();
+
+    const newInput = wrapper.find('[data-test="stalwart-admin-new-password"]');
+    const confirmInput = wrapper.find('[data-test="stalwart-admin-confirm-password"]');
+    await newInput.setValue('brand-new-strong-value');
+    await confirmInput.setValue('brand-new-strong-value');
+    await wrapper.find('[data-test="stalwart-admin-save"]').trigger('click');
+    await flushPromises();
+
+    expect(put).toHaveBeenCalledWith('brand-new-strong-value');
+
+    // Panel is back in read-only reveal state and shows the new value.
+    expect(wrapper.find('[data-test="stalwart-admin-edit-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="stalwart-admin-secret"]').text())
+      .toContain('brand-new-strong-value');
+    expect(wrapper.find('[data-test="stalwart-admin-save-success"]').exists()).toBe(true);
+  });
+
+  it('the success alert mentions the container recreate step', async () => {
+    // Rotating the .env alone is not enough — compose interpolates
+    // env at container-create time and a live Stalwart container
+    // keeps its old value. The success copy has to say so, or the
+    // operator will assume the change took effect immediately and
+    // then panic when the old password still works in mail-admin.
+    vi.spyOn(StalwartApi, 'adminSecret').mockResolvedValue({
+      username: 'admin',
+      secret: 'brand-new-strong-value',
+      source: 'ENV',
+    });
+    vi.spyOn(StalwartApi, 'updateAdminSecret').mockResolvedValue(undefined);
+
+    const wrapper = await mountStalwartPanel();
+    await wrapper.find('[data-test="stalwart-admin-reveal"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[data-test="stalwart-admin-edit"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[data-test="stalwart-admin-new-password"]').setValue('brand-new-strong-value');
+    await wrapper.find('[data-test="stalwart-admin-confirm-password"]').setValue('brand-new-strong-value');
+    await wrapper.find('[data-test="stalwart-admin-save"]').trigger('click');
+    await flushPromises();
+
+    const success = wrapper.find('[data-test="stalwart-admin-save-success"]');
+    expect(success.exists()).toBe(true);
+    expect(success.text().toLowerCase()).toContain('recreated');
+    expect(success.text()).toContain('./scripts/up.sh core');
+  });
+
+  it('client-side mismatch blocks the API call', async () => {
+    // A form-fill mistake must never leave an audit row on the box.
+    const put = vi.spyOn(StalwartApi, 'updateAdminSecret').mockResolvedValue(undefined);
+    const wrapper = await openEditForm();
+
+    await wrapper.find('[data-test="stalwart-admin-new-password"]').setValue('a-strong-value-here');
+    await wrapper.find('[data-test="stalwart-admin-confirm-password"]').setValue('a-different-value');
+    await wrapper.find('[data-test="stalwart-admin-save"]').trigger('click');
+    await flushPromises();
+
+    expect(put).not.toHaveBeenCalled();
+    const err = wrapper.find('[data-test="stalwart-admin-save-error"]');
+    expect(err.exists()).toBe(true);
+    expect(err.text().toLowerCase()).toContain('match');
+  });
+
+  it('client-side too-short blocks the API call', async () => {
+    // 12-char floor mirrors the backend's @Size(min = 12) and the
+    // change-password endpoint. Catching it here means the operator
+    // gets an instant answer.
+    const put = vi.spyOn(StalwartApi, 'updateAdminSecret').mockResolvedValue(undefined);
+    const wrapper = await openEditForm();
+
+    await wrapper.find('[data-test="stalwart-admin-new-password"]').setValue('short');
+    await wrapper.find('[data-test="stalwart-admin-confirm-password"]').setValue('short');
+    await wrapper.find('[data-test="stalwart-admin-save"]').trigger('click');
+    await flushPromises();
+
+    expect(put).not.toHaveBeenCalled();
+    const err = wrapper.find('[data-test="stalwart-admin-save-error"]');
+    expect(err.exists()).toBe(true);
+    expect(err.text()).toContain('12');
+  });
+
+  it('400 from the backend renders inline in the edit form', async () => {
+    // Belt + braces: even if the client-side floor is bypassed, a
+    // backend 400 must not become a global toast — this is a form
+    // submit and the error copy belongs next to the fields.
+    vi.spyOn(StalwartApi, 'updateAdminSecret').mockRejectedValue({
+      response: { status: 400, data: { message: 'server said no' } },
+    });
+    const wrapper = await openEditForm();
+    await wrapper.find('[data-test="stalwart-admin-new-password"]').setValue('a-strong-value-here');
+    await wrapper.find('[data-test="stalwart-admin-confirm-password"]').setValue('a-strong-value-here');
+    await wrapper.find('[data-test="stalwart-admin-save"]').trigger('click');
+    await flushPromises();
+
+    const err = wrapper.find('[data-test="stalwart-admin-save-error"]');
+    expect(err.exists()).toBe(true);
+    expect(err.text()).toContain('server said no');
+    // Edit form stays open so the operator can retry.
+    expect(wrapper.find('[data-test="stalwart-admin-edit-form"]').exists()).toBe(true);
+  });
+
+  it('403 from the backend renders the admin-only copy in the edit form', async () => {
+    // Same reasoning as the read side: a logged-in USER can reach the
+    // page, but the write refuses. Copy says why so re-clicking is
+    // obvious as futile.
+    vi.spyOn(StalwartApi, 'updateAdminSecret').mockRejectedValue({
+      response: { status: 403 },
+    });
+    const wrapper = await openEditForm();
+    await wrapper.find('[data-test="stalwart-admin-new-password"]').setValue('a-strong-value-here');
+    await wrapper.find('[data-test="stalwart-admin-confirm-password"]').setValue('a-strong-value-here');
+    await wrapper.find('[data-test="stalwart-admin-save"]').trigger('click');
+    await flushPromises();
+
+    const err = wrapper.find('[data-test="stalwart-admin-save-error"]');
+    expect(err.exists()).toBe(true);
+    expect(err.text().toLowerCase()).toContain('admin');
+  });
+
+  it('Cancel closes the form and keeps the current revealed secret', async () => {
+    // Cancel is "never mind", not "forget everything". The reveal
+    // panel above the form must still show the original value.
+    const wrapper = await openEditForm();
+
+    await wrapper.find('[data-test="stalwart-admin-new-password"]').setValue('a-strong-value-here');
+    await wrapper.find('[data-test="stalwart-admin-cancel"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="stalwart-admin-edit-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="stalwart-admin-secret"]').text())
+      .toContain('abc123-strong-value');
+  });
 });

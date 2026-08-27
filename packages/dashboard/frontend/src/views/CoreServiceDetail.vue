@@ -12,7 +12,7 @@ import Badge from '@/components/ui/Badge.vue';
 import Button from '@/components/ui/Button.vue';
 import Skeleton from '@/components/ui/Skeleton.vue';
 import AppIcon from '@/components/AppIcon.vue';
-import { Alert, AlertDescription } from '@/components/ui';
+import { Alert, AlertDescription, Input, Label } from '@/components/ui';
 
 // Detail view for one Core service. Shared shell across Caddy, Authelia,
 // and Stalwart:
@@ -144,6 +144,100 @@ async function toggleStalwartReveal(): Promise<void> {
   }
 }
 
+// ── Edit-password flow ────────────────────────────────────────────
+//
+// The reveal panel stays visible while the operator is editing so the
+// current value is on-screen alongside the new one — the whole point
+// of "edit" here is "change it to something better than what I can
+// see". Save writes packages/core/.env, refetches through
+// StalwartApi.adminSecret() so the panel confirms the write landed,
+// and shows an inline note reminding the operator to recreate the
+// container so compose picks up the new value (compose interpolates
+// env at container-create time; a running container carries the
+// value it was created with even after the .env changes).
+const stalwartEditing = ref(false);
+const stalwartNewPassword = ref('');
+const stalwartConfirmPassword = ref('');
+const stalwartNewPasswordRevealed = ref(false);
+const stalwartSaving = ref(false);
+const stalwartSaveError = ref<string | null>(null);
+const stalwartSaveSuccess = ref(false);
+
+const MIN_STALWART_SECRET_LENGTH = 12;
+
+function startStalwartEdit(): void {
+  stalwartEditing.value = true;
+  stalwartNewPassword.value = '';
+  stalwartConfirmPassword.value = '';
+  stalwartNewPasswordRevealed.value = false;
+  stalwartSaveError.value = null;
+  stalwartSaveSuccess.value = false;
+}
+
+function cancelStalwartEdit(): void {
+  // Return to the read-only reveal state. Deliberately keep
+  // stalwartCred + stalwartRevealed so the operator can still see the
+  // current password after they change their mind — Cancel is not
+  // "forget everything".
+  stalwartEditing.value = false;
+  stalwartNewPassword.value = '';
+  stalwartConfirmPassword.value = '';
+  stalwartNewPasswordRevealed.value = false;
+  stalwartSaveError.value = null;
+}
+
+async function saveStalwartSecret(): Promise<void> {
+  // Client-side validation. Blocks the API call so a form-fill
+  // mistake never hits the backend and never leaves an audit row.
+  const next = stalwartNewPassword.value;
+  const confirm = stalwartConfirmPassword.value;
+  if (!next || !confirm) {
+    stalwartSaveError.value = 'Enter and confirm the new password.';
+    return;
+  }
+  if (next.length < MIN_STALWART_SECRET_LENGTH) {
+    stalwartSaveError.value =
+      `New password must be at least ${MIN_STALWART_SECRET_LENGTH} characters.`;
+    return;
+  }
+  if (next !== confirm) {
+    stalwartSaveError.value = 'The two passwords do not match.';
+    return;
+  }
+
+  stalwartSaving.value = true;
+  stalwartSaveError.value = null;
+  try {
+    await StalwartApi.updateAdminSecret(next);
+    // Confirm the write landed by refetching. Same GET the Reveal
+    // click uses, so a stale cached value cannot silently lie about
+    // the outcome.
+    stalwartCred.value = await StalwartApi.adminSecret();
+    stalwartSaveSuccess.value = true;
+    stalwartEditing.value = false;
+    stalwartNewPassword.value = '';
+    stalwartConfirmPassword.value = '';
+    stalwartNewPasswordRevealed.value = false;
+  } catch (e) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    if (status === 403) {
+      stalwartSaveError.value = 'Only admins can change the recovery password.';
+    } else if (status === 400) {
+      const body = (e as { response?: { data?: { message?: string } } })?.response?.data;
+      stalwartSaveError.value =
+        body?.message ??
+        `New password must be at least ${MIN_STALWART_SECRET_LENGTH} characters.`;
+    } else {
+      stalwartSaveError.value = humanCopyForError(e, {
+        subject: "Stalwart's recovery password",
+        action: 'save',
+      });
+    }
+  } finally {
+    stalwartSaving.value = false;
+  }
+}
+
 async function copyStalwartSecret(): Promise<void> {
   const secret = stalwartCred.value?.secret;
   if (!secret) return;
@@ -167,6 +261,12 @@ watch(isStalwart, (nowStalwart) => {
     stalwartRevealed.value = false;
     stalwartCred.value = null;
     stalwartErr.value = null;
+    stalwartEditing.value = false;
+    stalwartNewPassword.value = '';
+    stalwartConfirmPassword.value = '';
+    stalwartNewPasswordRevealed.value = false;
+    stalwartSaveError.value = null;
+    stalwartSaveSuccess.value = false;
   }
 });
 
@@ -446,8 +546,99 @@ function toggleBody(i: number): void {
               data-test="stalwart-admin-copy"
               @click="copyStalwartSecret"
             >{{ stalwartCopied ? 'Copied' : 'Copy' }}</Button>
+            <Button
+              v-if="stalwartRevealed && stalwartCred && !stalwartEditing"
+              variant="secondary"
+              size="sm"
+              data-test="stalwart-admin-edit"
+              @click="startStalwartEdit"
+            >Edit password</Button>
           </dd>
         </dl>
+
+        <!-- Success alert after a save. Tells the operator the write
+             landed AND that compose still has to pick up the new value
+             — a Stalwart container created before this rotation keeps
+             the old value until it is recreated. -->
+        <Alert
+          v-if="stalwartSaveSuccess"
+          class="mt-4"
+          data-test="stalwart-admin-save-success"
+        >
+          <AlertDescription>
+            Password saved. The container needs to be recreated to pick
+            up the new value — run
+            <code class="font-mono">./scripts/up.sh core</code> on the
+            host. The Reveal panel above already shows the new value
+            for verification.
+          </AlertDescription>
+        </Alert>
+
+        <!-- Inline edit form. Deliberately not a modal: the current
+             (soon-to-be-old) value stays visible above so the operator
+             can see what they are replacing. -->
+        <div
+          v-if="stalwartEditing"
+          class="mt-6 pt-6 border-t border-border space-y-4"
+          data-test="stalwart-admin-edit-form"
+        >
+          <div>
+            <Label for="stalwart-new-password" class="mb-1 block">New password</Label>
+            <div class="flex items-center gap-2">
+              <Input
+                id="stalwart-new-password"
+                :type="stalwartNewPasswordRevealed ? 'text' : 'password'"
+                :model-value="stalwartNewPassword"
+                autocomplete="new-password"
+                data-test="stalwart-admin-new-password"
+                @update:model-value="stalwartNewPassword = $event"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                data-test="stalwart-admin-new-password-reveal"
+                @click="stalwartNewPasswordRevealed = !stalwartNewPasswordRevealed"
+              >{{ stalwartNewPasswordRevealed ? 'Hide' : 'Show' }}</Button>
+            </div>
+            <p class="text-xs text-muted-foreground mt-1">
+              At least {{ MIN_STALWART_SECRET_LENGTH }} characters.
+            </p>
+          </div>
+          <div>
+            <Label for="stalwart-confirm-password" class="mb-1 block">Confirm new password</Label>
+            <Input
+              id="stalwart-confirm-password"
+              :type="stalwartNewPasswordRevealed ? 'text' : 'password'"
+              :model-value="stalwartConfirmPassword"
+              autocomplete="new-password"
+              data-test="stalwart-admin-confirm-password"
+              @update:model-value="stalwartConfirmPassword = $event"
+            />
+          </div>
+
+          <Alert
+            v-if="stalwartSaveError"
+            variant="destructive"
+            data-test="stalwart-admin-save-error"
+          >
+            <AlertDescription>{{ stalwartSaveError }}</AlertDescription>
+          </Alert>
+
+          <div class="flex items-center gap-3">
+            <Button
+              :loading="stalwartSaving"
+              data-test="stalwart-admin-save"
+              @click="saveStalwartSecret"
+            >Save</Button>
+            <Button
+              variant="secondary"
+              :disabled="stalwartSaving"
+              data-test="stalwart-admin-cancel"
+              @click="cancelStalwartEdit"
+            >Cancel</Button>
+          </div>
+        </div>
 
         <Alert
           v-if="stalwartErr"

@@ -360,6 +360,37 @@ paths:
               schema: { $ref: '#/components/schemas/StalwartAdminCredential' }
         '401': { description: Not signed in. }
         '403': { description: Signed in but not an admin. }
+    put:
+      tags: [services]
+      summary: Rotate the Stalwart recovery-admin secret
+      description: >-
+        Persist a new STALWART_ADMIN_SECRET in packages/core/.env,
+        preserving comments + every other key verbatim. Admin-only:
+        the plaintext is a bearer capability that unlocks the mail
+        server's admin plane. Does NOT recreate the Stalwart container
+        — compose interpolates env at container-create time, so the
+        running container still carries its old value until the
+        operator runs `./scripts/up.sh core`. The dashboard's reveal
+        panel says so in the success alert. Audits as
+        stalwart.admin-secret.rotate; the plaintext value never
+        touches the audit log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [secret]
+              properties:
+                secret:
+                  type: string
+                  minLength: 12
+                  description: New recovery-admin password. Not echoed back.
+      responses:
+        '204': { description: Saved. }
+        '400': { description: Body missing, blank, or shorter than 12 chars. }
+        '401': { description: Not signed in. }
+        '403': { description: Signed in but not an admin. }
 
   # ───────────────────────────── packages ─────────────────────────────
   /packages:

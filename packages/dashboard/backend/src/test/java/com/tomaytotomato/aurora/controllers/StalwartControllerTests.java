@@ -5,45 +5,59 @@ import com.tomaytotomato.aurora.services.CurrentUserService;
 import com.tomaytotomato.aurora.services.StalwartAdminService;
 import com.tomaytotomato.aurora.services.StalwartAdminService.AdminCredential;
 import com.tomaytotomato.aurora.services.StalwartAdminService.Source;
+import com.tomaytotomato.aurora.services.StalwartSecretsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.io.IOException;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * The reveal-panel endpoint. Two things worth pinning:
+ * The reveal-panel + rotation endpoints. Things worth pinning:
  *
  * <ol>
  *   <li>The bearer capability is the plaintext; anything less than an
- *       authenticated admin session must not see it. Non-admin roles
- *       have to 403, and an unauthenticated caller has to 401 with the
- *       same shape as every other admin-only route.</li>
- *   <li>The controller must not manufacture facts about the value \u2014 it
- *       is just a proxy over {@link StalwartAdminService#currentCredential()}.
- *       The reveal-vs-default classification is the service's, not the
+ *       authenticated admin session must not see it OR rotate it.
+ *       Non-admin roles have to 403, and an unauthenticated caller has
+ *       to 401 with the same shape as every other admin-only route.</li>
+ *   <li>The read controller must not manufacture facts about the value
+ *       \u2014 it is just a proxy over
+ *       {@link StalwartAdminService#currentCredential()}. The
+ *       reveal-vs-default classification is the service's, not the
  *       controller's.</li>
+ *   <li>The write controller must never echo the plaintext back and
+ *       must pass the acting user id through to the audit row so
+ *       rotations are attributed.</li>
  * </ol>
  */
 class StalwartControllerTests {
 
   private CurrentUserService currentUser;
   private StalwartAdminService stalwart;
+  private StalwartSecretsService secrets;
   private MockMvc mvc;
 
   @BeforeEach
   void setUp() {
     currentUser = Mockito.mock(CurrentUserService.class);
     stalwart = Mockito.mock(StalwartAdminService.class);
-    StalwartController ctrl = new StalwartController(stalwart, currentUser);
+    secrets = Mockito.mock(StalwartSecretsService.class);
+    StalwartController ctrl = new StalwartController(stalwart, secrets, currentUser);
     mvc = MockMvcBuilders.standaloneSetup(ctrl).build();
   }
+
+  // \u2500\u2500\u2500 GET /admin-secret \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
   @Test
   void unauthenticated_request_is_401() throws Exception {
@@ -97,5 +111,100 @@ class StalwartControllerTests {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.source").value("DEFAULT"))
         .andExpect(jsonPath("$.secret").value("aurora-change-me"));
+  }
+
+  // \u2500\u2500\u2500 PUT /admin-secret \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+  @Test
+  void put_admin_secret_unauthenticated_is_401() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.empty());
+    mvc.perform(put("/api/services/stalwart/admin-secret")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"secret\":\"a-strong-value-here\"}"))
+        .andExpect(status().isUnauthorized());
+    Mockito.verifyNoInteractions(secrets);
+  }
+
+  @Test
+  void put_admin_secret_non_admin_is_403() throws Exception {
+    // Rotation is a write and admin-only \u2014 same bearer-capability
+    // reasoning as the read side.
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.USER));
+    mvc.perform(put("/api/services/stalwart/admin-secret")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"secret\":\"a-strong-value-here\"}"))
+        .andExpect(status().isForbidden());
+    Mockito.verifyNoInteractions(secrets);
+  }
+
+  @Test
+  void put_admin_secret_short_value_is_400() throws Exception {
+    // 12-char floor \u2014 matches the change-password endpoint. Bean
+    // validation catches this before the service is ever asked, so
+    // the service mock stays untouched.
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    mvc.perform(put("/api/services/stalwart/admin-secret")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"secret\":\"short\"}"))
+        .andExpect(status().isBadRequest());
+    Mockito.verifyNoInteractions(secrets);
+  }
+
+  @Test
+  void put_admin_secret_blank_value_is_400() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    mvc.perform(put("/api/services/stalwart/admin-secret")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"secret\":\"\"}"))
+        .andExpect(status().isBadRequest());
+    Mockito.verifyNoInteractions(secrets);
+  }
+
+  @Test
+  void put_admin_secret_success_returns_204_and_passes_acting_user() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(42L));
+
+    mvc.perform(put("/api/services/stalwart/admin-secret")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"secret\":\"brand-new-strong-value\"}"))
+        .andExpect(status().isNoContent());
+
+    ArgumentCaptor<String> value = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<Long> acting = ArgumentCaptor.forClass(Long.class);
+    Mockito.verify(secrets).writeSecret(value.capture(), acting.capture());
+    assertThat(value.getValue()).isEqualTo("brand-new-strong-value");
+    assertThat(acting.getValue()).isEqualTo(42L);
+  }
+
+  @Test
+  void put_admin_secret_service_level_illegal_arg_maps_to_400() throws Exception {
+    // Belt + braces: even if bean validation is misconfigured, the
+    // service-level floor still keeps a bad value out of .env. The
+    // controller must not 500 in that case.
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(1L));
+    Mockito.doThrow(new IllegalArgumentException("recovery-admin password must be at least 12 characters"))
+        .when(secrets).writeSecret(Mockito.any(), Mockito.any());
+
+    mvc.perform(put("/api/services/stalwart/admin-secret")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"secret\":\"twelve-chars\"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void put_admin_secret_io_failure_is_500() throws Exception {
+    // A truly unwritable .env is a real system-level failure, not a
+    // client error. 500 surfaces that honestly.
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(1L));
+    Mockito.doThrow(new IOException("permission denied"))
+        .when(secrets).writeSecret(Mockito.any(), Mockito.any());
+
+    mvc.perform(put("/api/services/stalwart/admin-secret")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"secret\":\"brand-new-strong-value\"}"))
+        .andExpect(status().isInternalServerError());
   }
 }
