@@ -56,7 +56,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C9 | friction | Installing one app bounces every other running container | [x] |
 | C10 | friction | `.state.yml` drops `dashboard` after the first in-app install | [x] |
 | C11 | friction | Settings claims it can't read the TLS root; the API serves it fine | [x] |
-| C12 | friction | TLS card: unexpanded `$DOMAIN`, Linux steps miss the browser store | [~] |
+| C12 | friction | TLS card: unexpanded `$DOMAIN`, Linux steps miss the browser store | [x] |
 | C13 | polish | "last 24 hours" metrics and 4-day uptime on a 20-minute-old box | [x] |
 | C14 | polish | Activity feeds show raw event keys | [x] |
 | C15 | polish | `/users` heading is unreadable against the hero image | [x] |
@@ -652,6 +652,19 @@ failing with `ERR_CERT_AUTHORITY_INVALID` (reproduced).
 **Fix:** interpolate the domain; add a Chromium/NSS paragraph
 (`certutil -d sql:$HOME/.pki/nssdb …`) or, better, ship a one-click
 "trust this cert" download for Linux desktops.
+
+**SHIPPED.** The literal `$DOMAIN` went with C11. The instructions are now one
+shared `TrustRootInstructions.vue` used by both the wizard step and the Settings
+card — they were two copies, each carrying a "keep these in sync" comment, and
+they had already drifted (the wizard told Linux users to wait for a step-by-step
+in Settings; Settings showed something else). Two corrections to content, both
+cases where following the text literally still left a warning:
+`update-ca-certificates` fills the system store that Chrome/Chromium/Edge do not
+read, so the NSS `certutil` line is now there too; and "iOS / Android" was one
+entry giving only the iOS path, which does not exist on Android — split, with
+each platform's real menu path and a note that Android's scary "someone could
+monitor you" warning is about this box. 4 tests, including one that mounts both
+surfaces and asserts they render the same component.
 
 ### C13 · [polish] Time-travelling metrics
 Overview shows "CPU last 24h 30.4%" and a chart labelled "Host CPU % · last 24

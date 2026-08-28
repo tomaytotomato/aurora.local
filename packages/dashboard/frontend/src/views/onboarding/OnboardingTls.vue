@@ -4,6 +4,7 @@ import { useOnboardingStore } from '@/stores/onboarding';
 import { OnboardingApi } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import { Alert, AlertDescription } from '@/components/ui';
+import TrustRootInstructions from '@/components/TrustRootInstructions.vue';
 
 const store = useOnboardingStore();
 const router = useRouter();
@@ -32,28 +33,7 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
       </div>
     </div>
 
-    <div class="space-y-4 mb-10 text-sm text-muted-foreground">
-      <div>
-        <div class="eyebrow mb-1 text-foreground">macOS</div>
-        <p>Double-click the file, add to <em>System</em> keychain, then set to
-          <em>Always Trust</em> in the certificate's info panel.</p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">Windows</div>
-        <p>Right-click → Install Certificate → Local Machine → place in
-          <em>Trusted Root Certification Authorities</em>.</p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">Linux (Debian/Ubuntu)</div>
-        <p>Save the file to your Downloads folder. Aurora will show you a
-          step-by-step in <em>Settings → TLS</em> once install completes.</p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">iOS / Android</div>
-        <p>AirDrop or copy the file to your device; both platforms then require you
-          to enable the profile in Settings → General → About → Certificate Trust.</p>
-      </div>
-    </div>
+    <TrustRootInstructions variant="wizard" class="mb-10" />
 
     <Alert variant="info" class="mb-8">
       <AlertDescription>

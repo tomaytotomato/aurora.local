@@ -39,6 +39,7 @@ import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import { Alert, AlertDescription, Skeleton } from '@/components/ui';
+import TrustRootInstructions from '@/components/TrustRootInstructions.vue';
 
 const loading = ref<boolean>(true);
 const err = ref<string | null>(null);
@@ -329,47 +330,10 @@ onMounted(() => {
       </div>
     </dl>
 
-    <!-- Same per-OS hints the onboarding wizard shows. Kept in sync
-         with OnboardingTls.vue on purpose: an operator installing the
-         root after the fact shouldn't need a different playbook. -->
-    <div class="space-y-3 text-xs text-muted-foreground">
-      <div>
-        <div class="eyebrow mb-1 text-foreground">macOS</div>
-        <p>
-          Double-click the file, add to <em>System</em> keychain, then set
-          to <em>Always Trust</em> in the certificate's info panel.
-        </p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">Windows</div>
-        <p>
-          Right-click → Install Certificate → Local Machine → place in
-          <em>Trusted Root Certification Authorities</em>.
-        </p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">Linux (Debian/Ubuntu)</div>
-        <p>
-          <code class="bg-muted px-1 py-0.5 rounded border border-border">sudo cp caddy-root.crt
-            /usr/local/share/ca-certificates/ &amp;&amp; sudo update-ca-certificates</code>
-        </p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">Firefox</div>
-        <p>
-          Firefox keeps its own trust store. Settings → Privacy &amp; Security → Certificates
-          → <em>View Certificates</em> → <em>Authorities</em> → <em>Import</em> the file and
-          tick "trust for websites."
-        </p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">iOS / Android</div>
-        <p>
-          AirDrop or copy the file to your device; both platforms then require you
-          to enable the profile in Settings → General → About → Certificate Trust.
-        </p>
-      </div>
-    </div>
+    <!-- One shared component with the wizard's TLS step: these were two
+         copies with "keep in sync" comments on both, and they had already
+         drifted. -->
+    <TrustRootInstructions variant="settings" />
 
     <Alert variant="info" class="mt-6">
       <AlertDescription>
