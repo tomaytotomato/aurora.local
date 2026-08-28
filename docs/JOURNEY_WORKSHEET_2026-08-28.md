@@ -35,7 +35,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | A5 | polish | Ansible deprecation noise dominates the install transcript | [x] |
 | A6 | friction | No reset/uninstall path anywhere | [ ] |
 | A7 | blocker | Published image is stale vs main, and unidentifiable on the box | [ ] |
-| B1 | blocker | "AdGuard on this box" does not install AdGuard | [ ] |
+| B1 | blocker | "AdGuard on this box" does not install AdGuard | [x] |
 | B2 | blocker | AdGuard is never provisioned; the DNS story never completes | [ ] |
 | B3 | blocker | Vue escape leak: `${'{'}DOMAIN{'}'}` rendered to the user | [ ] |
 | B4 | friction | Wrong step reference ("trust the new TLS root (step 7)") | [ ] |
@@ -217,6 +217,17 @@ told the user it isn't going to happen, then did it anyway.
 **Fix:** when `dns=adguard`, add `privacy` to the install plan (chip visible on
 the review step) and delete the warning; keep the warning only as a
 one-click "Add AdGuard" if the plan is ever edited by hand.
+
+**SHIPPED:** `OnboardingService` now derives packages from the DNS choice
+(`packagesForDnsMode()`): `/plan` includes it, so the chip shows on Review before
+anything is written, and `/install` persists it with the line "Added Privacy
+(LAN DNS + VPN) because you chose AdGuard for DNS." The contradictory warning is
+gone; the only remaining one fires when the build genuinely has no AdGuard
+package, and is phrased for the reader ("AdGuard isn't available in this build,
+so nothing on this box will answer DNS for *.aurora.local. Point your devices at
+your router's DNS instead."). The step's own promise lost its jargon too
+("Install AdGuard Home on this box", not "Install the `privacy` package").
+4 integration tests in `OnboardingDnsImpliesPackageIntegrationTest`.
 
 ### B2 · [blocker] AdGuard is never provisioned; the DNS story never completes
 Even installing `privacy` by hand from the catalogue leaves:

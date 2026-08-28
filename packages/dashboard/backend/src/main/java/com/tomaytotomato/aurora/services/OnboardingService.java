@@ -576,6 +576,32 @@ public class OnboardingService {
   private static final List<String> MANDATORY_PACKAGES = List.of("core");
 
   /**
+   * The package that provides AdGuard Home. The DNS step of the wizard sells
+   * "AdGuard runs on this box and rewrites *.domain to your LAN IP" and lists
+   * "Install the privacy package (AdGuard Home)" under "What Aurora will do" —
+   * but choosing it used to change nothing except a string in the draft. The
+   * Review step then said "DNS mode is 'adguard' but the privacy package ... is
+   * not selected", offered no way to fix that, and installed anyway. The wizard
+   * promised, then denied, then ignored itself.
+   *
+   * <p>Now the choice carries its package: {@code adguard} adds this to the
+   * plan (so the chip shows up on Review before anything is written) and to
+   * the enabled set at install. Only a missing package directory can produce a
+   * warning here now, and that warning is about the repo, not the user.
+   */
+  private static final String DNS_ADGUARD_PACKAGE = "privacy";
+
+  /**
+   * Packages implied by the chosen DNS story. Empty for {@code router} and
+   * {@code mdns} — those need no software on this box.
+   */
+  private List<String> packagesForDnsMode() {
+    return "adguard".equals(dnsMode().orElse(null))
+        ? List.of(DNS_ADGUARD_PACKAGE)
+        : List.of();
+  }
+
+  /**
    * Apply the wizard draft. In v0.1 this means:
    *   1. Ensure the mandatory packages are in the enabled set (they're required).
    *   2. Write .state.yml (already done by earlier PATCHes, this is idempotent).
@@ -608,14 +634,27 @@ public class OnboardingService {
       }
     }
 
+    // 1a. Whatever the DNS step promised, add it — but only if this build
+    // actually ships it. See DNS_ADGUARD_PACKAGE. (The catalogue lookup
+    // below is what tells us; a name we cannot install would only be
+    // written into .state.yml for up.sh to drop again.)
+    var allPackages = packages.list();
+    var byName = new java.util.LinkedHashMap<String, Package>();
+    for (var p : allPackages) byName.put(p.name(), p);
+
+    var addedForDns = new java.util.LinkedHashSet<String>();
+    for (String implied : packagesForDnsMode()) {
+      if (byName.containsKey(implied) && !requested.contains(implied)) {
+        requested.add(implied);
+        addedForDns.add(implied);
+      }
+    }
+
     // 1b. Resolve the rest of the hard-dependency closure exactly the way
     // scripts/up.sh's manifest_resolve_deps would, and persist THAT set —
     // not the raw request — so .state.yml (and therefore what /launch
     // hands to up.sh) always matches what /plan already told the user
     // would happen.
-    var allPackages = packages.list();
-    var byName = new java.util.LinkedHashMap<String, Package>();
-    for (var p : allPackages) byName.put(p.name(), p);
     var resolution = resolveDependencies(requested, byName);
     var enabledOrder = new java.util.LinkedHashSet<String>(requested);
     enabledOrder.addAll(resolution.resolved());
@@ -626,6 +665,10 @@ public class OnboardingService {
           ? "Added " + prettyPackageName(mandatory) + " to enabled_packages (was missing; "
               + prettyPackageName(mandatory) + " is required)."
           : prettyPackageName(mandatory) + " is enabled.");
+    }
+    for (String added : addedForDns) {
+      applied.add("Added " + prettyPackageName(added)
+          + " because you chose AdGuard for DNS.");
     }
     for (String added : resolution.addedDependencies()) {
       if (MANDATORY_PACKAGES.contains(added)) continue;
@@ -689,11 +732,20 @@ public class OnboardingService {
     List<String> requested = enabledOverride != null
         ? enabledOverride
         : (state.enabled() == null ? List.of() : state.enabled());
+    // The DNS story's package is part of the plan, not an afterthought the
+    // Review step complains about. Same list install() will persist; the
+    // catalogue check happens below, once byName exists.
     String domain = state.domain();
 
     var allPackages = packages.list();
     var byName = new java.util.LinkedHashMap<String, Package>();
     for (var p : allPackages) byName.put(p.name(), p);
+
+    var withDns = new java.util.LinkedHashSet<>(requested);
+    for (String implied : packagesForDnsMode()) {
+      if (byName.containsKey(implied)) withDns.add(implied);
+    }
+    requested = new ArrayList<>(withDns);
 
     // Resolve depends_on into the same closure scripts/up.sh would arrive
     // at via manifest_resolve_deps, so this preview never promises fewer
@@ -751,8 +803,13 @@ public class OnboardingService {
     // Warnings: light static checks, plus the manifest-derived ones below.
     var warnings = new java.util.ArrayList<String>();
     String dns = dnsMode().orElse(null);
-    if ("adguard".equals(dns) && !enabled.contains("privacy")) {
-      warnings.add("DNS mode is 'adguard' but the privacy package (which provides AdGuard Home) is not selected.");
+    if ("adguard".equals(dns) && !enabled.contains(DNS_ADGUARD_PACKAGE)) {
+      // Only reachable when packages/privacy is missing from the repo — the
+      // user cannot cause this and cannot fix it, so say what it means for
+      // them rather than naming a package that isn't there.
+      warnings.add("AdGuard isn't available in this build, so nothing on this box "
+          + "will answer DNS for *." + (domain == null || domain.isBlank() ? "your domain" : domain)
+          + ". Point your devices at your router's DNS instead.");
     }
     if (domain == null || domain.isBlank()) {
       warnings.add("Domain not set — vhosts cannot be rendered until you complete step 3.");
