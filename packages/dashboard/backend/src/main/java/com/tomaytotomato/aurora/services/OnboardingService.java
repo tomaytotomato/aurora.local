@@ -61,6 +61,12 @@ public class OnboardingService {
   private final PackageNameValidator packageNames;
   /** Nullable in unit tests; see issueRecoveryCode(). */
   private final RecoveryCodeService recoveryCodes;
+  /**
+   * Publishes the user-changed event the mail reconciler listens for.
+   * Nullable for the same reason as the field above: several suites build
+   * this service directly with nulls.
+   */
+  private final org.springframework.context.ApplicationEventPublisher events;
 
   @org.springframework.beans.factory.annotation.Autowired
   public OnboardingService(AdminUserRepo users, AuditEventRepo audit, SettingsRepo settings,
@@ -68,7 +74,8 @@ public class OnboardingService {
                            PackagesService packages, SystemService system,
                            AuroraProperties props,
                            PackageNameValidator packageNames,
-                           RecoveryCodeService recoveryCodes) {
+                           RecoveryCodeService recoveryCodes,
+                           org.springframework.context.ApplicationEventPublisher events) {
     this.users = users;
     this.audit = audit;
     this.settings = settings;
@@ -79,6 +86,7 @@ public class OnboardingService {
     this.props = props;
     this.packageNames = packageNames;
     this.recoveryCodes = recoveryCodes;
+    this.events = events;
   }
 
   /**
@@ -90,7 +98,7 @@ public class OnboardingService {
                            PackagesService packages, SystemService system,
                            AuroraProperties props,
                            PackageNameValidator packageNames) {
-    this(users, audit, settings, auth, stateFiles, packages, system, props, packageNames, null);
+    this(users, audit, settings, auth, stateFiles, packages, system, props, packageNames, null, null);
   }
 
   /**
@@ -975,6 +983,16 @@ public class OnboardingService {
     long id = users.create(username.trim(), hash, tz == null || tz.isBlank() ? "UTC" : tz);
     audit.record(id, "onboarding.admin.create", "admin_user:" + id, null);
     settings.put(KEY_STEP, "domain");
+    // The wizard's admin is a user like any other, and users get a mailbox.
+    // This path created the account through the repo directly and published
+    // nothing, so the one account guaranteed to exist on every box — the
+    // owner's — was the only one without mail. MailAccountReconciler listens
+    // for this; it is idempotent and never throws, and the mail domain not
+    // being provisioned yet is handled by its own retry rather than here.
+    if (events != null) {
+      events.publishEvent(new com.tomaytotomato.aurora.events.UserChangedEvent(
+          com.tomaytotomato.aurora.events.UserChangedEvent.CREATE));
+    }
     return id;
   }
 

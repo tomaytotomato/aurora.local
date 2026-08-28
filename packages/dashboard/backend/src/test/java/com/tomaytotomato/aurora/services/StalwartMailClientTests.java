@@ -51,12 +51,17 @@ class StalwartMailClientTests {
   }
 
   @Test
-  void ensureDomain_returns_false_when_it_already_exists() {
+  void ensureDomain_reports_the_domain_exists_even_when_it_did_not_create_it() {
+    // It used to return false here, meaning "I did not create it" — which
+    // every caller read as "not ready". MailAccountReconciler believed that
+    // and provisioned nothing on any box whose domain already existed,
+    // i.e. all of them after the first minute. The question this method
+    // answers is now "does the domain exist", which is what callers want.
     var c = clientReturning(
         "{\"methodResponses\":[[\"x:Domain/set\",{\"notCreated\":{\"d1\":"
             + "{\"type\":\"primaryKeyViolation\",\"objectId\":{\"id\":\"b\"}}}},\"c1\"]]}",
         new AtomicReference<>());
-    assertThat(c.ensureDomain("aurora.local")).isFalse();
+    assertThat(c.ensureDomain("aurora.local")).isTrue();
   }
 
   @Test

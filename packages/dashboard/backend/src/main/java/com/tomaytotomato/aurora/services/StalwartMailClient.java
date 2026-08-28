@@ -83,6 +83,18 @@ public class StalwartMailClient {
    * false when it already existed. Throws {@link StalwartApiException} on
    * any other failure.
    */
+  /**
+   * Make sure the mail domain exists, and say whether it <em>does</em> —
+   * not whether this particular call is the one that made it.
+   *
+   * <p>It used to return true only on creation and false when the domain
+   * already existed, which reads as "not ready" to anyone who did not open
+   * this method. {@link MailAccountReconciler} did exactly that and
+   * silently provisioned nothing on every box past its first minute. The
+   * one caller that genuinely wants "did I create it" ({@link
+   * StalwartProvisionService}, for its log line) uses {@link #domainExists}
+   * to work it out instead.
+   */
   public boolean ensureDomain(String name) {
     String body = jmapCall("x:Domain/set",
         "{\"create\":{\"d1\":{\"@type\":\"Domain\",\"name\":" + quote(name) + "}}}");
@@ -95,19 +107,28 @@ public class StalwartMailClient {
     JsonNode notCreated = args.path("notCreated").path("d1");
     if ("primaryKeyViolation".equals(notCreated.path("type").asText())) {
       log.debug("stalwart: mail domain {} already exists", name);
-      return false;
+      return true;
     }
     throw new StalwartApiException("could not create domain " + name + ": " + notCreated);
   }
 
   /**
-   * Create a mailbox {@code localPart@domainName} with the given password.
+   * Create a mailbox {@code localPart@domainName} with the given secret.
    * The domain must already exist ({@link #ensureDomain}). Returns the
    * created account id. Throws {@link StalwartApiException} on failure
    * (including a weak password, which Stalwart rejects with
    * {@code invalidProperties}).
+   *
+   * <p><b>The secret may be a bcrypt hash rather than a plaintext
+   * password</b>, which is how a mailbox can be created for a user whose
+   * password Aurora only stores hashed. Verified against a live v0.16.19:
+   * an account created with {@code $2a$12$…} authenticates with the
+   * <em>plaintext</em> that hash was made from (200) and rejects the hash
+   * itself (401), so Stalwart is genuinely verifying, not storing the
+   * string as a literal password. That is what keeps "one password for
+   * your box and your mail" true for accounts Aurora heals after the fact.
    */
-  public String createMailbox(String localPart, String domainName, String password) {
+  public String createMailbox(String localPart, String domainName, String secret) {
     String domainId = domainIdFor(domainName);
     if (domainId == null) {
       throw new StalwartApiException("domain " + domainName + " does not exist; create it first");
@@ -115,7 +136,7 @@ public class StalwartMailClient {
     String create = "{\"create\":{\"a1\":{\"@type\":\"User\","
         + "\"name\":" + quote(localPart) + ","
         + "\"domainId\":" + quote(domainId) + ","
-        + "\"credentials\":{\"0\":{\"@type\":\"Password\",\"secret\":" + quote(password) + "}},"
+        + "\"credentials\":{\"0\":{\"@type\":\"Password\",\"secret\":" + quote(secret) + "}},"
         + "\"roles\":{\"@type\":\"User\"}}}}";
     JsonNode resp = post(jmapCall("x:Account/set", create));
     JsonNode args = methodArgs(resp);
@@ -179,6 +200,45 @@ public class StalwartMailClient {
     }
     JsonNode notUpdated = args.path("notUpdated").path(id);
     throw new StalwartApiException("could not reset mailbox " + id + ": " + notUpdated);
+  }
+
+  /** Whether the mail domain is already known to Stalwart. */
+  public boolean domainExists(String name) {
+    return domainIdFor(name) != null;
+  }
+
+  /**
+   * Point extra addresses at an existing mailbox.
+   *
+   * <p>Shape discovered against a live v0.16.19, because it is not
+   * obvious: {@code aliases} is a map of index to an {@code Alias} object
+   * carrying {@code name} and {@code domainId} — not a list of strings, and
+   * not a map of address to boolean. Both of those are rejected with
+   * {@code invalidPatch}.
+   *
+   * <p>Replaces the whole alias map, so callers pass the full desired set;
+   * that keeps the operation idempotent, which is what a reconcile needs.
+   */
+  public void setAliases(String accountId, java.util.List<String> localParts, String domainName) {
+    String domainId = domainIdFor(domainName);
+    if (domainId == null) {
+      throw new StalwartApiException("domain " + domainName + " does not exist; create it first");
+    }
+    var sb = new StringBuilder("{\"update\":{" + quote(accountId) + ":{\"aliases\":{");
+    for (int i = 0; i < localParts.size(); i++) {
+      if (i > 0) sb.append(',');
+      sb.append(quote(String.valueOf(i))).append(":{\"@type\":\"Alias\",\"name\":")
+          .append(quote(localParts.get(i)))
+          .append(",\"domainId\":").append(quote(domainId)).append('}');
+    }
+    sb.append("}}}}");
+    JsonNode args = methodArgs(post(jmapCall("x:Account/set", sb.toString())));
+    if (args.path("updated").has(accountId)) {
+      log.info("stalwart: aliases for {} set to {}", accountId, localParts);
+      return;
+    }
+    JsonNode notUpdated = args.path("notUpdated").path(accountId);
+    throw new StalwartApiException("could not set aliases on " + accountId + ": " + notUpdated);
   }
 
   /** Delete a mailbox via {@code x:Account/set destroy}. Irreversible. */

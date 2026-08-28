@@ -807,6 +807,44 @@ admin/domain/dns/install/launch → `adguard provision: wrote ... (admin=sarah,
 *.aurora.local -> 192.168.0.110)`, `dig @192.168.0.110 photos.aurora.local` →
 `192.168.0.110`, and AdGuard's own login accepts the Aurora password (200).
 
+### C24 · [blocker] The owner is the one user who gets no mailbox
+Reported by Bruce, 2026-08-28: "you created the sarah user during onboarding
+setup, so why isn't there a sarah@aurora.local".
+
+Reproduced exactly: creating `mailtest` through the **Users page** provisioned
+`mailtest@aurora.local` automatically (there is a comment in `UsersController`
+calling it "the story": one credential for signing in and for mail). `sarah`,
+created through the **onboarding wizard**, got nothing —
+`OnboardingService.createInitialAdmin` goes through `AdminUserRepo` directly and
+publishes no event. So the one account guaranteed to exist on every box, the
+owner's, was the only account without mail, and Stalwart looked empty on every
+fresh install.
+
+**SHIPPED:** `MailAccountReconciler` — idempotent, runs on boot, on a 5-minute
+drift guard, and on every user change; `createInitialAdmin` now publishes the
+event that triggers it. Three things made this more than a one-line call:
+
+1. **Timing.** The mail domain is provisioned asynchronously, and on a fresh box
+   does not exist when the wizard's admin step runs. A single call at creation
+   would be a race; a reconcile is not.
+2. **Healing existing boxes.** Aurora stores bcrypt hashes, never plaintext, so
+   an account created before this could not be given a mailbox with the right
+   password — unless Stalwart verifies against a hash. It does: proven on
+   v0.16.19 by creating an account with `$2a$12$…` and authenticating with the
+   plaintext (200) and with the hash itself (401). The hash is copied across, so
+   "one password for your box and your mail" holds for healed accounts too.
+   Verified live: `sarah@aurora.local` appeared on its own, and JMAP auth with
+   her Aurora password returns 200 while a wrong one returns 401.
+3. **A misleading boolean, which is why the first attempt silently did nothing.**
+   `ensureDomain` returned true only when it *created* the domain and false when
+   it already existed. Read as "is the domain ready" — which is what the name
+   suggests — that is inverted on every box past its first minute. It now
+   answers "does the domain exist"; the one caller that wanted "did I create it"
+   asks `domainExists` first. 8 tests.
+
+**Still open (next):** `admin@` and `system@` aliases onto the owner's mailbox,
+and routing Aurora's own alerts/diagnostics to `system@` (Bruce's (c)).
+
 ## D · Repo and docs
 
 ### D1 · [polish] `Essence.md` is orphaned
