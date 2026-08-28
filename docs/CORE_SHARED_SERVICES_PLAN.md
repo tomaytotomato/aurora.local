@@ -6,25 +6,35 @@
 
 ## Progress
 
-- **Phase 0 (contract/guardrails):** not yet.
+- **Phase 0 (contract/guardrails): DONE.** Wrote the core/non-core
+  isolation boundary into `docs/PACKAGE_CONTRACT.md`; added the
+  `core-isolation` CI job (fails a non-core `compose.yml` that references
+  `core-db`/`core-cache`); added `CoreDbIsolationRule`, a dashboard
+  security finding that flags a non-core container joined to core's
+  datastore on a live box (6 tests).
 - **Phase 1 (core-db + Authelia): DONE + verified.** Added `core-db`
   (postgres:17-alpine) with a per-app init script, seeded DB passwords via
   rotate-secrets, migrated Authelia off SQLite onto `storage.postgres`.
 - **Phase 2 (Stalwart onto core-db): DONE + verified — the wizard is gone.**
-  Aurora seeds `data/stalwart/etc/config.json` (datastore → core-db, secret
-  from `STALWART_DB_PASSWORD` env) via `render_stalwart_config()`, so
-  Stalwart boots straight into normal mode. Also fixed a latent `up.sh`
-  ordering bug: `render_all` now runs *before* rotate-secrets so bind-mount
-  dirs exist user-owned before any container starts (was: root-owned dir →
-  `install: Permission denied` + wizard/crash-loop on a fresh box).
-- **Full nuke-and-rebuild test PASSED:** wiped `data/{core-db,authelia,
-  stalwart}` + blanked all core secrets, ran `up.sh`. Result: secrets
-  regenerated, core-db provisioned both databases, Authelia auto-migrated
-  its schema (25 tables) into Postgres, **Stalwart booted in normal mode**
-  (SMTP :25 answered `220 ... Stalwart ESMTP`, 27 tables in core-db, no
-  wizard), users_database.yml seeded cleanly, dashboard projected the real
-  users, and `bruce` login returned `{"status":"OK"}`.
-- **Phase 3 (core-cache), Phase 4 (one-shot backup):** later.
+  Aurora seeds `data/stalwart/etc/config.json` (datastore → core-db) via
+  `render_stalwart_config()`. Fixed a latent `up.sh` ordering bug
+  (`render_all` now runs before rotate-secrets).
+- **Phase 3 (core-cache):** deferred — no core app needs a shared
+  Redis/Valkey yet (Authelia + Stalwart don't). Will add when a consumer
+  appears; `core-cache` is already reserved in the isolation guardrails.
+- **Phase 4 (one-shot backup): DONE.** Core's backup block now captures
+  the real state: a `postgres-dump` of `core-db` (Authelia + Stalwart
+  metadata) plus the on-disk bits not in Postgres (`data/stalwart`
+  config+blobs, `data/authelia`). Replaces the old stop-Stalwart-and-copy.
+- **Full nuke-and-rebuild test PASSED** (see Phase 2 detail below).
+
+### Remaining manual step (tracked, not yet automated)
+
+On a *fresh* box Stalwart boots configured (no wizard) but its mail DB is
+empty — no domain, no mailboxes. That is genuine per-box data. Creating the
+first domain + mailbox via Stalwart's management API from the dashboard is
+a candidate follow-up; today it is the one documented action, done with
+the recovery admin.
 
 ## The vision, in Bruce's words
 

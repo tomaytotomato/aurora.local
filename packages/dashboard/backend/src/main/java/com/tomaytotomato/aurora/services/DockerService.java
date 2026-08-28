@@ -218,6 +218,24 @@ public class DockerService {
   }
 
   /**
+   * Full container inspect, or null when the container is gone or the
+   * daemon is unreachable. Distinct from {@link #inspectContainer(String)}
+   * (which returns only the id): callers that need the config/env — e.g.
+   * {@code CoreDbIsolationRule} reading a container's environment — use
+   * this. Never throws; a passive security rule must degrade to "no
+   * evidence" rather than propagate.
+   */
+  public com.github.dockerjava.api.command.InspectContainerResponse rawInspect(String idOrName) {
+    if (idOrName == null || idOrName.isBlank()) return null;
+    try {
+      return docker.inspectContainerCmd(idOrName).exec();
+    } catch (Exception e) {
+      log.debug("rawInspect {} failed: {}", idOrName, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
    * B3 (v0.3): fetch the last {@code tail} lines from a container's log
    * stream. Snapshot only — no live follow; that's a v0.4 promotion.
    *

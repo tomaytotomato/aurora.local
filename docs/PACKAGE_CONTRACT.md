@@ -3,6 +3,39 @@
 A **package** is a self-contained stack of docker-compose services that
 `scripts/up.sh` can merge into the shared `home` project.
 
+## Core vs non-core: the isolation boundary
+
+There are two kinds of package, and they follow opposite rules. See
+`docs/CORE_SHARED_SERVICES_PLAN.md` for the full reasoning.
+
+**Core** (`packages/core`) is one tightly-integrated stack with shared
+infrastructure: the reverse proxy + SSO edge (Caddy, Authelia), the mail
+substrate (Stalwart), and the **shared datastore `core-db`** (one Postgres
+instance; each core app gets its own database on it, schemas stay
+app-owned). Core apps are pre-configured and share infrastructure because
+they are already one blast radius — if Caddy or Authelia is down, the box
+is down, so sharing a database costs nothing and buys one backup, one set
+of secrets, one thing to tune.
+
+**Non-core** packages are self-contained, isolated stacks. Each one:
+
+- **MUST** own its datastore inside its own `compose.yml` (as `dev`,
+  `documents`, and `photos` already do with their own Postgres/Redis).
+- **MUST NOT** connect to `core-db`, a future `core-cache`, or any other
+  package's services. The *only* sanctioned cross-stack dependency is the
+  reverse-proxy + SSO edge (a `caddy.snippet` + `sso:` block), which is
+  how every app is reached anyway.
+- Is deployable, restartable, and **destroyable** as a unit: deleting the
+  app deletes its data with it, and nothing else on the box notices.
+
+This is **blast-radius isolation**: a non-core app corrupting or hammering
+its database must never be able to take down auth, mail, or a sibling app.
+The rule is enforced, not just documented — CI fails a non-core
+`compose.yml` that references `core-db`/`core-cache` (see
+`.github/workflows/ci.yml`, the `core-isolation` job), and
+`CoreDbIsolationRule` raises a dashboard security finding if a non-core
+container is found joined to core's datastore on a live box.
+
 Every `packages/<name>/` directory MUST contain:
 
 | File               | Required | Purpose                                                      |

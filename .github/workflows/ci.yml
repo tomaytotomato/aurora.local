@@ -114,6 +114,34 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           python3 scripts/check-openapi.py
 
+  core-isolation:
+    name: core isolation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: no non-core package may reference core-internal services
+        run: |
+          # docs/PACKAGE_CONTRACT.md: core is a shared stack; non-core
+          # packages are isolated and MUST NOT connect to core-db /
+          # core-cache (or any other package's services). Only
+          # packages/core/ may define or reference them. This keeps a
+          # non-core app's blast radius sealed off from auth + mail.
+          bad=0
+          for f in packages/*/compose.yml; do
+            case "$f" in
+              packages/core/*) continue ;;
+            esac
+            hits=$(grep -nE 'core-db|core-cache' "$f" || true)
+            if [ -n "$hits" ]; then
+              bad=1
+              msg="non-core package references a core-internal service (core-db/core-cache)."
+              msg="$msg Non-core packages own their own datastore — see docs/PACKAGE_CONTRACT.md."
+              echo "::error file=$f::$msg"
+              echo "$hits"
+            fi
+          done
+          exit $bad
+
   manifest-schema:
     name: manifest schema
     runs-on: ubuntu-latest

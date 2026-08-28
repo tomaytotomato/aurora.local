@@ -51,18 +51,24 @@ required_env:
   - STALWART_ADMIN_SECRET
   - MAIL_HOSTNAME
 
-# Stalwart's embedded store has no online export yet; the supported backup
-# is stop-the-server-then-copy the data directory. Both paths under
-# data/stalwart are owned by core.
+# Core's real state now lives in the shared core-db (Postgres): Authelia's
+# tables and Stalwart's mail metadata both. A file copy of a live Postgres
+# data dir restores into a corrupt database, so the consistent backup is a
+# pg_dump of core-db, plus the small on-disk bits that are NOT in Postgres:
+# Stalwart's config.json + blob store (data/stalwart) and Authelia's
+# users_database.yml + notifications (data/authelia). See
+# docs/CORE_SHARED_SERVICES_PLAN.md § Phase 4.
 backup:
   paths:
+    - data/core-db
     - data/stalwart/etc
     - data/stalwart/lib
+    - data/authelia
   before:
-    - kind: command
-      description: Stop Stalwart so its embedded store is quiescent before the copy (no online export exists yet).
-      container: stalwart
-      command: "docker stop stalwart"
+    - kind: postgres-dump
+      description: Dump the shared core-db (Authelia + Stalwart) so the snapshot restores into a consistent database rather than a copy of live Postgres files.
+      container: core-db
+      command: "pg_dumpall -U postgres"
 
 probe:
   kind: self
