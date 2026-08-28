@@ -129,6 +129,61 @@ paths:
         '204': { description: Password rotated. }
         '400': { description: New password is too short, matches the current one, or was rejected by the user-service validator. }
         '401': { description: Not signed in, or the current password did not verify. }
+  /auth/recover:
+    post:
+      tags: [auth]
+      summary: Set a new password using the box's recovery code
+      security: []
+      description: >-
+        The way back into a box whose password has been lost. The recovery
+        code is issued once, with the admin account, and shown on the
+        wizard's admin step. Redeeming it sets a new password and returns a
+        replacement code, so the box is never left without one; the redeemed
+        code stops working immediately. Public by necessity — the caller
+        cannot sign in — and a wrong username is answered identically to a
+        wrong code so this cannot be used to enumerate accounts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, code, newPassword]
+              properties:
+                username: { type: string }
+                code: { type: string, description: The six-word recovery code. Case and separators are normalised. }
+                newPassword: { type: string, minLength: 12 }
+      responses:
+        '200':
+          description: Password set; a replacement recovery code is returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  recoveryCode: { type: string }
+        '400': { description: The new password is shorter than 12 characters. }
+        '401': { description: That username and recovery code do not match. }
+  /auth/recovery-status:
+    get:
+      tags: [auth]
+      summary: Whether this box has a recovery code at all
+      security: []
+      description: >-
+        Lets the sign-in page decide whether to offer "Forgot your
+        password?". Offering a form that cannot succeed would be the same
+        broken promise the recovery code replaces.
+      responses:
+        '200':
+          description: Status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issued: { type: boolean }
+                  issuedAt: { type: string, nullable: true, format: date-time }
 
   # ──────────────────────────── onboarding ────────────────────────────
   /onboarding:

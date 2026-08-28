@@ -184,8 +184,15 @@ export const OnboardingApi = {
   },
 
   /** One-shot bootstrap. Rejected with 409 after first success. */
-  async setAdmin(p: AdminSetupPayload): Promise<void> {
-    await http.post('/onboarding/admin', p);
+  /**
+   * Returns the one-time recovery code issued with the account. The server
+   * shows it exactly once — there is no endpoint that can hand it over
+   * again, by design — so the caller must put it in front of the operator
+   * before navigating away.
+   */
+  async setAdmin(p: AdminSetupPayload): Promise<{ recoveryCode?: string }> {
+    const { data } = await http.post<{ recoveryCode?: string }>('/onboarding/admin', p);
+    return data ?? {};
   },
 
   async plan(): Promise<InstallPlan> {

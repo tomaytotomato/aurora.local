@@ -409,9 +409,9 @@ function retryJob(): void {
         <Card v-if="!parity.configured" class="p-10 text-center" data-state="empty">
           <h3 class="mb-2">No parity protection</h3>
           <p class="text-sm text-muted-foreground max-w-lg mx-auto">
-            Right now, if a drive fails you lose whatever was on it. Aurora can protect
-            against a single drive failing once a spare drive — at least as large as your
-            biggest one — is added. Ask whoever set up this box to add parity protection.
+            Right now, if a drive fails you lose whatever was on it. Add a spare drive —
+            at least as large as your biggest one — and Aurora can survive one drive
+            failing. Nothing here needs doing until you have that spare.
           </p>
         </Card>
 

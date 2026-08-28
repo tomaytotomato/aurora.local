@@ -86,6 +86,15 @@ public final class PasswordGenerator {
   private PasswordGenerator() {}
 
   /** A fresh passphrase. Never returns the same value twice in practice. */
+  /**
+   * The curated wordlist itself, for anything that needs human-readable
+   * randomness with the same reading-aloud properties — the recovery code,
+   * today. Immutable (List.of), so exposing it hands out no mutation path.
+   */
+  public static List<String> words() {
+    return WORDS_LIST;
+  }
+
   public static String generate() {
     StringBuilder sb = new StringBuilder(56);
     for (int i = 0; i < WORDS; i++) {

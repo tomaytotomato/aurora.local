@@ -41,7 +41,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | B3 | blocker | Vue escape leak: `${'{'}DOMAIN{'}'}` rendered to the user | [x] |
 | B4 | friction | Wrong step reference ("trust the new TLS root (step 7)") | [x] |
 | B5 | friction | Step 7 (SSO) is silently skipped; 6 and 7 never tick | [x] |
-| B6 | blocker | "Password recovery" is promised in copy, unimplemented in fact | [ ] |
+| B6 | blocker | "Password recovery" is promised in copy, unimplemented in fact | [x] |
 | B7 | friction | Done step hands out `http://` right after the TLS-trust step | [x] |
 | B8 | polish | "Hostname & domain" step never lets you set the hostname | [x] |
 | B9 | polish | Welcome CPU string truncated mid-token | [ ] |
@@ -61,7 +61,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C14 | polish | Activity feeds show raw event keys | [x] |
 | C15 | polish | `/users` heading is unreadable against the hero image | [ ] |
 | C16 | polish | Catalogue: no search, three webmails, truncated copy, missing icons | [ ] |
-| C17 | polish | "Ask whoever set up this box" — Sarah *is* that person | [ ] |
+| C17 | polish | "Ask whoever set up this box" — Sarah *is* that person | [x] |
 | C18 | friction | Manifest descriptions still written for operators (found while fixing C4) | [ ] |
 | C19 | polish | Review lists a vhost for a profile-gated service that will not start | [ ] |
 | C20 | friction | The SSO step links to auth.$DOMAIN before the DNS that resolves it is running | [ ] |
@@ -336,6 +336,20 @@ recovery code shown at account creation, stored hashed, redeemable at
 `/login`; (b) until then, tell the truth on the card itself and print the
 recovery code with the password. Do not advertise a control that opens an
 apology.
+
+**SHIPPED (a).** `RecoveryCodeService` issues a six-word code (from the password
+generator's curated wordlist) when the admin account is created, stores only its
+bcrypt hash, and returns the plaintext exactly once. The wizard now stops on that
+screen and makes the operator acknowledge it, next to the password they are
+already saving. `/login` grew a "Forgot your password?" form — username, code,
+new password — which sets the password and immediately issues a replacement code,
+so the box is never left without a way back in; the spent code dies instantly. A
+wrong username and a wrong code return the same 401, so it cannot enumerate
+accounts. 9 service tests, OpenAPI updated. The apology dialog is deleted.
+
+**Also:** every other "ask whoever set up this box" was rewritten (C17) — the
+disks parity empty state and the marketplace card now tell the reader what they
+can do themselves.
 
 ### B7 · [friction] Done hands out `http://` after the TLS step
 The Done step's "REACH THIS BOX AT" lists `http://aurora.local` and

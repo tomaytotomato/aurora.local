@@ -58,7 +58,8 @@ class AuthControllerChangePasswordTests {
         Mockito.mock(StateFileService.class),
         new SessionService(),
         currentUser,
-        users);
+        users,
+        Mockito.mock(com.tomaytotomato.aurora.services.RecoveryCodeService.class));
     mvc = MockMvcBuilders.standaloneSetup(ctrl).build();
   }
 

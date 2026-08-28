@@ -59,13 +59,16 @@ public class OnboardingService {
   private final SystemService system;
   private final AuroraProperties props;
   private final PackageNameValidator packageNames;
+  /** Nullable in unit tests; see issueRecoveryCode(). */
+  private final RecoveryCodeService recoveryCodes;
 
   @org.springframework.beans.factory.annotation.Autowired
   public OnboardingService(AdminUserRepo users, AuditEventRepo audit, SettingsRepo settings,
                            AuthService auth, StateFileService stateFiles,
                            PackagesService packages, SystemService system,
                            AuroraProperties props,
-                           PackageNameValidator packageNames) {
+                           PackageNameValidator packageNames,
+                           RecoveryCodeService recoveryCodes) {
     this.users = users;
     this.audit = audit;
     this.settings = settings;
@@ -75,6 +78,19 @@ public class OnboardingService {
     this.system = system;
     this.props = props;
     this.packageNames = packageNames;
+    this.recoveryCodes = recoveryCodes;
+  }
+
+  /**
+   * Retained for the suites that construct this service directly. Wiring in
+   * production always goes through the constructor above.
+   */
+  public OnboardingService(AdminUserRepo users, AuditEventRepo audit, SettingsRepo settings,
+                           AuthService auth, StateFileService stateFiles,
+                           PackagesService packages, SystemService system,
+                           AuroraProperties props,
+                           PackageNameValidator packageNames) {
+    this(users, audit, settings, auth, stateFiles, packages, system, props, packageNames, null);
   }
 
   /**
@@ -950,6 +966,18 @@ public class OnboardingService {
     audit.record(id, "onboarding.admin.create", "admin_user:" + id, null);
     settings.put(KEY_STEP, "domain");
     return id;
+  }
+
+  /**
+   * The recovery code that goes with the account just created, shown once,
+   * next to the password the operator is already being told to save.
+   *
+   * <p>Nullable service so the pure-helper unit tests can keep constructing
+   * OnboardingService with nulls; a null here simply means no code, which is
+   * the pre-existing behaviour rather than a crash.
+   */
+  public String issueRecoveryCode() {
+    return recoveryCodes == null ? null : recoveryCodes.issue();
   }
 
   /** Update .state.yml + packages/core/.env's DOMAIN. */

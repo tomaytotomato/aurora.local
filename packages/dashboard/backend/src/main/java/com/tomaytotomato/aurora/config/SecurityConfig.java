@@ -39,6 +39,11 @@ public class SecurityConfig {
         .securityContext(sc -> sc.requireExplicitSave(false))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+            // Recovery is for people who cannot sign in; requiring a session
+            // to reach it would be a locked door with the key inside. The
+            // code itself is the credential (six words, single-use).
+            .requestMatchers(HttpMethod.POST, "/api/auth/recover").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/auth/recovery-status").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/auth/session", "/api/auth/me").permitAll()
             .requestMatchers("/api/onboarding/**").permitAll() // OnboardingController re-checks bootstrap mode
