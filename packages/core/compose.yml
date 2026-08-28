@@ -14,6 +14,48 @@ networks:
     external: true
 
 services:
+  # core-db — the shared core datastore (docs/CORE_SHARED_SERVICES_PLAN.md).
+  # One Postgres instance; each core app gets its OWN database on it
+  # (schemas stay app-owned — Authelia and Stalwart never share tables).
+  # This is a CORE-INTERNAL service: non-core packages MUST NOT connect to
+  # it — they own their own DB in their own stack, to keep blast radius
+  # isolated. See PACKAGE_CONTRACT.md.
+  #
+  # Passwords are seeded into packages/core/.env by rotate-secrets.sh on
+  # first up.sh (the *_DB_PASSWORD keys match its secret-hint pattern);
+  # the init script under core-db/init/ provisions per-app databases the
+  # first time the data dir is created.
+  core-db:
+    image: postgres:17-alpine
+    container_name: core-db
+    restart: unless-stopped
+    networks: [aurora_net]
+    # No host port: reachable only on aurora_net as `core-db:5432`. A home
+    # box has no reason to expose Postgres to the LAN, and not publishing
+    # it keeps it off every port-scan surface.
+    environment:
+      # The superuser owns provisioning only; apps log in as their own
+      # per-database role, never as this superuser.
+      - POSTGRES_USER=${CORE_DB_SUPERUSER:-postgres}
+      - POSTGRES_PASSWORD=${CORE_DB_PASSWORD:?core-db needs CORE_DB_PASSWORD in packages/core/.env}
+      - POSTGRES_DB=postgres
+      # Passed through to the init script so it can set per-app passwords.
+      - AUTHELIA_DB_PASSWORD=${AUTHELIA_DB_PASSWORD:-}
+      - STALWART_DB_PASSWORD=${STALWART_DB_PASSWORD:-}
+    volumes:
+      - ../../data/core-db:/var/lib/postgresql/data
+      # *.sh / *.sql here run once, only when the data dir is first created.
+      - ./core-db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # pg_isready as the superuser against the default DB: green only when
+      # Postgres is actually accepting connections, so dependents that wait
+      # on `condition: service_healthy` don't race the socket coming up.
+      test: ["CMD-SHELL", "pg_isready -U ${CORE_DB_SUPERUSER:-postgres} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   caddy:
     image: caddy:2-alpine
     container_name: caddy
@@ -115,6 +157,15 @@ services:
       # writes to, so the two mechanisms agree rather than collide.
       - AUTHELIA_SESSION_SECRET=${AUTHELIA_SESSION_SECRET}
       - AUTHELIA_STORAGE_ENCRYPTION_KEY=${AUTHELIA_STORAGE_ENCRYPTION_KEY}
+      # Storage: Postgres on the shared core-db (was local SQLite). Authelia
+      # maps AUTHELIA_STORAGE_POSTGRES_* straight onto storage.postgres.*,
+      # which configuration.yml now declares. Its database on the shared
+      # instance is `authelia`, owned by the `authelia` role; the schema is
+      # Authelia's own — nothing else touches it.
+      - AUTHELIA_STORAGE_POSTGRES_ADDRESS=tcp://core-db:5432
+      - AUTHELIA_STORAGE_POSTGRES_DATABASE=authelia
+      - AUTHELIA_STORAGE_POSTGRES_USERNAME=authelia
+      - AUTHELIA_STORAGE_POSTGRES_PASSWORD=${AUTHELIA_DB_PASSWORD:?authelia needs AUTHELIA_DB_PASSWORD in packages/core/.env}
       # Bake the domain into cookies via env; configuration.yml
       # references ${DOMAIN}.
       - DOMAIN=${DOMAIN:-aurora.local}
@@ -138,9 +189,15 @@ services:
       - AUTHELIA_NOTIFIER_SMTP_SENDER
     volumes:
       - ./authelia:/config:ro
-      # State (SQLite, notifications). Users db lives here too so it
-      # can be edited without a rebuild.
+      # State (notifications, users db). The SQLite store moved to core-db;
+      # users_database.yml still lives here so it can be edited without a
+      # rebuild, and the filesystem notifier still drops notification.txt.
       - ../../data/authelia:/data
+    depends_on:
+      # Authelia's storage is now on core-db, so it must not start until
+      # Postgres is accepting connections and the authelia database exists.
+      core-db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "--tries=1", "--timeout=5", "http://127.0.0.1:9091/api/health"]
       interval: 30s

@@ -143,12 +143,20 @@ regulation:
   ban_time: 5m
 
 # ---- Storage -------------------------------------------------
-# Local SQLite. Encrypted at rest with AUTHELIA_STORAGE_ENCRYPTION_KEY
-# (managed by IdentitySecretsService — see D3).
+# Postgres on the shared core-db instance (was local SQLite). Encrypted
+# at rest with AUTHELIA_STORAGE_ENCRYPTION_KEY (managed by
+# IdentitySecretsService). Connection details arrive via
+# AUTHELIA_STORAGE_POSTGRES_* env vars set in compose.yml, which Authelia
+# maps onto storage.postgres.*; the address/database/username/password
+# below are templated from env so this file stays declarative and carries
+# no secret. See docs/CORE_SHARED_SERVICES_PLAN.md.
 storage:
   encryption_key: '{{ env "AUTHELIA_STORAGE_ENCRYPTION_KEY" }}'
-  local:
-    path: /data/db.sqlite3
+  postgres:
+    address: '{{ env "AUTHELIA_STORAGE_POSTGRES_ADDRESS" }}'
+    database: '{{ env "AUTHELIA_STORAGE_POSTGRES_DATABASE" }}'
+    username: '{{ env "AUTHELIA_STORAGE_POSTGRES_USERNAME" }}'
+    password: '{{ env "AUTHELIA_STORAGE_POSTGRES_PASSWORD" }}'
 
 # ---- Notifier ------------------------------------------------
 # If AUTHELIA_NOTIFIER_SMTP_HOST is set in env, Authelia auto-picks

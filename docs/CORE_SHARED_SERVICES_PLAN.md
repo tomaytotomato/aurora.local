@@ -1,8 +1,21 @@
 # Core shared services — an opinionated, pre-configured core stack
 
-**Status:** proposal, ready to build.
+**Status:** IN PROGRESS — Phase 1 (core-db + Authelia) shipped + verified live 2026-08-28.
 **Author:** Aurora dashboard team.
 **Requested by:** Bruce, 2026-08-28.
+
+## Progress
+
+- **Phase 0 (contract/guardrails):** not yet.
+- **Phase 1 (core-db + Authelia): DONE + verified on the live box.** Added
+  `core-db` (postgres:17-alpine) to core's compose with a per-app init
+  script (`core-db/init/`), seeded `CORE_DB_PASSWORD` + `AUTHELIA_DB_PASSWORD`
+  + `STALWART_DB_PASSWORD` via rotate-secrets, migrated Authelia off SQLite
+  onto `storage.postgres` (schema migrated 0→24, first-factor login returns
+  200, forward-auth still gates). Old `data/authelia/db.sqlite3` left in
+  place as a rollback path.
+- **Phase 2 (Stalwart onto core-db):** next.
+- **Phase 3 (core-cache), Phase 4 (one-shot backup):** later.
 
 ## The vision, in Bruce's words
 
