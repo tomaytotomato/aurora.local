@@ -54,8 +54,8 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C8 | friction | Every install adds a HIGH finding Aurora itself caused, with no fix | [ ] |
 | C9 | friction | Installing one app bounces every other running container | [ ] |
 | C10 | friction | `.state.yml` drops `dashboard` after the first in-app install | [ ] |
-| C11 | friction | Settings claims it can't read the TLS root; the API serves it fine | [ ] |
-| C12 | friction | TLS card: unexpanded `$DOMAIN`, Linux steps miss the browser store | [ ] |
+| C11 | friction | Settings claims it can't read the TLS root; the API serves it fine | [x] |
+| C12 | friction | TLS card: unexpanded `$DOMAIN`, Linux steps miss the browser store | [~] |
 | C13 | polish | "last 24 hours" metrics and 4-day uptime on a 20-minute-old box | [ ] |
 | C14 | polish | Activity feeds show raw event keys | [ ] |
 | C15 | polish | `/users` heading is unreadable against the hero image | [ ] |
@@ -536,6 +536,15 @@ whose job is to stop browser warnings says it is broken when it is not.
 **Fix:** find the divergent probe (likely a host-path read vs the API/docker
 exec path used by the download endpoint), make the card use the same source as
 the Download button, and add a regression test for "cert present → no error".
+
+**SHIPPED (cause was more embarrassing than a divergent probe):** the card
+fetches the certificate fine and then hashes it with `crypto.subtle` — which
+browsers do not expose on an insecure origin. Reached at `http://aurora.local`,
+which is where every new box is reached, the hash threw and the catch rendered
+"Aurora couldn't read the TLS root certificate just now". The card that exists to
+end browser warnings was reporting itself broken *because* you had not installed
+the certificate yet. It now detects the insecure context, keeps the Download
+button, and explains that the fingerprint needs https. Regression test included.
 
 ### C12 · [friction] TLS card copy
 *"Install this on every device that connects to `*.$DOMAIN`"* — unexpanded

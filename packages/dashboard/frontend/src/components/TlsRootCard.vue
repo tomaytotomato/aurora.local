@@ -42,6 +42,18 @@ import { Alert, AlertDescription, Skeleton } from '@/components/ui';
 
 const loading = ref<boolean>(true);
 const err = ref<string | null>(null);
+/**
+ * True when the page is served over plain http, where the browser does not
+ * expose `crypto.subtle` at all.
+ *
+ * This is why the card that exists to *get you onto https* reported
+ * "Aurora couldn't read the TLS root certificate just now" on a box being
+ * reached at http://aurora.local — the certificate downloaded perfectly
+ * well (curl proves it), the fingerprint hash was what could not be
+ * computed. A missing nicety was being rendered as a red failure on the
+ * one card whose job is fixing browser warnings.
+ */
+const insecureContext = ref<boolean>(false);
 const fingerprint = ref<string | null>(null);
 const notBefore = ref<string | null>(null);
 const notAfter = ref<string | null>(null);
@@ -55,6 +67,7 @@ const notAfter = ref<string | null>(null);
 async function loadRootMeta(): Promise<void> {
   loading.value = true;
   err.value = null;
+  insecureContext.value = false;
   try {
     const resp = await fetch(OnboardingApi.caddyRootCaUrl(), {
       credentials: 'include',
@@ -70,6 +83,14 @@ async function loadRootMeta(): Promise<void> {
     // Keychain / Firefox / `openssl x509 -fingerprint`.
     const der = pemToDer(pemText);
     if (!der) throw new Error('cert body did not parse as PEM');
+    if (!globalThis.crypto?.subtle) {
+      // Over http the download still works, which is the whole point of
+      // the card; only the fingerprint is unavailable. Say that, and say
+      // it as information rather than as an error.
+      insecureContext.value = true;
+      fingerprint.value = null;
+      return;
+    }
     fingerprint.value = await sha256Fingerprint(der);
 
     // Best-effort: parse the DER to pull notBefore/notAfter dates so
@@ -251,9 +272,8 @@ onMounted(() => {
       <div>
         <h3 class="card-title mb-1">TLS root CA</h3>
         <p class="text-xs text-muted-foreground mt-1">
-          Install this on every device that connects to
-          <span class="font-mono">{{ '*.$DOMAIN' /* keep literal so users see the shape */ }}</span>.
-          Skip it and browsers will warn on every subdomain.
+          Install this on every device you use with this box. Skip it and your
+          browser will warn you on every app, every time.
         </p>
       </div>
       <a :href="rootUrl" download="caddy-root.crt" data-test="tls-root-download">
@@ -265,13 +285,21 @@ onMounted(() => {
       <AlertDescription>{{ err }}</AlertDescription>
     </Alert>
 
+    <Alert v-else-if="insecureContext" class="mb-3" data-test="tls-root-insecure">
+      <AlertDescription>
+        The certificate above is ready to download. Its fingerprint can only be
+        shown when you are viewing Aurora over https — which is what installing
+        this certificate gets you.
+      </AlertDescription>
+    </Alert>
+
     <div v-else-if="loading" class="space-y-2 py-2" data-state="loading">
       <Skeleton class="h-4 w-24" />
       <Skeleton class="h-4 w-full" />
       <Skeleton class="h-4 w-2/3" />
     </div>
 
-    <dl v-else class="text-xs space-y-2 mb-6" data-test="tls-root-meta">
+    <dl v-else-if="!insecureContext" class="text-xs space-y-2 mb-6" data-test="tls-root-meta">
       <div class="flex flex-col gap-1">
         <dt class="eyebrow">SHA-256 fingerprint</dt>
         <dd class="flex items-start justify-between gap-3">

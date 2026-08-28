@@ -74,6 +74,22 @@ describe('TlsRootCard', () => {
     expect(fp).toBe(REAL_FINGERPRINT);
   });
 
+  it('over plain http, offers the download and explains the missing fingerprint instead of erroring', async () => {
+    // Browsers do not expose crypto.subtle on an insecure origin, which is
+    // exactly where a new box is reached: http://aurora.local. The card
+    // used to render "Aurora couldn't read the TLS root certificate just
+    // now" — a red failure on the one card whose job is ending browser
+    // warnings, while the certificate itself downloaded fine.
+    vi.stubGlobal('crypto', {});
+    stubFetchWithPem(REAL_PEM);
+    const w = mount(TlsRootCard);
+    await flushAll();
+
+    expect(w.find('[data-test="tls-root-error"]').exists()).toBe(false);
+    expect(w.get('[data-test="tls-root-insecure"]').text()).toMatch(/ready to download/i);
+    expect(w.get('[data-test="tls-root-download"]').attributes('href')).toBe('/api/system/caddy-root.crt');
+  });
+
   it('shows an error state when the endpoint fails', async () => {
     vi.stubGlobal(
       'fetch',
