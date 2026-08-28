@@ -90,6 +90,8 @@ fi
 # Lazy-load libs that need manifest/state
 . "$REPO/scripts/lib/manifest.sh"
 . "$REPO/scripts/lib/state.sh"
+# shellcheck source=scripts/lib/net.sh
+. "$REPO/scripts/lib/net.sh"
 
 # --------------------------------------------------------------------
 # Prereqs
@@ -184,9 +186,10 @@ _resolve_selection() {
 # Config writing
 # --------------------------------------------------------------------
 
-_detect_lan_ip() {
-  ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}'
-}
+# Both live in scripts/lib/net.sh, which picks a LAN *interface* instead of
+# following the default route — a VPN on the host owns that route and used to
+# make aurora firewall off the real LAN. See the header of that file.
+_detect_lan_ip() { net_detect_lan_ip; }
 
 _write_configs() {
   local hostname="$1" domain="$2" tz="$3" user="$4" lan_cidr="$5" lan_ip="$6"
@@ -279,8 +282,15 @@ _install() {
   local user="${HOME_USER:-${SUDO_USER:-$USER}}"
   local lan_cidr="${LAN_CIDR:-$(_detect_lan_cidr)}"
   local lan_ip="${LAN_IP:-$(_detect_lan_ip)}"
-  lan_ip="${lan_ip:-192.168.0.110}"
-  lan_cidr="${lan_cidr:-192.168.0.0/24}"
+  # Detection returns empty rather than guessing. Say so out loud instead of
+  # silently baking a stranger's address into the firewall rules.
+  if [[ -z "$lan_ip" || -z "$lan_cidr" ]]; then
+    log_warn "couldn't work out which network this box is on."
+    log_warn "falling back to 192.168.0.110 on 192.168.0.0/24 — if that is wrong,"
+    log_warn "re-run with LAN_IP=<this box's address> LAN_CIDR=<your network>/24"
+    lan_ip="${lan_ip:-192.168.0.110}"
+    lan_cidr="${lan_cidr:-192.168.0.0/24}"
+  fi
 
   log_info "host=$hostname user=$user domain=$domain tz=$tz"
   log_info "lan_ip=$lan_ip lan_cidr=$lan_cidr"
@@ -310,11 +320,7 @@ _install() {
   _run_up "${requested[@]}"
 }
 
-# Derive the LAN CIDR from the default route's src address + prefix.
-# Falls back to empty (caller defaults to 192.168.0.0/24).
-_detect_lan_cidr() {
-  ip -4 route 2>/dev/null | awk '/proto kernel/ && /src/ {print $1; exit}'
-}
+_detect_lan_cidr() { net_detect_lan_cidr; }
 
 # --------------------------------------------------------------------
 # Runners

@@ -24,7 +24,8 @@ if [[ "$WHAT" == all || "$WHAT" == back ]]; then
 fi
 
 if [[ "$WHAT" == all || "$WHAT" == shell ]]; then
-  run "shellcheck" bash -c "cd '$REPO' && shopt -s nullglob && shellcheck -x -S style -e SC1091 bootstrap.sh scripts/*.sh scripts/lib/*.sh"
+  run "shellcheck" bash -c "cd '$REPO' && shopt -s nullglob && shellcheck -x -S style -e SC1091 bootstrap.sh scripts/*.sh scripts/lib/*.sh scripts/tests/*.sh"
+  run "shell unit tests" bash -c "'$REPO'/scripts/tests/net.test.sh"
 fi
 
 echo

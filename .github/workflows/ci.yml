@@ -20,8 +20,10 @@ jobs:
       - name: shellcheck
         run: |
           shopt -s nullglob
-          files=(bootstrap.sh scripts/*.sh scripts/lib/*.sh)
+          files=(bootstrap.sh scripts/*.sh scripts/lib/*.sh scripts/tests/*.sh)
           shellcheck -x -S style -e SC1091 "${files[@]}"
+      - name: shell unit tests
+        run: ./scripts/tests/net.test.sh
 
   yaml:
     name: yamllint

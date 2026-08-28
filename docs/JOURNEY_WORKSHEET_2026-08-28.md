@@ -28,7 +28,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 
 | ID | Sev | Title | Done |
 |----|-----|-------|------|
-| A1 | blocker | LAN detection follows the VPN route; UFW opens the wrong subnet | [ ] |
+| A1 | blocker | LAN detection follows the VPN route; UFW opens the wrong subnet | [x] |
 | A2 | blocker | `ansible -K` prompt breaks the documented `curl \| bash` install | [ ] |
 | A3 | friction | Install log screams about secrets it is about to generate itself | [ ] |
 | A4 | friction | Post-install notes are stale and terminal-first | [ ] |
@@ -89,6 +89,16 @@ skipping `tun*/wg*/proton*/tailscale*/ppp*` device names; prefer the interface
 with the lowest-metric non-VPN default route. Reuse (or share) whatever
 `SystemService` does, since it is already correct. Add a unit test with the
 `ip route` output captured above. Files: `bootstrap.sh`.
+
+**SHIPPED:** `scripts/lib/net.sh` picks a LAN *interface* instead of following a
+route — name filter (lo/docker/br-/veth/tun/wg/proton/pvpn/tailscale/zt/ppp),
+RFC1918-only address filter (so CGNAT 100.64/10 is out), `/31`+`/32` rejected as
+point-to-point, default-route owners preferred. Returns empty rather than
+guessing, and `bootstrap.sh` now says so in plain English before falling back.
+11 fixture tests in `scripts/tests/net.test.sh` (the ProtonVPN box above,
+Tailscale, `/22`, no-default-route, nothing-usable), wired into `ci.yml` and
+`scripts/verify.sh`. Live box re-derived to `192.168.0.110` / `192.168.0.0/24`
+and its ufw rules rebuilt — the VPN subnet is no longer trusted.
 
 ### A2 · [blocker] `ansible -K` prompt breaks `curl | bash`
 `_run_host_bootstrap` runs `ansible-playbook … -K`. In the documented one-liner
