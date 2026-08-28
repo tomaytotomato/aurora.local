@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useOnboardingStore } from '@/stores/onboarding';
+import { useOnboardingStore, nextStepFrom } from '@/stores/onboarding';
 import { OnboardingApi } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
@@ -138,8 +138,13 @@ function continueAfterRecovery(): void {
     return;
   }
   err.value = null;
-  store.next();
-  router.push(`/onboarding/${store.currentStep}`);
+  // Derived from STEPS rather than store.currentStep: this view can be
+  // mounted before the shell has synced the cursor, and "the step after
+  // admin" is the intent either way. Same reasoning as OnboardingReview.
+  const target = nextStepFrom('admin') ?? 'domain';
+  store.markCompleted('admin');
+  store.goTo(target);
+  router.push(`/onboarding/${target}`);
 }
 
 function back(): void { store.back(); router.push(`/onboarding/${store.currentStep}`); }
@@ -150,8 +155,11 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
     <div class="eyebrow mb-3">{{ store.stepEyebrow }}</div>
     <h1 class="mb-4">Create your admin account.</h1>
 
-    <!-- Branch A: admin already exists. Show what we know, offer no form. -->
-    <template v-if="alreadyCreated">
+    <!-- Branch A: admin already exists. Show what we know, offer no form.
+         Ordered AFTER the recovery-code branch below on purpose: creating
+         the account is what flips alreadyCreated to true, so putting this
+         first swallowed the one and only render of the recovery code. -->
+    <template v-if="alreadyCreated && !recoveryCode">
       <p class="text-foreground mb-8">
         An admin account is already set up on this box. You can keep going with
         the rest of the wizard.

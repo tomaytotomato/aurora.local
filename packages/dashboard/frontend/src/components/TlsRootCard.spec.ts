@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { webcrypto } from 'node:crypto';
 
@@ -32,6 +32,13 @@ beforeEach(() => {
   // jsdom doesn't ship crypto.subtle by default; Node's webcrypto is
   // API-compatible.
   vi.stubGlobal('crypto', webcrypto);
+});
+
+afterEach(() => {
+  // The insecure-context case stubs crypto to {}. Without this, that stub
+  // survives into whatever runs next in the same worker and the fingerprint
+  // test fails intermittently — which it did, exactly once, before this.
+  vi.unstubAllGlobals();
 });
 
 function stubFetchWithPem(pem: string): void {
