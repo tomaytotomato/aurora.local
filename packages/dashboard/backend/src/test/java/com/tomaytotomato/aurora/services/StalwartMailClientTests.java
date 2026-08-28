@@ -148,4 +148,72 @@ class StalwartMailClientTests {
         new AtomicReference<>());
     assertThat(c.listDomainIds()).isEqualTo(List.of("b", "e"));
   }
+
+  @Test
+  void listMailboxes_parses_address_used_and_created_newest_first() {
+    var c = clientReturning(
+        "{\"methodResponses\":[[\"x:Account/get\",{\"list\":["
+            + "{\"id\":\"h\",\"emailAddress\":\"terry@aurora.local\","
+            + "\"usedDiskQuota\":1024,\"quotas\":{},\"createdAt\":\"2026-08-01T00:00:00Z\"},"
+            + "{\"id\":\"i\",\"emailAddress\":\"sam@aurora.local\","
+            + "\"usedDiskQuota\":0,\"quotas\":{\"maxDiskQuota\":1073741824},"
+            + "\"createdAt\":\"2026-08-28T00:00:00Z\"}"
+            + "]},\"c1\"]]}",
+        new AtomicReference<>());
+    var boxes = c.listMailboxes();
+    assertThat(boxes).hasSize(2);
+    // Newest first: sam (28 Aug) before terry (1 Aug).
+    assertThat(boxes.get(0).address()).isEqualTo("sam@aurora.local");
+    assertThat(boxes.get(0).quotaBytes()).isEqualTo(1073741824L);
+    assertThat(boxes.get(0).usedBytes()).isEqualTo(0L);
+    assertThat(boxes.get(1).address()).isEqualTo("terry@aurora.local");
+    // Empty quotas map -> null (uncapped), so the UI hides the column.
+    assertThat(boxes.get(1).quotaBytes()).isNull();
+  }
+
+  @Test
+  void listMailboxes_is_empty_when_there_are_none() {
+    var c = clientReturning(
+        "{\"methodResponses\":[[\"x:Account/get\",{\"list\":[]},\"c1\"]]}",
+        new AtomicReference<>());
+    assertThat(c.listMailboxes()).isEmpty();
+  }
+
+  @Test
+  void resetMailboxPassword_sends_the_credentials_map_update() {
+    var captured = new AtomicReference<String>();
+    var c = clientReturning(
+        "{\"methodResponses\":[[\"x:Account/set\",{\"updated\":{\"h\":null}},\"c1\"]]}",
+        captured);
+    c.resetMailboxPassword("h", "brand-new-strong-password");
+    assertThat(captured.get()).contains("\"update\":{\"h\":{\"credentials\":{\"0\":{\"@type\":\"Password\"");
+  }
+
+  @Test
+  void resetMailboxPassword_throws_when_not_updated() {
+    var c = clientReturning(
+        "{\"methodResponses\":[[\"x:Account/set\",{\"notUpdated\":{\"h\":{\"type\":\"invalidProperties\"}}},\"c1\"]]}",
+        new AtomicReference<>());
+    assertThatThrownBy(() -> c.resetMailboxPassword("h", "weak"))
+        .isInstanceOf(StalwartMailClient.StalwartApiException.class);
+  }
+
+  @Test
+  void deleteMailbox_confirms_destroyed() {
+    var captured = new AtomicReference<String>();
+    var c = clientReturning(
+        "{\"methodResponses\":[[\"x:Account/set\",{\"destroyed\":[\"h\"]},\"c1\"]]}",
+        captured);
+    c.deleteMailbox("h"); // no throw = success
+    assertThat(captured.get()).contains("\"destroy\":[\"h\"]");
+  }
+
+  @Test
+  void deleteMailbox_throws_when_not_destroyed() {
+    var c = clientReturning(
+        "{\"methodResponses\":[[\"x:Account/set\",{\"notDestroyed\":{\"h\":{\"type\":\"notFound\"}}},\"c1\"]]}",
+        new AtomicReference<>());
+    assertThatThrownBy(() -> c.deleteMailbox("h"))
+        .isInstanceOf(StalwartMailClient.StalwartApiException.class);
+  }
 }

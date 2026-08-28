@@ -129,6 +129,92 @@ public class StalwartMailClient {
         + ": " + notCreated);
   }
 
+  /**
+   * Every mailbox on the box, newest-first. Two JMAP calls, the standard
+   * query→get: {@code x:Account/query} yields ids, {@code x:Account/get}
+   * fetches each account's detail. Property names ({@code emailAddress},
+   * {@code createdAt}, {@code usedDiskQuota}, {@code quotas}) were verified
+   * against a live v0.16.19. Returns an empty list when there are none —
+   * that is a valid state, not an error.
+   */
+  public List<com.tomaytotomato.aurora.domain.MailboxSummary> listMailboxes() {
+    JsonNode got = post(jmapCall("x:Account/get", "{\"ids\":null}"));
+    List<com.tomaytotomato.aurora.domain.MailboxSummary> out = new ArrayList<>();
+    for (JsonNode a : methodArgs(got).path("list")) {
+      String id = text(a, "id");
+      if (id == null) continue;
+      String address = text(a, "emailAddress");
+      if (address == null) {
+        // Older shape without the server-assembled address: build it.
+        address = text(a, "name");
+      }
+      Long used = a.hasNonNull("usedDiskQuota") ? a.get("usedDiskQuota").asLong() : null;
+      Long quota = quotaBytes(a);
+      out.add(new com.tomaytotomato.aurora.domain.MailboxSummary(
+          id, address, used, quota, text(a, "createdAt")));
+    }
+    // Newest first so a just-created mailbox is at the top of the table.
+    out.sort((x, y) -> {
+      String cx = x.createdAt(), cy = y.createdAt();
+      if (cx == null && cy == null) return 0;
+      if (cx == null) return 1;
+      if (cy == null) return -1;
+      return cy.compareTo(cx);
+    });
+    return out;
+  }
+
+  /**
+   * Reset a mailbox's password via {@code x:Account/set update} on the
+   * credentials map. Same map shape create uses. Throws on failure
+   * (including a weak password Stalwart refuses).
+   */
+  public void resetMailboxPassword(String id, String password) {
+    String update = "{\"update\":{" + quote(id) + ":{\"credentials\":{\"0\":"
+        + "{\"@type\":\"Password\",\"secret\":" + quote(password) + "}}}}}";
+    JsonNode args = methodArgs(post(jmapCall("x:Account/set", update)));
+    if (args.path("updated").has(id)) {
+      log.info("stalwart: reset password for mailbox {}", id);
+      return;
+    }
+    JsonNode notUpdated = args.path("notUpdated").path(id);
+    throw new StalwartApiException("could not reset mailbox " + id + ": " + notUpdated);
+  }
+
+  /** Delete a mailbox via {@code x:Account/set destroy}. Irreversible. */
+  public void deleteMailbox(String id) {
+    String destroy = "{\"destroy\":[" + quote(id) + "]}";
+    JsonNode args = methodArgs(post(jmapCall("x:Account/set", destroy)));
+    for (JsonNode d : args.path("destroyed")) {
+      if (id.equals(d.asText())) {
+        log.info("stalwart: deleted mailbox {}", id);
+        return;
+      }
+    }
+    JsonNode notDestroyed = args.path("notDestroyed").path(id);
+    throw new StalwartApiException("could not delete mailbox " + id + ": " + notDestroyed);
+  }
+
+  /**
+   * The mailbox's quota ceiling in bytes, or null when uncapped. Stalwart
+   * carries quotas in a {@code quotas} object; an empty map (the default
+   * on a single box) means unlimited, which we surface as null so the UI
+   * hides the column rather than inventing a ceiling.
+   */
+  private static Long quotaBytes(JsonNode account) {
+    JsonNode q = account.path("quotas");
+    if (q.isObject()) {
+      // Known field on the quotas object when set.
+      if (q.hasNonNull("maxDiskQuota")) return q.get("maxDiskQuota").asLong();
+    }
+    return null;
+  }
+
+  /** A string property, or null when absent/explicitly null. */
+  private static String text(JsonNode n, String field) {
+    return n.hasNonNull(field) ? n.get(field).asText() : null;
+  }
+
   /** Every domain id currently defined. */
   public List<String> listDomainIds() {
     JsonNode resp = post(jmapCall("x:Domain/query", "{}"));

@@ -136,7 +136,11 @@ export const CORE_SERVICES: readonly CoreService[] = [
     // mail-admin behind Authelia (admins only). Matches
     // packages/core/manifest.yml post_install_notes.
     openUrl: 'https://mail-admin.{domain}/',
-    openLabel: 'Open mail admin',
+    // Demoted from the hero "Open mail admin" once the dashboard grew
+    // native mailbox management: the raw Stalwart console is now an
+    // advanced escape hatch, not the primary thing to do here. The panel
+    // renders it as a secondary link, not the big header CTA.
+    openLabel: 'Open Stalwart console',
   },
 ] as const;
 

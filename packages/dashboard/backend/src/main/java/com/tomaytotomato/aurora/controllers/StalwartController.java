@@ -1,6 +1,8 @@
 package com.tomaytotomato.aurora.controllers;
 
 import com.tomaytotomato.aurora.domain.Role;
+import com.tomaytotomato.aurora.domain.MailboxSummary;
+import java.util.List;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.services.CurrentUserService;
 import com.tomaytotomato.aurora.services.PasswordGenerator;
@@ -20,6 +22,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -166,6 +170,82 @@ public class StalwartController {
       throw new ResponseStatusException(HttpStatus.CONFLICT,
           "could not create that mailbox — it may already exist");
     }
+  }
+
+  /**
+   * Every mailbox on the box. Empty list is a valid 200 (a fresh box has
+   * no mailboxes yet), never a 404. 502 when Stalwart is unreachable, so
+   * the UI shows a retry rather than an empty table that reads as "0".
+   */
+  @GetMapping("/mailboxes")
+  public List<MailboxSummary> listMailboxes() {
+    requireAdmin();
+    try {
+      return mail.listMailboxes();
+    } catch (StalwartApiException e) {
+      throw unreachableOrThrow(e, "could not list mailboxes");
+    }
+  }
+
+  /**
+   * Reset a mailbox's password. Generates a strong one and returns it
+   * once (the same one-time-reveal contract as create). 404 when the
+   * mailbox id is unknown; 502 when Stalwart is unreachable.
+   */
+  @PostMapping("/mailboxes/{id}/reset-password")
+  public MailboxCreated resetMailboxPassword(@PathVariable String id) {
+    Long acting = requireAdmin();
+    String password = PasswordGenerator.generate();
+    try {
+      mail.resetMailboxPassword(id, password);
+      audit.record(acting, "stalwart.mailbox.reset-password", "mailbox:" + id, null);
+      // Address is looked up so the reveal panel can name it; best-effort.
+      String address = mail.listMailboxes().stream()
+          .filter(m -> id.equals(m.id())).map(MailboxSummary::address).findFirst().orElse(id);
+      return new MailboxCreated(address, password);
+    } catch (StalwartApiException e) {
+      String msg = e.getMessage() == null ? "" : e.getMessage();
+      if (isUnreachable(msg)) {
+        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+            "the mail server is not reachable right now");
+      }
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "no such mailbox");
+    }
+  }
+
+  /**
+   * Delete a mailbox and all its mail. Irreversible. 404 when unknown;
+   * 502 when Stalwart is unreachable.
+   */
+  @DeleteMapping("/mailboxes/{id}")
+  public ResponseEntity<Void> deleteMailbox(@PathVariable String id) {
+    Long acting = requireAdmin();
+    try {
+      mail.deleteMailbox(id);
+      audit.record(acting, "stalwart.mailbox.delete", "mailbox:" + id, null);
+      return ResponseEntity.noContent().build();
+    } catch (StalwartApiException e) {
+      String msg = e.getMessage() == null ? "" : e.getMessage();
+      if (isUnreachable(msg)) {
+        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+            "the mail server is not reachable right now");
+      }
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "no such mailbox");
+    }
+  }
+
+  private static boolean isUnreachable(String msg) {
+    return msg.contains("unreachable") || msg.contains("JMAP request failed")
+        || msg.contains("JMAP HTTP");
+  }
+
+  private static ResponseStatusException unreachableOrThrow(StalwartApiException e, String ctx) {
+    String msg = e.getMessage() == null ? "" : e.getMessage();
+    if (isUnreachable(msg)) {
+      return new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+          "the mail server is not reachable right now");
+    }
+    return new ResponseStatusException(HttpStatus.BAD_GATEWAY, ctx);
   }
 
   /**

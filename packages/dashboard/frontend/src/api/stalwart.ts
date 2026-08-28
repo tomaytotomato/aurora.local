@@ -74,6 +74,28 @@ export const StalwartApi = {
     );
     return data;
   },
+
+  /** Every mailbox on the box, newest first. Admin-only; 502 when the mail
+   * server is unreachable (surfaced inline with a retry, not a toast). */
+  async listMailboxes(): Promise<MailboxSummary[]> {
+    const { data } = await http.get<MailboxSummary[]>('/services/stalwart/mailboxes', { toast: false });
+    return data;
+  },
+
+  /** Reset a mailbox's password; returns a one-time password to reveal. */
+  async resetMailboxPassword(id: string): Promise<MailboxCreated> {
+    const { data } = await http.post<MailboxCreated>(
+      `/services/stalwart/mailboxes/${encodeURIComponent(id)}/reset-password`,
+      undefined,
+      { toast: false },
+    );
+    return data;
+  },
+
+  /** Delete a mailbox and all its mail. Irreversible. */
+  async deleteMailbox(id: string): Promise<void> {
+    await http.delete(`/services/stalwart/mailboxes/${encodeURIComponent(id)}`, { toast: false });
+  },
 };
 
 /**
@@ -87,4 +109,20 @@ export interface MailboxCreated {
   email: string;
   /** The generated password, shown once. Copy it now or it's gone. */
   password: string;
+}
+
+/**
+ * One mailbox as listed from Stalwart. Mirrors
+ * StalwartController/MailboxSummary. usedBytes/quotaBytes/createdAt are
+ * null when the server does not expose them (uncapped mailbox, or an
+ * older Stalwart) — the UI hides those columns rather than render a bogus
+ * value.
+ */
+export interface MailboxSummary {
+  id: string;
+  /** The full address, name@domain. */
+  address: string;
+  usedBytes?: number | null;
+  quotaBytes?: number | null;
+  createdAt?: string | null;
 }

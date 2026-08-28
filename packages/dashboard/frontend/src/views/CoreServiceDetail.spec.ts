@@ -86,6 +86,9 @@ async function mountDetail(service: string) {
 describe('CoreServiceDetail', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    // The Stalwart panel loads the mailbox list on mount; default it to
+    // empty so mounts don't hit real http. Tests that care override it.
+    vi.spyOn(StalwartApi, 'listMailboxes').mockResolvedValue([]);
     vi.spyOn(ContainersApi, 'list').mockResolvedValue([
       container('authelia'),
       container('caddy'),
@@ -238,7 +241,7 @@ describe('CoreServiceDetail', () => {
     const cta = wrapper.find('[data-test="core-service-open"]');
     expect(cta.exists()).toBe(true);
     expect(cta.attributes('href')).toBe('https://mail-admin.aurora.local/');
-    expect(cta.text()).toContain('Open mail admin');
+    expect(cta.text()).toContain('Open Stalwart console');
     // target=_blank + noopener are the same safety pair marketplace
     // apps use for their Open CTA; pin them so a refactor does not
     // quietly widen the surface.
@@ -750,5 +753,79 @@ describe('CoreServiceDetail', () => {
     // Back to the form, no lingering password.
     expect(wrapper.find('[data-test="stalwart-mailbox-result"]').exists()).toBe(false);
     expect(wrapper.find('[data-test="stalwart-mailbox-create"]').exists()).toBe(true);
+  });
+
+  // ─── Mailbox list ──────────────────────────────────────
+
+  it('renders the mailbox list with rows, only for Stalwart', async () => {
+    vi.spyOn(StalwartApi, 'listMailboxes').mockResolvedValue([
+      { id: 'h', address: 'terry@aurora.local', usedBytes: 1024, quotaBytes: null, createdAt: '2026-08-01T00:00:00Z' },
+    ]);
+    const caddy = await mountDetail('caddy');
+    expect(caddy.find('[data-test="stalwart-mailbox-list"]').exists()).toBe(false);
+
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+    expect(wrapper.find('[data-test="stalwart-mailbox-list"]').exists()).toBe(true);
+    const rows = wrapper.findAll('[data-test="stalwart-mailbox-row"]');
+    expect(rows).toHaveLength(1);
+    expect(wrapper.find('[data-test="stalwart-mailbox-row-address"]').text()).toBe('terry@aurora.local');
+  });
+
+  it('shows the empty state when there are no mailboxes', async () => {
+    vi.spyOn(StalwartApi, 'listMailboxes').mockResolvedValue([]);
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+    expect(wrapper.find('[data-test="stalwart-mailbox-list-empty"]').text())
+      .toContain('No mailboxes yet');
+  });
+
+  it('shows an error + retry when the list load fails with 502', async () => {
+    vi.spyOn(StalwartApi, 'listMailboxes').mockRejectedValue({ response: { status: 502 } });
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+    const err = wrapper.find('[data-test="stalwart-mailbox-list-error"]');
+    expect(err.exists()).toBe(true);
+    expect(err.text().toLowerCase()).toContain('not reachable');
+    expect(wrapper.find('[data-test="stalwart-mailbox-list-retry"]').exists()).toBe(true);
+  });
+
+  it('reset-password on a row shows the one-time password', async () => {
+    vi.spyOn(StalwartApi, 'listMailboxes').mockResolvedValue([
+      { id: 'h', address: 'terry@aurora.local', usedBytes: null, quotaBytes: null, createdAt: null },
+    ]);
+    const resetSpy = vi.spyOn(StalwartApi, 'resetMailboxPassword').mockResolvedValue({
+      email: 'terry@aurora.local', password: 'fresh-reset-password-9',
+    });
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+
+    await wrapper.find('[data-test="stalwart-mailbox-reset"]').trigger('click');
+    await flushPromises();
+
+    expect(resetSpy).toHaveBeenCalledWith('h');
+    // Reuses the create panel's one-time reveal.
+    expect(wrapper.find('[data-test="stalwart-mailbox-password"]').text()).toBe('fresh-reset-password-9');
+  });
+
+  it('delete asks for confirmation, then deletes and refreshes', async () => {
+    const listSpy = vi.spyOn(StalwartApi, 'listMailboxes')
+      .mockResolvedValueOnce([
+        { id: 'h', address: 'terry@aurora.local', usedBytes: null, quotaBytes: null, createdAt: null },
+      ])
+      .mockResolvedValueOnce([]); // after delete, empty
+    const delSpy = vi.spyOn(StalwartApi, 'deleteMailbox').mockResolvedValue(undefined);
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+
+    await wrapper.find('[data-test="stalwart-mailbox-delete"]').trigger('click');
+    await flushPromises();
+    // Confirm dialog names the address (teleported to body).
+    const confirm = document.querySelector('[data-test="stalwart-mailbox-delete-confirm"]');
+    expect(confirm).toBeTruthy();
+    expect(document.body.textContent).toContain('terry@aurora.local');
+
+    (confirm as HTMLElement).click();
+    await flushPromises();
+
+    expect(delSpy).toHaveBeenCalledWith('h');
+    // Re-fetched after delete (2 calls: initial + refresh).
+    expect(listSpy).toHaveBeenCalledTimes(2);
+    document.body.innerHTML = '';
   });
 });

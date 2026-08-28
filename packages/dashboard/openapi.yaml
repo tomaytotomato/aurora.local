@@ -394,6 +394,25 @@ paths:
         '401': { description: Not signed in. }
         '403': { description: Signed in but not an admin. }
   /services/stalwart/mailboxes:
+    get:
+      tags: [services]
+      summary: List every mailbox on the box
+      description: >-
+        Every mailbox Stalwart holds, newest first, read via its JMAP
+        account store. Empty list is a valid 200 (a fresh box has none),
+        never a 404. Admin-only. 502 when Stalwart is unreachable so the UI
+        can offer a retry rather than render an empty table.
+      responses:
+        '200':
+          description: The mailboxes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MailboxSummary' }
+        '401': { description: Not signed in. }
+        '403': { description: Signed in but not an admin. }
+        '502': { description: The mail server is not reachable. }
     post:
       tags: [services]
       summary: Create a mailbox on the box's mail domain
@@ -430,6 +449,45 @@ paths:
         '401': { description: Not signed in. }
         '403': { description: Signed in but not an admin. }
         '409': { description: Mailbox already exists, or the password was refused. }
+        '502': { description: The mail server is not reachable. }
+  /services/stalwart/mailboxes/{id}/reset-password:
+    post:
+      tags: [services]
+      summary: Reset a mailbox's password
+      description: >-
+        Generate a new strong password for a mailbox and return it once
+        (same one-time-reveal contract as create). Admin-only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Password reset; shown once.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MailboxCreated' }
+        '401': { description: Not signed in. }
+        '403': { description: Signed in but not an admin. }
+        '404': { description: No such mailbox. }
+        '502': { description: The mail server is not reachable. }
+  /services/stalwart/mailboxes/{id}:
+    delete:
+      tags: [services]
+      summary: Delete a mailbox and all its mail
+      description: >-
+        Permanently remove a mailbox. Irreversible. Admin-only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Deleted. }
+        '401': { description: Not signed in. }
+        '403': { description: Signed in but not an admin. }
+        '404': { description: No such mailbox. }
         '502': { description: The mail server is not reachable. }
 
   # ───────────────────────────── packages ─────────────────────────────
@@ -3571,3 +3629,19 @@ components:
             The generated password, shown ONCE. Aurora never stores it in
             plaintext and cannot show it again — the operator must copy it
             now. Same one-time-reveal contract as the admin-password reset.
+    MailboxSummary:
+      type: object
+      description: >-
+        One mailbox as read from Stalwart's JMAP account store. quotaBytes
+        is null when the mailbox is uncapped (the single-box default), and
+        usedBytes/createdAt are null when the server does not expose them;
+        the UI hides those columns rather than rendering a bogus value.
+      required: [id, address]
+      properties:
+        id: { type: string }
+        address:
+          type: string
+          description: The full address, name@domain (server-assembled).
+        usedBytes: { type: [integer, 'null'] }
+        quotaBytes: { type: [integer, 'null'] }
+        createdAt: { type: [string, 'null'] }

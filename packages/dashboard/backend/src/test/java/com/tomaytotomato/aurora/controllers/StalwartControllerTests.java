@@ -21,6 +21,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -280,5 +281,84 @@ class StalwartControllerTests {
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"localPart\":\"bruce\"}"))
         .andExpect(status().isConflict());
+  }
+
+  // ─── GET /mailboxes ───────────────────────────────────────
+
+  @Test
+  void list_mailboxes_requires_admin() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.USER));
+    mvc.perform(get("/api/services/stalwart/mailboxes")).andExpect(status().isForbidden());
+    Mockito.verifyNoInteractions(mail);
+  }
+
+  @Test
+  void list_mailboxes_returns_the_rows() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(mail.listMailboxes()).thenReturn(java.util.List.of(
+        new com.tomaytotomato.aurora.domain.MailboxSummary("h", "terry@aurora.local", 1024L, null, "2026-08-01T00:00:00Z")));
+    mvc.perform(get("/api/services/stalwart/mailboxes"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].address").value("terry@aurora.local"))
+        .andExpect(jsonPath("$[0].usedBytes").value(1024));
+  }
+
+  @Test
+  void list_mailboxes_maps_unreachable_to_502() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(mail.listMailboxes())
+        .thenThrow(new StalwartMailClient.StalwartApiException("JMAP request failed: refused"));
+    mvc.perform(get("/api/services/stalwart/mailboxes")).andExpect(status().isBadGateway());
+  }
+
+  // ─── POST /mailboxes/{id}/reset-password ────────────────────────
+
+  @Test
+  void reset_mailbox_password_returns_a_one_time_password() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(1L));
+    Mockito.when(mail.listMailboxes()).thenReturn(java.util.List.of(
+        new com.tomaytotomato.aurora.domain.MailboxSummary("h", "terry@aurora.local", 0L, null, null)));
+    mvc.perform(post("/api/services/stalwart/mailboxes/h/reset-password"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email").value("terry@aurora.local"))
+        .andExpect(jsonPath("$.password").isNotEmpty());
+    Mockito.verify(mail).resetMailboxPassword(Mockito.eq("h"), Mockito.anyString());
+  }
+
+  @Test
+  void reset_mailbox_password_unknown_id_is_404() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(1L));
+    Mockito.doThrow(new StalwartMailClient.StalwartApiException("could not reset mailbox z: notFound"))
+        .when(mail).resetMailboxPassword(Mockito.eq("z"), Mockito.anyString());
+    mvc.perform(post("/api/services/stalwart/mailboxes/z/reset-password"))
+        .andExpect(status().isNotFound());
+  }
+
+  // ─── DELETE /mailboxes/{id} ───────────────────────────────
+
+  @Test
+  void delete_mailbox_requires_admin() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.USER));
+    mvc.perform(delete("/api/services/stalwart/mailboxes/h")).andExpect(status().isForbidden());
+    Mockito.verifyNoInteractions(mail);
+  }
+
+  @Test
+  void delete_mailbox_returns_204() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(1L));
+    mvc.perform(delete("/api/services/stalwart/mailboxes/h")).andExpect(status().isNoContent());
+    Mockito.verify(mail).deleteMailbox("h");
+  }
+
+  @Test
+  void delete_mailbox_unknown_id_is_404() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(1L));
+    Mockito.doThrow(new StalwartMailClient.StalwartApiException("could not delete mailbox z: notFound"))
+        .when(mail).deleteMailbox("z");
+    mvc.perform(delete("/api/services/stalwart/mailboxes/z")).andExpect(status().isNotFound());
   }
 }

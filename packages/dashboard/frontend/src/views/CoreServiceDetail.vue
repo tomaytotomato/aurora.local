@@ -4,16 +4,16 @@ import { useRoute, useRouter } from 'vue-router';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { findCoreService, resolveOpenUrl } from '@/api/core-services';
 import { SsoApi, type SsoNotification } from '@/api/sso';
-import { StalwartApi, type StalwartAdminCredential, type MailboxCreated } from '@/api/stalwart';
+import { StalwartApi, type StalwartAdminCredential, type MailboxCreated, type MailboxSummary } from '@/api/stalwart';
 import { useSystemStore } from '@/stores/system';
-import { copyToClipboard } from '@/lib/utils';
+import { copyToClipboard, humanBytes } from '@/lib/utils';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
 import Button from '@/components/ui/Button.vue';
 import Skeleton from '@/components/ui/Skeleton.vue';
 import AppIcon from '@/components/AppIcon.vue';
-import { Alert, AlertDescription, Input, Label } from '@/components/ui';
+import { Alert, AlertDescription, Dialog, Input, Label } from '@/components/ui';
 
 // Detail view for one Core service. Shared shell across Caddy, Authelia,
 // and Stalwart:
@@ -304,6 +304,9 @@ async function createMailbox(): Promise<void> {
   try {
     mailboxResult.value = await StalwartApi.createMailbox(local);
     mailboxLocalPart.value = '';
+    // Refresh the list so the new mailbox appears — the table is the
+    // source of truth, and this ends the old discovery-by-collision.
+    void loadMailboxes();
   } catch (e) {
     const status = (e as { response?: { status?: number } })?.response?.status;
     if (status === 403) {
@@ -336,6 +339,98 @@ function dismissMailboxResult(): void {
   mailboxCopied.value = null;
 }
 
+// ── Mailbox list ────────────────────────────────────────────
+//
+// The panel was write-only before this: an admin could mint mailboxes and
+// never see them again, with no way to reset a password or delete an
+// account short of the raw Stalwart console. The list makes the dashboard
+// the source of truth — every mailbox, with reset-password and delete per
+// row — which is the whole point of the review Bruce commissioned.
+const mailboxes = ref<MailboxSummary[]>([]);
+const mailboxesLoading = ref(false);
+const mailboxesError = ref<string | null>(null);
+
+// Whether the Usage / Created columns render at all. Stalwart returns null
+// for these on an uncapped / older mailbox; the review's rule is "omit the
+// column rather than render undefined". Shown only when at least one row
+// actually carries the value.
+const showUsageColumn = computed(() => mailboxes.value.some((m) => m.usedBytes != null || m.quotaBytes != null));
+const showCreatedColumn = computed(() => mailboxes.value.some((m) => m.createdAt));
+
+async function loadMailboxes(): Promise<void> {
+  if (!isStalwart.value) return;
+  mailboxesLoading.value = true;
+  mailboxesError.value = null;
+  try {
+    mailboxes.value = await StalwartApi.listMailboxes();
+  } catch (e) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    if (status === 403) {
+      mailboxesError.value = 'Only admins can view mailboxes.';
+    } else if (status === 502) {
+      mailboxesError.value = 'The mail server is not reachable right now. Try again in a moment.';
+    } else {
+      mailboxesError.value = humanCopyForError(e, { subject: 'the mailboxes', action: 'load' });
+    }
+  } finally {
+    mailboxesLoading.value = false;
+  }
+}
+
+/** One row's usage cell, e.g. "12 MB / 1 GB" or "12 MB" (no quota). */
+function usageLabel(m: MailboxSummary): string {
+  const used = m.usedBytes != null ? humanBytes(m.usedBytes) : null;
+  const quota = m.quotaBytes != null ? humanBytes(m.quotaBytes) : null;
+  if (used && quota) return `${used} / ${quota}`;
+  if (used) return used;
+  if (quota) return `— / ${quota}`;
+  return '—';
+}
+
+// Reset-password: reuses the same one-time reveal panel the create flow
+// uses (mailboxResult) so there is one mental model for "secrets show
+// once", not a third scattered reveal.
+const mailboxRowBusy = ref<string | null>(null);
+async function resetMailbox(m: MailboxSummary): Promise<void> {
+  mailboxRowBusy.value = m.id;
+  try {
+    mailboxResult.value = await StalwartApi.resetMailboxPassword(m.id);
+  } catch (e) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    mailboxError.value = status === 502
+      ? 'The mail server is not reachable right now. Try again in a moment.'
+      : humanCopyForError(e, { subject: 'the password', action: 'reset' });
+  } finally {
+    mailboxRowBusy.value = null;
+  }
+}
+
+// Delete: confirm first (names the address + spells out the consequence),
+// then re-fetch so the table stays the source of truth.
+const mailboxToDelete = ref<MailboxSummary | null>(null);
+const mailboxDeleting = ref(false);
+function askDeleteMailbox(m: MailboxSummary): void {
+  mailboxToDelete.value = m;
+}
+async function confirmDeleteMailbox(): Promise<void> {
+  const m = mailboxToDelete.value;
+  if (!m) return;
+  mailboxDeleting.value = true;
+  try {
+    await StalwartApi.deleteMailbox(m.id);
+    mailboxToDelete.value = null;
+    await loadMailboxes();
+  } catch (e) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    mailboxesError.value = status === 502
+      ? 'The mail server is not reachable right now. Try again in a moment.'
+      : humanCopyForError(e, { subject: 'the mailbox', action: 'delete' });
+    mailboxToDelete.value = null;
+  } finally {
+    mailboxDeleting.value = false;
+  }
+}
+
 // Reset reveal state when the operator navigates between services so
 // leaving Stalwart and coming back does not still render a stale
 // plaintext under the Reveal button.
@@ -356,6 +451,9 @@ watch(isStalwart, (nowStalwart) => {
     mailboxError.value = null;
     mailboxResult.value = null;
     mailboxCopied.value = null;
+    mailboxes.value = [];
+    mailboxesError.value = null;
+    mailboxToDelete.value = null;
   }
 });
 
@@ -414,6 +512,7 @@ let poll: number | undefined;
 onMounted(() => {
   void loadContainer();
   void loadNotifications();
+  void loadMailboxes();
   // 5s poll: same cadence as the Core index. Authelia's notification
   // file only changes when the operator does something (reset, enroll,
   // OTP), so the poll is idle-cheap and only matters when the operator
@@ -438,6 +537,7 @@ watch(
     notifications.value = [];
     void loadContainer();
     void loadNotifications();
+    void loadMailboxes();
   },
 );
 
@@ -760,6 +860,128 @@ function toggleBody(i: number): void {
       </Card>
     </div>
 
+    <!-- Stalwart-specific: the mailbox list. The panel was write-only
+         before this — you could create mailboxes and never see them.
+         This table is the source of truth, with reset-password + delete
+         per row. Admin-only on the server. -->
+    <div v-if="isStalwart" data-test="stalwart-mailbox-list" class="mb-6">
+      <div class="mb-3 on-photo flex items-end justify-between gap-4">
+        <div>
+          <h2 class="mb-1">Mailboxes</h2>
+          <p class="text-sm">
+            Every mailbox on this box. Reset a password or delete an account
+            without leaving Aurora.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          :loading="mailboxesLoading"
+          data-test="stalwart-mailbox-refresh"
+          @click="loadMailboxes"
+        >Refresh</Button>
+      </div>
+
+      <Card class="p-0 overflow-hidden">
+        <!-- Loading -->
+        <div v-if="mailboxesLoading && !mailboxes.length" class="p-6 space-y-3" data-test="stalwart-mailbox-list-loading">
+          <Skeleton v-for="n in 3" :key="n" class="h-6 w-full" />
+        </div>
+
+        <!-- Error -->
+        <div v-else-if="mailboxesError" class="p-6" data-test="stalwart-mailbox-list-error">
+          <Alert variant="destructive">
+            <AlertDescription>{{ mailboxesError }}</AlertDescription>
+          </Alert>
+          <Button variant="secondary" size="sm" class="mt-3" data-test="stalwart-mailbox-list-retry" @click="loadMailboxes">
+            Try again
+          </Button>
+        </div>
+
+        <!-- Empty -->
+        <div
+          v-else-if="!mailboxes.length"
+          class="p-8 text-center text-sm text-muted-foreground"
+          data-test="stalwart-mailbox-list-empty"
+        >
+          No mailboxes yet. Create the first one below.
+        </div>
+
+        <!-- List -->
+        <table v-else class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th class="px-4 py-3 font-medium">Address</th>
+              <th v-if="showUsageColumn" class="px-4 py-3 font-medium">Usage</th>
+              <th v-if="showCreatedColumn" class="px-4 py-3 font-medium">Created</th>
+              <th class="px-4 py-3 font-medium text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="m in mailboxes"
+              :key="m.id"
+              class="border-b border-border last:border-0"
+              data-test="stalwart-mailbox-row"
+            >
+              <td class="px-4 py-3 font-mono select-all text-foreground" data-test="stalwart-mailbox-row-address">
+                {{ m.address }}
+              </td>
+              <td v-if="showUsageColumn" class="px-4 py-3 text-muted-foreground">{{ usageLabel(m) }}</td>
+              <td v-if="showCreatedColumn" class="px-4 py-3 text-muted-foreground">
+                {{ m.createdAt ? formatDate(m.createdAt) : '—' }}
+              </td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-end gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    :loading="mailboxRowBusy === m.id"
+                    data-test="stalwart-mailbox-reset"
+                    @click="resetMailbox(m)"
+                  >Reset password</Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="text-destructive hover:text-destructive"
+                    data-test="stalwart-mailbox-delete"
+                    @click="askDeleteMailbox(m)"
+                  >Delete</Button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </Card>
+
+      <!-- A row action reset returns a one-time password; it reuses the
+           create panel's reveal (mailboxResult) which renders below. -->
+    </div>
+
+    <!-- Delete-mailbox confirm. Names the address and spells out the
+         irreversible consequence. -->
+    <Dialog
+      v-if="isStalwart"
+      :open="mailboxToDelete !== null"
+      @update:open="(v: boolean) => { if (!v) mailboxToDelete = null; }"
+    >
+      <template #title>Delete this mailbox?</template>
+      <template #description>
+        Deleting <span class="font-mono">{{ mailboxToDelete?.address }}</span>
+        permanently removes the mailbox and all of its mail. This cannot be undone.
+      </template>
+      <template #footer>
+        <Button variant="ghost" :disabled="mailboxDeleting" @click="mailboxToDelete = null">Cancel</Button>
+        <Button
+          variant="primary"
+          class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          :loading="mailboxDeleting"
+          data-test="stalwart-mailbox-delete-confirm"
+          @click="confirmDeleteMailbox"
+        >Delete mailbox</Button>
+      </template>
+    </Dialog>
+
     <!-- Stalwart-specific: create a mailbox. Aurora auto-provisions the
          mail domain, so this is the one per-operator step. The backend
          generates the password and returns it once; this panel is the
@@ -861,6 +1083,45 @@ function toggleBody(i: number): void {
             @click="createMailbox"
           >Create mailbox</Button>
         </div>
+      </Card>
+    </div>
+
+    <!-- Stalwart-specific: connect a mail client. Ports are fixed by
+         packages/core/compose.yml, so this is static — no endpoint. Saves
+         the admin a trip into the compose file to set up Thunderbird or a
+         phone. -->
+    <div v-if="isStalwart" data-test="stalwart-connect-panel" class="mb-6">
+      <div class="mb-3 on-photo">
+        <h2 class="mb-1">Connect a mail client</h2>
+        <p class="text-sm">
+          Settings for Thunderbird, Apple Mail or your phone. Sign in with a
+          mailbox address and its password.
+        </p>
+      </div>
+
+      <Card class="p-6">
+        <dl class="grid grid-cols-1 sm:grid-cols-[max-content_1fr] gap-x-6 gap-y-3 text-sm">
+          <dt class="text-muted-foreground">Server</dt>
+          <dd class="font-mono text-foreground select-all">mail.{{ mailDomain }}</dd>
+
+          <dt class="text-muted-foreground">IMAP (incoming)</dt>
+          <dd class="font-mono text-foreground">port 993 · SSL/TLS</dd>
+
+          <dt class="text-muted-foreground">SMTP (outgoing)</dt>
+          <dd class="font-mono text-foreground">port 587 · STARTTLS</dd>
+        </dl>
+        <p class="text-xs text-muted-foreground mt-4">
+          Also available: IMAP 143 (STARTTLS), SMTP 465 (SSL/TLS), ManageSieve 4190.
+          The mail server's own admin console is behind
+          <a
+            :href="openUrl ?? '#'"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline hover:text-foreground"
+            data-test="stalwart-console-link"
+          >Open Stalwart console ↗</a>
+          — you rarely need it now that mailboxes are managed here.
+        </p>
       </Card>
     </div>
 
