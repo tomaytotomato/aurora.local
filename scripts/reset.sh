@@ -109,10 +109,13 @@ fi
 if [[ $KEEP_DATA -eq 0 && -d "$REPO/data" ]]; then
   log_step "deleting data/"
   # Containers run as assorted uids and leave root-owned trees behind, so
-  # this needs sudo — the one place in this script that does.
-  if [[ -w "$REPO/data" ]] && ! find "$REPO/data" -maxdepth 2 -uid 0 -print -quit | grep -q .; then
-    rm -rf "${REPO:?}/data"
-  else
+  # this usually needs sudo — the one place in this script that does. Try
+  # without first (a box where every service ran as the operator does not
+  # need it), and only escalate when the unprivileged attempt fails.
+  # Testing ownership up front looked tidier and was wrong: `find` cannot
+  # even read a root-owned 0700 directory, so the probe reported "no
+  # root-owned files" and the plain rm failed halfway through.
+  if ! rm -rf "${REPO:?}/data" 2>/dev/null; then
     sudo rm -rf "${REPO:?}/data"
   fi
   log_ok "data/ removed"
