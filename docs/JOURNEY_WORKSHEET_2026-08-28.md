@@ -36,7 +36,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | A6 | friction | No reset/uninstall path anywhere | [ ] |
 | A7 | blocker | Published image is stale vs main, and unidentifiable on the box | [ ] |
 | B1 | blocker | "AdGuard on this box" does not install AdGuard | [x] |
-| B2 | blocker | AdGuard is never provisioned; the DNS story never completes | [ ] |
+| B2 | blocker | AdGuard is never provisioned; the DNS story never completes | [x] |
 | B3 | blocker | Vue escape leak: `${'{'}DOMAIN{'}'}` rendered to the user | [ ] |
 | B4 | friction | Wrong step reference ("trust the new TLS root (step 7)") | [ ] |
 | B5 | friction | Step 7 (SSO) is silently skipped; 6 and 7 never tick | [ ] |
@@ -248,6 +248,20 @@ the Aurora admin, bcrypt hash, bind `0.0.0.0:53`, upstreams, and the
 `*.$DOMAIN → LAN_IP` rewrite) before first start, exactly as core now does for
 Stalwart/Authelia. Verify with `dig @<lan-ip> anything.aurora.local`. Then add a
 Done-step check "DNS answers for *.aurora.local" that is real, not assumed.
+
+**SHIPPED:** `AdguardProvisionService` writes `AdGuardHome.yaml` before AdGuard's
+first start — DNS on :53, DoH upstreams, rewrites for both `aurora.local` and
+`*.aurora.local` at the LAN address, admin = the Aurora admin with the same
+password (the bcrypt hash is copied, not a second credential invented). Wired
+into both paths that can start it (wizard launch, catalogue install) plus a
+startup heal for boxes installed before this existed; it never overwrites an
+existing config. `render_data_dirs` in `render.sh` now pre-creates every
+`../../data/<dir>` a package bind-mounts, user-owned, because Docker creates
+missing bind-mount sources as **root** — which is exactly why the first heal
+attempt on the live box failed with AccessDenied. Proved live:
+`dig @192.168.0.110 jellyfin.aurora.local` → `192.168.0.110`, upstream lookups
+resolve, and `POST /control/login` as `sarah` with her Aurora password → 200.
+Still open as its own item: a Done-step check that *shows* DNS answering.
 
 ### B3 · [blocker] Vue escape leak in step 3
 Step 3 renders literally:
