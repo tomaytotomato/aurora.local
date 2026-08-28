@@ -38,7 +38,23 @@ const notDebian = computed(() => {
 // render. Everything degrades to '—' when the backing field is null so
 // a stale/partial /env payload can't blow up the welcome screen.
 
-const cpuModel = computed(() => env.value?.cpu?.model ?? null);
+/**
+ * Intel and AMD ship marketing noise in the model string:
+ * "Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz". Truncated to one line it read
+ * "Intel(R) Core(T…" — the part that identifies the chip cut off in favour
+ * of two trademark symbols. Strip those, keep the model, and let the clock
+ * speed go (it is already shown on the line below).
+ */
+const cpuModel = computed(() => {
+  const raw = env.value?.cpu?.model ?? null;
+  if (!raw) return null;
+  return raw
+    .replace(/\((R|TM|r|tm)\)/g, '')
+    .replace(/\bCPU\b/g, '')
+    .replace(/@.*$/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+});
 const cpuLine = computed(() => {
   const c = env.value?.cpu;
   if (!c) return null;
@@ -154,7 +170,7 @@ const diskRowsExtra = computed(() => Math.max(0, diskRows.value.length - 4));
       <!-- CPU -->
       <div class="border border-border rounded-lg px-5 py-4 bg-card">
         <div class="eyebrow text-muted-foreground mb-2">CPU</div>
-        <div class="font-serif text-lg leading-snug text-foreground truncate" :title="cpuModel ?? undefined">
+        <div class="font-serif text-lg leading-snug text-foreground" :title="cpuModel ?? undefined">
           {{ cpuModel ?? '—' }}
         </div>
         <div class="font-mono text-xs text-foreground mt-1">{{ cpuLine ?? '—' }}</div>

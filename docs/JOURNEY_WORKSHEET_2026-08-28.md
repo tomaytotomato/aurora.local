@@ -44,7 +44,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | B6 | blocker | "Password recovery" is promised in copy, unimplemented in fact | [x] |
 | B7 | friction | Done step hands out `http://` right after the TLS-trust step | [x] |
 | B8 | polish | "Hostname & domain" step never lets you set the hostname | [x] |
-| B9 | polish | Welcome CPU string truncated mid-token | [ ] |
+| B9 | polish | Welcome CPU string truncated mid-token | [x] |
 | C1 | blocker | `<service>.aurora.local` does not resolve on Linux/Android clients | [ ] |
 | C2 | blocker | 2FA-gated apps are unreachable: enrolment codes land in a server file | [ ] |
 | C3 | blocker | Installed AdGuard has no Open link anywhere | [x] |
@@ -59,7 +59,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C12 | friction | TLS card: unexpanded `$DOMAIN`, Linux steps miss the browser store | [~] |
 | C13 | polish | "last 24 hours" metrics and 4-day uptime on a 20-minute-old box | [x] |
 | C14 | polish | Activity feeds show raw event keys | [x] |
-| C15 | polish | `/users` heading is unreadable against the hero image | [ ] |
+| C15 | polish | `/users` heading is unreadable against the hero image | [x] |
 | C16 | polish | Catalogue: no search, three webmails, truncated copy, missing icons | [ ] |
 | C17 | polish | "Ask whoever set up this box" — Sarah *is* that person | [x] |
 | C18 | friction | Manifest descriptions still written for operators (found while fixing C4) | [ ] |
@@ -67,8 +67,8 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C22 | blocker | Review listed the doubled `aurora.aurora.local` (regression from C10) | [x] |
 | C20 | friction | The SSO step links to auth.$DOMAIN before the DNS that resolves it is running | [ ] |
 | C21 | fork | Ship image digests, or a "Pin these now" action (owner's call) | [ ] |
-| D1 | polish | `Essence.md` is unreferenced and inconsistently named | [ ] |
-| D2 | polish | README package table lists 12 of 18 packages | [ ] |
+| D1 | polish | `Essence.md` is unreferenced and inconsistently named | [x] |
+| D2 | polish | README package table lists 12 of 18 packages | [x] |
 
 ---
 
@@ -380,6 +380,10 @@ pretending otherwise.
 `Intel(R) Core(T…` — one line, hard-truncated. **Fix:** normalise the model
 string (strip `(R)`, `(TM)`, `CPU @ …`) and let it wrap to two lines.
 
+**SHIPPED:** exactly that — "Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz" becomes
+"Intel Core i5-6500T", and the line is allowed to wrap instead of truncating the
+part that identifies the chip.
+
 ---
 
 ## C · Dashboard and the app journey
@@ -644,6 +648,9 @@ row's `title` for anyone debugging.
 The "Users" H1 and its "ACCESS" eyebrow sit on the dark aurora hero and are
 close to unreadable. **Fix:** the same scrim/offset treatment the other pages
 use.
+
+**SHIPPED:** the header block was missing the `.on-photo` class every other view
+applies over the hero image.
 
 ### C16 · [polish] Catalogue
 No search or filter across 17 apps; **three** webmail clients (Bulwark,

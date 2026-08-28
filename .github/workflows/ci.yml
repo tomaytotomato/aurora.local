@@ -24,6 +24,10 @@ jobs:
           shellcheck -x -S style -e SC1091 "${files[@]}"
       - name: shell unit tests
         run: ./scripts/tests/net.test.sh
+      - name: README package table is current
+        run: |
+          pip install --quiet pyyaml
+          ./scripts/gen-package-table.py --check
 
   yaml:
     name: yamllint
