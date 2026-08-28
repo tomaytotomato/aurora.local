@@ -73,9 +73,13 @@ render_authelia_seed() {
   if [[ -f "$src" && ! -f "$dst" ]]; then
     log_info "seeding data/authelia/users_database.yml from example"
     install -m 0640 "$src" "$dst"
-    log_warn "IMPORTANT: replace the example password hash in $dst"
-    log_warn "generate one with:  docker run --rm authelia/authelia:latest \\"
-    log_warn "                       authelia crypto hash generate argon2 --password 'yourpass'"
+    # No scary IMPORTANT block here any more. This placeholder exists only
+    # so Authelia can boot (it crash-loops on an empty users: map) and it is
+    # overwritten by AutheliaService the moment the wizard creates the real
+    # admin, minutes later in the same install. Telling the operator to go
+    # and run `docker run --rm authelia/authelia crypto hash generate argon2`
+    # was both terminal-first and untrue: nobody has to do it.
+    log_info "placeholder sign-in file written; the wizard replaces it with your admin account"
   fi
 }
 

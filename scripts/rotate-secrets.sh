@@ -126,9 +126,19 @@ for envf in "$REPO"/packages/*/.env; do
 
   if (( ${#weak_here[@]} > 0 )); then
     FOUND=$((FOUND+1))
-    log "$pkg/.env — ${#weak_here[@]} weak value(s)"
-    for w in "${weak_here[@]}"; do warn "  $w"; done
-    echo
+    # In --apply mode this is not a finding, it is a to-do list the script
+    # is about to complete itself: up.sh calls us right after seeding fresh
+    # .env files, where *every* secret is legitimately empty. Printing
+    # thirteen red WARN lines and then silently fixing all thirteen made a
+    # clean first install read like a failure. Report mode (an operator
+    # audit) still lists every offending key.
+    if (( APPLY )); then
+      log "$pkg/.env — generating ${#weak_here[@]} missing secret(s)"
+    else
+      log "$pkg/.env — ${#weak_here[@]} weak value(s)"
+      for w in "${weak_here[@]}"; do warn "  $w"; done
+      echo
+    fi
     # Names only. This block used to generate a replacement for every
     # weak key and print all of them under "suggested replacements:" —
     # in BOTH preview and apply mode, fifteen lines above a comment
@@ -138,11 +148,11 @@ for envf in "$REPO"/packages/*/.env; do
     # one into the terminal, scrollback and any CI capture. Generation
     # now happens under --apply only, and nothing prints a value.
     if (( APPLY )); then
-      dim "  rotating: ${weak_keys[*]}"
+      : # names are not news in apply mode; the summary below says what changed
     else
       dim "  run with --apply to generate and write replacements: ${weak_keys[*]}"
+      echo
     fi
-    echo
 
     if (( APPLY )); then
       cp -a "$envf" "$envf.bak"
@@ -155,7 +165,7 @@ for envf in "$REPO"/packages/*/.env; do
       # would print the freshly-rotated secret in plain text to
       # whatever terminal or log captures this script's stdout —
       # exactly the leak rotation exists to prevent.
-      ok "applied; keys changed: $(printf '%s ' "${weak_here[@]%%=*}")"
+      ok "generated ${#weak_keys[@]} secret(s) for $pkg"
       echo
 
       recreate_running_package "$pkg" "$envf"

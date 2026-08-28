@@ -30,7 +30,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 |----|-----|-------|------|
 | A1 | blocker | LAN detection follows the VPN route; UFW opens the wrong subnet | [x] |
 | A2 | blocker | `ansible -K` prompt breaks the documented `curl \| bash` install | [x] |
-| A3 | friction | Install log screams about secrets it is about to generate itself | [ ] |
+| A3 | friction | Install log screams about secrets it is about to generate itself | [x] |
 | A4 | friction | Post-install notes are stale and terminal-first | [ ] |
 | A5 | polish | Ansible deprecation noise dominates the install transcript | [ ] |
 | A6 | friction | No reset/uninstall path anywhere | [ ] |
@@ -143,6 +143,15 @@ the wizard).
 **Fix:** run `rotate-secrets.sh --apply` first, then warn only about what is
 still weak. Delete the `authelia crypto hash` advice. Files: `scripts/up.sh`,
 `scripts/lib/render.sh`, `scripts/rotate-secrets.sh`.
+
+**SHIPPED:** `rotate-secrets.sh --apply` no longer prints a WARN per key — on a
+fresh install every secret is legitimately empty and the script fixes all of them
+seconds later, so it now says `core/.env — generating 13 missing secret(s)` and
+`OK generated 13 secret(s) for core`. Report mode (the operator audit) still
+lists every offending key. `render_authelia_seed` drops the `IMPORTANT: replace
+the example password hash` + `docker run ... crypto hash generate argon2` block
+for "placeholder sign-in file written; the wizard replaces it with your admin
+account", which is what actually happens.
 
 ### A4 · [friction] Post-install notes are stale and terminal-first
 `core`'s `post_install_notes` still walks the operator through the **removed**
