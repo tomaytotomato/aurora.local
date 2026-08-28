@@ -32,7 +32,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | A2 | blocker | `ansible -K` prompt breaks the documented `curl \| bash` install | [x] |
 | A3 | friction | Install log screams about secrets it is about to generate itself | [x] |
 | A4 | friction | Post-install notes are stale and terminal-first | [ ] |
-| A5 | polish | Ansible deprecation noise dominates the install transcript | [ ] |
+| A5 | polish | Ansible deprecation noise dominates the install transcript | [x] |
 | A6 | friction | No reset/uninstall path anywhere | [ ] |
 | A7 | blocker | Published image is stale vs main, and unidentifiable on the box | [ ] |
 | B1 | blocker | "AdGuard on this box" does not install AdGuard | [ ] |
@@ -170,6 +170,12 @@ screen that does the job.
 Five `INJECT_FACTS_AS_VARS` blocks with source excerpts dominate the transcript.
 **Fix:** `deprecation_warnings = False` in `ansible.cfg` and move host roles to
 `ansible_facts['os_family']`.
+
+**SHIPPED:** both. Every `ansible_os_family` / `ansible_distribution*` /
+`ansible_architecture` / `ansible_memtotal_mb` / `ansible_hostname` reference in
+`host/roles/` now reads `ansible_facts['...']`, and `ansible.cfg` silences the
+notice. A full `--check` run of `host/site.yml` prints zero deprecation lines
+(was five multi-line blocks with caret diagrams).
 
 ### A6 · [friction] There is no reset path
 Nothing in `bootstrap.sh`, `scripts/`, or the dashboard takes a box back to

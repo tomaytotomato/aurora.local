@@ -3,7 +3,7 @@
 # force an explicit size.
 - name: Compute effective RAM in GB
   ansible.builtin.set_fact:
-    _ram_gb: "{{ (ansible_memtotal_mb | int / 1024) | round(0, 'ceil') | int }}"
+    _ram_gb: "{{ (ansible_facts['memtotal_mb'] | int / 1024) | round(0, 'ceil') | int }}"
 
 - name: Decide whether swap file is needed
   ansible.builtin.set_fact:

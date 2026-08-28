@@ -1,5 +1,5 @@
 ---
-avahi_host_name: "{{ ansible_hostname }}"
+avahi_host_name: "{{ ansible_facts['hostname'] }}"
 avahi_domain_name: local
 avahi_publish_workstation: true
 avahi_publish_addresses: true
