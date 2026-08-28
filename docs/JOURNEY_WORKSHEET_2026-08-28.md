@@ -33,8 +33,9 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | A3 | friction | Install log screams about secrets it is about to generate itself | [x] |
 | A4 | friction | Post-install notes are stale and terminal-first | [x] |
 | A5 | polish | Ansible deprecation noise dominates the install transcript | [x] |
-| A6 | friction | No reset/uninstall path anywhere | [ ] |
+| A6 | friction | No reset/uninstall path anywhere | [x-cli] |
 | A7 | blocker | Published image is stale vs main, and unidentifiable on the box | [ ] |
+| A8 | friction | "Start over" exists only as a script, not in the dashboard | [ ] |
 | B1 | blocker | "AdGuard on this box" does not install AdGuard | [x] |
 | B2 | blocker | AdGuard is never provisioned; the DNS story never completes | [x] |
 | B3 | blocker | Vue escape leak: `${'{'}DOMAIN{'}'}` rendered to the user | [x] |
@@ -198,6 +199,18 @@ resettable by the consumer.
 **Fix:** `bootstrap.sh reset [--keep-data]` (stop everything, drop volumes,
 clear runtime state, keep the repo) plus Settings → "Start over" with a typed
 confirmation, streaming through the existing job/SSE plumbing.
+
+**SHIPPED (half):** `scripts/reset.sh` + `bootstrap.sh reset`, with `--yes`,
+`--keep-data` and `--all`. It says what it will do in the same words the UI
+would, requires typing RESET (or `--yes`), removes containers/volumes by compose
+**label** rather than by compose file so a half-broken or since-removed package
+is still cleaned up, deletes `data/` (with sudo only when root-owned files are
+actually there), clears `.state.yml` and every `packages/*/.env`, and leaves the
+repo, docker and the firewall alone. Deliberately skips the prereq check, because
+resetting has to work on a box whose install failed halfway.
+
+**Still open:** the in-dashboard "Start over" button. Tracked as A8 so the CLI
+half does not read as done.
 
 ### A7 · [blocker] Published image is stale, and the box can't say what it runs
 `ghcr.io/tomaytotomato/aurora:0.1.0` on GHCR carries

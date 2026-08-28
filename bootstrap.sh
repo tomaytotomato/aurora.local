@@ -62,6 +62,8 @@ Usage:
   bootstrap.sh remove PKG [PKG...]  Stop and disable packages.
   bootstrap.sh list                 List all packages available in this repo.
   bootstrap.sh status               Show current state + container health.
+  bootstrap.sh reset [--yes]        Start over: stop everything, delete this
+                                    box's data and state, keep the repo.
   bootstrap.sh --help               This message.
 
 Environment:
@@ -80,7 +82,7 @@ EOF
 CMD="install"
 if [[ $# -gt 0 ]]; then
   case "$1" in
-    install|add|remove|list|status) CMD="$1"; shift ;;
+    install|add|remove|list|status|reset) CMD="$1"; shift ;;
     -h|--help|help) usage; exit 0 ;;
     -*) log_err "unknown flag: $1"; usage; exit 2 ;;
     *) ;;  # bare package names -> install
@@ -543,5 +545,11 @@ case "$CMD" in
   install)
     _ensure_prereqs
     _install "$@"
+    ;;
+  reset)
+    # Deliberately no _ensure_prereqs: resetting must work on a box whose
+    # install failed halfway, which is exactly when yq/ansible may be the
+    # thing that is broken.
+    exec "$REPO/scripts/reset.sh" "$@"
     ;;
 esac
