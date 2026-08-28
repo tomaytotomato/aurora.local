@@ -63,7 +63,8 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C16 | polish | Catalogue: no search, three webmails, truncated copy, missing icons | [ ] |
 | C17 | polish | "Ask whoever set up this box" — Sarah *is* that person | [x] |
 | C18 | friction | Manifest descriptions still written for operators (found while fixing C4) | [ ] |
-| C19 | polish | Review lists a vhost for a profile-gated service that will not start | [ ] |
+| C19 | polish | Review lists a vhost for a profile-gated service that will not start | [x] |
+| C22 | blocker | Review listed the doubled `aurora.aurora.local` (regression from C10) | [x] |
 | C20 | friction | The SSO step links to auth.$DOMAIN before the DNS that resolves it is running | [ ] |
 | C21 | fork | Ship image digests, or a "Pin these now" action (owner's call) | [ ] |
 | D1 | polish | `Essence.md` is unreferenced and inconsistently named | [ ] |

@@ -807,6 +807,12 @@ public class OnboardingService {
       }
       for (var pkg : enabledManifests) {
         if ("core".equals(pkg.name())) continue;
+        // The dashboard IS the apex (and admin.<domain>), both already
+        // added above. Deriving a subdomain from its port description gave
+        // "aurora.aurora.local" — the doubled name the design language
+        // names as a thing that must never appear on screen. It showed up
+        // the moment `dashboard` correctly entered the enabled set.
+        if ("dashboard".equals(pkg.name())) continue;
         for (var entry : pkg.ports()) {
           Object desc = entry.get("description");
           Object portNum = entry.get("port");
@@ -814,6 +820,10 @@ public class OnboardingService {
           if (desc == null) continue;
           if (proto != null && !"tcp".equalsIgnoreCase(proto.toString())) continue;
           if (portNum instanceof Number n && NON_HTTP_PORTS.contains(n.intValue())) continue;
+          // A port declared behind a compose profile only exists if that
+          // profile is on. Listing qbittorrent.<domain> for a box that will
+          // not start qBittorrent promises an address that answers nothing.
+          if (entry.get("profile") != null) continue;
           String sub = firstWord(desc.toString()).toLowerCase();
           if (sub.isEmpty()) continue;
           if (sub.contains("http")) continue;               // "HTTP", "HTTPS" labels
