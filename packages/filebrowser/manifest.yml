@@ -1,11 +1,9 @@
 name: filebrowser
 title: Files (FileBrowser)
 description: |
-  A file manager in the browser for the shared storage pool: browse,
-  preview, rename, upload and download without reaching for Samba or
-  SSH. Useful for the "just let me look at that file from my phone"
-  case, which is the one thing a network share is bad at.
-
+  Look at the files on this box from any browser: photos, documents,
+  downloads. Upload, rename and download without setting up network drives on
+  every device.
 category: storage
 icon: filebrowser
 

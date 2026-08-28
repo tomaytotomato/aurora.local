@@ -62,7 +62,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C15 | polish | `/users` heading is unreadable against the hero image | [x] |
 | C16 | polish | Catalogue: no search, three webmails, truncated copy, missing icons | [ ] |
 | C17 | polish | "Ask whoever set up this box" — Sarah *is* that person | [x] |
-| C18 | friction | Manifest descriptions still written for operators (found while fixing C4) | [ ] |
+| C18 | friction | Manifest descriptions still written for operators (found while fixing C4) | [x] |
 | C19 | polish | Review lists a vhost for a profile-gated service that will not start | [x] |
 | C22 | blocker | Review listed the doubled `aurora.aurora.local` (regression from C10) | [x] |
 | C20 | friction | The SSO step links to auth.$DOMAIN before the DNS that resolves it is running | [x-copy] |
@@ -700,6 +700,13 @@ when C4 landed; the rest have not been.
 **Fix:** one pass over every `packages/*/manifest.yml` description: what it does
 for the household, in two or three sentences, no component names unless the
 owner would recognise them.
+
+**SHIPPED:** all 15 remaining descriptions rewritten. "Prometheus scrapes
+node_exporter (host) and cAdvisor (containers)" became "Charts for the curious:
+how hard this box is working, how much room is left, whether anything has been
+down. Nothing here is needed for the box to run well." Photos is "Your own photo
+library... the parts you would pay a subscription for elsewhere, on hardware you
+own." Component names survive only where the owner would recognise them.
 
 ### C17 · [polish] Wrong-audience copy
 Settings → App marketplace: *"Ask whoever set up this box to turn it on."* Same

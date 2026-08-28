@@ -1,10 +1,8 @@
 name: memos
 title: Notes (Memos)
 description: |
-  Memos is a lightweight, self-hosted memo/notes stream: quick capture,
-  tags, Markdown, full-text search, backed by SQLite. The lighter
-  alternative to SilverBullet.
-
+  Somewhere to put a thought in two seconds. Short notes, tags, search. The
+  simpler of the two note apps here.
 category: productivity
 icon: memos
 

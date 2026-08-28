@@ -1,12 +1,9 @@
 name: documents
 title: Documents (Paperless-ngx + Stirling-PDF)
 description: |
-  Paperless-ngx is a document management system: OCRs paper scans,
-  tags them, and gives you a searchable archive. Gotenberg + Apache
-  Tika are its office-file and content-extraction sidecars.
-  Stirling-PDF is an unrelated but complementary browser-based PDF
-  toolkit (split, merge, sign, redact, etc.).
-
+  Scan or drop in paper — bills, letters, warranties — and it reads the text,
+  files it, and makes the lot searchable. Includes tools for splitting,
+  merging and converting PDFs.
 category: productivity
 icon: paperless-ngx
 

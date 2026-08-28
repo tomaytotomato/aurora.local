@@ -1,10 +1,9 @@
 name: media
 title: Media automation (*arr + requests + downloaders)
 description: |
-  Debrid-first (RDTClient) with qBittorrent-behind-gluetun as the local
-  fallback. Sonarr/Radarr/Bazarr/Prowlarr do the automation, Seerr
-  handles requests, Flaresolverr rides shotgun on Cloudflare challenges.
-
+  Finds and downloads the films and shows you follow, keeps them named and
+  tidy, and lets the household ask for things. Feeds the media server that
+  plays them.
 category: media
 icon: prowlarr
 

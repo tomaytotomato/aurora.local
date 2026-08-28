@@ -1,11 +1,9 @@
 name: backup
 title: Backup (Kopia)
 description: |
-  Kopia is a deduplicating, encrypted backup tool with a friendly web
-  UI. Defaults to a local filesystem repository under
-  data/backup/repository; can be reconfigured to point at B2, S3, GCS,
-  Azure, SFTP or WebDAV from the UI without changing this package.
-
+  Keeps encrypted, deduplicated copies of what matters on this box, so a
+  broken drive or a bad afternoon is recoverable. Backs up to this machine by
+  default; can also send copies off-site to cloud storage.
 category: backup
 icon: kopia
 

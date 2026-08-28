@@ -1,12 +1,9 @@
 name: dev
 title: Dev sandbox (code-server + Postgres + Redis)
 description: |
-  Browser-based VS Code (code-server) plus a Postgres 16 and Redis 7
-  instance for general dev/prototyping. code-server has ~/aurora.local
-  bind-mounted at /workspace/aurora.local so you can edit this repo from
-  any browser. Postgres/Redis are reachable from other packages on
-  aurora_net at postgres:5432 and redis:6379.
-
+  A code editor in the browser, plus a database and cache to build things
+  against. For tinkering on the box itself without setting anything up on
+  your laptop.
 category: dev
 icon: dev
 
