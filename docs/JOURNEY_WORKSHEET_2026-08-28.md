@@ -31,7 +31,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | A1 | blocker | LAN detection follows the VPN route; UFW opens the wrong subnet | [x] |
 | A2 | blocker | `ansible -K` prompt breaks the documented `curl \| bash` install | [x] |
 | A3 | friction | Install log screams about secrets it is about to generate itself | [x] |
-| A4 | friction | Post-install notes are stale and terminal-first | [ ] |
+| A4 | friction | Post-install notes are stale and terminal-first | [x] |
 | A5 | polish | Ansible deprecation noise dominates the install transcript | [x] |
 | A6 | friction | No reset/uninstall path anywhere | [ ] |
 | A7 | blocker | Published image is stale vs main, and unidentifiable on the box | [ ] |
@@ -166,6 +166,14 @@ dashboard now has a Download button (commit a3c6227).
 auto-provisioned; the recovery admin is revealed in the dashboard), interpolate
 `$DOMAIN`/`$LAN_IP` before printing, and replace every script reference with the
 screen that does the job.
+
+**SHIPPED:** both core and dashboard notes rewritten — the whole block is now
+four lines pointing at the browser ("Open it and finish setup in the browser:
+http://aurora.local/ or http://192.168.0.110/ ... Nothing left to do at a
+terminal"), the removed Stalwart wizard is replaced by what actually happens
+(mail is pre-configured, recovery admin is in the dashboard), and `bootstrap.sh`
+interpolates `$DOMAIN`/`$HOSTNAME`/`$LAN_IP` before printing, so the last thing
+the installer prints is an address that can actually be typed.
 
 ### A5 · [polish] Ansible deprecation noise
 Five `INJECT_FACTS_AS_VARS` blocks with source excerpts dominate the transcript.

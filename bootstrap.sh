@@ -420,9 +420,21 @@ _run_up() {
   _up_with_docker_group "${full[@]}"
 
   log_step "post-install notes"
+  # Interpolate the handful of placeholders a note can use. These are
+  # printed on the last screen of a terminal the owner is meant never to
+  # come back to, so a literal `https://$DOMAIN/` — which is what shipped
+  # — is worse than useless: it is an address that cannot be typed.
+  local _notes_domain _notes_host _notes_ip
+  _notes_domain="$(state_get domain 2>/dev/null || echo "${DOMAIN:-aurora.local}")"
+  _notes_host="$(state_get hostname 2>/dev/null || hostname -s)"
+  _notes_ip="${LAN_IP:-$(net_detect_lan_ip)}"
+  _notes_ip="${_notes_ip:-$_notes_host.local}"
   for p in "${full[@]}"; do
     local notes; notes=$(manifest_get post_install_notes "$p")
     [[ -z "$notes" ]] && continue
+    notes="${notes//\$DOMAIN/$_notes_domain}"
+    notes="${notes//\$HOSTNAME/$_notes_host}"
+    notes="${notes//\$LAN_IP/$_notes_ip}"
     printf '\n%s---- %s ----%s\n%s\n' "$_c_blue" "$p" "$_c_reset" "$notes" >&2
   done
 
