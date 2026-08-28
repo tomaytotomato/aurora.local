@@ -121,19 +121,29 @@ recreate_running_package() {
   fi
 }
 
-# Keys a package's manifest declares under required_env are, by
-# definition, values only the owner can supply: a VPN provider's WireGuard
-# private key, an account password at some third party. Aurora cannot
-# invent those. Generating 24 random bytes for WIREGUARD_PRIVATE_KEY does
-# not produce a WireGuard key — it produces junk that looks configured,
-# destroys the "empty means you have not set this yet" signal the UI reads,
-# and (because the value changes on every run) made every single
-# `up.sh` recreate the package's containers. That is how installing an
-# unrelated app came to bounce AdGuard and drop DNS for the whole house.
+# Values that exist somewhere else and can only be copied in: a VPN
+# provider's WireGuard key, another app's API key, an account password at a
+# third party. Aurora cannot invent those. Generating 24 random bytes for
+# WIREGUARD_PRIVATE_KEY does not produce a WireGuard key — it produces junk
+# that looks configured, destroys the "empty means you have not set this
+# yet" signal the dashboard reads, and (because the value changes on every
+# run) made every single `up.sh` recreate that package's containers, which
+# is how installing an unrelated app came to bounce the LAN's DNS server.
+#
+# A package can declare these itself with `external_env:` in its manifest;
+# EXTERNAL_SECRET_PATTERN below is the fallback for packages that have not.
+#
+# NOTE: deliberately NOT `required_env`. That field means "this package
+# cannot run without a value here", which is equally true of the secrets
+# Aurora generates for itself — core lists AUTHELIA_JWT_SECRET and
+# AUTHELIA_STORAGE_ENCRYPTION_KEY there. Treating required as external left
+# those empty and Authelia crash-looped on a fresh install with
+# "option 'encryption_key' is required". Caught by a full nuke-and-reinstall,
+# which is the only test that would have.
 _owner_supplied_keys() {
   local pkg="$1"
   manifest_exists "$pkg" 2>/dev/null || return 0
-  manifest_list required_env "$pkg" 2>/dev/null || true
+  manifest_list external_env "$pkg" 2>/dev/null || true
 }
 
 FOUND=0
