@@ -54,7 +54,7 @@ export const STEPS: OnboardingStepId[] = [
 export const STEP_LABELS: Record<OnboardingStepId, string> = {
   welcome: 'Welcome',
   admin: 'Admin account',
-  domain: 'Hostname & domain',
+  domain: 'Your domain',
   dns: 'DNS story',
   tls: 'Trust the root CA',
   review: 'Review & install',

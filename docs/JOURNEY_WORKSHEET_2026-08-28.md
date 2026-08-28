@@ -37,12 +37,12 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | A7 | blocker | Published image is stale vs main, and unidentifiable on the box | [ ] |
 | B1 | blocker | "AdGuard on this box" does not install AdGuard | [x] |
 | B2 | blocker | AdGuard is never provisioned; the DNS story never completes | [x] |
-| B3 | blocker | Vue escape leak: `${'{'}DOMAIN{'}'}` rendered to the user | [ ] |
-| B4 | friction | Wrong step reference ("trust the new TLS root (step 7)") | [ ] |
+| B3 | blocker | Vue escape leak: `${'{'}DOMAIN{'}'}` rendered to the user | [x] |
+| B4 | friction | Wrong step reference ("trust the new TLS root (step 7)") | [x] |
 | B5 | friction | Step 7 (SSO) is silently skipped; 6 and 7 never tick | [ ] |
 | B6 | blocker | "Password recovery" is promised in copy, unimplemented in fact | [ ] |
 | B7 | friction | Done step hands out `http://` right after the TLS-trust step | [ ] |
-| B8 | polish | "Hostname & domain" step never lets you set the hostname | [ ] |
+| B8 | polish | "Hostname & domain" step never lets you set the hostname | [x] |
 | B9 | polish | Welcome CPU string truncated mid-token | [ ] |
 | C1 | blocker | `<service>.aurora.local` does not resolve on Linux/Android clients | [ ] |
 | C2 | blocker | 2FA-gated apps are unreachable: enrolment codes land in a server file | [ ] |
@@ -278,6 +278,9 @@ Same card: *"You'll need to trust the new TLS root (step 7)."* Trust the root CA
 is **step 5**; step 7 is SSO. **Fix:** derive the number from the step list, or
 link the step instead of numbering it.
 
+**SHIPPED:** the line now names the step from `STEP_LABELS` ("on the *Trust the
+root CA* step") instead of hardcoding an index that was already two out of date.
+
 ### B5 · [friction] Step 7 is silently skipped and steps never tick
 Clicking Install jumps from 6 → 8 ("You're set", *Step 8 of 8*) while the
 sidebar leaves **6 Review & install** and **7 Set up SSO** unchecked. Either SSO
@@ -314,6 +317,10 @@ say which one to bookmark.
 Sidebar says "Hostname & domain"; the page is titled "Pick your domain" and only
 has a domain field. **Fix:** rename the step to "Domain", or let the hostname be
 edited there.
+
+**SHIPPED:** renamed to "Your domain". The hostname is a host-level fact
+(`hostname -s`, set before Aurora exists) and the wizard has no business
+pretending otherwise.
 
 ### B9 · [polish] Truncated CPU string on Welcome
 `Intel(R) Core(T…` — one line, hard-truncated. **Fix:** normalise the model
