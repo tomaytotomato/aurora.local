@@ -153,13 +153,22 @@ public class LaunchService {
     this(props, audit, packages, currentUser, commands, null);
   }
 
-  @Autowired
+  /**
+   * Test-only overload. NOT annotated: Spring must choose the constructor
+   * below, the one that receives the provisioner. When @Autowired sat here
+   * instead, production wiring passed null for it and the AdGuard
+   * provisioning added in B2 silently never ran on the wizard's own launch
+   * path — the box came up with an unconfigured AdGuard and no DNS, exactly
+   * the failure B2 was supposed to end. A compatibility shim that disables
+   * a feature in production is worse than no shim.
+   */
   public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
                        com.tomaytotomato.aurora.services.CurrentUserService currentUser,
                        CommandRunner commands, Converger converger) {
     this(props, audit, packages, currentUser, commands, converger, null);
   }
 
+  @Autowired
   public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
                        com.tomaytotomato.aurora.services.CurrentUserService currentUser,
                        CommandRunner commands, Converger converger,

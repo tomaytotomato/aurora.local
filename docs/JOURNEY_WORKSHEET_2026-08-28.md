@@ -65,6 +65,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C18 | friction | Manifest descriptions still written for operators (found while fixing C4) | [x] |
 | C19 | polish | Review lists a vhost for a profile-gated service that will not start | [x] |
 | C22 | blocker | Review listed the doubled `aurora.aurora.local` (regression from C10) | [x] |
+| C23 | blocker | The wizard's own launch path skipped AdGuard provisioning entirely | [x] |
 | C20 | friction | The SSO step links to auth.$DOMAIN before the DNS that resolves it is running | [x-copy] |
 | C21 | fork | Ship image digests, or a "Pin these now" action (owner's call) | [ ] |
 | D1 | polish | `Essence.md` is unreferenced and inconsistently named | [x] |
@@ -728,6 +729,34 @@ pattern as B6. **Fix:** sweep the frontend for "ask whoever" / "whoever set this
 box up" and address the reader as the owner.
 
 ---
+
+### C23 · [blocker] The wizard's launch path skipped the provisioning B2 added
+Found by the fourth nuke-and-reinstall, on a box where every test was green:
+`data/adguard/conf/` root-owned and empty, `dig @192.168.0.110` refused. B2's
+provisioning worked through `scripts/up.sh` and never ran through the path the
+first-run wizard actually uses.
+
+Two causes, both mine:
+1. `@Autowired` sat on `LaunchService`'s backwards-compatible constructor, the
+   one that passes `null` for `AdguardProvisionService`. Every test passed
+   because tests construct the full one; production wired the shim. **A
+   compatibility shim that disables a feature in production only is worse than
+   no shim.**
+2. `ComposeConvergeService` — the in-container bring-up the wizard calls — did
+   `ensureNetwork` + `seedEnvFiles` + secrets, but none of `up.sh`'s rendering.
+   So Docker created `data/adguard/*` as **root** before anything could write
+   config into it.
+
+**SHIPPED:** `@Autowired` moved to the constructor that carries the provisioner;
+`ensureDataDirs` added to the converger, mirroring `render_data_dirs`. Three
+tests: one asserts by reflection that the wired constructor takes
+`AdguardProvisionService` (that is the test that would have caught it), two cover
+data-dir creation and never touching an existing directory.
+
+**Proved on a clean box:** reset → `bootstrap.sh install` → wizard API through
+admin/domain/dns/install/launch → `adguard provision: wrote ... (admin=sarah,
+*.aurora.local -> 192.168.0.110)`, `dig @192.168.0.110 photos.aurora.local` →
+`192.168.0.110`, and AdGuard's own login accepts the Aurora password (200).
 
 ## D · Repo and docs
 

@@ -56,6 +56,51 @@ class ComposeConvergeServiceTests {
   }
 
   @Nested
+  class DataDirectoryPreparation {
+
+    /**
+     * Docker creates a missing bind-mount source as root. Once that has
+     * happened nothing running as the aurora user can write into it — which
+     * is how the wizard's own launch produced an AdGuard with no config and
+     * a box with no DNS, while the same bring-up through scripts/up.sh
+     * worked. up.sh had learned this; this path had not.
+     */
+    @Test
+    void createsEveryBindMountedDataDirBeforeComposeRuns(@TempDir Path repo) throws IOException {
+      Path dir = repo.resolve("packages").resolve("privacy");
+      Files.createDirectories(dir);
+      Files.writeString(dir.resolve("compose.yml"),
+          "services:\n  adguard:\n    volumes:\n"
+              + "      - ../../data/adguard/work:/opt/adguardhome/work\n"
+              + "      - ../../data/adguard/conf:/opt/adguardhome/conf\n"
+              + "      - ../../data/gluetun:/gluetun\n");
+      var svc = service(repo, new FakeCommandRunner());
+
+      svc.ensureDataDirs(List.of("privacy"), line -> { });
+
+      assertThat(repo.resolve("data/adguard/work")).exists();
+      assertThat(repo.resolve("data/adguard/conf")).exists();
+      assertThat(repo.resolve("data/gluetun")).exists();
+    }
+
+    @Test
+    void neverTouchesADirectoryThatAlreadyExists(@TempDir Path repo) throws IOException {
+      Path dir = repo.resolve("packages").resolve("privacy");
+      Files.createDirectories(dir);
+      Files.writeString(dir.resolve("compose.yml"),
+          "services:\n  adguard:\n    volumes:\n      - ../../data/adguard/conf:/conf\n");
+      Path existing = repo.resolve("data/adguard/conf");
+      Files.createDirectories(existing);
+      Files.writeString(existing.resolve("AdGuardHome.yaml"), "# the owner's config\n");
+      var svc = service(repo, new FakeCommandRunner());
+
+      svc.ensureDataDirs(List.of("privacy"), line -> { });
+
+      assertThat(existing.resolve("AdGuardHome.yaml")).content().isEqualTo("# the owner's config\n");
+    }
+  }
+
+  @Nested
   class ComposeFileAssembly {
 
     @Test
