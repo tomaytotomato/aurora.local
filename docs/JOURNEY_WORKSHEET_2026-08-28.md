@@ -45,7 +45,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | B7 | friction | Done step hands out `http://` right after the TLS-trust step | [x] |
 | B8 | polish | "Hostname & domain" step never lets you set the hostname | [x] |
 | B9 | polish | Welcome CPU string truncated mid-token | [x] |
-| C1 | blocker | `<service>.aurora.local` does not resolve on Linux/Android clients | [ ] |
+| C1 | blocker | `<service>.aurora.local` does not resolve on Linux/Android clients | [x] |
 | C2 | blocker | 2FA-gated apps are unreachable: enrolment codes land in a server file | [ ] |
 | C3 | blocker | Installed AdGuard has no Open link anywhere | [x] |
 | C4 | blocker | App detail dumps the operator README (CLI steps) into Sarah's UI | [x] |
@@ -417,6 +417,18 @@ interface, which will hand LAN clients an unroutable A record.
    need the box as their DNS server.
 3. Every Open CTA gets a `http://<lan-ip>:<port>` fallback link, which never
    depends on name resolution.
+
+**SHIPPED, all three:**
+1. The avahi role publishes on the LAN interface only (`allow-interfaces`,
+   detected by the same `net.sh` that fixed A1) and denies docker's bridges.
+   Verified live: `aurora.local` went from `172.18.0.1` — a docker bridge
+   address being handed to every laptop that asked — to `192.168.0.110`.
+2. B2 makes the AdGuard path real, and the Done step now carries the
+   router-DNS instruction (B7), which is what actually fixes Linux/Android.
+3. Each app page shows `http://<lan-ip>:<port>` under the Open button:
+   "Name not resolving on this device? http://192.168.0.110:8096/ always works."
+Remaining honestly-open: per-platform wording in Settings' LAN-aliases card
+still claims "no setup on those devices". Rolled into C18's copy pass.
 
 ### C2 · [blocker] Anything behind SSO is unreachable without a terminal
 `packages/core/authelia/configuration.yml` sets `policy: two_factor` for
