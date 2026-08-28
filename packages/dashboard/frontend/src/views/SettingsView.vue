@@ -5,6 +5,7 @@ import { useSystemStore } from '@/stores/system';
 import { AuditApi, type AuditEvent } from '@/api/audit';
 import { MdnsApi, type MdnsAlias } from '@/api/mdns';
 import { humanCopyForError } from '@/lib/http-error-copy';
+import { auditActionText } from '@/lib/eventCopy';
 import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
@@ -412,7 +413,7 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           launching a package appear here.
         </div>
 
-        <Table v-else data-test="audit-list" class="font-mono text-xs">
+        <Table v-else data-test="audit-list" class="text-xs">
           <TableHeader>
             <TableRow class="hover:bg-transparent">
               <TableHead class="w-40">Time</TableHead>
@@ -422,8 +423,12 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           </TableHeader>
           <TableBody>
             <TableRow v-for="e in auditEvents" :key="e.id">
-              <TableCell class="text-muted-foreground whitespace-nowrap align-baseline">{{ formatAuditTs(e.ts) }}</TableCell>
-              <TableCell class="text-foreground align-baseline">{{ e.action }}</TableCell>
+              <TableCell class="text-muted-foreground whitespace-nowrap align-baseline font-mono">{{ formatAuditTs(e.ts) }}</TableCell>
+              <!-- Was the raw key: mdns.alias.publish, job.finish,
+                   stalwart.secrets.bootstrap. True, and addressed to
+                   whoever wrote the code. The key stays in the title
+                   attribute for anyone debugging. -->
+              <TableCell class="text-foreground align-baseline" :title="e.action">{{ auditActionText(e.action) }}</TableCell>
               <TableCell class="text-muted-foreground truncate align-baseline">
                 <span v-if="e.user_id !== null" class="text-muted-foreground">user #{{ e.user_id }} · </span>
                 {{ e.target ?? '' }}

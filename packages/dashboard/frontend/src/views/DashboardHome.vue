@@ -16,6 +16,8 @@ import {
   type BackupStatus,
 } from '@/api/backup';
 import { humanCopyForError } from '@/lib/http-error-copy';
+import { seriesWindowLabel } from '@/lib/seriesWindow';
+import { containerEventText } from '@/lib/eventCopy';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import Badge from '@/components/ui/Badge.vue';
@@ -391,6 +393,8 @@ const metricErr = ref<string | null>(null);
 // Kept as its own ref so switching the picker doesn't overwrite the pill's
 // context and vice versa.
 const cpuSpark = ref<{ ts: number[]; values: number[] }>({ ts: [], values: [] });
+const sparkWindowLabel = computed(() => seriesWindowLabel(cpuSpark.value.ts));
+const metricWindowLabel = computed(() => seriesWindowLabel(metricSeries.value.ts));
 const cpuSparkLatest = computed<number | null>(() => {
   const v = cpuSpark.value.values;
   return v.length > 0 ? v[v.length - 1] : null;
@@ -470,7 +474,7 @@ function pickMetric(key: string): void {
       <Card class="col-span-3 row-span-2 p-8" data-card="system">
         <h3 class="card-title mb-1">System</h3>
         <p class="card-subtitle font-mono mb-4" data-test="uptime">
-          Resources · uptime {{ uptimeText }}
+          Resources · this box has been on for {{ uptimeText }}
         </p>
 
         <!-- iter-3 P1a: reach-info banner. Renders the mDNS host + LAN IP
@@ -544,7 +548,7 @@ function pickMetric(key: string): void {
             data-test="system-cpu-sparkline"
           >
             <div class="flex items-center justify-between text-xs mb-1">
-              <span class="text-muted-foreground">CPU last 24h</span>
+              <span class="text-muted-foreground">CPU {{ sparkWindowLabel }}</span>
               <span class="font-mono text-muted-foreground">
                 {{ cpuSparkLatest === null ? '\u2014' : cpuSparkLatest.toFixed(1) + '%' }}
               </span>
@@ -576,21 +580,23 @@ function pickMetric(key: string): void {
           <p class="text-sm text-foreground">Nothing has changed recently.</p>
           <p class="text-muted-foreground text-xs">Container starts and stops will show up here.</p>
         </div>
-        <ul v-else class="space-y-2 text-xs font-mono" data-test="recent-changes-list">
+        <ul v-else class="space-y-2 text-xs" data-test="recent-changes-list">
           <li
             v-for="e in recentEvents"
             :key="e.ts + '|' + e.container + '|' + e.action"
             class="flex items-center gap-2"
           >
-            <span class="text-muted-foreground">{{ new Date(e.ts).toLocaleTimeString() }}</span>
-            <span class="text-foreground">{{ e.action }}</span>
-            <!-- B3 (iter-12): row-click drill into log tail. router-link
+            <span class="text-muted-foreground font-mono">{{ new Date(e.ts).toLocaleTimeString() }}</span>
+            <!-- Was `{{ e.action }} {{ e.container }}`, i.e. "health:healthy
+                 stalwart" — the docker event stream's own vocabulary, shown
+                 to someone who has never heard of a health probe. B3
+                 (iter-12): row-click drill into log tail; the router-link
                  stays inline so keyboard tab order + focus ring behave. -->
             <router-link
               :to="`/containers/${encodeURIComponent(e.container)}/logs`"
               class="text-foreground no-underline hover:underline"
               data-test="recent-changes-log-link"
-            >{{ e.container }}</router-link>
+            >{{ containerEventText(e.action, e.container) }}</router-link>
           </li>
         </ul>
       </Card>
@@ -766,7 +772,7 @@ function pickMetric(key: string): void {
           <div>
             <h3 class="card-title mb-1">Metrics</h3>
             <p v-if="!metricsCapable" class="card-subtitle">Charts land next release.</p>
-            <p v-else class="card-subtitle">{{ selectedMetric.label }} · last 24 hours</p>
+            <p v-else class="card-subtitle">{{ selectedMetric.label }} · {{ metricWindowLabel }}</p>
           </div>
           <div v-if="metricsCapable" class="flex items-center gap-2">
             <label for="metric-picker" class="sr-only">Metric</label>

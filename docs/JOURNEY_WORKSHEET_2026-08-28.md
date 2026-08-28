@@ -57,8 +57,8 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C10 | friction | `.state.yml` drops `dashboard` after the first in-app install | [x] |
 | C11 | friction | Settings claims it can't read the TLS root; the API serves it fine | [x] |
 | C12 | friction | TLS card: unexpanded `$DOMAIN`, Linux steps miss the browser store | [~] |
-| C13 | polish | "last 24 hours" metrics and 4-day uptime on a 20-minute-old box | [ ] |
-| C14 | polish | Activity feeds show raw event keys | [ ] |
+| C13 | polish | "last 24 hours" metrics and 4-day uptime on a 20-minute-old box | [x] |
+| C14 | polish | Activity feeds show raw event keys | [x] |
 | C15 | polish | `/users` heading is unreadable against the hero image | [ ] |
 | C16 | polish | Catalogue: no search, three webmails, truncated copy, missing icons | [ ] |
 | C17 | polish | "Ask whoever set up this box" — Sarah *is* that person | [ ] |
@@ -617,6 +617,13 @@ uptime) on a fresh install. **Fix:** label the window by what exists
 `stalwart.secrets.bootstrap`, `health:healthy stalwart`. **Fix:** a
 key → sentence map ("Published jellyfin.aurora.local on the network"), with the
 raw key behind a details toggle.
+
+**SHIPPED:** `lib/eventCopy.ts` with two maps and 5 tests — container events read
+"stalwart is healthy", "adguard started", "jellyfin stopped responding"; audit
+rows read "Published an address on the network", "Set up the mail server",
+"Finished first-run setup". Unknown keys are made readable rather than hidden
+(dropping a real event would be the worse failure), and the raw key stays in the
+row's `title` for anyone debugging.
 
 ### C15 · [polish] `/users` heading contrast
 The "Users" H1 and its "ACCESS" eyebrow sit on the dark aurora hero and are
