@@ -107,6 +107,8 @@ public class LaunchService {
    * which stage a fake {@code up.sh} and exercise the fallback below.
    */
   private final Converger converger;
+  /** Nullable: unit tests that stage a fake up.sh construct without it. */
+  private final AdguardProvisionService adguard;
 
   private final Map<String, Job> jobs = new ConcurrentHashMap<>();
   private final AtomicReference<String> activeJobId = new AtomicReference<>(null);
@@ -155,12 +157,20 @@ public class LaunchService {
   public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
                        com.tomaytotomato.aurora.services.CurrentUserService currentUser,
                        CommandRunner commands, Converger converger) {
+    this(props, audit, packages, currentUser, commands, converger, null);
+  }
+
+  public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
+                       com.tomaytotomato.aurora.services.CurrentUserService currentUser,
+                       CommandRunner commands, Converger converger,
+                       AdguardProvisionService adguard) {
     this.props = props;
     this.audit = audit;
     this.packages = packages;
     this.currentUser = currentUser;
     this.commands = commands;
     this.converger = converger;
+    this.adguard = adguard;
     // Fires every 15s. Cheap; iterates active job's emitters only.
     heartbeat.scheduleAtFixedRate(this::sendHeartbeats, 15, 15, TimeUnit.SECONDS);
   }
@@ -183,6 +193,15 @@ public class LaunchService {
       if (existing != null && existing.state == State.RUNNING) {
         throw new LaunchInProgressException(current);
       }
+    }
+
+    // Config that has to exist before a container's first start, or the
+    // service comes up in its own setup wizard instead of the state the
+    // wizard promised. Today that is AdGuard: an unprovisioned AdGuard does
+    // not answer DNS at all, so the "AdGuard on this box" story would be a
+    // dead letter on the finished box. Idempotent and non-fatal.
+    if (adguard != null && enabledPackages.contains("privacy")) {
+      adguard.provisionIfAbsent();
     }
 
     String id = UUID.randomUUID().toString();

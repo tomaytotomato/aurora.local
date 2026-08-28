@@ -101,13 +101,16 @@ public class PackageLifecycleService {
   private final StateFileService stateFiles;
   private final JobService jobs;
   private final CommandRunner commands;
+  private final AdguardProvisionService adguard;
 
   public PackageLifecycleService(PackagesService packages, StateFileService stateFiles,
-                                 JobService jobs, CommandRunner commands) {
+                                 JobService jobs, CommandRunner commands,
+                                 AdguardProvisionService adguard) {
     this.packages = packages;
     this.stateFiles = stateFiles;
     this.jobs = jobs;
     this.commands = commands;
+    this.adguard = adguard;
   }
 
   /**
@@ -122,6 +125,16 @@ public class PackageLifecycleService {
     }
 
     List<String> newEnabled = mergeEnabled(name);
+
+    // Some packages need their config written before their container's
+    // first start, or they come up in their own setup wizard and the
+    // promise Aurora made on the user's behalf never lands. AdGuard is the
+    // one that matters today: without this it starts with an empty conf/
+    // and does not answer DNS at all. Idempotent and non-fatal.
+    if ("privacy".equals(name) && adguard != null) {
+      adguard.provisionIfAbsent();
+    }
+
     List<String> argv = new ArrayList<>();
     argv.add("bash");
     argv.add("scripts/up.sh");
