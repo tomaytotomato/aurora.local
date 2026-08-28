@@ -393,6 +393,44 @@ paths:
         '400': { description: Body missing, blank, or shorter than 12 chars. }
         '401': { description: Not signed in. }
         '403': { description: Signed in but not an admin. }
+  /services/stalwart/mailboxes:
+    post:
+      tags: [services]
+      summary: Create a mailbox on the box's mail domain
+      description: >-
+        Create a mailbox localPart@<box-domain> on Stalwart via its JMAP
+        management API. Aurora provisions the mail domain automatically on
+        boot (StalwartProvisionService), so a fresh box needs no setup
+        wizard; this is the one genuinely per-operator step because a
+        mailbox needs a password. Aurora GENERATES a strong password and
+        returns it once (never stored in plaintext, cannot be shown again),
+        matching the admin-password reset pattern. Admin-only. Ensures the
+        domain exists first (idempotent).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [localPart]
+              properties:
+                localPart:
+                  type: string
+                  maxLength: 64
+                  description: >-
+                    The part before the @. The domain is the box's own, and
+                    the address is derived as localPart@<box-domain>.
+      responses:
+        '201':
+          description: Mailbox created; password shown once.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MailboxCreated' }
+        '400': { description: Missing or malformed local part. }
+        '401': { description: Not signed in. }
+        '403': { description: Signed in but not an admin. }
+        '409': { description: Mailbox already exists, or the password was refused. }
+        '502': { description: The mail server is not reachable. }
 
   # ───────────────────────────── packages ─────────────────────────────
   /packages:
@@ -3480,3 +3518,16 @@ components:
             packages/core/.env. DEFAULT means the .env line is missing
             or blank and Stalwart is running with the compose fallback
             (aurora-change-me), which is public knowledge.
+    MailboxCreated:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          description: The created address, localPart@<box-domain>.
+        password:
+          type: string
+          description: >-
+            The generated password, shown ONCE. Aurora never stores it in
+            plaintext and cannot show it again — the operator must copy it
+            now. Same one-time-reveal contract as the admin-password reset.

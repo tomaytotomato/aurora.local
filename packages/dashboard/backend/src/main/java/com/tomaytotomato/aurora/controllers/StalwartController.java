@@ -1,12 +1,18 @@
 package com.tomaytotomato.aurora.controllers;
 
 import com.tomaytotomato.aurora.domain.Role;
+import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.services.CurrentUserService;
+import com.tomaytotomato.aurora.services.PasswordGenerator;
 import com.tomaytotomato.aurora.services.StalwartAdminService;
 import com.tomaytotomato.aurora.services.StalwartAdminService.AdminCredential;
+import com.tomaytotomato.aurora.services.StalwartMailClient;
+import com.tomaytotomato.aurora.services.StalwartMailClient.StalwartApiException;
+import com.tomaytotomato.aurora.services.StalwartProvisionService;
 import com.tomaytotomato.aurora.services.StalwartSecretsService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import org.slf4j.Logger;
@@ -14,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -54,13 +61,22 @@ public class StalwartController {
   private final StalwartAdminService stalwart;
   private final StalwartSecretsService secrets;
   private final CurrentUserService currentUser;
+  private final StalwartMailClient mail;
+  private final StalwartProvisionService provision;
+  private final AuditEventRepo audit;
 
   public StalwartController(StalwartAdminService stalwart,
                             StalwartSecretsService secrets,
-                            CurrentUserService currentUser) {
+                            CurrentUserService currentUser,
+                            StalwartMailClient mail,
+                            StalwartProvisionService provision,
+                            AuditEventRepo audit) {
     this.stalwart = stalwart;
     this.secrets = secrets;
     this.currentUser = currentUser;
+    this.mail = mail;
+    this.provision = provision;
+    this.audit = audit;
   }
 
   /**
@@ -112,6 +128,59 @@ public class StalwartController {
    * that "changeme" is refused up front.
    */
   public record UpdateReq(@NotBlank @Size(min = 12) String secret) {}
+
+  /**
+   * Create the first (or another) mailbox on the box's mail domain.
+   * Aurora provisions the domain automatically
+   * ({@link StalwartProvisionService}); this is the one genuinely
+   * per-operator step — a mailbox needs a password. Aurora generates a
+   * strong one and returns it <em>once</em> (the same pattern as the
+   * admin-password reset), because it is never stored in plaintext and
+   * cannot be shown again.
+   *
+   * <p>Ensures the domain exists first (idempotent), then creates
+   * {@code localPart@domain}. 409 when the mailbox already exists or the
+   * password is refused as weak (Stalwart's own check); 502 when Stalwart
+   * is unreachable.
+   */
+  @PostMapping("/mailboxes")
+  public ResponseEntity<MailboxCreated> createMailbox(@Valid @RequestBody CreateMailboxReq req) {
+    Long acting = requireAdmin();
+    String domain = provision.mailDomain();
+    String password = PasswordGenerator.generate();
+    try {
+      mail.ensureDomain(domain);
+      String id = mail.createMailbox(req.localPart(), domain, password);
+      audit.record(acting, "stalwart.mailbox.create",
+          req.localPart() + "@" + domain, "{\"id\":\"" + id + "\"}");
+      return ResponseEntity.status(HttpStatus.CREATED)
+          .body(new MailboxCreated(req.localPart() + "@" + domain, password));
+    } catch (StalwartApiException e) {
+      String msg = e.getMessage() == null ? "" : e.getMessage();
+      if (msg.contains("unreachable") || msg.contains("JMAP request failed")
+          || msg.contains("JMAP HTTP")) {
+        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+            "the mail server is not reachable right now");
+      }
+      // Already exists, or a weak password Stalwart refused.
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "could not create that mailbox — it may already exist");
+    }
+  }
+
+  /**
+   * Request for {@link #createMailbox(CreateMailboxReq)}. Only the local
+   * part — the domain is the box's own, and the password is generated so
+   * it is strong enough to pass Stalwart's own strength check.
+   */
+  public record CreateMailboxReq(
+      @NotBlank @Size(max = 64)
+      @Pattern(regexp = "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+          message = "use lowercase letters, numbers, dot, dash or underscore")
+      String localPart) {}
+
+  /** The created address and its one-time password. */
+  public record MailboxCreated(String email, String password) {}
 
   private Long requireAdmin() {
     var role = currentUser.currentRole();

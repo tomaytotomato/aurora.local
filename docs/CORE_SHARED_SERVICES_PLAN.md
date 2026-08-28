@@ -30,11 +30,29 @@
 
 ### Remaining manual step (tracked, not yet automated)
 
-On a *fresh* box Stalwart boots configured (no wizard) but its mail DB is
-empty — no domain, no mailboxes. That is genuine per-box data. Creating the
-first domain + mailbox via Stalwart's management API from the dashboard is
-a candidate follow-up; today it is the one documented action, done with
-the recovery admin.
+DONE (2026-08-28). Stalwart domain + mailbox provisioning is now automated:
+
+- **`StalwartMailClient`** — a tested client for Stalwart's JMAP management
+  API (v0.16 moved principal management to JMAP). Object shapes verified
+  against a live v0.16.19: `x:Domain/set` create, `x:Account/set` create
+  with a `credentials` MAP (not array). Basic-auth with the recovery admin.
+- **`StalwartProvisionService`** — on boot + a 10-min reconcile, ensures the
+  box's own mail domain (from `.state.yml`) exists in Stalwart. Idempotent,
+  fail-closed. So a fresh box comes up with its mail domain configured, no
+  wizard and no manual domain step.
+- **`POST /api/services/stalwart/mailboxes`** — admin-only; creates a
+  mailbox on the box domain with a GENERATED strong password returned once
+  (same one-time-reveal as the admin-password reset). 409 on duplicate,
+  400 on a bad local part, 502 when Stalwart is unreachable.
+- **Verified live end-to-end:** dashboard boot auto-confirmed the domain;
+  `POST /mailboxes` created `hello@aurora.local`, which then authenticated
+  against the real mail server (JMAP 200), rejected a wrong password (401),
+  and was audited. 18 new tests; 954 backend total, all green.
+
+Mailboxes are the one thing that still needs an operator click (they carry
+a password), but that click is now one dashboard action, not an SSH + admin
+console + wizard. A frontend surface for it (a "Create mailbox" panel on
+the Stalwart core-service page) is a small follow-up.
 
 ## The vision, in Bruce's words
 

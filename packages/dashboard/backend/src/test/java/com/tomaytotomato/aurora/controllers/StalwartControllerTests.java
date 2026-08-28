@@ -6,6 +6,8 @@ import com.tomaytotomato.aurora.services.StalwartAdminService;
 import com.tomaytotomato.aurora.services.StalwartAdminService.AdminCredential;
 import com.tomaytotomato.aurora.services.StalwartAdminService.Source;
 import com.tomaytotomato.aurora.services.StalwartSecretsService;
+import com.tomaytotomato.aurora.services.StalwartMailClient;
+import com.tomaytotomato.aurora.services.StalwartProvisionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,6 +21,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -46,6 +49,9 @@ class StalwartControllerTests {
   private CurrentUserService currentUser;
   private StalwartAdminService stalwart;
   private StalwartSecretsService secrets;
+  private StalwartMailClient mail;
+  private StalwartProvisionService provision;
+  private com.tomaytotomato.aurora.persistence.AuditEventRepo audit;
   private MockMvc mvc;
 
   @BeforeEach
@@ -53,7 +59,10 @@ class StalwartControllerTests {
     currentUser = Mockito.mock(CurrentUserService.class);
     stalwart = Mockito.mock(StalwartAdminService.class);
     secrets = Mockito.mock(StalwartSecretsService.class);
-    StalwartController ctrl = new StalwartController(stalwart, secrets, currentUser);
+    mail = Mockito.mock(StalwartMailClient.class);
+    provision = Mockito.mock(StalwartProvisionService.class);
+    audit = Mockito.mock(com.tomaytotomato.aurora.persistence.AuditEventRepo.class);
+    StalwartController ctrl = new StalwartController(stalwart, secrets, currentUser, mail, provision, audit);
     mvc = MockMvcBuilders.standaloneSetup(ctrl).build();
   }
 
@@ -206,5 +215,70 @@ class StalwartControllerTests {
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"secret\":\"brand-new-strong-value\"}"))
         .andExpect(status().isInternalServerError());
+  }
+
+  // ─── POST /mailboxes ──────────────────────────────────────
+
+  @Test
+  void create_mailbox_requires_admin() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.USER));
+    mvc.perform(post("/api/services/stalwart/mailboxes")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"localPart\":\"bruce\"}"))
+        .andExpect(status().isForbidden());
+    Mockito.verifyNoInteractions(mail);
+  }
+
+  @Test
+  void create_mailbox_returns_the_address_and_a_one_time_password() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(1L));
+    Mockito.when(provision.mailDomain()).thenReturn("aurora.local");
+    Mockito.when(mail.createMailbox(Mockito.eq("bruce"), Mockito.eq("aurora.local"), Mockito.anyString()))
+        .thenReturn("acct-id");
+
+    mvc.perform(post("/api/services/stalwart/mailboxes")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"localPart\":\"bruce\"}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.email").value("bruce@aurora.local"))
+        .andExpect(jsonPath("$.password").isNotEmpty());
+    Mockito.verify(mail).ensureDomain("aurora.local");
+  }
+
+  @Test
+  void create_mailbox_rejects_a_bad_local_part() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(1L));
+    mvc.perform(post("/api/services/stalwart/mailboxes")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"localPart\":\"Not Valid!\"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void create_mailbox_maps_stalwart_unreachable_to_502() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(1L));
+    Mockito.when(provision.mailDomain()).thenReturn("aurora.local");
+    Mockito.doThrow(new StalwartMailClient.StalwartApiException("JMAP request failed: connection refused"))
+        .when(mail).ensureDomain("aurora.local");
+    mvc.perform(post("/api/services/stalwart/mailboxes")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"localPart\":\"bruce\"}"))
+        .andExpect(status().isBadGateway());
+  }
+
+  @Test
+  void create_mailbox_maps_already_exists_to_409() throws Exception {
+    Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));
+    Mockito.when(currentUser.currentUserId()).thenReturn(Optional.of(1L));
+    Mockito.when(provision.mailDomain()).thenReturn("aurora.local");
+    Mockito.when(mail.createMailbox(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
+        .thenThrow(new StalwartMailClient.StalwartApiException("could not create mailbox: primaryKeyViolation"));
+    mvc.perform(post("/api/services/stalwart/mailboxes")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"localPart\":\"bruce\"}"))
+        .andExpect(status().isConflict());
   }
 }
