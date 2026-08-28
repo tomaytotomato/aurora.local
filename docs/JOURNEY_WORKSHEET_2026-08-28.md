@@ -46,7 +46,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | B8 | polish | "Hostname & domain" step never lets you set the hostname | [x] |
 | B9 | polish | Welcome CPU string truncated mid-token | [x] |
 | C1 | blocker | `<service>.aurora.local` does not resolve on Linux/Android clients | [x] |
-| C2 | blocker | 2FA-gated apps are unreachable: enrolment codes land in a server file | [ ] |
+| C2 | blocker | 2FA-gated apps are unreachable: enrolment codes land in a server file | [x] |
 | C3 | blocker | Installed AdGuard has no Open link anywhere | [x] |
 | C4 | blocker | App detail dumps the operator README (CLI steps) into Sarah's UI | [x] |
 | C5 | blocker | Config card renders raw `.env` comment art and env var names | [x] |
@@ -468,6 +468,29 @@ file as the source), **and/or** point the notifier at the core Stalwart SMTP now
 that every Aurora user gets a mailbox, **and** add a "Set up your second factor"
 card to the Done step / Overview attention strip so enrolment happens before the
 first gated app is installed.
+
+**SHIPPED — two fixes, both needed.** The machinery to surface the enrolment
+link already existed (`SsoEnrollmentService`, the wizard's SSO step). It was
+unreachable for two independent reasons, and either alone was fatal:
+1. **The step was skipped.** `OnboardingReview` pushed straight to
+   `/onboarding/done`, so the wizard went 6 → 8 and the operator never saw it
+   (B5).
+2. **The step could not work when reached.** It read Authelia's enrolment state
+   from `data/authelia/db.sqlite3`, a file that stopped existing when Authelia
+   moved to the shared Postgres — and an unreadable database is (correctly)
+   reported as "Authelia is not up yet", so the step sat on "Waiting for the SSO
+   service to finish starting" forever. Counts now come from
+   `docker exec core-db psql`; the SQLite path remains for pre-migration boxes.
+Verified live on a clean box: `/api/onboarding/sso` returns `autheliaUp: true`
+and the step renders its instructions and pending-link panel.
+
+**Bookkeeping note:** this row sat unticked for several iterations after the fix
+shipped — the scoreboard edit that should have ticked it was a no-op string
+replace and nobody checked. Fixed here, with the evidence above.
+
+**Still open (C20, product fork):** the step sends the operator to
+`https://auth.<domain>` on the second-to-last screen, before the DNS that
+resolves it exists. The copy now says so; reordering the wizard is the real fix.
 
 ### C3 · [blocker] Installed AdGuard has nowhere to click
 After installing `privacy`, the detail page shows `vhosts: none`, no Open CTA,
