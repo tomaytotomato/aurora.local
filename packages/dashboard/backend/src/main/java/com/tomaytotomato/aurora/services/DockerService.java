@@ -365,11 +365,32 @@ public class DockerService {
    * request thread.
    */
   public Optional<byte[]> readFileFromContainer(String containerName, String path) {
+    return execCapture(containerName, "cat", path).map(r -> r.stdout());
+  }
+
+  /** stdout/stderr/exit of one {@code docker exec}. */
+  public record ExecResult(byte[] stdout, String stderr, long exitCode) {}
+
+  /**
+   * Run a command inside a running container and capture its output.
+   *
+   * <p>Generalised out of {@link #readFileFromContainer}, which was the
+   * only caller until Authelia's storage moved from SQLite to the shared
+   * core-db: enrolment counts now have to come from Postgres, and shelling
+   * into the database container with {@code psql} keeps that a read-only
+   * query over the same docker socket Aurora already holds rather than
+   * adding a JDBC driver and a second set of credentials to keep in sync.
+   *
+   * <p>Returns empty when the container is not running, the exec cannot be
+   * created, or the command exits non-zero — every caller here is a
+   * best-effort read whose failure mode is an honest empty state.
+   */
+  public Optional<ExecResult> execCapture(String containerName, String... cmd) {
     try {
       String execId = docker.execCreateCmd(containerName)
           .withAttachStdout(true)
           .withAttachStderr(true)
-          .withCmd("cat", path)
+          .withCmd(cmd)
           .exec()
           .getId();
 
@@ -393,13 +414,13 @@ public class DockerService {
 
       Long exit = docker.inspectExecCmd(execId).exec().getExitCodeLong();
       if (exit == null || exit != 0L) {
-        log.warn("exec cat {} in {} exited {}: {}", path, containerName, exit,
+        log.warn("exec {} in {} exited {}: {}", String.join(" ", cmd), containerName, exit,
             stderr.toString().trim());
         return Optional.empty();
       }
-      return Optional.of(stdout.toByteArray());
+      return Optional.of(new ExecResult(stdout.toByteArray(), stderr.toString(), exit));
     } catch (Exception e) {
-      log.warn("exec cat {} in {} failed: {}", path, containerName, e.getMessage());
+      log.warn("exec {} in {} failed: {}", String.join(" ", cmd), containerName, e.getMessage());
       return Optional.empty();
     }
   }
