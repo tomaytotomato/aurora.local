@@ -52,7 +52,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C6 | friction | "UNHEALTHY" badge next to "Enabled and running" | [x] |
 | C7 | friction | "couldn't reach the registry last time it looked" + "Checked never." | [x] |
 | C8 | friction | Every install adds a HIGH finding Aurora itself caused, with no fix | [ ] |
-| C9 | friction | Installing one app bounces every other running container | [ ] |
+| C9 | friction | Installing one app bounces every other running container | [x] |
 | C10 | friction | `.state.yml` drops `dashboard` after the first in-app install | [x] |
 | C11 | friction | Settings claims it can't read the TLS root; the API serves it fine | [x] |
 | C12 | friction | TLS card: unexpanded `$DOMAIN`, Linux steps miss the browser store | [~] |
@@ -519,6 +519,26 @@ Enabling `privacy` recreated `stalwart` (mail down mid-install); enabling
 across the whole merged project. **Fix:** pass the newly-enabled package's
 service names explicitly, keeping `--remove-orphans` semantics for the
 compose-file set only.
+
+**SHIPPED (two causes, both worse than compose being noisy):**
+1. `rotate-secrets --apply` was "rotating" `WIREGUARD_PRIVATE_KEY` and
+   `OPENVPN_PASSWORD` on **every** run — values that belong to the owner's VPN
+   provider and that Aurora cannot mint. It wrote 24 random bytes into them,
+   which looks configured, destroys the "not set yet" signal, and changes every
+   run, so it then recreated the package's containers to "apply" the new junk.
+   Keys listed in a manifest's `required_env`, plus an explicit
+   external-credential pattern (`HOMEPAGE_VAR_*`, `*_API_KEY`,
+   `WIREGUARD_PRIVATE_KEY`, `OPENVPN_PASSWORD`), are now never generated. That
+   also stops seven pointless rotations in `core/.env`.
+2. `seed-adguard.sh` runs from up.sh's post-up hooks on every launch and
+   restarted AdGuard unconditionally — the LAN's DNS server, every time any app
+   was installed. It now restarts only when it actually added a rewrite.
+   Its fixture also hardcoded `192.168.0.110`/`aurora.local` (one specific box,
+   checked into the repo); both are substituted from this box's state, and the
+   substitution deliberately does not use `LAN_IP` from `privacy/.env`, where it
+   means "bind address" and defaults to `0.0.0.0` — which had just written
+   rewrites answering `0.0.0.0` for every name.
+Verified: repeated `up.sh` runs now recreate nothing and restart nothing.
 
 ### C10 · [friction] `.state.yml` drops the dashboard
 After the first in-app install: `enabled: [core, privacy]` — `dashboard` is

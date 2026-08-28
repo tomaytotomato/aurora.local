@@ -20,6 +20,11 @@ set -euo pipefail
 
 # shellcheck source=lib/ops.sh
 . "$(dirname "$0")/lib/ops.sh"
+# manifest_list / manifest_exists, for the required_env lookup below.
+REPO="${REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
+export REPO
+# shellcheck source=lib/manifest.sh
+. "$(dirname "$0")/lib/manifest.sh"
 
 APPLY=0
 for a in "$@"; do
@@ -33,12 +38,24 @@ done
 # Names that look like secrets but are NOT — never rotate.
 NON_SECRET_PATTERN='^(TZ|DOMAIN|LAN_IP|VPN_SERVICE_PROVIDER|VPN_TYPE|SERVER_COUNTRIES|SERVER_CITIES|OPENVPN_USER|.*_USER|FIREWALL.*|VPN_PORT_FORWARDING(_PROVIDER)?|PORT_FORWARD_ONLY|WIREGUARD_ADDRESSES)$'
 SECRET_HINT_PATTERN='(SECRET|KEY|PASSWORD|TOKEN|PASS|PSK)'
+# Credentials that exist somewhere else and merely have to be copied here:
+# a VPN provider's key, another app's API key. Aurora cannot mint these, and
+# filling them with random bytes is worse than leaving them empty — it looks
+# configured, breaks the "not set yet" signal the dashboard reads, and
+# changes on every run, which recreates containers that had no reason to
+# restart. HOMEPAGE_VAR_* are Sonarr/Radarr/AdGuard keys copied out of those
+# apps; inventing them guarantees the widgets stay broken.
+EXTERNAL_SECRET_PATTERN='^(OPENVPN_PASSWORD|WIREGUARD_PRIVATE_KEY|HOMEPAGE_VAR_.*|.*_API_KEY)$'
 WEAK_VALUES=('' password Password PASSWORD changeme change_me admin letmein 123456 secret)
 
 weak_value() {
   local k="$1" v="$2"
   # Skip explicit non-secret keys.
   if [[ "$k" =~ $NON_SECRET_PATTERN ]]; then
+    return 1
+  fi
+  # Skip credentials that belong to someone else's system.
+  if [[ "$k" =~ $EXTERNAL_SECRET_PATTERN ]]; then
     return 1
   fi
   # Explicit bad values.
@@ -104,10 +121,29 @@ recreate_running_package() {
   fi
 }
 
+# Keys a package's manifest declares under required_env are, by
+# definition, values only the owner can supply: a VPN provider's WireGuard
+# private key, an account password at some third party. Aurora cannot
+# invent those. Generating 24 random bytes for WIREGUARD_PRIVATE_KEY does
+# not produce a WireGuard key — it produces junk that looks configured,
+# destroys the "empty means you have not set this yet" signal the UI reads,
+# and (because the value changes on every run) made every single
+# `up.sh` recreate the package's containers. That is how installing an
+# unrelated app came to bounce AdGuard and drop DNS for the whole house.
+_owner_supplied_keys() {
+  local pkg="$1"
+  manifest_exists "$pkg" 2>/dev/null || return 0
+  manifest_list required_env "$pkg" 2>/dev/null || true
+}
+
 FOUND=0
 for envf in "$REPO"/packages/*/.env; do
   [[ -f "$envf" ]] || continue
   pkg=$(basename "$(dirname "$envf")")
+  owner_supplied="|"
+  while IFS= read -r rk; do
+    [[ -n "$rk" ]] && owner_supplied+="$rk|"
+  done < <(_owner_supplied_keys "$pkg")
   weak_here=()
   weak_keys=()
   while IFS= read -r line; do
@@ -118,6 +154,10 @@ for envf in "$REPO"/packages/*/.env; do
     v="${BASH_REMATCH[2]}"
     # strip surrounding quotes
     v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
+    # Never touch a value the owner has to get from somewhere else.
+    if [[ "$owner_supplied" == *"|$k|"* ]]; then
+      continue
+    fi
     if weak_value "$k" "$v"; then
       weak_here+=("$k=<${v:-empty}>")
       weak_keys+=("$k")
