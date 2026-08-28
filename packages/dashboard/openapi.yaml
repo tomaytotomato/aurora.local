@@ -40,6 +40,8 @@ tags:
   - name: network
   - name: proxy
   - name: custom
+  - name: sso
+  - name: marketplace
 
 security:
   - sessionCookie: []
@@ -1959,6 +1961,87 @@ paths:
       responses:
         '204': { description: Removed. }
 
+  # ─────────────────────────── marketplace ───────────────────────────
+  /marketplace:
+    get:
+      tags: [marketplace]
+      summary: The active catalogue, as summary cards
+      description: >
+        The apps the currently-active (signature-verified) catalogue index
+        offers. Summary projection only — no embedded compose/README; fetch
+        one app for those. Empty array when the marketplace feature is off
+        or no verifiable index is available. See
+        docs/MARKETPLACE_HOSTING_PLAN.md.
+      responses:
+        '200':
+          description: Catalogue apps.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MarketplaceApp' }
+  /marketplace/status:
+    get:
+      tags: [marketplace]
+      summary: Catalogue provenance and update availability
+      description: >
+        Which catalogue version is active, whether a newer verified one is
+        waiting for the operator to accept (plan point 6), and provenance
+        (when last fetched, whether the signature checked out).
+      responses:
+        '200':
+          description: Marketplace status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarketplaceStatus' }
+  /marketplace/refresh:
+    post:
+      tags: [marketplace]
+      summary: Fetch the remote index now
+      description: >
+        Fetch + verify the remote index immediately; stages a newer
+        verified one as available without applying it. Returns the
+        resulting status. No-op when the feature is disabled.
+      responses:
+        '200':
+          description: Status after the fetch attempt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarketplaceStatus' }
+  /marketplace/accept:
+    post:
+      tags: [marketplace]
+      summary: Accept the pending catalogue update
+      description: >
+        Make the pending `available` catalogue the active one and persist
+        it to the on-disk cache. Does not touch running apps, images, or
+        any .env (plan point 7).
+      responses:
+        '200':
+          description: Status after acceptance.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarketplaceStatus' }
+        '409':
+          description: Nothing to accept, or the remote changed mid-accept.
+  /marketplace/{slug}:
+    get:
+      tags: [marketplace]
+      summary: One catalogue app, with embedded compose / env / README
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The app.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarketplaceApp' }
+        '404':
+          description: No such app in the active catalogue.
+
 components:
   securitySchemes:
     sessionCookie:
@@ -2289,6 +2372,77 @@ components:
               oneOf:
                 - { $ref: '#/components/schemas/PackageBackupSpec' }
                 - { type: 'null' }
+    MarketplaceImage:
+      type: object
+      description: >
+        One container image a marketplace app runs, pinned by digest. The
+        digest is the catalogue's core promise: every box that installs
+        gets the same bytes. Null when the composer could not resolve one
+        at build time (no registry access, or an env-interpolated tag).
+      required: [ref]
+      properties:
+        ref: { type: string }
+        digest: { type: [string, 'null'] }
+    MarketplaceApp:
+      type: object
+      description: >
+        One app in the fetched, verified marketplace index. The list
+        endpoint returns the summary fields; the detail endpoint adds the
+        embedded compose / envExample / caddySnippet / readme bodies.
+      required: [slug, title, description, category, images, unpinned]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        description: { type: string }
+        category: { $ref: '#/components/schemas/PackageCategory' }
+        icon: { type: [string, 'null'] }
+        dependsOn:
+          type: [array, 'null']
+          items: { type: string }
+        recommends:
+          type: [array, 'null']
+          items: { type: string }
+        variantGroup: { type: [string, 'null'] }
+        variantDefault: { type: [boolean, 'null'] }
+        sourceUrl: { type: [string, 'null'] }
+        homepageUrl: { type: [string, 'null'] }
+        requires:
+          type: [object, 'null']
+          additionalProperties: true
+        images:
+          type: array
+          items: { $ref: '#/components/schemas/MarketplaceImage' }
+        unpinned:
+          type: boolean
+          description: True when at least one image could not be pinned by digest.
+        # Detail-only embedded bodies; omitted on the list projection.
+        compose: { type: string }
+        envExample: { type: string }
+        caddySnippet: { type: string }
+        readme: { type: string }
+    MarketplaceStatus:
+      type: object
+      description: >
+        The catalogue's state: which version is active, whether a newer
+        verified one is waiting for the operator to accept (plan point 6),
+        and provenance.
+      required: [enabled, appCount, signatureValid, updateAvailable]
+      properties:
+        enabled: { type: boolean }
+        activeVersion: { type: [string, 'null'] }
+        activeGeneratedAt: { type: [string, 'null'] }
+        appCount: { type: integer }
+        signatureValid: { type: boolean }
+        source:
+          type: [string, 'null']
+          description: Where the active catalogue came from — seed, cache, or fetch.
+        lastFetchedAt: { type: [string, 'null'] }
+        lastFetchError: { type: [string, 'null'] }
+        updateAvailable: { type: boolean }
+        availableVersion: { type: [string, 'null'] }
+        availableGeneratedAt: { type: [string, 'null'] }
+        availableAppCount: { type: [integer, 'null'] }
+        availableNewAppCount: { type: [integer, 'null'] }
     PackageResources:
       type: object
       description: >

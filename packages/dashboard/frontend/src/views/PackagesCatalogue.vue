@@ -52,7 +52,7 @@ type CatalogueTab = 'installed' | 'marketplace';
 const activeTab = ref<CatalogueTab>('installed');
 const catalogueTabs = computed(() => [
   { value: 'installed' as const, label: 'Installed', hint: String(split.value.installed.length) },
-  { value: 'marketplace' as const, label: 'Marketplace', hint: String(split.value.marketplace.length) },
+  { value: 'marketplace' as const, label: 'Available', hint: String(split.value.marketplace.length) },
 ]);
 
 const visible = computed(() =>
@@ -125,7 +125,7 @@ const appsNav = computed(() => {
     </Card>
 
     <Card v-else-if="!visible.length" class="py-16 text-sm text-muted-foreground text-center">
-      {{ activeTab === 'installed' ? 'Nothing installed yet — check the Marketplace tab.' : 'Nothing left to add — everything is installed.' }}
+      {{ activeTab === 'installed' ? 'Nothing installed yet — check the Available tab.' : 'Nothing left to add — everything is installed.' }}
     </Card>
 
     <!-- INSTALLED — unchanged whole-card link; no nested interactive

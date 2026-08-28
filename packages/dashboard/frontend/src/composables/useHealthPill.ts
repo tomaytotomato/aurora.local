@@ -45,11 +45,17 @@ export function useHealthPill(): { pill: ComputedRef<HealthPill> } {
 
   const pill = computed<HealthPill>(() => {
     switch (state.value) {
-      case 'running': return { text: 'All good', tone: 'ok', state: state.value };
-      case 'partial': return { text: 'Partly running', tone: 'warn', state: state.value };
-      case 'failed':  return { text: 'Attention needed', tone: 'err', state: state.value };
-      case 'needs-config': return { text: 'Needs setup', tone: 'warn', state: state.value };
-      default:        return { text: 'Not started', tone: 'neutral', state: state.value };
+      // Scoped to apps on purpose: this pill is computed only from
+      // package running-state, not from security, disks, or backup. A
+      // bare "All good" read as a global verdict and could sit green in
+      // the header while the page below flagged open security findings.
+      // Naming it "Apps: all running" keeps it honest about what it
+      // actually knows.
+      case 'running': return { text: 'Apps: all running', tone: 'ok', state: state.value };
+      case 'partial': return { text: 'Apps: partly running', tone: 'warn', state: state.value };
+      case 'failed':  return { text: 'Apps: attention needed', tone: 'err', state: state.value };
+      case 'needs-config': return { text: 'Apps: need setup', tone: 'warn', state: state.value };
+      default:        return { text: 'Apps: not started', tone: 'neutral', state: state.value };
     }
   });
 

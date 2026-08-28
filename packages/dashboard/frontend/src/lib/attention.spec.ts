@@ -260,6 +260,38 @@ describe('buildAttention', () => {
     expect(buildAttention({ ...clean(), updates: [update({ package: 'a', state: 'unknown' })] })).toEqual([]);
   });
 
+  it('nudges when a newer marketplace catalogue is waiting, with a count', () => {
+    const items = buildAttention({
+      ...clean(),
+      marketplace: { updateAvailable: true, newAppCount: 3 },
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('marketplace');
+    expect(items[0].tone).toBe('info');
+    expect(items[0].text).toBe('The app marketplace has 3 new apps to browse');
+    expect(items[0].to).toBe('/settings#marketplace');
+  });
+
+  it('singularises one new marketplace app', () => {
+    const items = buildAttention({
+      ...clean(),
+      marketplace: { updateAvailable: true, newAppCount: 1 },
+    });
+    expect(items[0].text).toBe('The app marketplace has 1 new app to browse');
+  });
+
+  it('falls back to a generic marketplace nudge when there are no new apps', () => {
+    const items = buildAttention({
+      ...clean(),
+      marketplace: { updateAvailable: true, newAppCount: 0 },
+    });
+    expect(items[0].text).toBe('A newer app marketplace catalogue is ready to review');
+  });
+
+  it('stays quiet when the marketplace has no pending update', () => {
+    expect(buildAttention({ ...clean(), marketplace: { updateAvailable: false, newAppCount: 0 } })).toEqual([]);
+  });
+
   it('gives every item somewhere to go', () => {
     const items = buildAttention({
       ...clean(),

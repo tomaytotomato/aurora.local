@@ -1,0 +1,126 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aurora.local/schema/marketplace-v1.json",
+  "title": "Aurora marketplace index (v1)",
+  "description": "The composed, signed catalogue Aurora fetches at runtime. Produced by marketplace/scripts/compose.py from the per-package manifests, and validated in CI before signing. See docs/MARKETPLACE_HOSTING_PLAN.md.",
+  "type": "object",
+  "required": ["schema_version", "index_version", "generated_at", "min_dashboard_version", "apps"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "The marketplace index schema this blob was written against. Aurora refuses to load an index whose schema_version is newer than it knows how to parse."
+    },
+    "index_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Monotonic catalogue version, e.g. v2026.08.28-a3f2c1 (date + short content hash). Aurora keys its 'new catalogue available' notice on a change here."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp the index was composed."
+    },
+    "min_dashboard_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The oldest dashboard build that can parse this index. Aurora refuses (with a 'your dashboard needs an update' banner) and falls back to its last compatible cached index if its own version is older."
+    },
+    "apps": {
+      "type": "array",
+      "description": "One entry per marketplace app.",
+      "items": { "$ref": "#/definitions/app" }
+    }
+  },
+  "definitions": {
+    "app": {
+      "type": "object",
+      "required": ["slug", "title", "description", "category", "images"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Canonical name and URL key. Same as the package directory name."
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "category": {
+          "type": "string",
+          "enum": [
+            "core", "privacy", "media", "storage", "monitoring",
+            "productivity", "dev", "ai", "identity", "home-automation",
+            "backup", "network"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Bundled-icon slug, resolved by the dashboard to /icons/<slug>.svg."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "uniqueItems": true
+        },
+        "recommends": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "uniqueItems": true
+        },
+        "variant_group": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "variant_default": { "type": "boolean" },
+        "source_url": { "type": "string", "format": "uri" },
+        "homepage_url": { "type": "string", "format": "uri" },
+        "requires": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "The manifest requires block (min_ram_mb, min_disk_gb, start_budget_seconds, host_roles)."
+        },
+        "images": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Every container image this app runs, pinned by digest. Tag-only entries are rejected: a catalogue that cannot pin an image cannot promise every box the same bytes. When a compose image reference carries only a tag, the composer records digest:null and the app is flagged unpinned so CI can warn without failing the whole catalogue.",
+          "items": {
+            "type": "object",
+            "required": ["ref"],
+            "additionalProperties": false,
+            "properties": {
+              "ref": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The image reference as written in compose (e.g. lscr.io/linuxserver/jellyfin:latest)."
+              },
+              "digest": {
+                "type": ["string", "null"],
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "The resolved image digest, or null when the composer could not resolve one (e.g. no registry access at compose time)."
+              }
+            }
+          }
+        },
+        "compose": {
+          "type": "string",
+          "description": "The full compose.yml, embedded (open question 1, option 1: embedded for v1). Airgaps cleanly; the whole catalogue is one artifact."
+        },
+        "env_example": {
+          "type": "string",
+          "description": "The .env.example body, embedded. What each variable is for and its default."
+        },
+        "caddy_snippet": {
+          "type": "string",
+          "description": "The caddy.snippet body, embedded."
+        },
+        "readme": {
+          "type": "string",
+          "description": "The README.md body, embedded."
+        },
+        "unpinned": {
+          "type": "boolean",
+          "description": "True when at least one image could not be pinned by digest at compose time. The dashboard surfaces this on the consent screen."
+        }
+      }
+    }
+  }
+}

@@ -47,6 +47,13 @@ export interface AttentionInput {
   backup?: { status: BackupStatus; policy: Pick<BackupPolicy, 'stalenessWarnDays'> } | null;
   disks?: { disks: Disk[]; pool: Pool; parity: Parity } | null;
   system?: SystemInfo | null;
+  /**
+   * The hosted marketplace catalogue, when a verified newer index is
+   * waiting for the operator to accept. Only the two fields the nudge
+   * needs, so the whole MarketplaceStatus type does not have to be
+   * imported into this pure module.
+   */
+  marketplace?: { updateAvailable: boolean; newAppCount?: number | null } | null;
   /** Root filesystem percentage above which Aurora starts saying so. */
   diskWarnPct?: number;
   nowMs?: number;
@@ -168,6 +175,25 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
       text: `${updateCount} app${updateCount === 1 ? '' : 's'} ${updateCount === 1 ? 'has' : 'have'} an update waiting`,
       to: '/apps',
       cta: 'Apps',
+    });
+  }
+
+  // ── Marketplace catalogue ───────────────────────────────────────────
+  // A newer, signature-verified catalogue is waiting for the operator to
+  // accept it (plan point 6). Info-tone: it is an opportunity, not a
+  // problem, and accepting it never touches a running app (point 7).
+  if (input.marketplace?.updateAvailable) {
+    const n = input.marketplace.newAppCount ?? 0;
+    const text =
+      n > 0
+        ? `The app marketplace has ${n} new app${n === 1 ? '' : 's'} to browse`
+        : 'A newer app marketplace catalogue is ready to review';
+    items.push({
+      id: 'marketplace',
+      tone: 'info',
+      text,
+      to: '/settings#marketplace',
+      cta: 'Review',
     });
   }
 

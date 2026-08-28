@@ -1,0 +1,120 @@
+name: marketplace
+
+# Phase 1 of docs/MARKETPLACE_HOSTING_PLAN.md: compose the catalogue index
+# from the per-package manifests, validate it against the schema, sign it
+# with the Ed25519 release key, and publish it as a GitHub Release asset.
+#
+# The dashboard fetches the resulting index.json (+ .sig) at runtime and
+# verifies it against the public key pinned into its build. Nothing here
+# touches a running box; it only produces the artifact a box may later
+# choose to fetch.
+#
+# Scoped to changes under packages/ and marketplace/ so an unrelated
+# dashboard commit does not cut a new catalogue release.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/**/manifest.yml"
+      - "packages/**/compose.yml"
+      - "packages/**/.env.example"
+      - "packages/**/caddy.snippet"
+      - "packages/**/README.md"
+      - "marketplace/**"
+      - ".github/workflows/marketplace.yml"
+  workflow_dispatch:
+    inputs:
+      resolve_digests:
+        description: "Resolve image digests (needs registry access; slower)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: compose + validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.x" }
+      - name: install deps
+        run: pip install --user "pyyaml>=6" "jsonschema>=4" "cryptography>=42"
+      - name: compose index
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          # Digest resolution needs a logged-in docker; default off in CI
+          # push builds (the schema tolerates unpinned + flags it), on for
+          # a manual dispatch that asks for it.
+          if [ "${{ github.event.inputs.resolve_digests }}" = "true" ]; then
+            python3 marketplace/scripts/compose.py --resolve-digests
+          else
+            python3 marketplace/scripts/compose.py
+          fi
+      - name: validate against schema
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          python3 marketplace/scripts/validate.py marketplace/dist/index.json
+      - name: upload composed index
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-index
+          path: marketplace/dist/index.json
+
+  publish:
+    name: sign + release
+    needs: build
+    # Only cut a release on a real push to main, never on a PR or a fork.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.x" }
+      - name: install deps
+        run: pip install --user "cryptography>=42"
+      - name: download composed index
+        uses: actions/download-artifact@v4
+        with:
+          name: marketplace-index
+          path: marketplace/dist
+      - name: write signing key
+        env:
+          # The Ed25519 private key PEM, stored as a repository secret.
+          # Its public half is pinned into the dashboard build at
+          # backend/src/main/resources/marketplace/marketplace-pub.ed25519.spki.b64.
+          MARKETPLACE_SIGNING_KEY: ${{ secrets.MARKETPLACE_SIGNING_KEY }}
+        run: |
+          if [ -z "$MARKETPLACE_SIGNING_KEY" ]; then
+            echo "::error::MARKETPLACE_SIGNING_KEY secret is not set; cannot sign the catalogue" >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$MARKETPLACE_SIGNING_KEY" > /tmp/marketplace-key.pem
+      - name: sign
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          python3 marketplace/scripts/sign.py marketplace/dist/index.json --key /tmp/marketplace-key.pem
+          rm -f /tmp/marketplace-key.pem
+      - name: derive release tag
+        id: tag
+        run: |
+          version=$(python3 -c "import json;print(json.load(open('marketplace/dist/index.json'))['index_version'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: marketplace-${{ steps.tag.outputs.version }}
+          name: Marketplace ${{ steps.tag.outputs.version }}
+          body: >
+            Signed Aurora marketplace catalogue index.
+            Verify with the public key pinned into the dashboard build.
+          files: |
+            marketplace/dist/index.json
+            marketplace/dist/index.json.sig
+            marketplace/dist/index.json.sha256

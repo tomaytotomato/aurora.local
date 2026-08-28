@@ -1,0 +1,10 @@
+# The marketplace release private key must NEVER be committed. The root
+# .gitignore already excludes *.pem; this is belt-and-braces so a future
+# change to that rule cannot accidentally expose the signing key.
+#
+# In CI the private key comes from a repository secret, written to a temp
+# file outside the tree. Locally it is generated here for dev signing.
+*.pem
+marketplace-dev.*
+!marketplace-pub.ed25519.b64
+!marketplace-pub.ed25519.pem

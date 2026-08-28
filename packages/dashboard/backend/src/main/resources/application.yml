@@ -41,6 +41,16 @@ aurora:
   docker:
     # Overridden by DOCKER_HOST env for isolated-daemon tests.
     host: ${DOCKER_HOST:unix:///var/run/docker.sock}
+  # Marketplace catalogue hosting (docs/MARKETPLACE_HOSTING_PLAN.md).
+  # Off by default: the catalogue renders from the on-disk packages/ tree
+  # and nothing reaches out to the network. Turn on + set index-url to
+  # fetch the signed index from GitHub Releases, verify it against the
+  # pinned key, cache it under data/marketplace/, and merge it in.
+  marketplace:
+    enabled: ${AURORA_MARKETPLACE_ENABLED:false}
+    index-url: ${AURORA_MARKETPLACE_INDEX_URL:}
+    fetch-on-startup: ${AURORA_MARKETPLACE_FETCH_ON_STARTUP:true}
+    fetch-cron: ${AURORA_MARKETPLACE_FETCH_CRON:0 14 3 * * *}
 
 management:
   endpoints:

@@ -1,8 +1,43 @@
 # Marketplace hosting — separating Aurora's app catalogue from Aurora itself
 
-**Status:** proposal, not scheduled.
+**Status:** IMPLEMENTED (phases 0–3 + CI), 2026-08-28.
 **Author:** Aurora dashboard team.
 **Requested by:** Bruce, 2026-08-27.
+
+## Implementation status (2026-08-28)
+
+Built in this pass, all green (930 backend tests, 625 frontend tests,
+OpenAPI conformance, marketplace schema validation):
+
+- **Tooling (`marketplace/`)** — schema (`schema/marketplace-v1.json`),
+  composer (`scripts/compose.py`, walks `packages/*/` — single source of
+  truth, no duplicated manifest tree), validator (`scripts/validate.py`),
+  Ed25519 signer (`scripts/sign.py`). Ships a committed public key and a
+  gitignored dev private key. See `marketplace/README.md`.
+- **Signed artifact + CI (`.github/workflows/marketplace.yml`)** —
+  compose → validate → sign → publish as a GitHub Release asset, gated on
+  changes under `packages/`/`marketplace/`, signing key from the
+  `MARKETPLACE_SIGNING_KEY` secret.
+- **Backend consumer (`MarketplaceCatalogService`)** — fetch, Ed25519
+  verify against the pinned key, cache under `data/marketplace/`, seed
+  fallback embedded in the build, staged `available`/`accept` consent
+  model, daily scheduled refresh. Endpoints under `/api/marketplace`
+  (`MarketplaceController`), documented in `openapi.yaml`. **Off by
+  default** (`aurora.marketplace.enabled=false`).
+- **Frontend (Phase 3 consent UI)** — `MarketplaceCard` on Settings
+  (provenance + Check-for-updates + Accept), an Overview attention-strip
+  nudge when a verified newer catalogue is waiting, a Pinia store, and
+  MSW mocks.
+
+Deviations from the plan below, all deliberate: (1) the composer reads the
+live `packages/` tree rather than a duplicated `marketplace/<slug>/` tree
+(Phase 0 kept both) so the catalogue cannot drift from what the box ships;
+(2) the new `aurora-marketplace` repo is realised as the in-repo
+`marketplace/` directory + workflow for now — splitting it to its own
+GitHub repo (Phase 4 contributor path) is a repo-admin action, not code.
+Everything below is the original proposal, kept for the reasoning.
+
+---
 
 ## The problem
 

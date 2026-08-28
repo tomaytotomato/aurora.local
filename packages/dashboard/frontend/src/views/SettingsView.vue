@@ -9,6 +9,7 @@ import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import NotificationsCard from '@/components/NotificationsCard.vue';
+import MarketplaceCard from '@/components/MarketplaceCard.vue';
 import ProxyRoutesCard from '@/components/ProxyRoutesCard.vue';
 import SettingsPortabilityCard from '@/components/SettingsPortabilityCard.vue';
 import {
@@ -245,15 +246,23 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
            problem at all. -->
       <NotificationsCard v-if="info?.capabilities?.notifications" />
 
+      <!-- App marketplace catalogue. The consent surface for a hosted,
+           signed app index (docs/MARKETPLACE_HOSTING_PLAN.md). Always
+           rendered: when the feature is off it explains what it would do,
+           which is a better answer than an absent card. -->
+      <MarketplaceCard />
+
       <Card v-if="info" class="p-8">
         <h3 class="card-title mb-1">System</h3>
         <p class="card-subtitle mb-4">Metadata</p>
+        <!-- Domain, LAN IP and Docker version are deliberately not here:
+             Overview already owns them (its header shows Docker + distro,
+             and ReachInfo shows Domain + LAN IP with Copy buttons). This
+             card keeps only what is unique to it so the same fact does not
+             appear on two pages. -->
         <dl class="text-sm space-y-2">
           <div class="flex justify-between"><dt class="text-muted-foreground">Hostname</dt><dd class="font-mono">{{ info.hostname }}</dd></div>
-          <div class="flex justify-between"><dt class="text-muted-foreground">Domain</dt><dd class="font-mono">{{ info.domain }}</dd></div>
-          <div class="flex justify-between"><dt class="text-muted-foreground">LAN IP</dt><dd class="font-mono">{{ info.lanIp }}</dd></div>
           <div class="flex justify-between"><dt class="text-muted-foreground">Kernel</dt><dd class="font-mono">{{ info.kernel }}</dd></div>
-          <div class="flex justify-between"><dt class="text-muted-foreground">Docker</dt><dd class="font-mono">{{ info.dockerVersion }}</dd></div>
         </dl>
       </Card>
 

@@ -14,6 +14,7 @@ import { customHandlers } from './custom';
 import { disksHandlers } from './disks';
 import { hardeningHandlers } from './hardening';
 import { jobsHandlers } from './jobs';
+import { marketplaceHandlers } from './marketplace';
 import { networkHandlers } from './network';
 import { notificationsHandlers } from './notifications';
 import { observabilityHandlers } from './observability';
@@ -34,6 +35,7 @@ export const handlers = [
   ...networkHandlers,
   ...proxyHandlers,
   ...updatesHandlers,
+  ...marketplaceHandlers,
   ...jobsHandlers,
   ...backupHandlers,
   ...disksHandlers,

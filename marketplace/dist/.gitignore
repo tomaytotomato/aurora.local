@@ -1,0 +1,7 @@
+# Build output. The composed + signed index is produced fresh by
+# scripts/compose.py + sign.py (locally or in CI) and published as a
+# GitHub Release asset. The committed copy that the dashboard ships with
+# lives in the backend resources as the seed index, not here.
+index.json
+index.json.sig
+index.json.sha256

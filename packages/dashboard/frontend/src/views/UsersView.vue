@@ -250,7 +250,11 @@ const roleOptions: { value: Role; label: string }[] = [
 ];
 
 function badgeToneFor(role: Role): 'ok' | 'warn' | 'err' | 'neutral' {
-  if (role === 'admin') return 'warn';
+  // Admin is a role, not a warning. Amber read as "something is wrong
+  // with this user" on every admin row; a home box where both users are
+  // admins had two caution-coloured pills for no reason. Neutral keeps
+  // amber reserved for actual attention states.
+  if (role === 'admin') return 'neutral';
   if (role === 'user') return 'neutral';
   return 'neutral';
 }

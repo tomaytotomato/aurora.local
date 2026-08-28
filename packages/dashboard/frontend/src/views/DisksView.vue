@@ -407,11 +407,11 @@ function retryJob(): void {
       <!-- ── Parity ──────────────────────────────────────────────── -->
       <div v-else>
         <Card v-if="!parity.configured" class="p-10 text-center" data-state="empty">
-          <h3 class="mb-2">No parity disk</h3>
+          <h3 class="mb-2">No parity protection</h3>
           <p class="text-sm text-muted-foreground max-w-lg mx-auto">
-            Without parity, losing a data disk loses what was on it. SnapRAID needs one spare
-            drive at least as large as the biggest disk it protects; enable the
-            <span class="font-mono">snapraid</span> role in group_vars to set it up.
+            Right now, if a drive fails you lose whatever was on it. Aurora can protect
+            against a single drive failing once a spare drive — at least as large as your
+            biggest one — is added. Ask whoever set up this box to add parity protection.
           </p>
         </Card>
 
@@ -424,7 +424,7 @@ function retryJob(): void {
                 The scheduled sync stopped itself on purpose.
                 {{ parity.deletedSinceSync }} files had been deleted since the last one, which is
                 over the {{ parity.deletionThreshold }} it is willing to accept without being
-                asked. That guard exists so one bad <span class="font-mono">rm -rf</span> cannot
+                asked. That guard exists so a large accidental deletion cannot
                 quietly destroy your ability to recover from it. If the deletions were
                 deliberate, sync now and parity will catch up.
               </AlertDescription>

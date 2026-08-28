@@ -29,6 +29,7 @@ import { renderIdentity } from '@/lib/identity';
 import { type PackageSummary } from '@/api/packages';
 import { useHealthPill } from '@/composables/useHealthPill';
 import { useUpdatesStore } from '@/stores/updates';
+import { useMarketplaceStore } from '@/stores/marketplace';
 import { SecurityApi, type SecurityFinding } from '@/api/security';
 import { DisksApi, type Disk, type Parity, type Pool } from '@/api/disks';
 import { buildAttention } from '@/lib/attention';
@@ -128,10 +129,29 @@ async function fetchBackup(): Promise<void> {
 // capability-gated and failure-tolerant: a missing input means one fewer
 // row, never an error banner on Overview.
 const updates = useUpdatesStore();
+const marketplace = useMarketplaceStore();
 const findings = ref<SecurityFinding[]>([]);
 const diskState = ref<{ disks: Disk[]; pool: Pool; parity: Parity } | null>(null);
 
 const disksCapable = computed(() => system.info?.capabilities?.disks === true);
+const securityCapable = computed(() => system.info?.capabilities?.securityScanner === true);
+
+// Live severity tally for the Security bento. Purely derived from the
+// findings this view already fetches — the same source the AttentionStrip
+// and /security read, so the home page can never claim a different
+// security posture than the Security page.
+const securityCounts = computed(() => {
+  const c = { high: 0, medium: 0, low: 0 };
+  for (const f of findings.value) {
+    if (f.severity === 'high') c.high++;
+    else if (f.severity === 'medium') c.medium++;
+    else if (f.severity === 'low') c.low++;
+  }
+  return c;
+});
+const securityTotal = computed(
+  () => securityCounts.value.high + securityCounts.value.medium + securityCounts.value.low,
+);
 
 async function fetchFindings(): Promise<void> {
   try {
@@ -159,6 +179,12 @@ const attentionItems = computed(() =>
       : null,
     disks: diskState.value,
     system: system.info,
+    marketplace: marketplace.status
+      ? {
+          updateAvailable: marketplace.updateAvailable,
+          newAppCount: marketplace.status.availableNewAppCount,
+        }
+      : null,
   }),
 );
 
@@ -168,6 +194,11 @@ onMounted(async () => {
   if (disksCapable.value) void fetchDisks();
   if (system.info?.capabilities?.securityScanner === true) void fetchFindings();
   void updates.ensureLoaded();
+  // The hosted marketplace catalogue: a background read that only ever
+  // adds an info-tone nudge when a verified newer index is waiting. Off
+  // by default server-side, so on most boxes this resolves to "disabled"
+  // and contributes nothing.
+  void marketplace.ensureLoaded();
   // B2-followup (iter-22): metrics fetch fires after system.info lands
   // so capabilities.metrics is up-to-date before the guard runs.
   // iter-24: sparkline fetch fans out in parallel so the pill picks up
@@ -242,6 +273,16 @@ const packagesCount = computed(() => {
   if (n === d) return { text: `All ${d} running`, tone: 'ok' as const };
   return { text: `${d} enabled \u00b7 ${n} running`, tone: 'neutral' as const };
 });
+
+// The "Bring your box online" checklist is an onboarding surface: it
+// belongs on the home page only while something is still coming up. On a
+// box where every enabled package is already running it is stale framing
+// ("bring online" over a box up for days) and a fourth restatement of the
+// same status the Apps bento already owns — so gate it to the in-progress
+// case only.
+const bringingOnline = computed(
+  () => packages.enabled.length > 0 && runningCount.value < packages.enabled.length,
+);
 
 // Health pill aggregation for the header.
 // iter-3 V3: lifted into `composables/useHealthPill.ts` so this view and
@@ -657,18 +698,21 @@ function pickMetric(key: string): void {
         </div>
       </Card>
 
-      <!-- Security card (permanent placeholder in iter-1 — §4.4)
-           iter-dash-polish-2 P6 (BLOCKER): the `Review checks →` link was
-           removed. /security is a stub with hard-coded findings + a
-           fabricated score; sending Sarah there manufactures information.
-           No CTA here.
-           iter-dash-polish-2 P3 + P4: h3 promoted to the empty-state
-           headline; body wrapped in the centred glyph pattern so the
-           card reads as a designed empty state, not a stub. -->
+      <!-- Security card. Renders the live severity tally from the same
+           findings feed the AttentionStrip and /security use, so the home
+           page can never contradict them. Before this it showed a fixed
+           "scanning hasn't shipped yet" stub even while the strip above
+           listed open findings — the single most trust-destroying
+           contradiction on the box. When the scanner capability is off,
+           it falls back to an honest empty state (no fabricated data);
+           when it is on and clean, it says so plainly. -->
       <Card class="col-span-3 p-8" data-card="security">
         <h3 class="card-title mb-1">Security</h3>
         <p class="card-subtitle mb-4">Security posture</p>
+
+        <!-- Scanner off (capability downgrade): honest empty state. -->
         <div
+          v-if="!securityCapable"
           data-state="empty"
           class="flex flex-col items-center text-center py-6"
         >
@@ -676,10 +720,35 @@ function pickMetric(key: string): void {
             <path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z" />
             <path d="m9 12 2 2 4-4" />
           </svg>
-          <p class="text-sm text-foreground mb-1">Watching for common misconfigurations</p>
-          <p class="text-xs text-muted-foreground">
-            Aurora will start scanning your box once the security module ships.
+          <p class="text-sm text-foreground mb-1">Security checks are off on this box</p>
+          <p class="text-xs text-muted-foreground">Nothing is being scanned right now.</p>
+        </div>
+
+        <!-- Scanner on, findings open: live tally + link. -->
+        <div v-else-if="securityTotal > 0" data-state="findings">
+          <div class="flex items-center gap-2 mb-3" data-test="overview-sec-counts">
+            <Badge v-if="securityCounts.high > 0" tone="err">{{ securityCounts.high }} high</Badge>
+            <Badge v-if="securityCounts.medium > 0" tone="warn">{{ securityCounts.medium }} medium</Badge>
+            <Badge v-if="securityCounts.low > 0" tone="info">{{ securityCounts.low }} low</Badge>
+          </div>
+          <p class="text-sm text-muted-foreground mb-3">
+            {{ securityTotal === 1 ? '1 check needs a look.' : securityTotal + ' checks need a look.' }}
           </p>
+          <router-link to="/security" class="text-sm text-muted-foreground" data-test="overview-sec-link">Review checks →</router-link>
+        </div>
+
+        <!-- Scanner on, all clear. -->
+        <div
+          v-else
+          data-state="clear"
+          class="flex flex-col items-center text-center py-6"
+        >
+          <svg viewBox="0 0 24 24" class="w-6 h-6 text-success mb-2" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+          <p class="text-sm text-foreground mb-1">No security issues found</p>
+          <router-link to="/security" class="text-xs text-muted-foreground">Review checks →</router-link>
         </div>
       </Card>
 
@@ -751,11 +820,14 @@ function pickMetric(key: string): void {
     </div>
 
     <!-- iter-3 BL4: living checklist — the same component the Done page uses
-         at the end of onboarding. Sarah's post-onboarding home surface now
-         shows real per-package status (polled every 5 s), not just static
-         bento cards. Renders only when there are enabled packages. -->
+         at the end of onboarding. Gated to the in-progress case: it shows
+         only while at least one enabled package is not yet running, so a
+         fully-running box does not carry a stale "Bring your box online"
+         onboarding surface (the Apps bento is the single home-page status
+         surface once everything is up). Polls per-package status every 5 s
+         while it is visible. -->
     <section
-      v-if="packages.enabled.length > 0"
+      v-if="bringingOnline"
       class="mt-4"
       :class="photoBg && 'on-photo'"
       data-test="dashboard-done-checklist"

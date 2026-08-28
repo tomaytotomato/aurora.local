@@ -12,7 +12,7 @@ import java.net.URI;
 import java.time.Duration;
 
 @Configuration
-@EnableConfigurationProperties(AuroraProperties.class)
+@EnableConfigurationProperties({AuroraProperties.class, MarketplaceProperties.class})
 public class DockerClientConfig {
 
   @Bean
