@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useUsersStore } from '@/stores/users';
+import { useSystemStore } from '@/stores/system';
 import type { Role, UserSummary } from '@/api/users';
 import { humanCopyForError } from '@/lib/http-error-copy';
 import { copyToClipboard } from '@/lib/utils';
@@ -13,6 +14,7 @@ import {
   Alert,
   AlertDescription,
   Badge,
+  Checkbox,
   Dialog,
   DropdownMenu,
   DropdownMenuItem,
@@ -56,6 +58,12 @@ const confirmDelete = ref<UserSummary | null>(null);
 
 const isAdmin = computed(() => auth.session?.role === 'admin');
 
+// The box's own mail domain — for the mailbox address preview in the
+// create form. Same source Overview + Settings read; falls back to the
+// canonical example before system.info hydrates.
+const system = useSystemStore();
+const mailDomain = computed(() => system.info?.domain || 'aurora.local');
+
 async function requireAdminOrRedirect(): Promise<boolean> {
   await auth.fetchSession();
   if (!isAdmin.value) {
@@ -72,17 +80,28 @@ onMounted(async () => {
 
 // ─── create ────────────────────────────────────────────────────────
 
-const createForm = ref<{ username: string; password: string; role: Role; tz: string }>({
+const createForm = ref<{
+  username: string;
+  password: string;
+  role: Role;
+  tz: string;
+  createMailbox: boolean;
+  email: string;
+}>({
   username: '',
   password: '',
   role: 'user',
   tz: '',
+  // Aurora auto-creates a mailbox for a new user by default — the story.
+  // The mailbox password is the user's own password.
+  createMailbox: true,
+  email: '',
 });
 const createErr = ref<string | null>(null);
 const createBusy = ref(false);
 
 function resetCreateForm() {
-  createForm.value = { username: '', password: '', role: 'user', tz: '' };
+  createForm.value = { username: '', password: '', role: 'user', tz: '', createMailbox: true, email: '' };
   createErr.value = null;
 }
 
@@ -97,22 +116,40 @@ async function submitCreate(): Promise<void> {
       password: createForm.value.password || undefined,
       role: createForm.value.role,
       tz: createForm.value.tz.trim() || null,
+      createMailbox: createForm.value.createMailbox,
+      // Blank email = default <username>@<box-domain> on the server.
+      email: createForm.value.createMailbox ? (createForm.value.email.trim() || undefined) : undefined,
     });
     const username = createForm.value.username.trim();
     showCreate.value = false;
     resetCreateForm();
 
+    // Mailbox outcome copy — folded into the success signal so the admin
+    // learns in one place whether the mailbox came up. A mailbox that
+    // could not be made is a warning, never a failure: the user exists.
+    const mb = created.mailbox;
+    const mailboxNote = mb && mb.requested
+      ? mb.created
+        ? ` Mailbox ${mb.email} is ready (same password).`
+        : ` The login works, but the mailbox couldn't be set up: ${mb.error}.`
+      : '';
+
     if (created.generatedPassword) {
       // Modal, not a toast. This is the only time this value will ever
       // exist — nothing stores the plaintext — so it must not be
       // dismissible by a 4-second timer while the admin is looking away.
-      issued.value = { username, password: created.generatedPassword };
+      issued.value = {
+        username,
+        password: created.generatedPassword,
+        mailboxEmail: mb?.created ? (mb.email ?? null) : null,
+        mailboxError: mb && mb.requested && !mb.created ? (mb.error ?? null) : null,
+      };
     } else {
       toast({
-        title: 'User created',
-        description: `${username} can now sign in.`,
-        variant: 'success',
-        duration: 4000,
+        title: mb && mb.requested && !mb.created ? 'User created (mailbox pending)' : 'User created',
+        description: `${username} can now sign in.${mailboxNote}`,
+        variant: mb && mb.requested && !mb.created ? 'default' : 'success',
+        duration: 6000,
       });
     }
   } catch (err) {
@@ -198,7 +235,12 @@ async function submitRotatePassword(): Promise<void> {
 // toast because it is unrecoverable: the server hashed it and kept no
 // copy, so if this disappears before the admin reads it the only remedy
 // is another rotation.
-const issued = ref<{ username: string; password: string } | null>(null);
+const issued = ref<{
+  username: string;
+  password: string;
+  mailboxEmail?: string | null;
+  mailboxError?: string | null;
+} | null>(null);
 const copied = ref<'ok' | 'fail' | null>(null);
 
 async function copyIssued(): Promise<void> {
@@ -398,6 +440,8 @@ function formatCreatedAt(iso: string): string {
           <p class="text-xs text-muted-foreground mt-1">
             Leave blank and Aurora generates a strong passphrase you can hand over
             once. If you set one yourself: at least 12 characters.
+            <span v-if="createForm.createMailbox" class="text-foreground">This is
+            also the password for their mailbox.</span>
           </p>
         </div>
 
@@ -420,6 +464,46 @@ function formatCreatedAt(iso: string): string {
             autocomplete="off"
             data-test="users-create-tz"
           />
+        </div>
+
+        <!-- Mailbox. A new user gets a mailbox by default, sharing their
+             own password (the story). The admin can name the address or
+             switch it off entirely. -->
+        <div class="pt-2 border-t border-border">
+          <label class="flex items-start gap-2 cursor-pointer">
+            <Checkbox
+              :model-value="createForm.createMailbox"
+              data-test="users-create-mailbox-toggle"
+              @update:model-value="createForm.createMailbox = $event"
+            />
+            <span class="text-sm">
+              <span class="font-medium text-foreground">Create a mailbox for this user</span>
+              <span class="block text-xs text-muted-foreground mt-0.5">
+                They get an email address using the same password. Turn off for a
+                login with no mail.
+              </span>
+            </span>
+          </label>
+
+          <div v-if="createForm.createMailbox" class="mt-3">
+            <Label for="create-email" hint="Optional">Email address</Label>
+            <div class="flex items-center gap-2 flex-wrap">
+              <Input
+                id="create-email"
+                v-model="createForm.email"
+                :placeholder="createForm.username.trim() || 'username'"
+                autocomplete="off"
+                class="max-w-[16rem]"
+                data-test="users-create-email"
+              />
+              <span v-if="!createForm.email.includes('@')" class="font-mono text-muted-foreground">@{{ mailDomain }}</span>
+            </div>
+            <p class="text-xs text-muted-foreground mt-1">
+              Leave blank to use
+              <span class="font-mono">{{ (createForm.username.trim() || 'username') }}@{{ mailDomain }}</span>.
+              Enter a full address to use a different domain.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -556,6 +640,25 @@ function formatCreatedAt(iso: string): string {
       <div class="border border-border rounded-lg p-4 bg-muted/40" data-test="users-issued-password">
         <code class="font-mono text-sm break-all select-all text-foreground">{{ issued?.password }}</code>
       </div>
+
+      <!-- Mailbox note: this credential is also the mailbox password, so
+           say the address here where the admin is already copying it. -->
+      <p
+        v-if="issued?.mailboxEmail"
+        class="text-sm mt-3"
+        data-test="users-issued-mailbox"
+      >
+        Mailbox <span class="font-mono text-foreground">{{ issued.mailboxEmail }}</span>
+        is ready — it uses this same password.
+      </p>
+      <p
+        v-else-if="issued?.mailboxError"
+        class="text-sm mt-3 text-warning"
+        data-test="users-issued-mailbox-error"
+      >
+        The login works, but the mailbox couldn't be set up: {{ issued.mailboxError }}.
+        You can add it later from the mail service page.
+      </p>
 
       <p class="text-xs text-muted-foreground mt-3">
         {{ issued?.username }} can change this after signing in. They will also need

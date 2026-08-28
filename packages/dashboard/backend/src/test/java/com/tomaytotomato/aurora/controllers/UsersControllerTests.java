@@ -7,6 +7,8 @@ import com.tomaytotomato.aurora.persistence.AdminUserRepo;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.services.AuthService;
 import com.tomaytotomato.aurora.services.CurrentUserService;
+import com.tomaytotomato.aurora.services.StalwartMailClient;
+import com.tomaytotomato.aurora.services.StalwartProvisionService;
 import com.tomaytotomato.aurora.services.UsersService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +48,8 @@ class UsersControllerTests {
   private AuditEventRepo audit;
   private ApplicationEventPublisher events;
   private CurrentUserService currentUser;
+  private StalwartMailClient mail;
+  private StalwartProvisionService provision;
 
   private UsersService svc;
   private UsersController ctrl;
@@ -63,7 +67,10 @@ class UsersControllerTests {
     Mockito.when(auth.hash(Mockito.any())).thenReturn("$2a$12$stub-hash");
 
     svc = new UsersService(repo, auth, audit, events);
-    ctrl = new UsersController(svc, currentUser);
+    mail = Mockito.mock(StalwartMailClient.class);
+    provision = Mockito.mock(StalwartProvisionService.class);
+    Mockito.when(provision.mailDomain()).thenReturn("aurora.local");
+    ctrl = new UsersController(svc, currentUser, mail, provision);
   }
 
   // ─── admin-role guard ──────────────────────────────────────────────────
@@ -114,7 +121,7 @@ class UsersControllerTests {
     Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.USER));
 
     assertThatThrownBy(() -> ctrl.create(new UsersController.CreateReq(
-        "alice", "reallystrong-2026", "user", "UTC")))
+        "alice", "reallystrong-2026", "user", "UTC", null, false)))
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
             .isEqualTo(HttpStatus.FORBIDDEN));
@@ -153,7 +160,7 @@ class UsersControllerTests {
     ));
 
     var response = ctrl.create(new UsersController.CreateReq(
-        "alice", "reallystrong-2026", "user", null));
+        "alice", "reallystrong-2026", "user", null, null, false));
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(response.getBody().user().username()).isEqualTo("alice");
@@ -178,7 +185,7 @@ class UsersControllerTests {
   void create_rejects_bad_username_shape() {
     stageAdmin();
     assertThatThrownBy(() -> ctrl.create(new UsersController.CreateReq(
-        "UPPERCASE-bad", "reallystrong-2026", "user", null)))
+        "UPPERCASE-bad", "reallystrong-2026", "user", null, null, false)))
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
             .isEqualTo(HttpStatus.BAD_REQUEST));
@@ -189,7 +196,7 @@ class UsersControllerTests {
   void create_rejects_weak_password_under_12_chars() {
     stageAdmin();
     assertThatThrownBy(() -> ctrl.create(new UsersController.CreateReq(
-        "alice", "short", "user", null)))
+        "alice", "short", "user", null, null, false)))
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
             .isEqualTo(HttpStatus.BAD_REQUEST));
@@ -199,7 +206,7 @@ class UsersControllerTests {
   void create_rejects_unknown_role() {
     stageAdmin();
     assertThatThrownBy(() -> ctrl.create(new UsersController.CreateReq(
-        "alice", "reallystrong-2026", "superuser", null)))
+        "alice", "reallystrong-2026", "superuser", null, null, false)))
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
             .isEqualTo(HttpStatus.BAD_REQUEST));
@@ -212,7 +219,7 @@ class UsersControllerTests {
         Mockito.anyString(), Mockito.any())).thenThrow(new DuplicateKeyException("boom"));
 
     assertThatThrownBy(() -> ctrl.create(new UsersController.CreateReq(
-        "alice", "reallystrong-2026", "user", null)))
+        "alice", "reallystrong-2026", "user", null, null, false)))
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
             .isEqualTo(HttpStatus.CONFLICT));
@@ -332,6 +339,98 @@ class UsersControllerTests {
   }
 
   // ─── helpers ───────────────────────────────────────────────────────────
+
+  /** Stage repo so a create(username) returns id 2 and reads back cleanly. */
+  private void stageCreate(String username) {
+    Mockito.when(repo.create(Mockito.eq(username), Mockito.any(),
+        Mockito.any(), Mockito.eq(Role.USER))).thenReturn(2L);
+    Mockito.when(repo.findAll()).thenReturn(List.of(
+        new AdminUser(2, username, "$2a$12$stub-hash", "UTC", "2026-08-03", Role.USER)));
+  }
+
+  @Test
+  void create_auto_provisions_a_mailbox_at_username_at_domain_with_the_users_password() {
+    stageAdmin();
+    stageCreate("alice");
+
+    var res = ctrl.create(new UsersController.CreateReq(
+        "alice", "reallystrong-2026", "user", null, null, null)); // createMailbox default = on
+
+    Mockito.verify(mail).ensureDomain("aurora.local");
+    Mockito.verify(mail).createMailbox("alice", "aurora.local", "reallystrong-2026");
+    var outcome = res.getBody().mailbox();
+    assertThat(outcome.requested()).isTrue();
+    assertThat(outcome.created()).isTrue();
+    assertThat(outcome.email()).isEqualTo("alice@aurora.local");
+    assertThat(outcome.error()).isNull();
+  }
+
+  @Test
+  void create_uses_the_generated_password_as_the_mailbox_password() {
+    stageAdmin();
+    stageCreate("bob");
+
+    var res = ctrl.create(new UsersController.CreateReq(
+        "bob", null, "user", null, null, null)); // no password -> generated
+    String generated = res.getBody().generatedPassword();
+
+    assertThat(generated).isNotBlank();
+    Mockito.verify(mail).createMailbox(Mockito.eq("bob"), Mockito.eq("aurora.local"),
+        Mockito.eq(generated));
+  }
+
+  @Test
+  void create_honours_an_explicit_local_part_email() {
+    stageAdmin();
+    stageCreate("carol");
+
+    ctrl.create(new UsersController.CreateReq(
+        "carol", "reallystrong-2026", "user", null, "c.mint", null));
+
+    Mockito.verify(mail).createMailbox("c.mint", "aurora.local", "reallystrong-2026");
+  }
+
+  @Test
+  void create_honours_a_full_email_with_its_own_domain() {
+    stageAdmin();
+    stageCreate("dave");
+
+    ctrl.create(new UsersController.CreateReq(
+        "dave", "reallystrong-2026", "user", null, "dave@example.com", null));
+
+    Mockito.verify(mail).ensureDomain("example.com");
+    Mockito.verify(mail).createMailbox("dave", "example.com", "reallystrong-2026");
+  }
+
+  @Test
+  void create_skips_the_mailbox_when_opted_out() {
+    stageAdmin();
+    stageCreate("erin");
+
+    var res = ctrl.create(new UsersController.CreateReq(
+        "erin", "reallystrong-2026", "user", null, null, false));
+
+    Mockito.verifyNoInteractions(mail);
+    assertThat(res.getBody().mailbox().requested()).isFalse();
+  }
+
+  @Test
+  void create_still_succeeds_when_the_mailbox_cannot_be_made() {
+    stageAdmin();
+    stageCreate("frank");
+    Mockito.doThrow(new StalwartMailClient.StalwartApiException("JMAP request failed: refused"))
+        .when(mail).ensureDomain(Mockito.anyString());
+
+    var res = ctrl.create(new UsersController.CreateReq(
+        "frank", "reallystrong-2026", "user", null, null, null));
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(res.getBody().user().username()).isEqualTo("frank");
+    var outcome = res.getBody().mailbox();
+    assertThat(outcome.requested()).isTrue();
+    assertThat(outcome.created()).isFalse();
+    assertThat(outcome.error()).contains("not reachable");
+  }
 
   private void stageAdmin() {
     Mockito.when(currentUser.currentRole()).thenReturn(Optional.of(Role.ADMIN));

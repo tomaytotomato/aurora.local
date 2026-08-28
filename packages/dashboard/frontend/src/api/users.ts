@@ -32,6 +32,18 @@ export interface CreateUserRequest {
   password?: string;
   role: Role;
   tz?: string | null;
+  /**
+   * Mailbox address for the auto-created mailbox. A bare local part
+   * (mailbox on the box domain) or a full `local@domain`. Omit to use the
+   * default `<username>@<box-domain>`. The mailbox password is the user's
+   * own password.
+   */
+  email?: string;
+  /**
+   * Whether to auto-create a mailbox for the new user (default true on the
+   * server). Send false to create a login with no mailbox.
+   */
+  createMailbox?: boolean;
 }
 
 export interface UpdateUserRequest {
@@ -49,9 +61,28 @@ export interface UpdateUserRequest {
  * so a lost value means a reset, not a lookup. Show it, let the admin copy
  * it, and do not persist it client-side either.
  */
+/**
+ * What happened to the new user's auto-provisioned mailbox. The mailbox
+ * shares the user's own password. Best-effort on the server: a mail
+ * failure never fails user creation, so `created` can be false with the
+ * user still made — `error` says why.
+ */
+export interface MailboxOutcome {
+  /** Whether a mailbox was attempted (false only when the admin opted out). */
+  requested: boolean;
+  /** The address Aurora tried to create; null when not requested. */
+  email: string | null;
+  /** True when the mailbox now exists and works. */
+  created: boolean;
+  /** A human reason when requested but not created; null on success. */
+  error: string | null;
+}
+
 export interface CreatedUser {
   user: UserSummary;
   generatedPassword: string | null;
+  /** Outcome of the auto-mailbox provisioning. Absent on older servers. */
+  mailbox?: MailboxOutcome;
 }
 
 export interface GeneratedPassword {

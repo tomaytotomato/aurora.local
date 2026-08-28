@@ -1700,6 +1700,18 @@ paths:
                   description: >-
                     Optional. Omit or leave blank and Aurora generates a strong
                     passphrase, returned once as generatedPassword.
+                email:
+                  type: string
+                  description: >-
+                    Optional mailbox address for the auto-created mailbox. A
+                    bare local part (mailbox on the box domain) or a full
+                    local@domain. Omitted means <username>@<box-domain>.
+                createMailbox:
+                  type: boolean
+                  description: >-
+                    Whether to auto-create a mailbox for the new user (default
+                    true). The mailbox password is the user's own password.
+                    Set false to create a login with no mailbox.
       responses:
         '201':
           description: Created.
@@ -3417,6 +3429,34 @@ components:
             and stored nowhere, so a lost value means a reset, not a lookup.
             Null when the caller supplied their own -- we never echo back a
             secret the client already holds.
+        mailbox:
+          $ref: '#/components/schemas/MailboxOutcome'
+
+    MailboxOutcome:
+      type: object
+      description: >-
+        What happened to the new user's auto-provisioned mailbox. The
+        mailbox shares the user's own password. Best-effort: a mail
+        failure never fails user creation.
+      required: [requested, created]
+      properties:
+        requested:
+          type: boolean
+          description: Whether a mailbox was attempted (false only when the admin opted out).
+        email:
+          type: string
+          nullable: true
+          description: The address Aurora tried to create; null when not requested.
+        created:
+          type: boolean
+          description: True when the mailbox now exists and works.
+        error:
+          type: string
+          nullable: true
+          description: >-
+            A human reason when a mailbox was requested but not created
+            (mail server down, password too weak, address taken); null on
+            success.
 
     GeneratedPassword:
       type: object

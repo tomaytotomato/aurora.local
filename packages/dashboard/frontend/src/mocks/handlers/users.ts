@@ -19,7 +19,10 @@ export const usersHandlers = [
   }),
 
   http.post('/api/users', async ({ request }) => {
-    const body = (await request.json()) as { username: string; role: Role; password: string; tz?: string };
+    const body = (await request.json()) as {
+      username: string; role: Role; password?: string; tz?: string;
+      email?: string; createMailbox?: boolean;
+    };
     if (state.users.some((u) => u.username === body.username)) {
       return HttpResponse.json({ message: 'That username is already taken.' }, { status: 409 });
     }
@@ -31,7 +34,29 @@ export const usersHandlers = [
       createdAt: nowIso(),
     };
     state.users = [...state.users, user];
-    return HttpResponse.json(user, { status: 201 });
+    // Aurora generates a password when the caller left it blank; echoed
+    // once. Mailbox is auto-provisioned unless opted out, at
+    // <username>@aurora.local (or the supplied email), same password.
+    const generatedPassword = body.password ? null : 'mock-generated-passphrase-42';
+    const wantsMailbox = body.createMailbox !== false;
+    const email = wantsMailbox
+      ? (body.email && body.email.includes('@')
+          ? body.email
+          : `${body.email || body.username}@aurora.local`)
+      : null;
+    return HttpResponse.json(
+      {
+        user,
+        generatedPassword,
+        mailbox: {
+          requested: wantsMailbox,
+          email,
+          created: wantsMailbox,
+          error: null,
+        },
+      },
+      { status: 201 },
+    );
   }),
 
   http.put('/api/users/:id', async ({ params, request }) => {

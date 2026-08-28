@@ -152,6 +152,12 @@ afterEach(() => {
   _resetToastDedupe();
   delete (http.defaults as { adapter?: AxiosAdapter }).adapter;
   vi.restoreAllMocks();
+  // Dialogs + dropdowns teleport their panels to <body>; @vue/test-utils
+  // unmounts the component root but not the teleported content, so a
+  // prior test's create dialog (and its duplicate data-test nodes) would
+  // otherwise linger and shadow the next test's fresh panel. Wipe any
+  // residue so each test sees only its own teleported DOM.
+  document.body.innerHTML = '';
 });
 
 // ─── tests ─────────────────────────────────────────────────────────────
@@ -275,5 +281,109 @@ describe('UsersView — delete', () => {
     expect(del).toBeTruthy();
     expect(useToastQueue().queue.some((t) => t.description?.includes('Deleted alice')))
       .toBe(true);
+  });
+});
+
+describe('UsersView — auto mailbox on create', () => {
+  async function openCreate() {
+    stubResponse({ method: 'get', url: '/users', data: SAMPLE_USERS });
+    const { w } = await mountUsersView('admin');
+    w.get('[data-test="users-create"]').element.dispatchEvent(new MouseEvent('click'));
+    await settle();
+    return w;
+  }
+
+  function field(test: string): HTMLInputElement {
+    // Dialogs teleport to <body> and a prior test's panel can linger in
+    // jsdom between mounts, so several elements may share a data-test.
+    // Take the LAST match — the one this test's freshly-opened dialog
+    // rendered — rather than a stale earlier one.
+    const all = document.querySelectorAll<HTMLInputElement>(`[data-test="${test}"]`);
+    return all[all.length - 1];
+  }
+
+  function control(test: string): HTMLElement {
+    const all = document.querySelectorAll<HTMLElement>(`[data-test="${test}"]`);
+    return all[all.length - 1];
+  }
+
+  async function typeInto(test: string, value: string) {
+    const el = field(test);
+    el.value = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    await settle();
+  }
+
+  it('defaults the mailbox on, previewing <username>@domain', async () => {
+    await openCreate();
+    // The mailbox toggle is on by default, so the email field shows.
+    expect(field('users-create-email')).toBeTruthy();
+    await typeInto('users-create-username', 'sam');
+    // Preview text uses the typed username against the box domain. Scope
+    // to the create dialog specifically — several dialogs render to body.
+    const createDialog = field('users-create-email').closest('[data-slot="dialog-content"]')!;
+    expect(createDialog.textContent).toContain('sam@aurora.local');
+  });
+
+  it('sends createMailbox:true with the default (blank) email', async () => {
+    stubResponse({ method: 'post', url: '/users', status: 201, data: {
+      user: { id: 3, username: 'sam', role: 'user', tz: 'UTC', createdAt: '2026-03-01T00:00:00Z' },
+      generatedPassword: 'gen-pass-123456',
+      mailbox: { requested: true, email: 'sam@aurora.local', created: true, error: null },
+    }});
+    await openCreate();
+    await typeInto('users-create-username', 'sam');
+    control('users-create-submit').click();
+    await settle();
+
+    const post = captured.find((c) => c.method === 'post' && c.url === '/users');
+    expect(post).toBeTruthy();
+    const body = post!.body as { createMailbox?: boolean; email?: string };
+    expect(body.createMailbox).toBe(true);
+    expect(body.email).toBeUndefined(); // blank -> server default
+    // The issued-password modal names the ready mailbox.
+    expect(control('users-issued-mailbox').textContent)
+      .toContain('sam@aurora.local');
+  });
+
+  it('omits email + createMailbox:false when the toggle is off', async () => {
+    stubResponse({ method: 'post', url: '/users', status: 201, data: {
+      user: { id: 4, username: 'nomail', role: 'user', tz: 'UTC', createdAt: '2026-03-01T00:00:00Z' },
+      generatedPassword: 'gen-pass-123456',
+      mailbox: { requested: false, email: null, created: false, error: null },
+    }});
+    await openCreate();
+    await typeInto('users-create-username', 'nomail');
+    // Untick the mailbox toggle.
+    control('users-create-mailbox-toggle').click();
+    await settle();
+    // Email field is hidden when the toggle is off.
+    expect(field('users-create-email')).toBeFalsy();
+
+    control('users-create-submit').click();
+    await settle();
+
+    const post = captured.find((c) => c.method === 'post' && c.url === '/users');
+    const body = post!.body as { createMailbox?: boolean; email?: string };
+    expect(body.createMailbox).toBe(false);
+    expect(body.email).toBeUndefined();
+  });
+
+  it('surfaces a mailbox that could not be made, without failing the user', async () => {
+    stubResponse({ method: 'post', url: '/users', status: 201, data: {
+      user: { id: 5, username: 'late', role: 'user', tz: 'UTC', createdAt: '2026-03-01T00:00:00Z' },
+      generatedPassword: 'gen-pass-123456',
+      mailbox: { requested: true, email: 'late@aurora.local', created: false,
+        error: 'the mail server is not reachable right now' },
+    }});
+    await openCreate();
+    await typeInto('users-create-username', 'late');
+    control('users-create-submit').click();
+    await settle();
+
+    // The password modal still shows (user was created) but warns about mail.
+    expect(control('users-issued-password')).toBeTruthy();
+    expect(control('users-issued-mailbox-error').textContent)
+      .toContain('not reachable');
   });
 });
