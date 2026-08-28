@@ -659,4 +659,96 @@ describe('CoreServiceDetail', () => {
     expect(wrapper.find('[data-test="stalwart-admin-secret"]').text())
       .toContain('abc123-strong-value');
   });
+
+  // ─── Create mailbox panel ────────────────────────────────────
+
+  it('renders the create-mailbox panel only for Stalwart', async () => {
+    const caddy = await mountDetail('caddy');
+    expect(caddy.find('[data-test="stalwart-mailbox-panel"]').exists()).toBe(false);
+
+    const stalwart = await mountWithDomain('stalwart', 'aurora.local');
+    expect(stalwart.find('[data-test="stalwart-mailbox-panel"]').exists()).toBe(true);
+    // The address preview shows the box's own domain.
+    expect(stalwart.find('[data-test="stalwart-mailbox-panel"]').text()).toContain('aurora.local');
+  });
+
+  it('disables Create until the local part is valid', async () => {
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+    const btn = () => wrapper.find('[data-test="stalwart-mailbox-create"]');
+    // Empty -> disabled.
+    expect(btn().attributes('disabled')).toBeDefined();
+    // Invalid (space + capital + bang) -> still disabled.
+    await wrapper.find('[data-test="stalwart-mailbox-localpart"]').setValue('Bad Name!');
+    expect(btn().attributes('disabled')).toBeDefined();
+    // Valid -> enabled.
+    await wrapper.find('[data-test="stalwart-mailbox-localpart"]').setValue('bruce');
+    expect(btn().attributes('disabled')).toBeUndefined();
+  });
+
+  it('creates a mailbox and shows the one-time password', async () => {
+    const spy = vi.spyOn(StalwartApi, 'createMailbox').mockResolvedValue({
+      email: 'bruce@aurora.local',
+      password: 'damson-onyx-bison-pebble',
+    });
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+
+    await wrapper.find('[data-test="stalwart-mailbox-localpart"]').setValue('bruce');
+    await wrapper.find('[data-test="stalwart-mailbox-create"]').trigger('click');
+    await flushPromises();
+
+    expect(spy).toHaveBeenCalledWith('bruce');
+    // The one-time result panel replaces the form and shows both fields.
+    const result = wrapper.find('[data-test="stalwart-mailbox-result"]');
+    expect(result.exists()).toBe(true);
+    expect(wrapper.find('[data-test="stalwart-mailbox-email"]').text()).toBe('bruce@aurora.local');
+    expect(wrapper.find('[data-test="stalwart-mailbox-password"]').text()).toBe('damson-onyx-bison-pebble');
+    // The form is hidden while the password is on screen.
+    expect(wrapper.find('[data-test="stalwart-mailbox-create"]').exists()).toBe(false);
+  });
+
+  it('surfaces a 409 as a friendly already-exists message', async () => {
+    vi.spyOn(StalwartApi, 'createMailbox').mockRejectedValue({ response: { status: 409 } });
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+
+    await wrapper.find('[data-test="stalwart-mailbox-localpart"]').setValue('bruce');
+    await wrapper.find('[data-test="stalwart-mailbox-create"]').trigger('click');
+    await flushPromises();
+
+    const err = wrapper.find('[data-test="stalwart-mailbox-error"]');
+    expect(err.exists()).toBe(true);
+    expect(err.text().toLowerCase()).toContain('already exists');
+    // No result panel on failure.
+    expect(wrapper.find('[data-test="stalwart-mailbox-result"]').exists()).toBe(false);
+  });
+
+  it('surfaces a 502 as a mail-server-unreachable message', async () => {
+    vi.spyOn(StalwartApi, 'createMailbox').mockRejectedValue({ response: { status: 502 } });
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+
+    await wrapper.find('[data-test="stalwart-mailbox-localpart"]').setValue('bruce');
+    await wrapper.find('[data-test="stalwart-mailbox-create"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="stalwart-mailbox-error"]').text().toLowerCase())
+      .toContain('not reachable');
+  });
+
+  it('dismisses the one-time password panel back to the form', async () => {
+    vi.spyOn(StalwartApi, 'createMailbox').mockResolvedValue({
+      email: 'bruce@aurora.local',
+      password: 'damson-onyx-bison-pebble',
+    });
+    const wrapper = await mountWithDomain('stalwart', 'aurora.local');
+
+    await wrapper.find('[data-test="stalwart-mailbox-localpart"]').setValue('bruce');
+    await wrapper.find('[data-test="stalwart-mailbox-create"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-test="stalwart-mailbox-result"]').exists()).toBe(true);
+
+    await wrapper.find('[data-test="stalwart-mailbox-done"]').trigger('click');
+    await flushPromises();
+    // Back to the form, no lingering password.
+    expect(wrapper.find('[data-test="stalwart-mailbox-result"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="stalwart-mailbox-create"]').exists()).toBe(true);
+  });
 });

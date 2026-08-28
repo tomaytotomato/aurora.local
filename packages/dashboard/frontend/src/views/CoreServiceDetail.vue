@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { findCoreService, resolveOpenUrl } from '@/api/core-services';
 import { SsoApi, type SsoNotification } from '@/api/sso';
-import { StalwartApi, type StalwartAdminCredential } from '@/api/stalwart';
+import { StalwartApi, type StalwartAdminCredential, type MailboxCreated } from '@/api/stalwart';
 import { useSystemStore } from '@/stores/system';
 import { copyToClipboard } from '@/lib/utils';
 import { humanCopyForError } from '@/lib/http-error-copy';
@@ -260,6 +260,82 @@ async function copyStalwartSecret(): Promise<void> {
 }
 const stalwartCopied = ref<'ok' | 'fail' | null>(null);
 
+// ── Create mailbox ───────────────────────────────────────────
+//
+// Aurora auto-provisions the box's mail domain on boot, so the mail
+// server is ready with zero setup — but a mailbox needs a password, and
+// that is the one genuinely per-operator decision. Rather than make the
+// operator invent (and then forget) a strong password, the backend
+// GENERATES one and returns it ONCE. This panel is the one-time reveal:
+// the operator types the address they want (the domain is the box's own,
+// appended automatically), and gets back a working mailbox + a password
+// they must copy now because it is never stored in plaintext and cannot
+// be shown again — the same contract as the admin-password reset.
+const mailboxLocalPart = ref('');
+const mailboxCreating = ref(false);
+const mailboxError = ref<string | null>(null);
+const mailboxResult = ref<MailboxCreated | null>(null);
+const mailboxCopied = ref<'ok' | 'fail' | null>(null);
+
+// The box's own domain — same source the Open CTA and Settings read, so
+// the address preview here matches what the mailbox actually becomes
+// (the backend appends the box domain server-side). Falls back to the
+// canonical example before system.info hydrates.
+const mailDomain = computed(() => system.info?.domain || 'aurora.local');
+
+// Mirrors the backend's CreateMailboxReq pattern: lowercase letters,
+// numbers, dot, dash, underscore; can't start/end with a separator.
+// Validated here so an obvious typo never makes a round trip, and the
+// button can disable until the field is plausibly valid.
+const LOCAL_PART_RE = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
+const mailboxLocalPartValid = computed(
+  () => LOCAL_PART_RE.test(mailboxLocalPart.value.trim()) && mailboxLocalPart.value.trim().length <= 64,
+);
+
+async function createMailbox(): Promise<void> {
+  const local = mailboxLocalPart.value.trim();
+  if (!mailboxLocalPartValid.value) {
+    mailboxError.value = 'Use lowercase letters, numbers, dot, dash or underscore.';
+    return;
+  }
+  mailboxCreating.value = true;
+  mailboxError.value = null;
+  mailboxResult.value = null;
+  try {
+    mailboxResult.value = await StalwartApi.createMailbox(local);
+    mailboxLocalPart.value = '';
+  } catch (e) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    if (status === 403) {
+      mailboxError.value = 'Only admins can create mailboxes.';
+    } else if (status === 409) {
+      mailboxError.value = `A mailbox “${local}” already exists. Pick a different name.`;
+    } else if (status === 502) {
+      mailboxError.value = 'The mail server is not reachable right now. Try again in a moment.';
+    } else if (status === 400) {
+      mailboxError.value = 'Use lowercase letters, numbers, dot, dash or underscore.';
+    } else {
+      mailboxError.value = humanCopyForError(e, { subject: 'the mailbox', action: 'create' });
+    }
+  } finally {
+    mailboxCreating.value = false;
+  }
+}
+
+async function copyMailboxPassword(): Promise<void> {
+  const pw = mailboxResult.value?.password;
+  if (!pw) return;
+  const ok = await copyToClipboard(pw);
+  mailboxCopied.value = ok ? 'ok' : 'fail';
+  window.setTimeout(() => { mailboxCopied.value = null; }, 2500);
+}
+
+/** Dismiss the one-time password panel once the operator has copied it. */
+function dismissMailboxResult(): void {
+  mailboxResult.value = null;
+  mailboxCopied.value = null;
+}
+
 // Reset reveal state when the operator navigates between services so
 // leaving Stalwart and coming back does not still render a stale
 // plaintext under the Reveal button.
@@ -274,6 +350,12 @@ watch(isStalwart, (nowStalwart) => {
     stalwartNewPasswordRevealed.value = false;
     stalwartSaveError.value = null;
     stalwartSaveSuccess.value = false;
+    // Also clear any in-flight / completed mailbox creation so navigating
+    // away and back does not leave a stale one-time password on screen.
+    mailboxLocalPart.value = '';
+    mailboxError.value = null;
+    mailboxResult.value = null;
+    mailboxCopied.value = null;
   }
 });
 
@@ -675,6 +757,110 @@ function toggleBody(i: number): void {
             picks up the new value.
           </AlertDescription>
         </Alert>
+      </Card>
+    </div>
+
+    <!-- Stalwart-specific: create a mailbox. Aurora auto-provisions the
+         mail domain, so this is the one per-operator step. The backend
+         generates the password and returns it once; this panel is the
+         one-time reveal + copy. Admin-only on the server. -->
+    <div v-if="isStalwart" data-test="stalwart-mailbox-panel" class="mb-6">
+      <div class="mb-3 on-photo">
+        <h2 class="mb-1">Create a mailbox</h2>
+        <p class="text-sm">
+          Add an email address on
+          <code class="font-mono">{{ mailDomain }}</code>. Aurora sets a
+          strong password for you and shows it once — copy it before you
+          close the panel.
+        </p>
+      </div>
+
+      <Card class="p-6">
+        <!-- The one-time password result. Shown after a successful create;
+             the password is never retrievable again, so it stays until the
+             operator explicitly dismisses it. -->
+        <div
+          v-if="mailboxResult"
+          data-test="stalwart-mailbox-result"
+          class="space-y-4"
+        >
+          <Alert data-test="stalwart-mailbox-success">
+            <AlertDescription>
+              Mailbox <strong class="font-mono">{{ mailboxResult.email }}</strong>
+              is ready. This password is shown once and cannot be recovered —
+              copy it now and give it to whoever owns the mailbox.
+            </AlertDescription>
+          </Alert>
+
+          <dl class="grid grid-cols-1 sm:grid-cols-[max-content_1fr] gap-x-6 gap-y-3 text-sm">
+            <dt class="text-muted-foreground">Address</dt>
+            <dd class="font-mono text-foreground select-all" data-test="stalwart-mailbox-email">
+              {{ mailboxResult.email }}
+            </dd>
+
+            <dt class="text-muted-foreground">Password</dt>
+            <dd class="flex items-center gap-3 flex-wrap">
+              <code
+                class="font-mono text-foreground select-all"
+                data-test="stalwart-mailbox-password"
+              >{{ mailboxResult.password }}</code>
+              <Button
+                variant="secondary"
+                size="sm"
+                data-test="stalwart-mailbox-copy"
+                @click="copyMailboxPassword"
+              >{{ mailboxCopied === 'ok' ? 'Copied' : mailboxCopied === 'fail' ? 'Copy failed' : 'Copy' }}</Button>
+            </dd>
+          </dl>
+
+          <div class="flex items-center gap-3 pt-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              data-test="stalwart-mailbox-done"
+              @click="dismissMailboxResult"
+            >Done — I've copied it</Button>
+          </div>
+        </div>
+
+        <!-- The create form. Hidden while a result is on screen so the
+             one-time password is not competing with a fresh form. -->
+        <div v-else class="space-y-4">
+          <div>
+            <Label for="stalwart-mailbox-localpart" class="mb-1 block">Email address</Label>
+            <div class="flex items-center gap-2 flex-wrap">
+              <Input
+                id="stalwart-mailbox-localpart"
+                :model-value="mailboxLocalPart"
+                placeholder="e.g. bruce"
+                autocomplete="off"
+                class="max-w-[16rem]"
+                data-test="stalwart-mailbox-localpart"
+                @update:model-value="mailboxLocalPart = $event"
+                @keyup.enter="createMailbox"
+              />
+              <span class="font-mono text-muted-foreground">@{{ mailDomain }}</span>
+            </div>
+            <p class="text-xs text-muted-foreground mt-1">
+              Lowercase letters, numbers, dot, dash or underscore.
+            </p>
+          </div>
+
+          <Alert
+            v-if="mailboxError"
+            variant="destructive"
+            data-test="stalwart-mailbox-error"
+          >
+            <AlertDescription>{{ mailboxError }}</AlertDescription>
+          </Alert>
+
+          <Button
+            :loading="mailboxCreating"
+            :disabled="!mailboxLocalPartValid || mailboxCreating"
+            data-test="stalwart-mailbox-create"
+            @click="createMailbox"
+          >Create mailbox</Button>
+        </div>
       </Card>
     </div>
 

@@ -56,4 +56,35 @@ export const StalwartApi = {
   async updateAdminSecret(secret: string): Promise<void> {
     await http.put('/services/stalwart/admin-secret', { secret }, { toast: false });
   },
+
+  /**
+   * Create a mailbox on the box's own mail domain. Aurora provisions the
+   * domain automatically; this is the one per-operator step because a
+   * mailbox needs a password. The backend GENERATES a strong one and
+   * returns it ONCE — it is never stored in plaintext and cannot be shown
+   * again, so the caller must surface it for the operator to copy now.
+   * Admin-only. 409 = already exists / weak password; 502 = mail server
+   * unreachable. Errors surfaced inline (a form submit, not a toast).
+   */
+  async createMailbox(localPart: string): Promise<MailboxCreated> {
+    const { data } = await http.post<MailboxCreated>(
+      '/services/stalwart/mailboxes',
+      { localPart },
+      { toast: false },
+    );
+    return data;
+  },
 };
+
+/**
+ * A freshly created mailbox and its one-time password. Mirrors
+ * StalwartController.MailboxCreated on the backend. The password is shown
+ * once and never retrievable again — same contract as the admin-password
+ * reset.
+ */
+export interface MailboxCreated {
+  /** The created address, localPart@<box-domain>. */
+  email: string;
+  /** The generated password, shown once. Copy it now or it's gone. */
+  password: string;
+}
