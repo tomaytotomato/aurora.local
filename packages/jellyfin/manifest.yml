@@ -1,10 +1,9 @@
 name: jellyfin
 title: Media server (Jellyfin)
 description: |
-  Jellyfin is a free, self-hosted media server: it plays the films, TV,
-  and music the arr stack collects, to a browser, a TV app, or a phone.
-  No account, no subscription, hardware transcoding included. Seerr
-  (in the media package) points at it for requests.
+  Your own Netflix, for the films, TV and music on this box. Watch in a
+  browser, on a smart TV, or on a phone. No subscription, no account with
+  anyone else, and it keeps working if the internet goes down.
 
 category: media
 icon: jellyfin

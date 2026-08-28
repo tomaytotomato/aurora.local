@@ -1,10 +1,13 @@
 name: privacy
 title: Privacy (LAN DNS + VPN)
 description: |
-  AdGuard Home is the LAN's DNS server + ad/tracker blocker; point
-  your router's DHCP DNS at this box after first boot. Gluetun is a
-  provider-agnostic VPN sidecar exposing its network namespace to
-  other packages (e.g. qBittorrent in media/torrent profile).
+  Blocks ads and trackers for every device in the house, and gives this
+  box's apps their names — photos.aurora.local instead of an IP address
+  and a port. Aurora sets it up with your own account; nothing to
+  configure.
+
+  It also includes an optional VPN connection that only the download
+  apps use, off unless you turn it on.
 
 category: privacy
 icon: adguard-home

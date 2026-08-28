@@ -47,8 +47,8 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C1 | blocker | `<service>.aurora.local` does not resolve on Linux/Android clients | [ ] |
 | C2 | blocker | 2FA-gated apps are unreachable: enrolment codes land in a server file | [ ] |
 | C3 | blocker | Installed AdGuard has no Open link anywhere | [x] |
-| C4 | blocker | App detail dumps the operator README (CLI steps) into Sarah's UI | [ ] |
-| C5 | blocker | Config card renders raw `.env` comment art and env var names | [ ] |
+| C4 | blocker | App detail dumps the operator README (CLI steps) into Sarah's UI | [x] |
+| C5 | blocker | Config card renders raw `.env` comment art and env var names | [x] |
 | C6 | friction | "UNHEALTHY" badge next to "Enabled and running" | [ ] |
 | C7 | friction | "couldn't reach the registry last time it looked" + "Checked never." | [ ] |
 | C8 | friction | Every install adds a HIGH finding Aurora itself caused, with no fix | [ ] |
@@ -61,6 +61,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C15 | polish | `/users` heading is unreadable against the hero image | [ ] |
 | C16 | polish | Catalogue: no search, three webmails, truncated copy, missing icons | [ ] |
 | C17 | polish | "Ask whoever set up this box" — Sarah *is* that person | [ ] |
+| C18 | friction | Manifest descriptions still written for operators (found while fixing C4) | [ ] |
 | D1 | polish | `Essence.md` is unreferenced and inconsistently named | [ ] |
 | D2 | polish | README package table lists 12 of 18 packages | [ ] |
 
@@ -423,6 +424,15 @@ product, and it sits on the page users visit most.
 moves behind a collapsed "For the owner (advanced)" disclosure. Update
 `docs/PACKAGE_CONTRACT.md` and every package.
 
+**SHIPPED (simpler than the plan):** no new manifest field was needed — the
+manifest already carries a `description`, written for the person deciding whether
+they want the app. About now renders that, and the README moves into a closed
+`Setup notes for the owner · technical` disclosure on both the pre-install
+preview and the installed page. Nothing is deleted; it just stops being the first
+thing a non-technical owner reads. The `privacy` and `jellyfin` descriptions were
+rewritten to carry that weight ("Your own Netflix, for the films, TV and music on
+this box"); the rest are follow-up C18.
+
 ### C5 · [blocker] Config card renders `.env` comment art
 The "What you'll be asked to set" table shows `VPN_SERVICE_PROVIDER`,
 `WIREGUARD_PRIVATE_KEY`, `FIREWALL_OUTBOUND_SUBNETS`, each with the raw comment
@@ -434,6 +444,13 @@ profile-gated).
 **Fix:** render label/help from manifest-declared fields (human label, one-line
 help, whether it is genuinely required *for the selected profile*), never raw
 `.env` comments. Hide the whole card when nothing is required.
+
+**SHIPPED:** `lib/envCopy.ts` (`humanEnvLabel`, `cleanEnvHelp`, 8 tests) turns
+`WIREGUARD_PRIVATE_KEY` into "Wireguard private key" and strips the divider art
+(`---- gluetun: provider selection ----`) plus everything after the first
+sentence. The pre-install card now lists only genuinely required values under
+"What you'll need to hand", with "Aurora fills in everything else"; the installed
+Config tab uses the same two helpers, so the two surfaces cannot drift.
 
 ### C6 · [friction] "UNHEALTHY" next to "Enabled and running"
 Right after a successful install, the privacy page header showed a red
@@ -522,6 +539,19 @@ default; opt-in NVIDI…"); SnappyMail and SilverBullet render blank/letter icon
 **Fix:** add search + outcome chips ("Watch", "Block ads", "Photos"), pick a
 default webmail and mark the others "alternative", clamp descriptions on a word
 boundary, fix the two icons.
+
+### C18 · [friction] Manifest descriptions are still written for operators
+Now that About renders the manifest `description` instead of the README (C4),
+that one paragraph is the only thing most owners will read about an app. Several
+are still operator prose: "Prometheus scrapes node_exporter (host) and cAdvisor
+(containers)", "Debrid-first (RDTClient) with qBittorrent-behind-gluetun as the
+local fallback", "A front end only — the mail server (Stalwart) lives in the core
+stack; this connects to it over JMAP". `privacy` and `jellyfin` were rewritten
+when C4 landed; the rest have not been.
+
+**Fix:** one pass over every `packages/*/manifest.yml` description: what it does
+for the household, in two or three sentences, no component names unless the
+owner would recognise them.
 
 ### C17 · [polish] Wrong-audience copy
 Settings → App marketplace: *"Ask whoever set up this box to turn it on."* Same

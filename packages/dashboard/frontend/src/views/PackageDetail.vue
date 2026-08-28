@@ -31,6 +31,7 @@ import PackageResourcesCard from '@/components/PackageResourcesCard.vue';
 import PackageImpactPanel from '@/components/PackageImpactPanel.vue';
 import PackagePreview from '@/components/PackagePreview.vue';
 import MarkdownBlock from '@/components/MarkdownBlock.vue';
+import { humanEnvLabel, cleanEnvHelp } from '@/lib/envCopy';
 import { Alert, AlertDescription, Button, Dialog, Input, Label, Skeleton } from '@/components/ui';
 
 const route = useRoute();
@@ -95,15 +96,19 @@ const links = computed(() => (detail.value ? packageLinks(detail.value) : []));
 
 // The backend serves packages/<name>/README.md verbatim, heading and all,
 // so the leading `# Title` is stripped here rather than rendered above the
-// one the header already shows. Falls back to the description for a
-// package that ships no README.
+// one the header already shows.
+//
+// The README is *not* the About text. It is the owner's setup document —
+// "copy .env.example to .env", `./scripts/up.sh privacy`, uncomment the
+// devices: block for hardware transcoding — and rendering it as the first
+// thing on an app's page put the densest concentration of terminal
+// instructions in the product on the screen users visit most, three inches
+// under a button that already does the job. About is the manifest's own
+// one-paragraph description; the README sits in a closed disclosure for the
+// person who wants it.
 const readmeBody = computed(() => (detail.value?.readme ?? '').replace(/^#\s+.*\n+/, '').trim());
-const aboutBody = computed(() => readmeBody.value || (detail.value?.description ?? '').trim());
-// The About body is markdown when it came from README.md and plain text
-// when it fell back to the manifest description. MarkdownBlock renders
-// both fine (plain text is a valid degenerate markdown document), so we
-// key off which one we actually used rather than sniffing for #/*.
-const aboutIsMarkdown = computed(() => !!readmeBody.value);
+const aboutBody = computed(() => (detail.value?.description ?? '').trim());
+const ownerNotes = computed(() => readmeBody.value);
 
 // Primary CTA target for an installed + running app: the first vhost
 // Caddy is serving for it. vhostsFor() in PackagesService already
@@ -202,11 +207,7 @@ const errors = computed(() => validateEnvForm(envSpecs.value, form));
 const hasErrors = computed(() => Object.keys(errors.value).length > 0);
 
 function fieldLabel(key: string): string {
-  return key
-    .toLowerCase()
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+  return humanEnvLabel(key);
 }
 
 function resetEnvFormState(): void {
@@ -746,15 +747,17 @@ onMounted(async () => {
           <Card class="col-span-2" data-test="package-about-card">
             <div class="eyebrow mb-1">About</div>
             <h3 class="mb-3">What this is</h3>
-            <!-- Package READMEs are authored markdown; the fallback
-                 description from the manifest is plain text. Both go
-                 through MarkdownBlock so headings, code and links
-                 render properly — previously this was `{{ aboutBody }}`
-                 inside a whitespace-pre-line paragraph, which surfaced
-                 raw `##` and `[text](url)` to the user. -->
-            <MarkdownBlock v-if="aboutBody && aboutIsMarkdown" :source="aboutBody" />
-            <p v-else-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
+            <p v-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
             <p v-else class="text-sm text-muted-foreground">No description yet.</p>
+
+            <details v-if="ownerNotes" class="mt-5 border-t border-border pt-4" data-test="package-owner-notes">
+              <summary class="text-sm text-muted-foreground cursor-pointer select-none">
+                Setup notes for the owner · technical
+              </summary>
+              <div class="mt-3">
+                <MarkdownBlock :source="ownerNotes" />
+              </div>
+            </details>
           </Card>
           <!-- Versions. Absent entirely when the updates domain has
                nothing for this app: a card that says "no data" is worse
@@ -942,7 +945,7 @@ onMounted(async () => {
                 >{{ revealed[spec.key] ? 'Hide' : 'Reveal' }}</Button>
               </div>
               <p v-if="errors[spec.key]" class="text-xs text-destructive mt-1">{{ errors[spec.key] }}</p>
-              <p v-else-if="spec.comment" class="text-xs text-muted-foreground mt-1">{{ spec.comment }}</p>
+              <p v-else-if="cleanEnvHelp(spec.comment)" class="text-xs text-muted-foreground mt-1">{{ cleanEnvHelp(spec.comment) }}</p>
             </div>
 
             <div class="flex items-center gap-3 pt-2">
