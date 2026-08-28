@@ -32,13 +32,23 @@ const props = withDefaults(defineProps<{
   lanIp?: string | null;
   port?: number;
   variant?: 'card' | 'inline';
+  /**
+   * Scheme for the name-based link. The Done page passes 'https': by the
+   * time the wizard reaches it the user has been walked through trusting
+   * this box's certificate, and handing them an http:// link three screens
+   * later undoes that. The IP fallback stays http — the certificate covers
+   * the name, not the address, so an https IP link would produce exactly
+   * the browser warning the trust step was for.
+   */
+  scheme?: 'http' | 'https';
 }>(), {
   variant: 'card',
+  scheme: 'http',
 });
 
 const mdnsHost = computed(() => renderIdentity(props.hostname, props.domain));
 const portSuffix = computed(() => (props.port ? `:${props.port}` : ''));
-const mdnsUrl = computed(() => `http://${mdnsHost.value}${portSuffix.value}`);
+const mdnsUrl = computed(() => `${props.scheme}://${mdnsHost.value}${portSuffix.value}`);
 const ipUrl = computed(() => (props.lanIp ? `http://${props.lanIp}${portSuffix.value}` : null));
 
 // Copy-feedback state, keyed by which button was clicked.
@@ -108,10 +118,11 @@ async function copy(kind: 'mdns' | 'ip'): Promise<void> {
       class="text-xs text-muted-foreground mt-4"
       data-test="reach-help"
     >
-      Use the mDNS name from any device that supports Bonjour / Avahi.
-      If Firefox on macOS refuses to resolve <code class="font-mono">{{ mdnsHost }}</code>,
-      or the site says "Unable to connect", paste the LAN IP link instead —
-      it never depends on mDNS working.
+      Bookmark the first one. Apple devices find
+      <code class="font-mono">{{ mdnsHost }}</code> on their own; Windows, Android and
+      Linux find it once this box is their DNS server — see below. The
+      address underneath always works, from anything, and never depends on
+      names resolving.
     </p>
   </section>
 </template>

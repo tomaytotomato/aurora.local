@@ -41,7 +41,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | B4 | friction | Wrong step reference ("trust the new TLS root (step 7)") | [x] |
 | B5 | friction | Step 7 (SSO) is silently skipped; 6 and 7 never tick | [x] |
 | B6 | blocker | "Password recovery" is promised in copy, unimplemented in fact | [ ] |
-| B7 | friction | Done step hands out `http://` right after the TLS-trust step | [ ] |
+| B7 | friction | Done step hands out `http://` right after the TLS-trust step | [x] |
 | B8 | polish | "Hostname & domain" step never lets you set the hostname | [x] |
 | B9 | polish | Welcome CPU string truncated mid-token | [ ] |
 | C1 | blocker | `<service>.aurora.local` does not resolve on Linux/Android clients | [ ] |
@@ -319,6 +319,14 @@ The Done step's "REACH THIS BOX AT" lists `http://aurora.local` and
 CA "so your browser stops warning". **Fix:** lead with
 `https://aurora.local`, keep the LAN-IP `http://` as the labelled fallback, and
 say which one to bookmark.
+
+**SHIPPED:** `ReachInfo` takes a `scheme` prop; Done passes `https` for the name
+and keeps `http` for the IP (the certificate covers the name, not the address, so
+an https IP link would produce the very warning the trust step exists to avoid).
+The help text now says which to bookmark and tells the per-platform truth.
+Done also gained the router-DNS card the DNS step promises — "set your router's
+DNS server to 192.168.0.110" with where to find it and what happens if you skip
+it — which was an unkept promise on the last screen of the wizard.
 
 ### B8 · [polish] The "Hostname & domain" step has no hostname
 Sidebar says "Hostname & domain"; the page is titled "Pick your domain" and only
