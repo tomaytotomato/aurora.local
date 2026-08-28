@@ -54,6 +54,7 @@ async function mountReview() {
     history: createMemoryHistory(),
     routes: [
       { path: '/onboarding/review', component: OnboardingReview },
+      { path: '/onboarding/sso', component: { template: '<div>sso</div>' } },
       { path: '/onboarding/done', component: { template: '<div>done</div>' } },
     ],
   });
@@ -81,7 +82,7 @@ afterEach(() => {
 });
 
 describe('OnboardingReview', () => {
-  it('installs and moves on to Done without ever calling /complete', async () => {
+  it('installs and moves on to the SSO step, never skipping it, and never calls /complete', async () => {
     const { w, store, router } = await mountReview();
 
     await w.find('[data-cta="primary"]').trigger('click');
@@ -93,7 +94,11 @@ describe('OnboardingReview', () => {
     expect(OnboardingApi.install).toHaveBeenCalledTimes(1);
     expect(OnboardingApi.complete).not.toHaveBeenCalled();
     expect(store.installResult).toEqual(INSTALL_RESULT);
-    expect(router.currentRoute.value.path).toBe('/onboarding/done');
+    // Not '/onboarding/done'. Jumping there skipped second-factor
+    // enrolment, which is what left every gated app unopenable on a fresh
+    // box — the reason the SSO step exists at all.
+    expect(router.currentRoute.value.path).toBe('/onboarding/sso');
+    expect([...store.completed]).toContain('review');
   });
 
   it('leaves onboarding on Review when install fails, and still never calls /complete', async () => {

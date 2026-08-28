@@ -39,7 +39,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | B2 | blocker | AdGuard is never provisioned; the DNS story never completes | [x] |
 | B3 | blocker | Vue escape leak: `${'{'}DOMAIN{'}'}` rendered to the user | [x] |
 | B4 | friction | Wrong step reference ("trust the new TLS root (step 7)") | [x] |
-| B5 | friction | Step 7 (SSO) is silently skipped; 6 and 7 never tick | [ ] |
+| B5 | friction | Step 7 (SSO) is silently skipped; 6 and 7 never tick | [x] |
 | B6 | blocker | "Password recovery" is promised in copy, unimplemented in fact | [ ] |
 | B7 | friction | Done step hands out `http://` right after the TLS-trust step | [ ] |
 | B8 | polish | "Hostname & domain" step never lets you set the hostname | [x] |
@@ -290,6 +290,12 @@ setup is dead weight in the stepper or it was skipped by accident; both read as
 
 **Fix:** if SSO needs no input, remove the step (7 steps, honest); otherwise run
 it. Mark every completed step complete when the wizard advances.
+
+**SHIPPED:** `OnboardingReview.install()` hardcoded `router.push('/onboarding/done')`.
+It now advances to whatever follows Review in `STEPS` (derived, not hardcoded)
+and marks Review complete, so the SSO step is reached and the sidebar ticks. This
+is also most of C2: that step is the only thing standing between a fresh box and
+"every gated app is impossible to open" — see below.
 
 ### B6 · [blocker] Password recovery is promised, then denied
 Step 2 body copy: *"If you lose the password, use the password recovery option

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useOnboardingStore } from '@/stores/onboarding';
+import { useOnboardingStore, nextStepFrom } from '@/stores/onboarding';
 import { OnboardingApi, type InstallPlan } from '@/api/onboarding';
 import Button from '@/components/ui/Button.vue';
 import { Alert, AlertDescription } from '@/components/ui';
@@ -95,7 +95,23 @@ async function install(): Promise<void> {
 
     // Small pause so the log renders before we navigate away.
     await new Promise((r) => setTimeout(r, 350));
-    router.push('/onboarding/done');
+    // Advance to whatever follows Review, rather than jumping to Done.
+    // Hardcoding '/onboarding/done' here skipped the SSO step entirely: the
+    // wizard went 6 → 8, the sidebar left both 6 and 7 unticked next to the
+    // words "Step 8 of 8", and — much worse — the operator never registered
+    // a second factor. Every *.DOMAIN vhost is policy: two_factor and the
+    // enrolment link is delivered into a file inside the Authelia
+    // container, so skipping that step is what made every gated app on a
+    // fresh box impossible to open without a shell. That step exists
+    // precisely to prevent this; it just was never reached.
+    //
+    // Derived from STEPS rather than from store.currentStep: this view can
+    // be mounted without the shell having synced the cursor, and "the step
+    // after review" is the actual intent either way.
+    const target = nextStepFrom('review') ?? 'done';
+    store.markCompleted('review');
+    store.goTo(target);
+    router.push(`/onboarding/${target}`);
   } catch (e) {
     installErr.value = classifyInstallError(e);
   } finally {
