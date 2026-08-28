@@ -204,7 +204,7 @@ export function isInfrastructurePackage(p: Pick<PackageSummary, 'name'>): boolea
  * `OnboardingService#install()` force-adds the same name again as a
  * belt-and-braces safety net if a step gets skipped via the sidebar.
  */
-export const MANDATORY_FIRST_RUN_PACKAGES: readonly string[] = ['core'];
+export const MANDATORY_FIRST_RUN_PACKAGES: readonly string[] = ['core', 'dashboard'];
 
 /** Only non-core packages can be enabled/disabled from the dashboard. */
 export function isRemovable(p: Pick<PackageSummary, 'name'>): boolean {

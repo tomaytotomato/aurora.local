@@ -565,15 +565,23 @@ public class OnboardingService {
   // ------------------------------------------------------------------
 
   /**
-   * The package every first-run box gets regardless of anything a client
-   * PATCHed — just the reverse proxy + SSO plane ({@code core}). Authelia
-   * ships inside {@code core} and is always-on, so SSO needs no separate
-   * mandatory entry or wizard toggle. {@code storage} is deferred (D5):
-   * LAN file sharing is now something the user adds later from the
-   * dashboard catalogue rather than a forced first-run package, so the
-   * onboarding wizard stays minimal.
+   * The packages every first-run box gets regardless of anything a client
+   * PATCHed: the reverse proxy + SSO plane ({@code core}) and the dashboard
+   * the user is looking at ({@code dashboard}). Authelia ships inside
+   * {@code core} and is always-on, so SSO needs no separate mandatory entry
+   * or wizard toggle. {@code storage} is deferred (D5): LAN file sharing is
+   * a day-2 catalogue install, not a forced first-run package.
+   *
+   * <p>{@code dashboard} is here because leaving it out was actively
+   * corrupting state. bootstrap.sh writes {@code enabled: [core, dashboard]},
+   * then the wizard's domain step PATCHes the baseline {@code [core]} over
+   * the top of it, and {@code .state.yml} ends up denying that the very
+   * container serving the wizard is installed. {@code scripts/up.sh} carries
+   * a 40-line "dashboard orphan guard" purely so that lie does not get the
+   * dashboard deleted as an orphan on the next launch. State should describe
+   * the box.
    */
-  private static final List<String> MANDATORY_PACKAGES = List.of("core");
+  private static final List<String> MANDATORY_PACKAGES = List.of("core", "dashboard");
 
   /**
    * The package that provides AdGuard Home. The DNS step of the wizard sells

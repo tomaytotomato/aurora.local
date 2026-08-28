@@ -53,7 +53,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C7 | friction | "couldn't reach the registry last time it looked" + "Checked never." | [x] |
 | C8 | friction | Every install adds a HIGH finding Aurora itself caused, with no fix | [ ] |
 | C9 | friction | Installing one app bounces every other running container | [ ] |
-| C10 | friction | `.state.yml` drops `dashboard` after the first in-app install | [ ] |
+| C10 | friction | `.state.yml` drops `dashboard` after the first in-app install | [x] |
 | C11 | friction | Settings claims it can't read the TLS root; the API serves it fine | [x] |
 | C12 | friction | TLS card: unexpanded `$DOMAIN`, Linux steps miss the browser store | [~] |
 | C13 | polish | "last 24 hours" metrics and 4-day uptime on a 20-minute-old box | [ ] |
