@@ -55,6 +55,13 @@ export function auditActionText(action: string): string {
     'auth.login': 'Signed in',
     'auth.logout': 'Signed out',
     'auth.password.change': 'Changed a password',
+    // Added with the recovery-code feature. Without them the fallback
+    // rendered 'auth.recovery_code.issue' as "Auth recovery code issue",
+    // which reads as a fault report — on the security-sensitive rows where
+    // a reader is least able to shrug off an apparent problem.
+    'auth.recovery_code.issue': 'Created a new recovery code',
+    'auth.recovery_code.redeem': 'Used the recovery code to set a password',
+    'auth.recovery_code.reject': 'A recovery code was entered incorrectly',
     'user.create': 'Added a user',
     'user.delete': 'Removed a user',
     'job.start': 'Started a task',

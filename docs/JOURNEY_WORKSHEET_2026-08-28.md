@@ -678,6 +678,13 @@ uptime) on a fresh install. **Fix:** label the window by what exists
 key → sentence map ("Published jellyfin.aurora.local on the network"), with the
 raw key behind a details toggle.
 
+**FOLLOW-UP (iteration 3):** the recovery-code feature added three audit keys
+after that map was written, so `auth.recovery_code.issue` fell through the
+generic path and rendered as **"Auth recovery code issue"** — a routine event
+reading as a fault, on exactly the rows a reader cannot shrug off. Spotted in a
+live screenshot, not by a test. Mapped, with a test that asserts the word
+"issue" never survives into that row.
+
 **SHIPPED:** `lib/eventCopy.ts` with two maps and 5 tests — container events read
 "stalwart is healthy", "adguard started", "jellyfin stopped responding"; audit
 rows read "Published an address on the network", "Set up the mail server",
