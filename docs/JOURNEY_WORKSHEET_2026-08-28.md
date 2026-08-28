@@ -49,8 +49,8 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C3 | blocker | Installed AdGuard has no Open link anywhere | [x] |
 | C4 | blocker | App detail dumps the operator README (CLI steps) into Sarah's UI | [x] |
 | C5 | blocker | Config card renders raw `.env` comment art and env var names | [x] |
-| C6 | friction | "UNHEALTHY" badge next to "Enabled and running" | [ ] |
-| C7 | friction | "couldn't reach the registry last time it looked" + "Checked never." | [ ] |
+| C6 | friction | "UNHEALTHY" badge next to "Enabled and running" | [x] |
+| C7 | friction | "couldn't reach the registry last time it looked" + "Checked never." | [x] |
 | C8 | friction | Every install adds a HIGH finding Aurora itself caused, with no fix | [ ] |
 | C9 | friction | Installing one app bounces every other running container | [ ] |
 | C10 | friction | `.state.yml` drops `dashboard` after the first in-app install | [ ] |
@@ -480,6 +480,13 @@ Right after a successful install, the privacy page header showed a red
 simply has no `HEALTHCHECK`. **Fix:** map "no healthcheck" → running (with a
 neutral "health not reported" tooltip); reserve unhealthy for real failures.
 
+**SHIPPED (root cause was different, and worse):** the red badge came from the
+probe's `needs-config` state — AdGuard's first-run detector firing because
+nothing had ever configured it (B2). B2 removes the cause; this removes the
+mislabel. `needs-config` now maps to its own amber `Needs setup` light instead of
+the red `Unhealthy` one, because "waiting for a human inside that app" and "this
+app is broken" are not the same sentence.
+
 ### C7 · [friction] Version card contradicts itself
 > Version unknown · UNCHECKED — "Aurora couldn't reach the image registry last
 > time it looked, so this is the version on the box rather than the newest one
@@ -487,6 +494,11 @@ neutral "health not reported" tooltip); reserve unhealthy for real failures.
 
 **Fix:** three honest states — never checked / checked at <time> / check failed
 at <time> — and only show the failure sentence for the third.
+
+**SHIPPED:** exactly that. A never-checked app now reads "Aurora hasn't checked
+for a newer version yet ... It checks on its own schedule, or you can use Check
+and update above" over "Not checked yet.", and the registry-unreachable sentence
+only appears when there really was a check.
 
 ### C8 · [friction] Aurora's own images generate HIGH findings, with no fix
 A 20-minute-old box shows 7 findings, 3 HIGH, all "Container X is not

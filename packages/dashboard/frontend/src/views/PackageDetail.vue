@@ -770,9 +770,13 @@ onMounted(async () => {
               <Badge v-else-if="updateUnknown" tone="warn">unchecked</Badge>
             </div>
 
-            <p v-if="updateUnknown" class="text-sm text-muted-foreground mb-3">
-              Aurora couldn't reach the image registry last time it looked, so this is the version
+            <p v-if="updateUnknown && update.lastCheckedAt" class="text-sm text-muted-foreground mb-3">
+              Aurora couldn't reach the image registry when it last looked, so this is the version
               on the box rather than the newest one available.
+            </p>
+            <p v-else-if="updateUnknown" class="text-sm text-muted-foreground mb-3">
+              Aurora hasn't checked for a newer version yet, so this is the version on the box.
+              It checks on its own schedule, or you can use Check and update above.
             </p>
 
             <div
@@ -799,7 +803,12 @@ onMounted(async () => {
             </ul>
 
             <p class="text-xs text-muted-foreground mt-3">
-              Checked {{ checkedLabel(update.lastCheckedAt) }}.
+              <!-- Three honest states, not two. "Aurora couldn't reach the
+                   registry last time it looked" printed directly above
+                   "Checked never." — two sentences contradicting each other
+                   inside one card, on a box that had simply never looked. -->
+              <template v-if="update.lastCheckedAt">Checked {{ checkedLabel(update.lastCheckedAt) }}.</template>
+              <template v-else>Not checked yet.</template>
               <template v-if="update.lastUpdatedAt"> Last updated {{ checkedLabel(update.lastUpdatedAt) }}.</template>
             </p>
           </Card>

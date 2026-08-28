@@ -108,7 +108,9 @@ describe('deriveStatusLight', () => {
   it('reflects the live probe state when one is available', () => {
     expect(deriveStatusLight({ loaded: true, enabled: true, running: true, probeState: 'starting' })).toBe('starting');
     expect(deriveStatusLight({ loaded: true, enabled: true, running: true, probeState: 'failed' })).toBe('unhealthy');
-    expect(deriveStatusLight({ loaded: true, enabled: true, running: true, probeState: 'needs-config' })).toBe('unhealthy');
+    // needs-config is an app waiting on a human, not a failure: it must
+    // not render as the red Unhealthy badge beside "Enabled and running".
+    expect(deriveStatusLight({ loaded: true, enabled: true, running: true, probeState: 'needs-config' })).toBe('needs-setup');
   });
 
   it('trusts the plain running boolean over an optimistic/pessimistic not-started probe', () => {
