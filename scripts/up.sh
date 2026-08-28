@@ -216,6 +216,14 @@ for ef in "${env_files[@]}"; do
   set +a
 done
 
+# Stamp build identity for any local `docker compose build` in this run, so
+# a box built from a working copy can still say which commit it is running.
+if command -v git >/dev/null 2>&1 && [[ -d "$REPO/.git" ]]; then
+  AURORA_BUILD_REVISION="$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  AURORA_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  export AURORA_BUILD_REVISION AURORA_BUILD_DATE
+fi
+
 # Auto-detect the docker group's gid so the dashboard container can read
 # /var/run/docker.sock without hard-coding a number that differs per
 # distro (packages/dashboard/compose.yml runs as ${AURORA_UID}:${DOCKER_GID}).

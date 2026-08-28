@@ -101,6 +101,24 @@ RUN addgroup -S aurora && adduser -S -G aurora -u 1000 aurora \
 
 COPY --from=backend /app/backend/target/aurora.jar /app/aurora.jar
 
+# Which build this actually is.
+#
+# A box could not tell you. The published :0.1.0 tag on GHCR was two days
+# behind main while calling itself 0.1.0, a fresh install pulled it, and
+# nothing in the UI or the API could say which commit was running — so
+# "have you got the fix?" was unanswerable without comparing image digests
+# by hand. These are plain build args so a local `docker compose build`
+# stamps the truth too; CI passes the real values.
+ARG AURORA_BUILD_REVISION=unknown
+ARG AURORA_BUILD_DATE=unknown
+ARG AURORA_BUILD_VERSION=dev
+ENV AURORA_BUILD_REVISION=${AURORA_BUILD_REVISION} \
+    AURORA_BUILD_DATE=${AURORA_BUILD_DATE} \
+    AURORA_BUILD_VERSION=${AURORA_BUILD_VERSION}
+LABEL org.opencontainers.image.revision=${AURORA_BUILD_REVISION} \
+      org.opencontainers.image.created=${AURORA_BUILD_DATE} \
+      org.opencontainers.image.version=${AURORA_BUILD_VERSION}
+
 EXPOSE 8090
 
 # JVM tuning: modest heap for a small admin app on a homelab box.

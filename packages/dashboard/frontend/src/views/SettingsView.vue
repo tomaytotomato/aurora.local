@@ -124,6 +124,26 @@ async function submitChangePassword(): Promise<void> {
 // will curl the endpoint directly, this card is for glanceability.
 const auditEvents = ref<AuditEvent[]>([]);
 const auditFilter = ref<string>('');
+/**
+ * "0.1.0 · a3c6227 · 28 Aug" when the image was stamped, "this build is
+ * unlabelled" when someone built it without the build args — which is the
+ * truth, and better than inventing a version.
+ */
+const buildLabel = computed(() => {
+  const b = system.info?.build;
+  if (!b) return 'unlabelled build';
+  const parts: string[] = [];
+  if (b.version) parts.push(b.version);
+  if (b.revision) parts.push(b.revision.slice(0, 7));
+  if (b.builtAt) {
+    const d = new Date(b.builtAt);
+    if (!Number.isNaN(d.getTime())) {
+      parts.push(d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }));
+    }
+  }
+  return parts.length ? parts.join(' · ') : 'unlabelled build';
+});
+
 const auditLoading = ref<boolean>(false);
 const auditErr = ref<string | null>(null);
 
@@ -265,6 +285,14 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
         <dl class="text-sm space-y-2">
           <div class="flex justify-between"><dt class="text-muted-foreground">Hostname</dt><dd class="font-mono">{{ info.hostname }}</dd></div>
           <div class="flex justify-between"><dt class="text-muted-foreground">Kernel</dt><dd class="font-mono">{{ info.kernel }}</dd></div>
+          <!-- Which Aurora this is. Without it, "have you got the fix?" was
+               unanswerable without comparing image digests by hand — the
+               published :0.1.0 tag was two days behind main while still
+               calling itself 0.1.0. -->
+          <div class="flex justify-between">
+            <dt class="text-muted-foreground">Aurora</dt>
+            <dd class="font-mono" data-test="system-build">{{ buildLabel }}</dd>
+          </div>
         </dl>
       </Card>
 

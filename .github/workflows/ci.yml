@@ -297,6 +297,10 @@ jobs:
           file: packages/dashboard/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            AURORA_BUILD_REVISION=${{ github.sha }}
+            AURORA_BUILD_DATE=${{ github.event.repository.updated_at }}
+            AURORA_BUILD_VERSION=${{ github.ref_name }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

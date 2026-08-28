@@ -34,7 +34,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | A4 | friction | Post-install notes are stale and terminal-first | [x] |
 | A5 | polish | Ansible deprecation noise dominates the install transcript | [x] |
 | A6 | friction | No reset/uninstall path anywhere | [x-cli] |
-| A7 | blocker | Published image is stale vs main, and unidentifiable on the box | [ ] |
+| A7 | blocker | Published image is stale vs main, and unidentifiable on the box | [x-half] |
 | A8 | friction | "Start over" exists only as a script, not in the dashboard | [ ] |
 | B1 | blocker | "AdGuard on this box" does not install AdGuard | [x] |
 | B2 | blocker | AdGuard is never provisioned; the DNS story never completes | [x] |
@@ -224,6 +224,21 @@ main at all.)
 **Fix:** publish on merge to main (rolling `:main` plus immutable
 `:sha-<short>`); surface `image.revision` + build date in Settings → System;
 make "Check and update" compare that revision, not just the tag.
+
+**SHIPPED (the identifiable half).** CI already publishes `edge` and
+`sha-<short>` on main, so the publishing was never the gap — the gap was that a
+box could not say what it was running. The image now carries
+`AURORA_BUILD_REVISION` / `_DATE` / `_VERSION` as build args (stamped by CI, and
+by `up.sh` from git for local builds), `/api/system/info` returns them under
+`build`, and Settings → System shows `0.1.0 · a3c6227 · 28 Aug` — or "unlabelled
+build" when someone built without stamps, which is the truth rather than an
+invented version.
+
+**Still open (owner's call):** whether a released tag like `0.1.0` should be
+re-published from main at all. It currently drifts under a fixed name, which is
+what made a fresh install silently two days old. Options: stop moving release
+tags and have boxes track `edge`; or bump `AURORA_VERSION` per release and have
+"Check and update" compare the stamped revision.
 
 ---
 

@@ -3384,6 +3384,19 @@ components:
         diskUsedBytes: { type: [integer, 'null'] }
         dockerVersion: { type: [string, 'null'] }
         containerCount: { type: [integer, 'null'] }
+        build:
+          type: object
+          description: >-
+            Which build of Aurora is running, stamped into the image at
+            build time. Every field is null when the image was built
+            without those stamps — honest, rather than a fabricated
+            version. Exists because a box could not previously say which
+            commit it was on, while the published :0.1.0 tag drifted days
+            behind main under the same name.
+          properties:
+            version: { type: [string, 'null'] }
+            revision: { type: [string, 'null'] }
+            builtAt: { type: [string, 'null'] }
         capabilities: { $ref: '#/components/schemas/SystemCapabilities' }
     MetricSample:
       type: object

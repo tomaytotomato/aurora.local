@@ -447,7 +447,14 @@ public class LaunchService {
   }
 
   private void finishWith(Job job, State state, int exit, String reason, Classified classified) {
-    job.state = state;
+    // Why the outcome is written before the state: anything watching this
+    // job — the SSE stream, a poll of GET /launch/{id}, a test — treats
+    // "state is no longer RUNNING" as the signal to read why it stopped.
+    // Flipping state first left a window where a finished job had no
+    // failure reason yet, so a reader could honestly report a failure with
+    // no explanation. It showed up as a one-in-hundreds flaky test, which
+    // is the cheap version of a support ticket that says "it just says
+    // failed".
     job.exitCode = exit;
     job.finishedAt = Instant.now();
     if (classified != null) {
@@ -457,6 +464,7 @@ public class LaunchService {
       job.failureReason = reason;
       job.failureCode = null;
     }
+    job.state = state;
     if (job.failureReason != null) {
       onLine(job, "[aurora] " + job.failureReason);
     }
