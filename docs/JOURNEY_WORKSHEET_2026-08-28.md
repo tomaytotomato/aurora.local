@@ -46,7 +46,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | B9 | polish | Welcome CPU string truncated mid-token | [ ] |
 | C1 | blocker | `<service>.aurora.local` does not resolve on Linux/Android clients | [ ] |
 | C2 | blocker | 2FA-gated apps are unreachable: enrolment codes land in a server file | [ ] |
-| C3 | blocker | Installed AdGuard has no Open link anywhere | [ ] |
+| C3 | blocker | Installed AdGuard has no Open link anywhere | [x] |
 | C4 | blocker | App detail dumps the operator README (CLI steps) into Sarah's UI | [ ] |
 | C5 | blocker | Config card renders raw `.env` comment art and env var names | [ ] |
 | C6 | friction | "UNHEALTHY" badge next to "Enabled and running" | [ ] |
@@ -384,6 +384,19 @@ only `auth`, `mail-admin`, `jellyfin`.
 **Fix:** ship `packages/privacy/caddy.snippet` for `adguard.$DOMAIN` (and an
 mDNS alias), or — better, generally — render an Open link from the manifest's
 published port whenever a package has no vhost.
+
+**SHIPPED:** `packages/privacy/caddy.snippet` (adguard.$DOMAIN, http + https,
+deliberately not behind Authelia). While doing it, the root cause turned up:
+`packages/core/caddy/Caddyfile` hardcoded vhosts for adguard **and** the whole
+media stack, so Caddy advertised addresses for apps that were not installed while
+the dashboard — which reads per-package snippets — showed `vhosts: none`, and
+adding the snippet collided outright ("ambiguous site definition:
+https://adguard.aurora.local"). Those blocks moved to
+`packages/media/caddy.snippet` and the privacy one, leaving core with only its
+own vhosts. Verified live: `https://adguard.aurora.local` → AdGuard's login,
+`/api/packages/privacy` reports `vhosts: [adguard.aurora.local]`, and the app
+page now renders the Open CTA. The generic "no vhost → offer host:port" fallback
+is still worth doing for backend-only apps; left for its own item.
 
 ### C4 · [blocker] The operator README is rendered into Sarah's UI
 `/apps/privacy` shows, verbatim, under "What this is":
