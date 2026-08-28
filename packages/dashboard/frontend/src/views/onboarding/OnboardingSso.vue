@@ -122,6 +122,18 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
             <a :href="portalUrl" target="_blank" rel="noopener noreferrer">
               <Button variant="secondary" size="sm">Open Aurora SSO ↗</Button>
             </a>
+            <!-- Honest about the one way this step fails on a fresh box:
+                 the portal lives at a subdomain, and until this box is the
+                 network's DNS server (the last screen sets that up) a
+                 Linux or Android browser cannot resolve one. Better to say
+                 so than to leave someone staring at a browser error on the
+                 second-to-last step. -->
+            <p class="text-xs text-muted-foreground mt-2">
+              If that page doesn't open, this device can't look up
+              <code>auth.{{ store.domain }}</code> yet. Skip this for now, finish
+              the last screen — it shows you how to point your network at this
+              box — then come back from Settings.
+            </p>
           </div>
         </li>
 
