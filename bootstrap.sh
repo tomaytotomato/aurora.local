@@ -195,6 +195,7 @@ _detect_lan_ip() { net_detect_lan_ip; }
 
 _write_configs() {
   local hostname="$1" domain="$2" tz="$3" user="$4" lan_cidr="$5" lan_ip="$6"
+  local lan_if; lan_if="$(net_detect_lan_iface)"
   local inv="$REPO/inventory.ini"
   local gv="$REPO/group_vars/all.yml"
 
@@ -241,6 +242,10 @@ fail2ban_max_retry: 5
 
 # ---- network ----
 lan_ip: $lan_ip
+# The interface the LAN is on. avahi publishes mDNS only here, so
+# aurora.local can never resolve to a docker bridge address on someone
+# else's laptop.
+lan_interface: $lan_if
 
 # Frees port 53 for the privacy package's AdGuard by turning off
 # systemd-resolved's loopback stub listener. Set false to keep the stub.

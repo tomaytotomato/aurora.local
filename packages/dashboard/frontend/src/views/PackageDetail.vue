@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
+import { useSystemStore } from '@/stores/system';
 import { useUpdatesStore } from '@/stores/updates';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { PackagesApi, dockerStructureFor, isCorePackage, isRemovable, packageLinks } from '@/api/packages';
@@ -35,6 +36,7 @@ import { humanEnvLabel, cleanEnvHelp } from '@/lib/envCopy';
 import { Alert, AlertDescription, Button, Dialog, Input, Label, Skeleton } from '@/components/ui';
 
 const route = useRoute();
+const system = useSystemStore();
 const packages = usePackagesStore();
 const updates = useUpdatesStore();
 
@@ -122,6 +124,32 @@ const openUrl = computed<string | null>(() => {
   if (!detail.value?.enabled || !detail.value?.running) return null;
   const host = (detail.value.vhosts ?? [])[0];
   return host ? `https://${host}/` : null;
+});
+
+/**
+ * The address that works when the name does not.
+ *
+ * `<app>.<domain>` is a multi-label .local name, and glibc's stock
+ * mdns4_minimal only resolves single-label ones — so on Linux and Android
+ * clients the Open button above is a dead link until this box is their DNS
+ * server. Rather than explain that in a paragraph nobody reads, offer the
+ * address that never depends on name resolution.
+ */
+const openFallbackUrl = computed<string | null>(() => {
+  if (!detail.value?.enabled || !detail.value?.running) return null;
+  const ip = system.info?.lanIp;
+  if (!ip) return null;
+  const ports = detail.value.ports ?? [];
+  for (const p of ports) {
+    const proto = (p.proto ?? 'tcp') as string;
+    if (proto.toLowerCase() !== 'tcp') continue;
+    if (p.profile) continue;              // behind a compose profile: not running
+    const port = (p.host ?? p.port) as number | undefined;
+    if (typeof port !== 'number') continue;
+    if (port === 80 || port === 443 || port === 53) continue;
+    return `http://${ip}:${port}/`;
+  }
+  return null;
 });
 
 function portLabel(p: Record<string, unknown>): string {
@@ -568,6 +596,17 @@ onMounted(async () => {
           data-test="package-open"
         >Open {{ heading }} <span aria-hidden="true">↗</span></a>
       </div>
+      <p v-if="openFallbackUrl" class="mt-2 text-sm text-white/80">
+        Name not resolving on this device?
+        <a
+          :href="openFallbackUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-white underline underline-offset-2"
+          data-test="package-open-fallback"
+        >{{ openFallbackUrl }}</a>
+        always works.
+      </p>
       <p v-if="detail" class="mt-2">{{ detail.description }}</p>
       <!-- VPN has a bespoke config surface at its own route; peer/QR
            management doesn't fit the generic env-var Config tab. -->

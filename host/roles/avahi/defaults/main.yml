@@ -4,3 +4,12 @@ avahi_domain_name: local
 avahi_publish_workstation: true
 avahi_publish_addresses: true
 avahi_publish_hinfo: false
+
+# The interface the LAN is on. Set by bootstrap.sh from the same detection
+# that fills lan_ip (scripts/lib/net.sh), so mDNS answers cannot advertise a
+# docker bridge or a VPN tunnel as the way to reach this box. Empty means
+# "every interface", which is avahi's own default.
+avahi_allow_interfaces: "{{ lan_interface | default('') }}"
+# Belt and braces for a box where the allow-list is empty: never answer on
+# the bridges docker creates.
+avahi_deny_interfaces: "docker_gwbridge"

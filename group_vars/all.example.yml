@@ -88,6 +88,9 @@ fail2ban_max_retry: 5
 # AdGuard runs as LAN DNS. Set this to the address of the box on your
 # LAN so *.{{ domain }} rewrites resolve to it.
 lan_ip: 192.168.0.110
+# Interface the LAN is on. avahi publishes mDNS here only, so aurora.local
+# cannot resolve to a docker bridge address on a client's machine.
+lan_interface: eth0
 
 # mDNS host name published by avahi (usually leave as inventory_hostname).
 # avahi_host_name: aurora
