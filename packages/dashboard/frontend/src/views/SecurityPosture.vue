@@ -222,8 +222,9 @@ const counts = computed(() => {
         <div class="eyebrow mb-2">Security</div>
         <h1 class="mb-3">Security posture</h1>
         <p class="text-muted-foreground max-w-2xl">
-          Aurora runs a fixed set of opinionated checks against your host,
-          containers, and secrets. Every finding has a fix — no silent nags.
+          Aurora checks your box for the handful of things that actually go
+          wrong, and tells you which ones need you and which ones it handles
+          itself.
         </p>
       </div>
       <div v-if="scannerLive" class="flex items-center gap-2">

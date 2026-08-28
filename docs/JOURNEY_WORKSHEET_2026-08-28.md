@@ -51,7 +51,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C5 | blocker | Config card renders raw `.env` comment art and env var names | [x] |
 | C6 | friction | "UNHEALTHY" badge next to "Enabled and running" | [x] |
 | C7 | friction | "couldn't reach the registry last time it looked" + "Checked never." | [x] |
-| C8 | friction | Every install adds a HIGH finding Aurora itself caused, with no fix | [ ] |
+| C8 | friction | Every install adds a HIGH finding Aurora itself caused, with no fix | [x] |
 | C9 | friction | Installing one app bounces every other running container | [x] |
 | C10 | friction | `.state.yml` drops `dashboard` after the first in-app install | [x] |
 | C11 | friction | Settings claims it can't read the TLS root; the API serves it fine | [x] |
@@ -62,6 +62,9 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C16 | polish | Catalogue: no search, three webmails, truncated copy, missing icons | [ ] |
 | C17 | polish | "Ask whoever set up this box" — Sarah *is* that person | [ ] |
 | C18 | friction | Manifest descriptions still written for operators (found while fixing C4) | [ ] |
+| C19 | polish | Review lists a vhost for a profile-gated service that will not start | [ ] |
+| C20 | friction | The SSO step links to auth.$DOMAIN before the DNS that resolves it is running | [ ] |
+| C21 | fork | Ship image digests, or a "Pin these now" action (owner's call) | [ ] |
 | D1 | polish | `Essence.md` is unreferenced and inconsistently named | [ ] |
 | D2 | polish | README package table lists 12 of 18 packages | [ ] |
 
@@ -512,6 +515,19 @@ exists and could fix all of them.
 is absent by default; where it remains, give it a real "Pin these now" button
 that runs the existing script through the job runner. Failing that, it is not a
 HIGH.
+
+**SHIPPED (the "failing that" branch, deliberately):** severity is now about what
+the owner should do — `:latest` is medium, a floating tag is low, and neither is
+high, because the box was born in this state, nobody did anything wrong, and no
+action exists for a person who has never opened a terminal. The copy is rewritten
+for the reader: "Aurora media sonarr updates to whatever version is newest …
+Nothing is broken and there is nothing for you to do: Aurora pins these versions
+in its own releases, and this entry disappears when it does." A test asserts the
+description never tells a household user to pin an `@sha256` digest. The page
+header stops claiming "Every finding has a fix — no silent nags" and says which
+findings need a person and which Aurora handles. **Left open as a product fork
+(C21):** actually shipping digests in the repo, and/or a "Pin these now" button
+wired to `scripts/pin.sh --refresh` through the job runner.
 
 ### C9 · [friction] Installing one app restarts the others
 Enabling `privacy` recreated `stalwart` (mail down mid-install); enabling

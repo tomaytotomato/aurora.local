@@ -83,7 +83,11 @@ async function loadRootMeta(): Promise<void> {
     // Keychain / Firefox / `openssl x509 -fingerprint`.
     const der = pemToDer(pemText);
     if (!der) throw new Error('cert body did not parse as PEM');
-    if (!globalThis.crypto?.subtle) {
+    // Bare `crypto`, not `globalThis.crypto`: the digest call below
+    // resolves the identifier through the scope chain, and a test (or a
+    // polyfill) that swaps the global has to be seen by both or the two
+    // disagree about whether hashing is possible.
+    if (typeof crypto === 'undefined' || !crypto?.subtle) {
       // Over http the download still works, which is the whole point of
       // the card; only the fingerprint is unavailable. Say that, and say
       // it as information rather than as an error.
