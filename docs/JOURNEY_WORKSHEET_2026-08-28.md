@@ -29,7 +29,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | ID | Sev | Title | Done |
 |----|-----|-------|------|
 | A1 | blocker | LAN detection follows the VPN route; UFW opens the wrong subnet | [x] |
-| A2 | blocker | `ansible -K` prompt breaks the documented `curl \| bash` install | [ ] |
+| A2 | blocker | `ansible -K` prompt breaks the documented `curl \| bash` install | [x] |
 | A3 | friction | Install log screams about secrets it is about to generate itself | [ ] |
 | A4 | friction | Post-install notes are stale and terminal-first | [ ] |
 | A5 | polish | Ansible deprecation noise dominates the install transcript | [ ] |
@@ -117,6 +117,14 @@ the run dies at the first `become` task.
 the password from `/dev/tty` with plain-English copy ("Your Linux password, so
 Aurora can install Docker and set the firewall"), and fail with that sentence if
 there is no tty. Files: `bootstrap.sh`.
+
+**SHIPPED:** `_run_host_bootstrap` now has three honest cases — passwordless
+sudo never prompts; with a terminal it prompts on `/dev/tty` (so the curl pipe on
+stdin is irrelevant); with neither it stops *before* touching the host with
+"Aurora needs your login password to set this box up, and there is no terminal to
+ask on. Run it from a terminal: bash bootstrap.sh". The prompt is introduced by
+"Aurora needs your login password once, to install Docker and set up the
+firewall" instead of a bare `BECOME password:`.
 
 ### A3 · [friction] The install log screams about secrets it then generates
 `up.sh` seeds `.env` files, prints 13 `WARN …=<empty>` lines plus

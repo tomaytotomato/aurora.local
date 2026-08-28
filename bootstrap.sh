@@ -339,8 +339,45 @@ _run_host_bootstrap() {
   # intersected to nothing and ansible refused to run any role at all.
   # Same expression as _write_configs so the two cannot drift apart.
   local target="${HOSTNAME:-$(hostname -s)}"
-  ( cd "$REPO" && ansible-playbook -i "$inv" host/site.yml \
-      --connection=local --limit "$target" -K )
+
+  # Getting the sudo password right is the difference between an install
+  # that works and one that dies on its first task.
+  #
+  # The documented way in is `curl -fsSL ... | bash`, which means this
+  # script's stdin IS the download. Unconditionally passing -K therefore
+  # asked for a password on a stream that has no human on the other end:
+  #
+  #   getpass.py: GetPassWarning: Can not control echo on the terminal.
+  #   BECOME password:
+  #
+  # ...and ansible got an empty answer. It only appeared to work on boxes
+  # with passwordless sudo. Three honest cases instead:
+  #
+  #   1. sudo needs no password here    -> never prompt.
+  #   2. there is a terminal            -> prompt on /dev/tty, not stdin,
+  #                                        so the curl pipe is irrelevant.
+  #   3. no terminal and sudo wants one -> stop with a sentence that says
+  #                                        what to do, before anything is
+  #                                        half-applied to the host.
+  local -a become_args=()
+  if sudo -n true 2>/dev/null; then
+    become_args=()
+  elif [[ -r /dev/tty ]]; then
+    log_info "Aurora needs your login password once, to install Docker and set up the firewall."
+    become_args=(-K)
+  else
+    die "Aurora needs your login password to set this box up, and there is no terminal to ask on.
+   Run it from a terminal:  bash bootstrap.sh
+   ...or give this user passwordless sudo first."
+  fi
+
+  if [[ ${#become_args[@]} -gt 0 ]]; then
+    ( cd "$REPO" && ansible-playbook -i "$inv" host/site.yml \
+        --connection=local --limit "$target" "${become_args[@]}" </dev/tty )
+  else
+    ( cd "$REPO" && ansible-playbook -i "$inv" host/site.yml \
+        --connection=local --limit "$target" </dev/null )
+  fi
 }
 
 # The docker role has just added the user to the docker group, but this
