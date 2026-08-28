@@ -437,7 +437,9 @@ public class PackagesService {
           str(m, "source_url"),
           str(m, "homepage_url"),
           str(m, "icon"),
-          null, null, null, null
+          null, null, null, null,
+          str(m, "variant_group"),
+          m.get("variant_default") instanceof Boolean b ? b : null
       ));
     } catch (IOException e) {
       log.warn("failed to parse {}: {}", manifest, e.getMessage());

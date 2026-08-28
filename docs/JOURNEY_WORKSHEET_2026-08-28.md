@@ -60,7 +60,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C13 | polish | "last 24 hours" metrics and 4-day uptime on a 20-minute-old box | [x] |
 | C14 | polish | Activity feeds show raw event keys | [x] |
 | C15 | polish | `/users` heading is unreadable against the hero image | [x] |
-| C16 | polish | Catalogue: no search, three webmails, truncated copy, missing icons | [x-part] |
+| C16 | polish | Catalogue: no search, three webmails, truncated copy, missing icons | [x] |
 | C17 | polish | "Ask whoever set up this box" — Sarah *is* that person | [x] |
 | C18 | friction | Manifest descriptions still written for operators (found while fixing C4) | [x] |
 | C19 | polish | Review lists a vhost for a profile-gated service that will not start | [x] |
@@ -695,13 +695,19 @@ description, category and package name, with an honest "Nothing here matches
 the words someone actually arrives with — "photos", "block ads", "watch" — now
 find the right app through its own prose.
 
-**Still open:** the manifests already declare `variant_group` and
-`variant_default` (webmail: roundcube default, snappymail + bulwark
-alternatives; notes: silverbullet default, memos alternative), but nothing
-parses them, so the catalogue shows three webmails as three equal choices
-against the "one clear choice per job" doctrine. Wiring `variant_*` through
-Package → API → a "Default"/"Alternative" badge is the remaining work, plus the
-two missing icons (SnappyMail, SilverBullet) and word-boundary clamping.
+**SHIPPED (variants).** The manifests had recorded the choice all along —
+roundcube the default webmail, silverbullet the default notes app, jellyfin the
+default media player — and nothing read the fields. `variant_group` /
+`variant_default` now flow through `Package` → `/api/packages` → the catalogue,
+which sorts the recommended app ahead of its alternatives (they had been sorting
+alphabetically, so the first webmail an owner met was Bulwark — the one the repo
+does not recommend) and labels them: "★ Recommended", "Alternative to Roundcube".
+The reference uses the short name, because "Alternative to Roundcube (webmail)"
+wrapped to three lines restating the group already visible. 4 unit tests; the
+label placement took two live passes to stop colliding with the Source/Docs links.
+
+**Still open (small):** the two missing icons (SnappyMail, SilverBullet) and
+word-boundary clamping on truncated descriptions.
 
 ### C18 · [friction] Manifest descriptions are still written for operators
 Now that About renders the manifest `description` instead of the README (C4),

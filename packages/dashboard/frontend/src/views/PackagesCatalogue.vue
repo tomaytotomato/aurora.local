@@ -4,7 +4,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
 import { useUpdatesStore } from '@/stores/updates';
-import { dockerStructureFor, packageFallbackIcon, packageIconUrl, packageLinks, splitCatalogue, type PackageSummary } from '@/api/packages';
+import { dockerStructureFor, packageFallbackIcon, packageIconUrl, packageLinks, splitCatalogue, variantLabel, type PackageSummary } from '@/api/packages';
 import { categoryLabel, packageLabel } from '@/lib/packageName';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
@@ -68,11 +68,26 @@ const inTab = computed(() =>
  * category.
  */
 const query = ref('');
+/**
+ * The recommended app in a group comes first, its alternatives after it.
+ * Without this, "one clear choice per job" depended on alphabetical luck:
+ * Bulwark and SnappyMail sorted above Roundcube, so the first webmail an
+ * owner met was the one the repo does not recommend.
+ */
+function byVariantPreference(a: PackageSummary, b: PackageSummary): number {
+  const rank = (p: PackageSummary) => (p.variantGroup && !p.variantDefault ? 1 : 0);
+  return rank(a) - rank(b);
+}
+
+function labelFor(pkg: PackageSummary): string | null {
+  return variantLabel(pkg, packages.list);
+}
+
 const visible = computed(() => {
   const q = query.value.trim().toLowerCase();
-  if (!q) return inTab.value;
+  if (!q) return [...inTab.value].sort(byVariantPreference);
   const terms = q.split(/\s+/);
-  return inTab.value.filter((pkg) => {
+  return [...inTab.value].sort(byVariantPreference).filter((pkg) => {
     const haystack = [
       packageLabel(pkg),
       pkg.title ?? '',
@@ -237,7 +252,18 @@ const appsNav = computed(() => {
           </div>
           <Badge tone="neutral">available</Badge>
         </div>
-        <p class="text-sm text-muted-foreground line-clamp-3 mb-4 flex-1">{{ pkg.description }}</p>
+        <p class="text-sm text-muted-foreground line-clamp-3 mb-3 flex-1">{{ pkg.description }}</p>
+        <!-- Own row, above the footer: as a badge beside DockerBadge it
+             collided with the Source/Docs links on a three-up grid, and
+             beside the title it wrapped to three lines. -->
+        <p
+          v-if="labelFor(pkg)"
+          class="text-xs mb-3"
+          :class="pkg.variantDefault ? 'text-foreground' : 'text-muted-foreground'"
+          data-test="variant-label"
+        >
+          <span v-if="pkg.variantDefault" aria-hidden="true">★ </span>{{ labelFor(pkg) }}
+        </p>
         <div class="flex items-center justify-between gap-3">
           <DockerBadge :structure="dockerStructureFor(pkg)" />
           <div v-if="packageLinks(pkg).length" class="flex items-center gap-3" @click.stop>

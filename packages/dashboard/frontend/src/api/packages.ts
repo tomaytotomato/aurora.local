@@ -1,4 +1,5 @@
 import { http } from './client';
+import { packageLabel } from '@/lib/packageName';
 import type { BackupAction } from './backup';
 
 export type PackageStatus = 'running' | 'degraded' | 'stopped' | 'not-installed';
@@ -51,6 +52,43 @@ export interface PackageSummary {
   /** Bundled-icon slug (e.g. `jellyfin`), resolved to /icons/<slug>.svg by
    * `packageIconUrl`. Absent on manifests that declare no icon. */
   icon?: string | null;
+  /**
+   * The job this app does, where several apps do the same one: `webmail`,
+   * `notes`, `media-player`. Absent when the app is the only answer to its
+   * question.
+   */
+  variantGroup?: string | null;
+  /** True for the recommended answer in that group. */
+  variantDefault?: boolean | null;
+}
+
+/**
+ * "one clear choice per job" is doctrine, and the manifests have recorded
+ * the choice all along — but nothing read it, so three webmails sat in the
+ * catalogue as three equal options with nothing to choose between them.
+ *
+ * Returns the label a card should carry: the recommended one says so, the
+ * others say what they are an alternative to (by name, not by group slug —
+ * "Alternative to Roundcube" tells you something; "webmail variant" does
+ * not).
+ */
+export function variantLabel(
+  pkg: PackageSummary,
+  all: readonly PackageSummary[],
+): string | null {
+  if (!pkg.variantGroup) return null;
+  if (pkg.variantDefault) return 'Recommended';
+
+  const preferred = all.find(
+    (p) => p.variantGroup === pkg.variantGroup && p.variantDefault,
+  );
+  if (!preferred) return 'Alternative';
+  // Short name only: the titles carry a parenthetical ("Roundcube
+  // (webmail)") which turns the badge into "Alternative to Roundcube
+  // (webmail)" — three lines of wrap on a card, restating the group the
+  // reader can already see.
+  const short = packageLabel(preferred).replace(/\s*\(.*\)\s*$/, '').trim();
+  return `Alternative to ${short}`;
 }
 
 /** Derive a status label from the on-wire booleans. */
