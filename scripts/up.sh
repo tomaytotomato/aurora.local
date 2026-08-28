@@ -180,6 +180,21 @@ if [[ $dashboard_requested -eq 0 ]] && [[ -f "$dashboard_compose" ]] && [[ -f "$
   log_step "dashboard is installed but not in the enabled set; including its compose file so --remove-orphans can't reap its running container"
 fi
 
+# --------------------------------------------------------------------
+# Render per-package fragments into runtime layout (caddy snippets,
+# authelia users_database seed, stalwart datastore config, pinned images).
+#
+# MUST run before rotate-secrets below. On a fresh box rotate-secrets may
+# recreate an already-running core container to apply a freshly-generated
+# secret; a container start whose bind-mount host dir does not yet exist
+# makes Docker create that dir as ROOT, after which render_all cannot
+# write its seed files (install: Permission denied) and Stalwart/Authelia
+# start before their config.json / users_database.yml exist — falling into
+# the setup wizard / a crash-loop. Rendering first means every bind-mount
+# dir exists, user-owned and populated, before anything starts.
+# --------------------------------------------------------------------
+render_all "${pkgs[@]}"
+
 # A freshly-seeded .env has every secret blank (that's what .env.example
 # ships). Several services (Authelia, Paperless, Kopia, ...) treat an
 # empty required secret as fatal and refuse to start, so a first "up"
@@ -210,12 +225,6 @@ if [[ -z "${DOCKER_GID:-}" ]]; then
   DOCKER_GID="${DOCKER_GID:-998}"
   export DOCKER_GID
 fi
-
-# --------------------------------------------------------------------
-# Render per-package fragments into runtime layout (caddy snippets,
-# authelia users_database seed (core/SSO), pinned images).
-# --------------------------------------------------------------------
-render_all "${pkgs[@]}"
 
 # --------------------------------------------------------------------
 # Self-recreation guard

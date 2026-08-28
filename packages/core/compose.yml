@@ -240,12 +240,22 @@ services:
       # to packages/core/.env so rotate-secrets.sh generates a real one; the
       # default below only exists so a fresh testbed boots — change it.
       - STALWART_RECOVERY_ADMIN=admin:${STALWART_ADMIN_SECRET:-aurora-change-me}
+      # Datastore password, read by config.json's authSecret
+      # (@type EnvironmentVariable). Stalwart's data lives in the shared
+      # core-db (database `stalwart`, role `stalwart`); config.json is
+      # seeded by render_stalwart_config() so there is NO setup wizard.
+      - STALWART_DB_PASSWORD=${STALWART_DB_PASSWORD:?stalwart needs STALWART_DB_PASSWORD in packages/core/.env}
     volumes:
-      # v0.16: a tiny JSON at /etc/stalwart describes only the datastore;
-      # everything else lives in the DB, edited via the admin UI/API. One
-      # data directory under /var/lib/stalwart — the whole backup surface.
+      # v0.16: config.json at /etc/stalwart describes ONLY the datastore
+      # (pointed at core-db, seeded by Aurora — no wizard). Everything else
+      # lives in that database. /var/lib/stalwart holds blobs + local state.
       - ../../data/stalwart/etc:/etc/stalwart
       - ../../data/stalwart/lib:/var/lib/stalwart
+    depends_on:
+      # Stalwart's datastore is core-db, so it must not start until
+      # Postgres is accepting connections and the stalwart database exists.
+      core-db:
+        condition: service_healthy
 
   # Homepage retired in v0.1 — Aurora is the single landing page.
   # If you want the tile-grid dashboard back, restore this block and

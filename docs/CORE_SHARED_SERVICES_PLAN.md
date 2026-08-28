@@ -1,20 +1,29 @@
 # Core shared services — an opinionated, pre-configured core stack
 
-**Status:** IN PROGRESS — Phase 1 (core-db + Authelia) shipped + verified live 2026-08-28.
+**Status:** IN PROGRESS — Phases 1 + 2 shipped, verified via full nuke-and-rebuild 2026-08-28.
 **Author:** Aurora dashboard team.
 **Requested by:** Bruce, 2026-08-28.
 
 ## Progress
 
 - **Phase 0 (contract/guardrails):** not yet.
-- **Phase 1 (core-db + Authelia): DONE + verified on the live box.** Added
-  `core-db` (postgres:17-alpine) to core's compose with a per-app init
-  script (`core-db/init/`), seeded `CORE_DB_PASSWORD` + `AUTHELIA_DB_PASSWORD`
-  + `STALWART_DB_PASSWORD` via rotate-secrets, migrated Authelia off SQLite
-  onto `storage.postgres` (schema migrated 0→24, first-factor login returns
-  200, forward-auth still gates). Old `data/authelia/db.sqlite3` left in
-  place as a rollback path.
-- **Phase 2 (Stalwart onto core-db):** next.
+- **Phase 1 (core-db + Authelia): DONE + verified.** Added `core-db`
+  (postgres:17-alpine) with a per-app init script, seeded DB passwords via
+  rotate-secrets, migrated Authelia off SQLite onto `storage.postgres`.
+- **Phase 2 (Stalwart onto core-db): DONE + verified — the wizard is gone.**
+  Aurora seeds `data/stalwart/etc/config.json` (datastore → core-db, secret
+  from `STALWART_DB_PASSWORD` env) via `render_stalwart_config()`, so
+  Stalwart boots straight into normal mode. Also fixed a latent `up.sh`
+  ordering bug: `render_all` now runs *before* rotate-secrets so bind-mount
+  dirs exist user-owned before any container starts (was: root-owned dir →
+  `install: Permission denied` + wizard/crash-loop on a fresh box).
+- **Full nuke-and-rebuild test PASSED:** wiped `data/{core-db,authelia,
+  stalwart}` + blanked all core secrets, ran `up.sh`. Result: secrets
+  regenerated, core-db provisioned both databases, Authelia auto-migrated
+  its schema (25 tables) into Postgres, **Stalwart booted in normal mode**
+  (SMTP :25 answered `220 ... Stalwart ESMTP`, 27 tables in core-db, no
+  wizard), users_database.yml seeded cleanly, dashboard projected the real
+  users, and `bruce` login returned `{"status":"OK"}`.
 - **Phase 3 (core-cache), Phase 4 (one-shot backup):** later.
 
 ## The vision, in Bruce's words

@@ -100,6 +100,37 @@ render_pins() {
 }
 
 # --------------------------------------------------------------------
+# render_stalwart_config
+#
+# Stalwart v0.16 boots into a setup WIZARD unless a config.json exists at
+# /etc/stalwart describing its datastore. Aurora seeds that file pointing
+# at the shared core-db (Postgres), so Stalwart comes up already
+# configured — no operator wizard. See docs/CORE_SHARED_SERVICES_PLAN.md.
+#
+# The template carries no secret: the DB password is read at runtime from
+# the STALWART_DB_PASSWORD env var (authSecret.@type = EnvironmentVariable).
+# Only seeds when the file is absent, so a config Stalwart itself rewrote
+# after first-run provisioning is never clobbered.
+# --------------------------------------------------------------------
+render_stalwart_config() {
+  local pkgs=("$@")
+  local want=0
+  local p
+  for p in "${pkgs[@]}"; do [[ "$p" == "core" ]] && want=1; done
+  [[ $want -eq 1 ]] || return 0
+
+  local src="$REPO/packages/core/stalwart/config.template.json"
+  local dst_dir="$REPO/data/stalwart/etc"
+  local dst="$dst_dir/config.json"
+
+  mkdir -p "$dst_dir"
+  if [[ -f "$src" && ! -f "$dst" ]]; then
+    log_info "seeding data/stalwart/etc/config.json (datastore -> core-db), skips the setup wizard"
+    install -m 0644 "$src" "$dst"
+  fi
+}
+
+# --------------------------------------------------------------------
 # render_all <pkg> [<pkg>...]
 #
 # One-call convenience wrapper for scripts/up.sh.
@@ -107,5 +138,6 @@ render_pins() {
 render_all() {
   render_caddy_snippets "$@"
   render_authelia_seed "$@"
+  render_stalwart_config "$@"
   render_pins "$@"
 }
