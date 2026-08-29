@@ -6,12 +6,14 @@ import com.tomaytotomato.aurora.domain.Parity;
 import com.tomaytotomato.aurora.domain.Pool;
 import com.tomaytotomato.aurora.services.DisksService;
 import com.tomaytotomato.aurora.services.NetworkStorageService;
+import com.tomaytotomato.aurora.services.NetworkMountService;
 import com.tomaytotomato.aurora.services.SmbShareService;
 import com.tomaytotomato.aurora.services.JobService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,14 +40,17 @@ public class DisksController {
   private final JobService jobs;
   private final NetworkStorageService networkStorage;
   private final SmbShareService smbShares;
+  private final NetworkMountService mounts;
 
   public DisksController(DisksService disks, JobService jobs,
                          NetworkStorageService networkStorage,
-                         SmbShareService smbShares) {
+                         SmbShareService smbShares,
+                         NetworkMountService mounts) {
     this.disks = disks;
     this.jobs = jobs;
     this.networkStorage = networkStorage;
     this.smbShares = smbShares;
+    this.mounts = mounts;
   }
 
   /**
@@ -87,6 +92,39 @@ public class DisksController {
 
   /** Credentials are optional: most NAS boxes allow a guest listing. */
   public record ShareRequest(String address, String username, String password) {}
+
+  /** Folders on network devices that this box has attached. */
+  @GetMapping("/network/mounts")
+  public List<NetworkMountService.Mount> mounts() {
+    return mounts.list();
+  }
+
+  /**
+   * Attach a folder so apps on this box can use it.
+   *
+   * <p>Returns 200 with {@code ok:false} for the things the owner can fix —
+   * wrong password, wrong folder name, device asleep — rather than a 4xx.
+   * Those are answers to the question they asked, not errors in the
+   * request, and a 401 in particular would log them out of the dashboard.
+   */
+  @PostMapping("/network/mounts")
+  public NetworkMountService.AttachResult attach(@RequestBody AttachRequest req) {
+    if (req == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "body required");
+    }
+    return mounts.attach(req.label(), req.address(), req.share(),
+        req.username(), req.password(), req.readOnly());
+  }
+
+  @DeleteMapping("/network/mounts/{id}")
+  public ResponseEntity<Void> detach(@PathVariable String id) {
+    return mounts.detach(id)
+        ? ResponseEntity.noContent().build()
+        : ResponseEntity.notFound().build();
+  }
+
+  public record AttachRequest(String label, String address, String share,
+                              String username, String password, boolean readOnly) {}
 
   @GetMapping
   public List<Disk> list() {
