@@ -5,6 +5,7 @@ import com.tomaytotomato.aurora.domain.DiskSmart;
 import com.tomaytotomato.aurora.domain.Parity;
 import com.tomaytotomato.aurora.domain.Pool;
 import com.tomaytotomato.aurora.services.DisksService;
+import com.tomaytotomato.aurora.services.NetworkStorageService;
 import com.tomaytotomato.aurora.services.JobService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,10 +34,31 @@ public class DisksController {
 
   private final DisksService disks;
   private final JobService jobs;
+  private final NetworkStorageService networkStorage;
 
-  public DisksController(DisksService disks, JobService jobs) {
+  public DisksController(DisksService disks, JobService jobs,
+                         NetworkStorageService networkStorage) {
     this.disks = disks;
     this.jobs = jobs;
+    this.networkStorage = networkStorage;
+  }
+
+  /**
+   * Storage on the LAN that is not this box: a NAS, another server, a
+   * spare machine sharing a folder.
+   *
+   * <p>Lives under {@code /api/disks} because to the owner it is the same
+   * question — "where can my files go?" — even though the plumbing is
+   * completely different from a physical disk.
+   *
+   * <p>Listening, not scanning: see {@link NetworkStorageService}. Returns
+   * an empty list on a network with nothing on it, on a box with no mDNS
+   * stack, and on any failure; every one of those is honestly "found
+   * nothing" rather than an error to put in front of someone.
+   */
+  @GetMapping("/network")
+  public List<com.tomaytotomato.aurora.domain.NetworkStorageDevice> network() {
+    return networkStorage.discover();
   }
 
   @GetMapping

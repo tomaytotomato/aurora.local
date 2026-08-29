@@ -1022,6 +1022,32 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Disk' }
+  /disks/network:
+    get:
+      tags: [disks]
+      summary: Storage found on the LAN that is not this box
+      description: >-
+        A NAS, another server, or a spare machine sharing a folder.
+        Discovered by listening to the mDNS announcements this box already
+        receives — Synology, QNAP, TrueNAS, unRAID and a plain Samba
+        install all advertise `_smb._tcp` out of the box. It does **not**
+        sweep the subnet for open ports: a box that quietly probes every
+        address on someone's home network is not something to install on
+        trust, and it trips intrusion detection on exactly the appliances
+        being looked for.
+
+
+        Returns an empty array for a network with nothing on it, for a box
+        with no mDNS stack, and for any failure — all of which are honestly
+        "found nothing" rather than an error.
+      responses:
+        '200':
+          description: Devices found. Possibly none.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NetworkStorageDevice' }
   /disks/pool:
     get:
       tags: [disks]
@@ -3375,6 +3401,45 @@ components:
           description: >
             Gates /disks. False until the backend can read smartctl and
             the mergerfs/snapraid state.
+    NetworkStorageDevice:
+      type: object
+      description: >-
+        Something on the LAN that offers file storage. Deliberately not
+        called a "NAS": the same shape covers a Synology, a Raspberry Pi
+        running Samba, or a Mac with sharing switched on.
+      required: [name, address, protocols, reachable]
+      properties:
+        name:
+          type: string
+          description: The name the device advertises for itself. Never invented.
+        host:
+          type: [string, 'null']
+          description: mDNS hostname, when it advertised one.
+        address: { type: string }
+        protocols:
+          type: array
+          description: Sharing protocols it advertises, in the order Aurora would prefer them.
+          items:
+            type: object
+            required: [kind, port]
+            properties:
+              kind:
+                type: string
+                enum: [smb, nfs, afp, time-machine]
+              port: { type: integer }
+        model:
+          type: [string, 'null']
+          description: >-
+            What the device published about itself, when it published
+            anything. Null rather than guessed from the hostname — a wrong
+            badge is worse than no badge.
+        reachable:
+          type: boolean
+          description: >-
+            Whether the advertised port answered a connection just now.
+            Kept separate from the advertisement because a device that is
+            asleep keeps advertising, and merging the two into one
+            optimistic boolean would be a claim Aurora cannot support.
     SystemInfo:
       type: object
       required: [capabilities]
