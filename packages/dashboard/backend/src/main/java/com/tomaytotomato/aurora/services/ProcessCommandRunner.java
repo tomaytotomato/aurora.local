@@ -182,7 +182,16 @@ public class ProcessCommandRunner implements CommandRunner {
 
     int exit = proc.waitFor();
     StreamOutcome result = outcome.get();
-    if (result == StreamOutcome.CANCELLED) {
+    // The token is the source of truth for "was this cancelled", not which
+    // of the two threads noticed first. Relying on the watchdog to have set
+    // CANCELLED before the process died lost the race often enough to make
+    // the launch-cancellation test flaky twice: the process would end, the
+    // reader would return, and the outcome would still read COMPLETED — so
+    // a cancelled job was reported as 'exited 143' with no failure code,
+    // which is what an operator would have seen too.
+    boolean cancelled = result == StreamOutcome.CANCELLED
+        || (cancelToken != null && cancelToken.isCancelled());
+    if (cancelled) {
       throw new CommandCancelledException("command cancelled: " + String.join(" ", argv));
     }
     if (result == StreamOutcome.TIMED_OUT) {
