@@ -6,12 +6,14 @@ import com.tomaytotomato.aurora.domain.Parity;
 import com.tomaytotomato.aurora.domain.Pool;
 import com.tomaytotomato.aurora.services.DisksService;
 import com.tomaytotomato.aurora.services.NetworkStorageService;
+import com.tomaytotomato.aurora.services.SmbShareService;
 import com.tomaytotomato.aurora.services.JobService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -35,12 +37,15 @@ public class DisksController {
   private final DisksService disks;
   private final JobService jobs;
   private final NetworkStorageService networkStorage;
+  private final SmbShareService smbShares;
 
   public DisksController(DisksService disks, JobService jobs,
-                         NetworkStorageService networkStorage) {
+                         NetworkStorageService networkStorage,
+                         SmbShareService smbShares) {
     this.disks = disks;
     this.jobs = jobs;
     this.networkStorage = networkStorage;
+    this.smbShares = smbShares;
   }
 
   /**
@@ -60,6 +65,28 @@ public class DisksController {
   public List<com.tomaytotomato.aurora.domain.NetworkStorageDevice> network() {
     return networkStorage.discover();
   }
+
+  /**
+   * What folders a device is offering.
+   *
+   * <p>POST rather than GET because credentials are in the body: a share
+   * listing with a password in the query string would end up in access
+   * logs and browser history.
+   *
+   * <p>Never 401s on a refused login — a wrong NAS password is not an
+   * Aurora authentication failure, and returning 401 would log the operator
+   * out of the dashboard. The refusal is the payload.
+   */
+  @PostMapping("/network/shares")
+  public SmbShareService.Result shares(@RequestBody ShareRequest req) {
+    if (req == null || req.address() == null || req.address().isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "address required");
+    }
+    return smbShares.list(req.address(), req.username(), req.password());
+  }
+
+  /** Credentials are optional: most NAS boxes allow a guest listing. */
+  public record ShareRequest(String address, String username, String password) {}
 
   @GetMapping
   public List<Disk> list() {

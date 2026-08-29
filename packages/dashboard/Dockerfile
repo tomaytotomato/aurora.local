@@ -61,8 +61,13 @@ WORKDIR /app
 #   - bind-tools: dig, for mDNS resolution checks (@224.0.0.251 :5353)
 #   - ca-certificates: TLS verification for the yq download below (and future
 #     runtime https calls). Without it wget --https-only fails on Alpine.
+#   - samba-client: `smbclient -L` lists the shares a NAS offers, so the
+#     owner picks a folder from a list instead of typing a share name they
+#     have to go and look up. ~2 MB, and it is the only way to answer "what
+#     is on that box" without implementing SMB2 by hand.
 # Also install /var/log/aurora as a writable log destination for LaunchService.
-RUN apk add --no-cache bash docker-cli docker-cli-compose avahi-tools bind-tools ca-certificates
+RUN apk add --no-cache bash docker-cli docker-cli-compose avahi-tools bind-tools ca-certificates \
+    samba-client
 
 # ── mikefarah yq (v4) ──────────────────────────────────────────────────────
 # scripts/lib/manifest.sh + scripts/lib/state.sh (invoked by scripts/up.sh)

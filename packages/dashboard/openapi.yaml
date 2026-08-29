@@ -1048,6 +1048,57 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/NetworkStorageDevice' }
+  /disks/network/shares:
+    post:
+      tags: [disks]
+      summary: What folders a network device is offering
+      description: >-
+        POST rather than GET because credentials travel in the body: a
+        share listing with a password in the query string ends up in access
+        logs and browser history.
+
+
+        Credentials are optional — most NAS boxes allow a guest listing, and
+        asking for a username before we know one is needed is a wall in
+        front of a door that is already open. A refused login is reported in
+        the body as `denied`, never as a 401: a wrong NAS password is not an
+        Aurora authentication failure, and a 401 here would log the operator
+        out of the dashboard.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address: { type: string }
+                username: { type: [string, 'null'] }
+                password: { type: [string, 'null'] }
+      responses:
+        '200':
+          description: The outcome of asking. Not all outcomes are successes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [outcome, shares]
+                properties:
+                  outcome:
+                    type: string
+                    enum: [ok, denied, unreachable]
+                  shares:
+                    type: array
+                    items:
+                      type: object
+                      required: [name]
+                      properties:
+                        name: { type: string }
+                        comment: { type: [string, 'null'] }
+                  detail:
+                    type: [string, 'null']
+                    description: Plain-language explanation when the outcome is not ok.
+        '400': { description: No address given. }
   /disks/pool:
     get:
       tags: [disks]
