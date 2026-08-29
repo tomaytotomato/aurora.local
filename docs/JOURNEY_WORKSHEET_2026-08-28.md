@@ -68,8 +68,8 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C23 | blocker | The wizard's own launch path skipped AdGuard provisioning entirely | [x] |
 | C24 | blocker | The owner is the one user who gets no mailbox | [x] |
 | C25 | friction | `admin@` / `system@` do not exist | [x] |
-| C26 | friction | Aurora's alerts still go to a file, not to `system@` | [ ] |
-| C27 | blocker | Mail is accepted on :25 and then silently discarded | [ ] |
+| C26 | friction | Aurora's alerts still go to a file, not to `system@` | [x] |
+| C27 | blocker | Mail is accepted on :25 and then silently discarded | [x-code] |
 | C20 | friction | The SSO step links to auth.$DOMAIN before the DNS that resolves it is running | [x-copy] |
 | C21 | fork | Ship image digests, or a "Pin these now" action (owner's call) | [x] |
 | D1 | polish | `Essence.md` is unreferenced and inconsistently named | [x] |
@@ -928,6 +928,34 @@ delivery, queue processing, logging. Those defaults evidently do not add up to a
 working local-delivery mail server. Aurora owns AdGuard's and Authelia's config
 for exactly this reason; mail is the outlier.
 
+**C27 implementation SHIPPED (2026-08-29, needs live-box verification):**
+See `docs/MAIL_LOCAL_DELIVERY_PLAN.md` for the design.
+`StalwartRegistrySeedService` runs on `ApplicationReadyEvent` and on a
+30-minute schedule (drift guard). It waits for JMAP to be reachable AND for
+the box's mail domain to exist (both belong to `StalwartProvisionService`),
+then performs three idempotent JMAP writes via `StalwartMailClient`: (1)
+`x:SystemSettings/set update singleton` with `defaultHostname=mail.<domain>`
+and `defaultDomain=<id>`; (2) six `x:NetworkListener/set create` matching the
+ports compose already publishes (smtp :25, submission :587, submissions :465,
+imap :143, imaps :993, managesieve :4190); (3) `x:Tracer/set create` for a
+Console tracer at info level so `docker logs stalwart` stops being empty.
+Each step first checks whether the object is already correct and skips the
+write when it is, so the reconcile is a drift-guard, not a load-bearing loop.
+Failures absorbed silently and retried on the next tick — same shape as
+`StalwartProvisionService`. Unit-tested with a scripted JMAP seam:
+`StalwartMailClientTests` covers the three ensure-shape methods, and
+`StalwartRegistrySeedServiceTests` pins the exact set of six listeners and
+the reachable+domain gate.
+
+**Live-box verification still owed:** rebuild the aurora image, force-recreate
+the container, wipe `data/stalwart` and Stalwart's registry, boot from scratch
+and confirm: (a) SMTP `MAIL FROM ... RCPT TO:<sarah@aurora.local> ... DATA .`
+followed by IMAPS `LOGIN sarah@aurora.local <pw>` + `SELECT INBOX` shows the
+message; (b) IMAP :143 and submission :587 answer instead of refusing; (c)
+`docker logs stalwart` carries INFO-level events. Backend tests pin the
+JMAP payload shape and the seed sequence; only a live run proves the
+Stalwart-side effect matches.
+
 **The fork:** how much of Stalwart's configuration should Aurora own? Minimum to
 close this is local delivery + the listeners we advertise + logging that reaches
 `docker logs`. Doing it properly probably means the same treatment core already
@@ -951,6 +979,27 @@ submission :587 stop refusing, and `docker logs stalwart` stops being empty.
 Until this is fixed, mailboxes and aliases are correct but useless, and
 **anything routed to `system@` would be silently lost** — so C26 (Aurora's alerts
 to `system@`) should not ship before it.
+
+### C26 · [friction] Aurora's alerts still go to a file, not to `system@`
+**SHIPPED alongside C27 (2026-08-29, needs live-box verification):**
+Authelia's password-reset and 2FA-enrolment links no longer land in
+`data/authelia/notification.txt`; they get mailed. `AutheliaMailProvisionService`
+runs on boot (and every 30 minutes), waits for JMAP to be reachable and the
+mail domain to exist, generates a strong SMTP password, ensures an
+`authelia@$DOMAIN` mailbox on the box's own Stalwart (creates it, or resets
+it when it exists but the password is unknown), and writes the five
+`AUTHELIA_NOTIFIER_SMTP_*` keys into `packages/core/.env` pointing at the
+internal Stalwart on `submission://stalwart:587`. `packages/core/authelia/
+configuration.yml` now emits `notifier.smtp` when those env vars are set and
+`notifier.filesystem` otherwise (Authelia templating gated by `X_AUTHELIA_
+CONFIG_FILTERS=template`, since having both blocks configured at once is a
+fatal Authelia error). Idempotent: a second run on a provisioned .env is a
+silent no-op with the password NOT rotated. Alerts intended for the owner
+use the existing `system@` alias `MailAccountReconciler` already points at
+the owner's mailbox, so the delivery path is authelia@ → SMTP → Stalwart →
+system@ alias → owner's inbox. **Deferred to the live-box verification of
+C27:** proving that a password-reset email actually arrives, and that
+Authelia recreates cleanly with the new SMTP env on the next `up.sh`.
 
 ## D · Repo and docs
 
