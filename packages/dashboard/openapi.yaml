@@ -1103,6 +1103,79 @@ paths:
                     type: [string, 'null']
                     description: Plain-language explanation when the outcome is not ok.
         '400': { description: No address given. }
+  /disks/network/mounts:
+    get:
+      tags: [disks]
+      summary: Folders on network devices this box has attached
+      responses:
+        '200':
+          description: Attached folders. Possibly none.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NetworkMount' }
+    post:
+      tags: [disks]
+      summary: Attach a folder from a network device
+      description: >-
+        Creates a CIFS docker volume, then proves it by mounting it once
+        with a throwaway container and reading it. Docker will create such a
+        volume happily whether or not the credentials are right — nothing is
+        mounted until something uses it — so reporting success at creation
+        time would tell the owner it worked and leave them to discover
+        otherwise when an app fails to start days later.
+
+
+        Returns 200 with `ok: false` for the things the owner can fix (wrong
+        password, wrong folder, device asleep). Those are answers to the
+        question they asked, not malformed requests, and a 401 in particular
+        would log them out of the dashboard.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address, share]
+              properties:
+                label: { type: [string, 'null'], description: What to call it on screen. }
+                address: { type: string }
+                share: { type: string }
+                username: { type: [string, 'null'] }
+                password: { type: [string, 'null'] }
+                readOnly:
+                  type: boolean
+                  description: >-
+                    Mount without write access, so a compromised app cannot
+                    delete the owner's files.
+      responses:
+        '200':
+          description: Whether it attached, and why not if it did not.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+                  mount: { $ref: '#/components/schemas/NetworkMount' }
+                  detail:
+                    type: [string, 'null']
+                    description: Plain-language reason, written for the owner.
+        '400': { description: No body. }
+  /disks/network/mounts/{id}:
+    delete:
+      tags: [disks]
+      summary: Detach a folder and forget it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Detached; the volume is removed. }
+        '404': { description: Nothing attached under that id. }
   /disks/pool:
     get:
       tags: [disks]
@@ -3456,6 +3529,24 @@ components:
           description: >
             Gates /disks. False until the backend can read smartctl and
             the mergerfs/snapraid state.
+    NetworkMount:
+      type: object
+      description: >-
+        A folder on a network device, attached to this box as a docker
+        volume. The password is deliberately absent: it lives in the volume
+        definition, and copying it here would put the same secret in a
+        second place for no gain.
+      required: [id, label, address, share, volume, readOnly]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        address: { type: string }
+        share: { type: string }
+        username: { type: [string, 'null'] }
+        volume:
+          type: string
+          description: The docker volume name, prefixed so `docker volume ls` explains itself.
+        readOnly: { type: boolean }
     NetworkStorageDevice:
       type: object
       description: >-
