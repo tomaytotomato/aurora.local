@@ -71,7 +71,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C26 | friction | Aurora's alerts still go to a file, not to `system@` | [ ] |
 | C27 | blocker | Mail is accepted on :25 and then silently discarded | [ ] |
 | C20 | friction | The SSO step links to auth.$DOMAIN before the DNS that resolves it is running | [x-copy] |
-| C21 | fork | Ship image digests, or a "Pin these now" action (owner's call) | [ ] |
+| C21 | fork | Ship image digests, or a "Pin these now" action (owner's call) | [x] |
 | D1 | polish | `Essence.md` is unreferenced and inconsistently named | [x] |
 | D2 | polish | README package table lists 12 of 18 packages | [x] |
 
@@ -645,6 +645,17 @@ findings need a person and which Aurora handles. **Left open as a product fork
 (C21):** actually shipping digests in the repo, and/or a "Pin these now" button
 wired to `scripts/pin.sh --refresh` through the job runner.
 
+**C21 answer (2026-08-29):** digests are managed in `packages/<pkg>/pins.env`.
+`scripts/pin.sh` already does the walking + resolving + rewriting; Aurora's own
+release process is the single place where a refresh + apply lands, so a box's
+pinned digests match a release, not the operator's arbitrary Tuesday. Recorded
+as `docs/IMAGE_PINS.md`, which spells out where they live, when they change,
+why they are outside `manifest.yml`, and why the dashboard deliberately does
+NOT ship a "Pin these now" button. The already-shipped ImagePinRule
+severity/copy is consistent with that: un-pinned is medium, not high, and the
+copy says "Aurora pins these versions in its own releases and this entry
+disappears when it does".
+
 ### C9 · [friction] Installing one app restarts the others
 Enabling `privacy` recreated `stalwart` (mail down mid-install); enabling
 `jellyfin` recreated `adguard` (DNS down). `up.sh` runs `up -d --remove-orphans`
@@ -922,6 +933,20 @@ close this is local delivery + the listeners we advertise + logging that reaches
 `docker logs`. Doing it properly probably means the same treatment core already
 gives Authelia: a rendered config Aurora controls, with the box's domain and
 hostname in it.
+
+**Owner's answer (2026-08-29):** ESSENCE. Aurora already owns AdGuard's and
+Authelia's config; mail is the outlier and should get the same treatment. The
+complication in v0.16 is that `config.json` really does only describe the
+datastore — every other setting the wizard writes (listeners, hostname,
+tracers, local-delivery routing) lives inside the datastore as JMAP objects.
+So "Aurora owns the config" means "Aurora replicates the wizard's writes",
+not "Aurora renders one big JSON file". Full plan in
+`docs/MAIL_LOCAL_DELIVERY_PLAN.md`: a new `StalwartRegistrySeedService` that
+posts the wizard-equivalent JMAP objects on boot (SystemSettings, Domain, six
+NetworkListeners, session/rcpt defaults, stdout tracer), idempotent and
+drift-reconciling so a rebuild that changes the seed re-applies cleanly. Not
+yet implemented — needs a live Stalwart to verify SMTP delivery, IMAP :143 +
+submission :587 stop refusing, and `docker logs stalwart` stops being empty.
 
 Until this is fixed, mailboxes and aliases are correct but useless, and
 **anything routed to `system@` would be silently lost** — so C26 (Aurora's alerts
