@@ -221,4 +221,182 @@ class StalwartMailClientTests {
     assertThatThrownBy(() -> c.deleteMailbox("h"))
         .isInstanceOf(StalwartMailClient.StalwartApiException.class);
   }
+
+  // ─── registry seed (C27) ──────────────────────────────────────
+
+  /**
+   * A client that dispatches per JMAP method name: the caller registers
+   * a script from {@code method → response body} and the last request
+   * body is captured for assertion. Real Stalwart is one endpoint;
+   * the seam is dumb, so tests need to be smart.
+   */
+  private static StalwartMailClient scripted(java.util.Map<String, String> byMethod,
+                                             java.util.List<String> capturedBodies) {
+    return new StalwartMailClient(admin(), "http://stalwart:8080/jmap/") {
+      @Override
+      protected String jmapPost(String requestBody) {
+        capturedBodies.add(requestBody);
+        for (var e : byMethod.entrySet()) {
+          if (requestBody.contains(e.getKey())) return e.getValue();
+        }
+        throw new AssertionError("no scripted response for: " + requestBody);
+      }
+    };
+  }
+
+  @Test
+  void ensureSystemSettings_updates_when_the_current_singleton_disagrees() {
+    var bodies = new java.util.ArrayList<String>();
+    var c = scripted(java.util.Map.of(
+        "x:Domain/get", "{\"methodResponses\":[[\"x:Domain/get\","
+            + "{\"list\":[{\"id\":\"b\",\"name\":\"aurora.local\"}]},\"c1\"]]}",
+        "x:SystemSettings/get", "{\"methodResponses\":[[\"x:SystemSettings/get\","
+            + "{\"list\":[{\"id\":\"singleton\","
+            + "\"defaultHostname\":\"mail.old.example\",\"defaultDomain\":\"other\"}]},\"c1\"]]}",
+        "x:SystemSettings/set", "{\"methodResponses\":[[\"x:SystemSettings/set\","
+            + "{\"updated\":{\"singleton\":null}},\"c1\"]]}"
+    ), bodies);
+
+    assertThat(c.ensureSystemSettings("mail.aurora.local", "aurora.local")).isTrue();
+
+    // The Set call carries the hostname literal AND references the
+    // domain by its id, not by its name (defaultDomain is Id<Domain>).
+    String setBody = bodies.stream()
+        .filter(b -> b.contains("x:SystemSettings/set")).findFirst().orElseThrow();
+    assertThat(setBody).contains("\"defaultHostname\":\"mail.aurora.local\"");
+    assertThat(setBody).contains("\"defaultDomain\":\"b\"");
+    assertThat(setBody).contains("\"update\":{\"singleton\":");
+  }
+
+  @Test
+  void ensureSystemSettings_is_a_no_op_when_already_correct() {
+    // Idempotency is what makes the scheduled reconcile safe. A boot
+    // where hostname + domain are already right must not emit a Set,
+    // must not throw, and must return false so the caller does not log
+    // a transition line.
+    var bodies = new java.util.ArrayList<String>();
+    var c = scripted(java.util.Map.of(
+        "x:Domain/get", "{\"methodResponses\":[[\"x:Domain/get\","
+            + "{\"list\":[{\"id\":\"b\",\"name\":\"aurora.local\"}]},\"c1\"]]}",
+        "x:SystemSettings/get", "{\"methodResponses\":[[\"x:SystemSettings/get\","
+            + "{\"list\":[{\"id\":\"singleton\","
+            + "\"defaultHostname\":\"mail.aurora.local\",\"defaultDomain\":\"b\"}]},\"c1\"]]}"
+    ), bodies);
+
+    assertThat(c.ensureSystemSettings("mail.aurora.local", "aurora.local")).isFalse();
+    // Never touched Set.
+    assertThat(bodies).noneMatch(b -> b.contains("x:SystemSettings/set"));
+  }
+
+  @Test
+  void ensureSystemSettings_refuses_when_the_domain_does_not_exist_yet() {
+    // The caller is telling us to point defaultDomain at a domain that
+    // does not exist. Fail explicitly instead of writing an invalid id
+    // that the server would reject later with a less useful message.
+    var c = scripted(java.util.Map.of(
+        "x:Domain/get",
+        "{\"methodResponses\":[[\"x:Domain/get\",{\"list\":[]},\"c1\"]]}"
+    ), new java.util.ArrayList<>());
+
+    assertThatThrownBy(() -> c.ensureSystemSettings("mail.aurora.local", "aurora.local"))
+        .isInstanceOf(StalwartMailClient.StalwartApiException.class)
+        .hasMessageContaining("does not exist");
+  }
+
+  @Test
+  void ensureNetworkListener_creates_a_new_listener_when_the_name_is_absent() {
+    var bodies = new java.util.ArrayList<String>();
+    var c = scripted(java.util.Map.of(
+        "x:NetworkListener/get",
+        "{\"methodResponses\":[[\"x:NetworkListener/get\",{\"list\":[]},\"c1\"]]}",
+        "x:NetworkListener/set",
+        "{\"methodResponses\":[[\"x:NetworkListener/set\",{\"created\":{\"n1\":{\"id\":\"L1\"}}},\"c1\"]]}"
+    ), bodies);
+
+    assertThat(c.ensureNetworkListener("smtp", "smtp", "0.0.0.0:25", false)).isTrue();
+
+    String setBody = bodies.stream()
+        .filter(b -> b.contains("x:NetworkListener/set")).findFirst().orElseThrow();
+    // bind is a JMAP Set encoded as a numeric-keyed map, not a JSON array.
+    // Getting this wrong is exactly what breaks a listener on the server.
+    assertThat(setBody).contains("\"bind\":{\"0\":\"0.0.0.0:25\"}");
+    assertThat(setBody).contains("\"name\":\"smtp\"");
+    assertThat(setBody).contains("\"protocol\":\"smtp\"");
+    assertThat(setBody).contains("\"tlsImplicit\":false");
+  }
+
+  @Test
+  void ensureNetworkListener_is_a_no_op_when_bind_protocol_and_tls_all_match() {
+    var bodies = new java.util.ArrayList<String>();
+    var c = scripted(java.util.Map.of(
+        "x:NetworkListener/get",
+        "{\"methodResponses\":[[\"x:NetworkListener/get\",{\"list\":["
+            + "{\"id\":\"L9\",\"name\":\"imaps\","
+            + "\"bind\":{\"0\":\"0.0.0.0:993\"},"
+            + "\"protocol\":\"imap\",\"tlsImplicit\":true}]},\"c1\"]]}"
+    ), bodies);
+
+    assertThat(c.ensureNetworkListener("imaps", "imap", "0.0.0.0:993", true)).isFalse();
+    assertThat(bodies).noneMatch(b -> b.contains("x:NetworkListener/set"));
+  }
+
+  @Test
+  void ensureNetworkListener_updates_the_existing_object_when_a_field_drifted() {
+    // Aurora keys off the listener's name. A change to the port in
+    // packages/core/compose.yml has to update the SAME listener, not add
+    // a second one — duplicate listeners on the same protocol are exactly
+    // how mail servers end up with unpredictable delivery.
+    var bodies = new java.util.ArrayList<String>();
+    var c = scripted(java.util.Map.of(
+        "x:NetworkListener/get",
+        "{\"methodResponses\":[[\"x:NetworkListener/get\",{\"list\":["
+            + "{\"id\":\"L9\",\"name\":\"submission\","
+            + "\"bind\":{\"0\":\"0.0.0.0:588\"},"
+            + "\"protocol\":\"smtp\",\"tlsImplicit\":false}]},\"c1\"]]}",
+        "x:NetworkListener/set",
+        "{\"methodResponses\":[[\"x:NetworkListener/set\",{\"updated\":{\"L9\":null}},\"c1\"]]}"
+    ), bodies);
+
+    assertThat(c.ensureNetworkListener("submission", "smtp", "0.0.0.0:587", false)).isTrue();
+
+    String setBody = bodies.stream()
+        .filter(b -> b.contains("x:NetworkListener/set")).findFirst().orElseThrow();
+    // Update by ID, not by name.
+    assertThat(setBody).contains("\"update\":{\"L9\":");
+    assertThat(setBody).contains("\"bind\":{\"0\":\"0.0.0.0:587\"}");
+  }
+
+  @Test
+  void ensureConsoleTracer_creates_one_when_the_list_is_empty() {
+    var bodies = new java.util.ArrayList<String>();
+    var c = scripted(java.util.Map.of(
+        "x:Tracer/get",
+        "{\"methodResponses\":[[\"x:Tracer/get\",{\"list\":[]},\"c1\"]]}",
+        "x:Tracer/set",
+        "{\"methodResponses\":[[\"x:Tracer/set\",{\"created\":{\"t1\":{\"id\":\"T1\"}}},\"c1\"]]}"
+    ), bodies);
+
+    assertThat(c.ensureConsoleTracer()).isTrue();
+
+    String setBody = bodies.stream()
+        .filter(b -> b.contains("x:Tracer/set")).findFirst().orElseThrow();
+    assertThat(setBody).contains("\"@type\":\"Console\"");
+    assertThat(setBody).contains("\"level\":\"info\"");
+  }
+
+  @Test
+  void ensureConsoleTracer_is_a_no_op_when_a_console_tracer_already_exists() {
+    // The reason this matters: without it, the 30-minute reconcile would
+    // add a second console tracer on every tick, filling the registry
+    // with duplicates.
+    var bodies = new java.util.ArrayList<String>();
+    var c = scripted(java.util.Map.of(
+        "x:Tracer/get",
+        "{\"methodResponses\":[[\"x:Tracer/get\",{\"list\":["
+            + "{\"id\":\"T1\",\"@type\":\"Console\",\"level\":\"info\"}]},\"c1\"]]}"
+    ), bodies);
+
+    assertThat(c.ensureConsoleTracer()).isFalse();
+    assertThat(bodies).noneMatch(b -> b.contains("x:Tracer/set"));
+  }
 }

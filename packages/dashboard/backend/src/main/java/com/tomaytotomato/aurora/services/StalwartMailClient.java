@@ -228,6 +228,184 @@ public class StalwartMailClient {
     return domainIdFor(name) != null;
   }
 
+  // ─── registry seed (C27) ──────────────────────────────────────
+  //
+  // Aurora's config.json is pre-seeded so Stalwart never enters bootstrap
+  // mode. That skips the setup wizard, which means the JMAP objects the
+  // wizard would have written (SystemSettings hostname/domain, six
+  // NetworkListeners, a console Tracer) never get written either — and
+  // without them, only :25/:993/:4190 answer and delivered mail is
+  // discarded because there is no session/queue behind it. Aurora fills
+  // in the wizard's job programmatically; see StalwartRegistrySeedService
+  // for the driver.
+
+  /**
+   * Bring the SystemSettings singleton in line with the box: the default
+   * hostname the SMTP greeting uses and the default domain reports use.
+   * Returns true when the object was actually changed; false when both
+   * values were already correct (idempotent no-op).
+   *
+   * <p>Only these two fields are touched. Anything else the wizard would
+   * normally write to SystemSettings (thread-pool size, service
+   * advertisements) is left at Stalwart's defaults — they are correct on
+   * a single-box install.
+   */
+  public boolean ensureSystemSettings(String defaultHostname, String defaultDomain) {
+    String domainId = domainIdFor(defaultDomain);
+    if (domainId == null) {
+      throw new StalwartApiException("domain " + defaultDomain
+          + " does not exist; create it before seeding SystemSettings");
+    }
+
+    JsonNode got = post(jmapCall("x:SystemSettings/get",
+        "{\"ids\":[\"singleton\"]}"));
+    JsonNode current = null;
+    for (JsonNode s : methodArgs(got).path("list")) {
+      current = s;
+      break;
+    }
+    if (current != null) {
+      String curHost = text(current, "defaultHostname");
+      String curDomain = text(current, "defaultDomain");
+      // SystemSettings.defaultDomain is an Id<Domain>; the server may
+      // echo either the id or the object depending on Get expansion, so
+      // compare against the resolved id.
+      if (defaultHostname.equals(curHost) && domainId.equals(curDomain)) {
+        return false;
+      }
+    }
+
+    String update = "{\"update\":{\"singleton\":{"
+        + "\"defaultHostname\":" + quote(defaultHostname) + ","
+        + "\"defaultDomain\":" + quote(domainId)
+        + "}}}";
+    JsonNode args = methodArgs(post(jmapCall("x:SystemSettings/set", update)));
+    if (args.path("updated").has("singleton")) {
+      log.info("stalwart: SystemSettings updated (hostname={}, domainId={})",
+          defaultHostname, domainId);
+      return true;
+    }
+    JsonNode notUpdated = args.path("notUpdated").path("singleton");
+    throw new StalwartApiException("could not update SystemSettings: " + notUpdated);
+  }
+
+  /**
+   * Ensure a named NetworkListener exists on {@code bind} carrying
+   * {@code protocol}. Returns true when it was created (or updated to
+   * match) this call; false when it was already correct.
+   *
+   * <p>The identity is the listener's {@code name}; Aurora keys off it
+   * so a rebuild that changes a listener's bind updates the existing
+   * object rather than adding a second one.
+   *
+   * @param protocol one of {@code smtp}, {@code imap}, {@code manageSieve};
+   *                 the {@code NetworkListenerProtocol} enum in v0.16
+   * @param tlsImplicit true for ports that speak TLS from byte zero
+   *                    (submissions :465, imaps :993, managesieve :4190);
+   *                    false for STARTTLS or plaintext-then-upgrade ports
+   *                    (:25, :143, :587)
+   */
+  public boolean ensureNetworkListener(String name, String protocol, String bind,
+                                       boolean tlsImplicit) {
+    JsonNode existing = findListenerByName(name);
+    if (existing != null) {
+      String curBind = firstSetValue(existing.path("bind"));
+      String curProto = text(existing, "protocol");
+      Boolean curTls = existing.hasNonNull("tlsImplicit") ? existing.get("tlsImplicit").asBoolean() : null;
+      if (bind.equals(curBind) && protocol.equals(curProto)
+          && curTls != null && curTls == tlsImplicit) {
+        return false;
+      }
+      String id = text(existing, "id");
+      String update = "{\"update\":{" + quote(id) + ":{"
+          + "\"bind\":{\"0\":" + quote(bind) + "},"
+          + "\"protocol\":" + quote(protocol) + ","
+          + "\"tlsImplicit\":" + tlsImplicit
+          + "}}}";
+      JsonNode args = methodArgs(post(jmapCall("x:NetworkListener/set", update)));
+      if (args.path("updated").has(id)) {
+        log.info("stalwart: updated listener {} ({} on {})", name, protocol, bind);
+        return true;
+      }
+      JsonNode notUpdated = args.path("notUpdated").path(id);
+      throw new StalwartApiException("could not update listener " + name + ": " + notUpdated);
+    }
+
+    String create = "{\"create\":{\"n1\":{"
+        + "\"name\":" + quote(name) + ","
+        + "\"bind\":{\"0\":" + quote(bind) + "},"
+        + "\"protocol\":" + quote(protocol) + ","
+        + "\"tlsImplicit\":" + tlsImplicit
+        + "}}}";
+    JsonNode args = methodArgs(post(jmapCall("x:NetworkListener/set", create)));
+    if (args.path("created").has("n1")) {
+      log.info("stalwart: created listener {} ({} on {})", name, protocol, bind);
+      return true;
+    }
+    JsonNode notCreated = args.path("notCreated").path("n1");
+    throw new StalwartApiException("could not create listener " + name + ": " + notCreated);
+  }
+
+  /** The current NetworkListener object named {@code name}, or null. */
+  private JsonNode findListenerByName(String name) {
+    JsonNode resp = post(jmapCall("x:NetworkListener/get", "{\"ids\":null}"));
+    for (JsonNode l : methodArgs(resp).path("list")) {
+      if (name.equalsIgnoreCase(l.path("name").asText())) {
+        return l;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * A JMAP {@code Set<X>} is encoded as an object of numeric-string keys.
+   * The listener's {@code bind} is such a set of {@code host:port}
+   * strings; Aurora writes one entry per listener (one host:port each,
+   * matching how compose exposes them), so "first value" is enough to
+   * compare against for idempotency.
+   */
+  private static String firstSetValue(JsonNode set) {
+    if (set == null || !set.isObject()) return null;
+    var it = set.fields();
+    while (it.hasNext()) {
+      var e = it.next();
+      JsonNode v = e.getValue();
+      if (v.isTextual()) return v.asText();
+    }
+    return null;
+  }
+
+  /**
+   * Ensure a Console tracer at INFO level exists, so {@code docker logs
+   * stalwart} is not empty. Returns true when it was created; false when
+   * a console tracer was already there.
+   *
+   * <p>Content of the console tracer is intentionally minimal:
+   * {@code @type=Console}, {@code level=info}, everything else default.
+   * Aurora is not telling Stalwart what to log — only that logging should
+   * reach stdout so an operator can see it. Followups that tune log
+   * volume belong in the mail admin console, not the seed.
+   */
+  public boolean ensureConsoleTracer() {
+    JsonNode got = post(jmapCall("x:Tracer/get", "{\"ids\":null}"));
+    for (JsonNode t : methodArgs(got).path("list")) {
+      if ("Console".equals(text(t, "@type"))) {
+        return false;
+      }
+    }
+    String create = "{\"create\":{\"t1\":{"
+        + "\"@type\":\"Console\","
+        + "\"level\":\"info\""
+        + "}}}";
+    JsonNode args = methodArgs(post(jmapCall("x:Tracer/set", create)));
+    if (args.path("created").has("t1")) {
+      log.info("stalwart: created Console tracer (level=info)");
+      return true;
+    }
+    JsonNode notCreated = args.path("notCreated").path("t1");
+    throw new StalwartApiException("could not create Console tracer: " + notCreated);
+  }
+
   /**
    * Point extra addresses at an existing mailbox.
    *
