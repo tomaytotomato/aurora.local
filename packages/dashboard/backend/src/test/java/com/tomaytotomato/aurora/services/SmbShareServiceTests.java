@@ -76,12 +76,20 @@ class SmbShareServiceTests {
   }
 
   @Test
-  void tellsTheOwnerWhichOfTheTwoThingsWentWrong() {
-    // "wrong password" and "device is asleep" need different reactions from
-    // a person, so they must not collapse into one "couldn't connect".
+  void tellsTheOwnerWhichOfTheThingsWentWrong() {
+    // "wrong password", "needs a password" and "device is asleep" need
+    // different reactions from a person, so they must not collapse.
     CommandRunner denied = failing("session setup failed: NT_STATUS_LOGON_FAILURE");
     assertThat(new SmbShareService(denied).list("192.0.2.10", "sarah", "wrong").outcome())
         .isEqualTo(Result.DENIED);
+
+    // The same refusal, but nobody had typed a username yet. Reported live
+    // against a real NAS as "That username and password didn't open it",
+    // which is nonsense to read and blames the reader for a mistake they
+    // did not make.
+    var guest = new SmbShareService(denied).list("192.0.2.10", null, null);
+    assertThat(guest.outcome()).isEqualTo(Result.CREDENTIALS_REQUIRED);
+    assertThat(guest.detail()).isEqualTo("This device needs a username and password.");
 
     CommandRunner down = failing("Connection to 192.0.2.10 failed (Error NT_STATUS_IO_TIMEOUT)");
     assertThat(new SmbShareService(down).list("192.0.2.10", null, null).outcome())

@@ -54,6 +54,17 @@ public class SmbShareService {
     public static final String OK = "ok";
     /** The device answered, but not with these credentials. */
     public static final String DENIED = "denied";
+    /**
+     * The device answered and wants credentials, and none were offered.
+     *
+     * <p>Distinct from {@link #DENIED} because the two need different
+     * things from a person: one is "sign in", the other is "you got it
+     * wrong". Collapsing them produced "That username and password didn't
+     * open it" in response to a guest attempt where no username had been
+     * typed — nonsense to read, and it points the reader at a mistake they
+     * did not make.
+     */
+    public static final String CREDENTIALS_REQUIRED = "credentials-required";
     /** The device did not answer at all. */
     public static final String UNREACHABLE = "unreachable";
   }
@@ -96,8 +107,12 @@ public class SmbShareService {
       // details did not work", which is what the owner needs to know.
       if (text.contains("LOGON_FAILURE") || text.contains("ACCESS_DENIED")
           || text.contains("NT_STATUS_ACCOUNT_DISABLED")) {
-        return new Result(Result.DENIED, List.of(),
-            "That username and password didn't open it.");
+        boolean guestAttempt = username == null || username.isBlank();
+        return guestAttempt
+            ? new Result(Result.CREDENTIALS_REQUIRED, List.of(),
+                "This device needs a username and password.")
+            : new Result(Result.DENIED, List.of(),
+                "That username and password didn't open it.");
       }
       return new Result(Result.UNREACHABLE, List.of(),
           "That device didn't answer. It may be asleep, or sharing may be switched off.");

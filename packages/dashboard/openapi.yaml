@@ -1086,7 +1086,11 @@ paths:
                 properties:
                   outcome:
                     type: string
-                    enum: [ok, denied, unreachable]
+                    description: >-
+                      `credentials-required` and `denied` are deliberately
+                      separate: "sign in" and "you got that wrong" need
+                      different things from a person.
+                    enum: [ok, credentials-required, denied, unreachable]
                   shares:
                     type: array
                     items:
