@@ -130,6 +130,30 @@ class AvahiStorageParserTests {
   }
 
   @Test
+  void understandsAvahisFriendlyServiceLabelsToo() {
+    // Verbatim from a real UGREEN NAS on a real LAN, browsed without -k:
+    // avahi rewrites _smb._tcp through its service-type database, and the
+    // first version of this code matched only the canonical type — so it
+    // reported "no storage found" while the NAS sat there advertising.
+    // The service passes -k now; this is the belt to that pair of braces,
+    // because whether the database is installed varies by image.
+    String out = """
+        =;enp0s31f6;IPv4;CORONA;Microsoft Windows Network;local;corona.local;192.168.0.216;445;
+        =;enp0s31f6;IPv4;CORONA;Device Info;local;corona.local;192.168.0.216;0;"model=MacSamba"
+        """;
+
+    List<NetworkStorageDevice> found = AvahiStorageParser.parse(out);
+
+    assertThat(found).hasSize(1);
+    assertThat(found.get(0).name()).isEqualTo("CORONA");
+    assertThat(found.get(0).protocols()).containsExactly(new Protocol(Protocol.SMB, 445));
+    // "Device Info" is not storage, so its model=MacSamba — a Samba
+    // emulation string, not a model anyone would recognise — is not
+    // borrowed to badge the device.
+    assertThat(found.get(0).model()).isNull();
+  }
+
+  @Test
   void anEmptyNetworkIsAnEmptyList_notAnError() {
     assertThat(AvahiStorageParser.parse("")).isEmpty();
     assertThat(AvahiStorageParser.parse(null)).isEmpty();

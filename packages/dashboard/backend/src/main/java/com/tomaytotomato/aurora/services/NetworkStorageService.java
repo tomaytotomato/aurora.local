@@ -82,12 +82,22 @@ public class NetworkStorageService {
    * Run the browse. {@code -a} all services, {@code -l} local only (a
    * device on someone else's network is not ours to offer), {@code -r}
    * resolve to address and port, {@code -p} parsable, {@code -t} terminate
-   * once the cache is exhausted.
+   * once the cache is exhausted, {@code -k} <b>do not</b> translate service
+   * types through avahi's service-type database.
+   *
+   * <p>{@code -k} is the difference between working and silently finding
+   * nothing. Without it avahi rewrites {@code _smb._tcp} as its friendly
+   * label "Microsoft Windows Network", which matches none of the types
+   * this code looks for — so a NAS advertising correctly would be reported
+   * as "no storage found". Discovered against a real UGREEN NAS; the
+   * parser also accepts the friendly labels, because whether the
+   * substitution happens at all depends on the service-type database
+   * being installed, and a second silent zero is not worth risking.
    */
   private String browse() throws IOException, InterruptedException {
     var sb = new StringBuilder();
     commands.stream(null, java.util.Map.of(),
-        List.of("timeout", String.valueOf(BROWSE_SECONDS), "avahi-browse", "-alrpt"),
+        List.of("timeout", String.valueOf(BROWSE_SECONDS), "avahi-browse", "-alrptk"),
         line -> sb.append(line).append('\n'));
     return sb.toString();
   }

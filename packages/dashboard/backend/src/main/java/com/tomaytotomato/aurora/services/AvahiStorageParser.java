@@ -35,12 +35,28 @@ final class AvahiStorageParser {
 
   private AvahiStorageParser() {}
 
-  /** mDNS service types that mean "I can store your files". */
-  static final Map<String, String> SERVICE_TYPES = Map.of(
-      "_smb._tcp", Protocol.SMB,
-      "_nfs._tcp", Protocol.NFS,
-      "_afpovertcp._tcp", Protocol.AFP,
-      "_adisk._tcp", Protocol.TIME_MACHINE
+  /**
+   * mDNS service types that mean "I can store your files".
+   *
+   * <p>Both spellings on purpose. {@code avahi-browse} rewrites types
+   * through its service-type database into friendly labels unless {@code -k}
+   * is passed — {@code _smb._tcp} becomes "Microsoft Windows Network" — and
+   * whether that database is installed varies by image. We pass {@code -k},
+   * and we also accept the labels, because the failure mode of getting this
+   * wrong is not an error: it is an empty list and a confident "nothing
+   * found" on a network that has a NAS sitting in plain sight. That is
+   * exactly what happened the first time this met a real device.
+   */
+  static final Map<String, String> SERVICE_TYPES = Map.ofEntries(
+      Map.entry("_smb._tcp", Protocol.SMB),
+      Map.entry("Microsoft Windows Network", Protocol.SMB),
+      Map.entry("_nfs._tcp", Protocol.NFS),
+      Map.entry("Network File System", Protocol.NFS),
+      Map.entry("NFS Remote File Share", Protocol.NFS),
+      Map.entry("_afpovertcp._tcp", Protocol.AFP),
+      Map.entry("Apple File Sharing", Protocol.AFP),
+      Map.entry("_adisk._tcp", Protocol.TIME_MACHINE),
+      Map.entry("Apple TimeMachine", Protocol.TIME_MACHINE)
   );
 
   /**
