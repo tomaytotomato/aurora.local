@@ -545,6 +545,56 @@ paths:
         '404': { description: No such mailbox. }
         '502': { description: The mail server is not reachable. }
 
+  # ─────────────────────────── start over (A8) ─────────────────────────
+  /reset:
+    post:
+      tags: [reset]
+      summary: Wipe this box back to a clean clone
+      description: >-
+        The button-shaped equivalent of `bash scripts/reset.sh`. Aurora
+        spawns a detached helper container that, a few seconds after this
+        response returns, tears down every aurora container, deletes
+        `data/`, and clears every `packages/*/.env` and `.state.yml`.
+        The repo, docker itself, the OS and the firewall are left alone.
+
+
+        Admin-only. The request body must carry the literal string
+        "RESET" — a case-exact match — so that a misclick or a stray
+        curl cannot wipe the box. Returns 202 as soon as the helper is
+        launched; the dashboard itself is gone shortly after, so any
+        follow-up call will fail. Bringing Aurora back is a single
+        `bash bootstrap.sh install` from a terminal on the box.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  description: Must be the literal string "RESET".
+      responses:
+        '202':
+          description: Reset accepted; helper container launched.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [helperId]
+                properties:
+                  helperId:
+                    type: string
+                    description: >-
+                      Docker id of the helper container. Not shown to the
+                      operator; useful in bug reports for cross-referencing
+                      `docker logs` on the box.
+        '400': { description: Confirmation missing or not the exact word "RESET". }
+        '401': { description: Not signed in. }
+        '403': { description: Signed in but not an admin. }
+        '500': { description: Aurora could not start the helper; nothing has been destroyed. }
+
   # ───────────────────────────── packages ─────────────────────────────
   /packages:
     get:

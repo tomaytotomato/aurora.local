@@ -33,9 +33,9 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | A3 | friction | Install log screams about secrets it is about to generate itself | [x] |
 | A4 | friction | Post-install notes are stale and terminal-first | [x] |
 | A5 | polish | Ansible deprecation noise dominates the install transcript | [x] |
-| A6 | friction | No reset/uninstall path anywhere | [x-cli] |
+| A6 | friction | No reset/uninstall path anywhere | [x] |
 | A7 | blocker | Published image is stale vs main, and unidentifiable on the box | [x-half] |
-| A8 | friction | "Start over" exists only as a script, not in the dashboard | [ ] |
+| A8 | friction | "Start over" exists only as a script, not in the dashboard | [x] |
 | B1 | blocker | "AdGuard on this box" does not install AdGuard | [x] |
 | B2 | blocker | AdGuard is never provisioned; the DNS story never completes | [x] |
 | B3 | blocker | Vue escape leak: `${'{'}DOMAIN{'}'}` rendered to the user | [x] |
@@ -218,6 +218,10 @@ resetting has to work on a box whose install failed halfway.
 **Still open:** the in-dashboard "Start over" button. Tracked as A8 so the CLI
 half does not read as done.
 
+**Update:** A8 shipped. Settings → Start over now runs the same reset script
+through a detached helper container, with a typed-confirmation modal and a
+goodbye splash. See A8.
+
 ### A7 · [blocker] Published image is stale, and the box can't say what it runs
 `ghcr.io/tomaytotomato/aurora:0.1.0` on GHCR carries
 `org.opencontainers.image.revision=3232c95` (2026-08-26) while `main` is
@@ -244,6 +248,31 @@ re-published from main at all. It currently drifts under a fixed name, which is
 what made a fresh install silently two days old. Options: stop moving release
 tags and have boxes track `edge`; or bump `AURORA_VERSION` per release and have
 "Check and update" compare the stamped revision.
+
+### A8 · [friction] "Start over" exists only as a script, not in the dashboard
+**SHIPPED.** Settings → Start over. A red-framed card near the bottom of the
+page opens a modal that lists what will be deleted (every app + its data, every
+mailbox and account, the TLS root, DNS settings, backups on this box) and what
+will survive (the OS, docker, ufw, the repo, files on other machines), and
+makes the operator type the word `RESET` verbatim before the confirm button
+un-greys. On accept the whole viewport swaps to a "disconnecting…" splash
+spelling out how to bring Aurora back (`bash bootstrap.sh install`); the router
+would otherwise bounce to /login the moment the container starts dying, which
+reads as a mundane sign-out rather than the deliberate wipe.
+
+**Why it needs a helper container.** `POST /api/reset` records the audit row,
+then spawns a small detached container that reuses the aurora image (bash +
+docker-cli already baked in, so no pull), runs as UID 0 so it can delete
+root-owned `data/` subtrees without sudo, mounts the repo at its host path
+identity-style, and executes `bash scripts/reset.sh --yes` after a short sleep
+so the HTTP response can leave the process before the process is killed. The
+helper deliberately does NOT carry the `com.docker.compose.project=aurora`
+label that `reset.sh` filters on — otherwise it would delete itself mid-run.
+
+**Kept as a followup:** wire the reset flow into a fresh nuke-and-rebuild in
+`scripts/verify-*` so the door does not silently rot with future changes to
+`reset.sh`. The unit tests pin the docker argv shape; a live rebuild is what
+proves the operator ever gets back to the login screen.
 
 ---
 

@@ -13,6 +13,7 @@ import NotificationsCard from '@/components/NotificationsCard.vue';
 import MarketplaceCard from '@/components/MarketplaceCard.vue';
 import ProxyRoutesCard from '@/components/ProxyRoutesCard.vue';
 import SettingsPortabilityCard from '@/components/SettingsPortabilityCard.vue';
+import StartOverCard from '@/components/StartOverCard.vue';
 import TlsRootCard from '@/components/TlsRootCard.vue';
 import {
   Alert,
@@ -391,6 +392,17 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
            card, but it is the difference between a reinstall costing an
            evening and costing ten minutes. -->
       <SettingsPortabilityCard />
+
+      <!-- Start over (A8, closing A6). The destructive twin of the
+           export card above: instead of preserving the state, wipe
+           it. Danger-zone framing on the card itself + a compulsory
+           typed confirmation in the modal + a "disconnecting" splash
+           after acceptance, because a single-button box-wipe would be
+           a footgun the doctrine explicitly bans (ESSENCE.md's
+           "honest state" clause covers what you are about to lose).
+           Sits above the audit log because it is destructive and
+           audit is diagnostic; findable, but past the boring cards. -->
+      <StartOverCard />
 
       <!-- iter-31: audit-log viewer. Consumes GET /api/audit/events
            (iter-30). Kept as an inline card rather than its own route
