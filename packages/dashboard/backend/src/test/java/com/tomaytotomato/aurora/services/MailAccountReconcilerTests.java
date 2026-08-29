@@ -126,6 +126,74 @@ class MailAccountReconcilerTests {
     assertThat(MailAccountReconciler.localPartFor(user(1, "Sarah"))).isEqualTo("sarah");
   }
 
+  // ── admin@ / system@ ────────────────────────────────────────────────
+
+  private MailboxSummary box(String id, String address) {
+    return new MailboxSummary(id, address, 0L, null, "2026-08-28T00:00:00Z");
+  }
+
+  @Test
+  void pointsAdminAndSystemAtTheOwnersMailbox() {
+    when(users.findAll()).thenReturn(List.of(user(1, "sarah")));
+    when(mail.listMailboxes()).thenReturn(List.of(box("m1", "sarah@aurora.local")));
+    when(mail.aliasesOf("m1")).thenReturn(List.of());
+
+    svc.reconcile("startup");
+
+    verify(mail).setAliases(eq("m1"), eq(List.of("admin", "system")), eq("aurora.local"));
+  }
+
+  @Test
+  void leavesCorrectAliasesAlone_becauseSettingThemRewritesTheWholeMap() {
+    // This runs every five minutes; without the comparison it would
+    // rewrite the same value forever and log it each time.
+    when(users.findAll()).thenReturn(List.of(user(1, "sarah")));
+    when(mail.listMailboxes()).thenReturn(List.of(box("m1", "sarah@aurora.local")));
+    when(mail.aliasesOf("m1")).thenReturn(List.of("system", "admin"));
+
+    svc.reconcile("schedule");
+
+    verify(mail, never()).setAliases(anyString(), any(), anyString());
+  }
+
+  @Test
+  void theOwnerIsTheFirstAdmin_notWhoeverWasAddedLast() {
+    var owner = user(1, "sarah");
+    var later = user(2, "bruce");
+    when(users.findAll()).thenReturn(List.of(owner, later));
+    when(mail.listMailboxes()).thenReturn(List.of(
+        box("m1", "sarah@aurora.local"), box("m2", "bruce@aurora.local")));
+    when(mail.aliasesOf(anyString())).thenReturn(List.of());
+
+    svc.reconcile("startup");
+
+    verify(mail).setAliases(eq("m1"), any(), anyString());
+    verify(mail, never()).setAliases(eq("m2"), any(), anyString());
+  }
+
+  @Test
+  void doesNotAliasAnOwnerCalledAdminToThemselves() {
+    when(users.findAll()).thenReturn(List.of(user(1, "admin")));
+    when(mail.listMailboxes()).thenReturn(List.of(box("m1", "admin@aurora.local")));
+    when(mail.aliasesOf("m1")).thenReturn(List.of());
+
+    svc.reconcile("startup");
+
+    // Only system@ is left to add; admin@ is already their own address.
+    verify(mail).setAliases(eq("m1"), eq(List.of("system")), eq("aurora.local"));
+  }
+
+  @Test
+  void anAliasCollisionDoesNotBreakTheRestOfTheReconcile() {
+    when(users.findAll()).thenReturn(List.of(user(1, "sarah")));
+    when(mail.listMailboxes()).thenReturn(List.of(box("m1", "sarah@aurora.local")));
+    when(mail.aliasesOf("m1")).thenReturn(List.of());
+    org.mockito.Mockito.doThrow(new StalwartMailClient.StalwartApiException("taken"))
+        .when(mail).setAliases(anyString(), any(), anyString());
+
+    svc.reconcile("startup");   // must not throw
+  }
+
   @Test
   void neverThrowsAtAUserWithNoMailServerRunning() {
     when(users.findAll()).thenReturn(List.of(user(1, "sarah")));

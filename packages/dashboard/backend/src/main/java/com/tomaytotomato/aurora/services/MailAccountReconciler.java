@@ -2,6 +2,7 @@ package com.tomaytotomato.aurora.services;
 
 import com.tomaytotomato.aurora.domain.AdminUser;
 import com.tomaytotomato.aurora.domain.MailboxSummary;
+import com.tomaytotomato.aurora.domain.Role;
 import com.tomaytotomato.aurora.persistence.AdminUserRepo;
 import com.tomaytotomato.aurora.events.UserChangedEvent;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
@@ -49,6 +50,21 @@ public class MailAccountReconciler {
   private static final Logger log = LoggerFactory.getLogger(MailAccountReconciler.class);
 
   static final String DEFAULT_DOMAIN = "aurora.local";
+
+  /**
+   * Addresses the box itself answers to, pointed at the owner's mailbox.
+   *
+   * <p>{@code admin@} is what a person writes to when they want whoever
+   * runs this thing. {@code system@} is what Aurora itself uses for
+   * diagnostics, alerts and anything it generates — so those land in a real
+   * inbox the owner already reads, rather than in
+   * {@code data/authelia/notification.txt} where they have been going.
+   *
+   * <p>Aliases rather than separate mailboxes on purpose: a second mailbox
+   * means a second password to manage and an inbox nobody opens, and it
+   * would break "one password for your box and your mail".
+   */
+  static final List<String> OWNER_ALIASES = List.of("admin", "system");
 
   private final AdminUserRepo users;
   private final StateFileService stateFiles;
@@ -120,7 +136,52 @@ public class MailAccountReconciler {
         log.warn("mail reconcile: could not create {}: {}", address, e.toString());
       }
     }
+
+    // Re-read only if we changed anything; otherwise reuse the list.
+    ensureOwnerAliases(created > 0 ? mail.listMailboxes() : existing, all, domain);
     return created;
+  }
+
+  /**
+   * Point {@code admin@} and {@code system@} at the owner's mailbox.
+   *
+   * <p>The owner is the first account created on the box — the one the
+   * wizard made. Aliases are only ever written when they are actually
+   * wrong, because {@link StalwartMailClient#setAliases} replaces the whole
+   * map and this runs every five minutes.
+   */
+  void ensureOwnerAliases(List<MailboxSummary> existing, List<AdminUser> all, String domain) {
+    AdminUser owner = all.stream()
+        .filter(u -> Role.ADMIN.equals(u.role()))
+        .findFirst()
+        .orElse(all.isEmpty() ? null : all.get(0));
+    if (owner == null) return;
+
+    String ownerLocal = localPartFor(owner);
+    if (ownerLocal == null) return;
+    var mailbox = find(existing, ownerLocal + "@" + domain);
+    if (mailbox.isEmpty()) return;
+
+    // An owner literally called "admin" already answers at admin@; adding
+    // it as an alias of itself is a collision, not a courtesy.
+    List<String> wanted = OWNER_ALIASES.stream()
+        .filter(a -> !a.equalsIgnoreCase(ownerLocal))
+        .toList();
+    if (wanted.isEmpty()) return;
+
+    try {
+      List<String> current = mail.aliasesOf(mailbox.get().id());
+      if (current.containsAll(wanted) && wanted.containsAll(current)) return;
+
+      mail.setAliases(mailbox.get().id(), wanted, domain);
+      audit.record(owner.id(), "mail.aliases.set", String.join(",", wanted), null);
+      log.info("mail reconcile: {} now also answer at {}", ownerLocal + "@" + domain,
+          wanted.stream().map(a -> a + "@" + domain).toList());
+    } catch (Exception e) {
+      // A collision (someone already owns admin@ as their own address) or a
+      // mail server hiccup. Neither is worth failing the whole reconcile.
+      log.warn("mail reconcile: could not set aliases on {}: {}", ownerLocal, e.toString());
+    }
   }
 
   private void reconcileQuietly(String reason) {

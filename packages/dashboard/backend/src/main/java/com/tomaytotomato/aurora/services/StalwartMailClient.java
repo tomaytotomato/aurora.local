@@ -202,6 +202,27 @@ public class StalwartMailClient {
     throw new StalwartApiException("could not reset mailbox " + id + ": " + notUpdated);
   }
 
+  /**
+   * The extra addresses currently pointed at a mailbox, as local parts.
+   *
+   * <p>Exists so a reconcile can tell "already correct" from "needs
+   * setting" and stay quiet: {@link #setAliases} replaces the whole map, so
+   * without this it would rewrite the same value every five minutes
+   * forever and log it each time.
+   */
+  public java.util.List<String> aliasesOf(String accountId) {
+    JsonNode got = post(jmapCall("x:Account/get", "{\"ids\":[" + quote(accountId) + "]}"));
+    var out = new ArrayList<String>();
+    for (JsonNode a : methodArgs(got).path("list")) {
+      JsonNode aliases = a.path("aliases");
+      aliases.fields().forEachRemaining(e -> {
+        String name = text(e.getValue(), "name");
+        if (name != null) out.add(name);
+      });
+    }
+    return out;
+  }
+
   /** Whether the mail domain is already known to Stalwart. */
   public boolean domainExists(String name) {
     return domainIdFor(name) != null;

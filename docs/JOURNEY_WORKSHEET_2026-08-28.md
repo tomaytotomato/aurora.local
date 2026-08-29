@@ -66,6 +66,10 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | C19 | polish | Review lists a vhost for a profile-gated service that will not start | [x] |
 | C22 | blocker | Review listed the doubled `aurora.aurora.local` (regression from C10) | [x] |
 | C23 | blocker | The wizard's own launch path skipped AdGuard provisioning entirely | [x] |
+| C24 | blocker | The owner is the one user who gets no mailbox | [x] |
+| C25 | friction | `admin@` / `system@` do not exist | [x] |
+| C26 | friction | Aurora's alerts still go to a file, not to `system@` | [ ] |
+| C27 | blocker | Mail is accepted on :25 and then silently discarded | [ ] |
 | C20 | friction | The SSO step links to auth.$DOMAIN before the DNS that resolves it is running | [x-copy] |
 | C21 | fork | Ship image digests, or a "Pin these now" action (owner's call) | [ ] |
 | D1 | polish | `Essence.md` is unreferenced and inconsistently named | [x] |
@@ -842,8 +846,57 @@ event that triggers it. Three things made this more than a one-line call:
    answers "does the domain exist"; the one caller that wanted "did I create it"
    asks `domainExists` first. 8 tests.
 
-**Still open (next):** `admin@` and `system@` aliases onto the owner's mailbox,
-and routing Aurora's own alerts/diagnostics to `system@` (Bruce's (c)).
+**SHIPPED (C25, aliases).** `admin@` and `system@` now point at the owner's
+mailbox — the first admin, i.e. the account the wizard created. Aliases rather
+than separate mailboxes, because a second mailbox means a second password to
+manage and an inbox nobody opens, and it would break "one password for your box
+and your mail". The alias schema had to be reverse-engineered against a live
+v0.16.19: it is a map of index → `{"@type":"Alias","name":…,"domainId":…}`; a
+list of strings and a map of address→bool are both rejected with `invalidPatch`.
+The reconcile reads the current aliases first and only writes when they differ,
+because setting them replaces the whole map and this runs every five minutes.
+An owner called `admin` is not aliased to themselves. 5 more tests.
+
+Verified as far as this layer goes: Stalwart records both aliases, and SMTP
+`RCPT TO:<system@aurora.local>` and `<admin@aurora.local>` both return 250 —
+i.e. the aliases resolve to the owner's account. End-to-end delivery could not
+be verified because of C27 below, which is not caused by this change.
+
+### C27 · [blocker] Mail is accepted and then silently discarded
+Found while verifying the aliases. **The box takes mail and throws it away.**
+
+Evidence, all on the live box:
+- SMTP on :25 answers `220 mail.aurora.local Stalwart ESMTP at your service`,
+  and a full transaction succeeds: `MAIL FROM` 250, `RCPT TO:<sarah@aurora.local>`
+  250, `RCPT TO:<system@aurora.local>` 250, `DATA` accepted.
+- Nothing ever arrives. Over IMAPS (993) as `sarah@aurora.local`, every folder
+  is empty, polled for 30 seconds after each send.
+- It is not an IMAP visibility problem: the row count in Stalwart's Postgres
+  store is **unchanged** after sending a 500-byte message (4838 before, 4838
+  after). The message is never stored.
+- `docker logs stalwart` is **completely empty**. No telemetry at all, so an
+  operator has no way of seeing any of this.
+- Plain IMAP :143 and submission :587 are **refused**, though compose publishes
+  them and the Stalwart panel's "connect a mail client" facts advertise
+  "IMAP 993 SSL/TLS, SMTP 587 STARTTLS". Only 25, 993 and 4190 answer.
+
+Likely root cause, and why this needs a decision rather than a guess: Aurora
+seeds **only the datastore pointer** into `config.json`
+(`packages/core/stalwart/config.template.json` is nine lines describing
+Postgres) and lets Stalwart's own defaults do everything else — listeners, local
+delivery, queue processing, logging. Those defaults evidently do not add up to a
+working local-delivery mail server. Aurora owns AdGuard's and Authelia's config
+for exactly this reason; mail is the outlier.
+
+**The fork:** how much of Stalwart's configuration should Aurora own? Minimum to
+close this is local delivery + the listeners we advertise + logging that reaches
+`docker logs`. Doing it properly probably means the same treatment core already
+gives Authelia: a rendered config Aurora controls, with the box's domain and
+hostname in it.
+
+Until this is fixed, mailboxes and aliases are correct but useless, and
+**anything routed to `system@` would be silently lost** — so C26 (Aurora's alerts
+to `system@`) should not ship before it.
 
 ## D · Repo and docs
 
