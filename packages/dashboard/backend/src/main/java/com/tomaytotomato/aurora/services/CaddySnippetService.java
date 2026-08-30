@@ -115,6 +115,19 @@ public class CaddySnippetService {
   );
 
   /**
+   * Per-vhost opt-out marker. A snippet author writes
+   * {@code # @sso: skip} on its own line immediately before a vhost
+   * header to keep that specific vhost public even when the package's
+   * manifest declares {@code sso.protect: true}. Whitespace-tolerant.
+   * Used by packages like {@code privacy} (AdGuard) that expose a
+   * gated admin UI on one vhost and an unauthenticated DoH endpoint
+   * on another.
+   */
+  private static final Pattern SSO_SKIP_MARKER = Pattern.compile(
+      "^\\s*#\\s*@sso:\\s*skip\\s*$"
+  );
+
+  /**
    * Filename {@link com.tomaytotomato.aurora.services.ProxyService} writes
    * hand-added routes into, inside this service's own {@link #snippetDir()}.
    *
@@ -211,6 +224,15 @@ public class CaddySnippetService {
    * the snippet through verbatim otherwise. Adds a banner comment so
    * an operator reading the rendered file understands why it looks
    * different from the source.
+   *
+   * <p><b>Per-vhost opt-out.</b> A package with mixed public + gated
+   * vhosts (e.g. AdGuard: admin UI on one vhost, DoH on another) can
+   * mark individual vhosts as public by prefixing the block header with
+   * a {@code # @sso: skip} line. The renderer sees the marker, skips
+   * the injection for that one block, and drops the marker itself from
+   * the output so the rendered snippet stays a valid Caddyfile. All
+   * other vhosts in the same source still get {@code import authelia}
+   * as usual.
    */
   static String render(String source, String pkgName, SsoBlock sso) {
     var out = new StringBuilder();
@@ -223,11 +245,26 @@ public class CaddySnippetService {
     out.append('\n');
 
     boolean inject = sso != null && sso.protect();
+    boolean skipNextVhost = false;
     for (String line : source.split("\\R", -1)) {
+      // Per-vhost SSO opt-out marker: a comment on its own line reading
+      // '# @sso: skip' immediately before a vhost header disables the
+      // authelia injection for THAT vhost only. Kept out of the rendered
+      // output so the marker doesn't show up in Caddy's active config.
+      if (SSO_SKIP_MARKER.matcher(line).matches()) {
+        skipNextVhost = true;
+        continue;
+      }
       out.append(line).append('\n');
       if (inject) {
         Matcher m = VHOST_HEADER.matcher(line);
         if (m.matches()) {
+          if (skipNextVhost) {
+            // Public vhost inside an otherwise SSO-protected package.
+            // Neither redirect nor authelia — leave the block alone.
+            skipNextVhost = false;
+            continue;
+          }
           // Preserve the leading indent so the imported directive
           // aligns with the rest of the block. Caddy tolerates any
           // whitespace but consistent formatting reads better in a

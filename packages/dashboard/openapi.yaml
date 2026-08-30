@@ -1963,6 +1963,39 @@ paths:
             application/x-x509-ca-cert:
               schema: { type: string }
 
+  # ────────────────────────── apps (SSO helpers) ─────────────────────────
+  /apps/adguard/session-cookie:
+    get:
+      tags: [system]
+      summary: AdGuard session cookie (Caddy forward_auth helper)
+      description: >-
+        Called by Caddy on every request to `adguard.$DOMAIN` after
+        Authelia has verified the user. Aurora returns a valid AdGuard
+        admin session cookie in the `X-Adguard-Cookie` response header;
+        Caddy copies that header onto the outgoing request as `Cookie`
+        so AdGuard never shows its own login screen. See
+        `packages/privacy/caddy.snippet` for the wire shape.
+
+
+        Public because Caddy's forward-auth sub-request has no session
+        of its own; the actual access control is Authelia's `import`
+        block in the Caddy vhost, which runs BEFORE this endpoint is
+        called.
+      security: []
+      responses:
+        '204':
+          description: >-
+            Cookie returned in the `X-Adguard-Cookie` header.
+          headers:
+            X-Adguard-Cookie:
+              description: '`agh_session=<hex>` — use as a request `Cookie` header.'
+              schema: { type: string }
+        '503':
+          description: >-
+            AdGuard is not reachable or the broker credential does not
+            work. Caddy treats 5xx as "deny" so the operator sees a
+            proxy error rather than the AdGuard login page.
+
   # ─────────────────────────────── mdns ───────────────────────────────
   /mdns/aliases:
     get:

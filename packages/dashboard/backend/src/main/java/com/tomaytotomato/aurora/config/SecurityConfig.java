@@ -49,6 +49,14 @@ public class SecurityConfig {
             .requestMatchers("/api/onboarding/**").permitAll() // OnboardingController re-checks bootstrap mode
             .requestMatchers(HttpMethod.GET, "/api/services/status", "/api/services/status/stream").permitAll() // iter-2: probed by Done page; safe read-only. TD1: SSE variant same posture.
             .requestMatchers(HttpMethod.GET, "/api/system/caddy-root.crt").permitAll()
+            // Called by Caddy (forward_auth) on every request to
+            // adguard.$DOMAIN after Authelia has verified the user. Aurora
+            // has no way to authenticate a Caddy forward-auth sub-request,
+            // so the endpoint is permitAll here — the actual access
+            // control lives at the Caddy layer, which only asks Aurora
+            // for this cookie AFTER `import authelia` has approved the
+            // outer request. See AdguardSessionController.
+            .requestMatchers(HttpMethod.GET, "/api/apps/adguard/session-cookie").permitAll()
             .requestMatchers("/api/health").permitAll()
             .anyRequest().authenticated()
         )

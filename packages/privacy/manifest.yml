@@ -44,10 +44,26 @@ probe:
   in_cluster_url: http://adguard:3000
   external_url: http://{lan_ip}:3000/
 
+sso:
+  protect: true
+  min_role: user
+  # Aurora auto-logs the SSO user into AdGuard via a broker cookie
+  # (see AdguardSessionBroker + caddy.snippet). One login end-to-end.
+  trusted_headers: false
+
+vhosts:
+  - {label: adguard, upstream: adguard:3000, description: AdGuard admin UI (gated by SSO)}
+  - {label: dns,     upstream: adguard:3000, description: DNS-over-HTTPS endpoint (public, /dns-query only)}
+
 post_install_notes: |
   AdGuard is set up already: it answers DNS for this network and points
   every *.{domain} name at this box. Sign in at https://adguard.{domain}
-  with your Aurora username and password.
+  with your Aurora account — you go through the box's usual SSO screen
+  and AdGuard's own login screen never appears.
+
+  For DNS-over-HTTPS on phones and browsers, point them at
+  https://dns.{domain}/dns-query (no login — the TLS handshake IS the
+  authentication).
 
   To cover every device in the house, set your router's DNS to this box's
   address. Aurora shows you where to do that on the Network screen.

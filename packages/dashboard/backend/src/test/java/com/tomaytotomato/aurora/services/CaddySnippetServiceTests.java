@@ -156,6 +156,70 @@ class CaddySnippetServiceTests {
   }
 
   @Test
+  void render_honours_per_vhost_sso_skip_marker() {
+    // A package with sso.protect=true can still declare individual
+    // vhosts as public by prefixing the block header with a
+    // '# @sso: skip' comment. Used by privacy (AdGuard) so the DoH
+    // endpoint on dns.$DOMAIN stays reachable to phones and routers
+    // that can't do browser SSO, while the admin UI on adguard.$DOMAIN
+    // still gets `import authelia`.
+    String src =
+        "# gated admin UI\n"
+        + "https://adguard.{$DOMAIN} {\n"
+        + "\ttls internal\n"
+        + "\treverse_proxy adguard:3000\n"
+        + "}\n"
+        + "\n"
+        + "# public DoH endpoint\n"
+        + "# @sso: skip\n"
+        + "https://dns.{$DOMAIN} {\n"
+        + "\ttls internal\n"
+        + "\treverse_proxy adguard:3000\n"
+        + "}\n";
+    SsoBlock sso = new SsoBlock(true, Role.USER, false, java.util.List.of());
+    String out = CaddySnippetService.render(src, "privacy", sso);
+
+    // adguard.$DOMAIN block is gated (authelia injected).
+    String[] parts = out.split("https://dns\\.\\{\\$DOMAIN}", 2);
+    assertThat(parts).hasSize(2);
+    assertThat(parts[0]).contains("import authelia");
+
+    // dns.$DOMAIN block is NOT gated — no authelia injection AFTER
+    // its header.
+    assertThat(parts[1]).doesNotContain("import authelia");
+
+    // The marker itself is dropped from the rendered output so it
+    // doesn't appear in Caddy's active config as a mysterious comment.
+    assertThat(out).doesNotContain("@sso: skip");
+  }
+
+  @Test
+  void render_sso_skip_only_affects_the_next_vhost() {
+    // A skip marker before ONE vhost must not accidentally leak into
+    // the next one. Otherwise a snippet with a public vhost followed
+    // by a gated vhost would silently drop the second injection.
+    String src =
+        "# @sso: skip\n"
+        + "https://public.{$DOMAIN} {\n"
+        + "\ttls internal\n"
+        + "\treverse_proxy public:80\n"
+        + "}\n"
+        + "\n"
+        + "https://gated.{$DOMAIN} {\n"
+        + "\ttls internal\n"
+        + "\treverse_proxy gated:80\n"
+        + "}\n";
+    SsoBlock sso = new SsoBlock(true, Role.USER, false, java.util.List.of());
+    String out = CaddySnippetService.render(src, "x", sso);
+
+    String[] parts = out.split("https://gated\\.\\{\\$DOMAIN}", 2);
+    // Before gated: NO authelia (the skip covered public).
+    assertThat(parts[0]).doesNotContain("import authelia");
+    // After gated header: authelia IS injected (skip did not leak).
+    assertThat(parts[1]).contains("import authelia");
+  }
+
+  @Test
   void render_does_not_grow_by_a_trailing_newline_on_every_pass() {
     // If a future edit accidentally appends "\n" without trimming, a
     // 60-second drift loop would grow the file by one blank line per

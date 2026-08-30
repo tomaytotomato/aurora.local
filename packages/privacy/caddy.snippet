@@ -1,21 +1,75 @@
 # aurora.local / packages/privacy / caddy vhost fragment
 #
-# Fronts AdGuard Home on adguard.${DOMAIN}. Without this the package
-# installed fine and then vanished: `vhosts: none` on its app page, no Open
-# button, no address anywhere in the dashboard, and the only way in was
-# knowing to type the box's LAN IP and :3000 — which is precisely the
-# knowledge Aurora exists to make unnecessary.
+# Two vhosts, one purpose each:
 #
-# NOTE: no `import authelia`. AdGuard has its own admin account (Aurora
-# provisions it with the owner's own credentials, see
-# AdguardProvisionService), and fronting it with forward-auth would break
-# the DNS-over-HTTPS and mobile-client endpoints AdGuard serves from the
-# same listener.
+#   adguard.$DOMAIN  \u2014 AdGuard's admin UI.
+#                       Gated by Authelia (`import authelia` injected by
+#                       CaddySnippetService because sso.protect=true).
+#                       Then, on every request, Caddy calls Aurora's
+#                       `/api/apps/adguard/session-cookie`, copies the
+#                       returned `X-Adguard-Cookie` header onto the
+#                       outgoing request as `Cookie`, and reverse-proxies
+#                       to AdGuard. AdGuard treats it as an authenticated
+#                       admin session and never shows its own login
+#                       screen. So the operator sees ONE login (Authelia)
+#                       end-to-end.
+#
+#   dns.$DOMAIN      \u2014 AdGuard's DNS-over-HTTPS endpoint (`/dns-query`).
+#                       The `# @sso: skip` marker below tells
+#                       CaddySnippetService NOT to inject `import authelia`
+#                       here \u2014 phones and routers can't do browser SSO,
+#                       and DoH's own TLS is the authentication anyway.
+#
+# The vhost split matters. AdGuard serves both admin UI and DoH on the
+# SAME upstream port (3000); wrapping everything with Authelia would
+# lock phones and routers out. Two vhosts is the cleanest fix and
+# reads honestly: `adguard.$DOMAIN` = admin, `dns.$DOMAIN` = DoH.
 
+# \u2500\u2500\u2500 admin UI \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 http://adguard.{$DOMAIN} {
 	reverse_proxy adguard:3000
 }
 https://adguard.{$DOMAIN} {
 	tls internal
+	# CaddySnippetService injects `import authelia` here, before this
+	# block runs, because the manifest declares sso.protect=true.
+
+	# Second forward_auth: ask Aurora for a valid AdGuard session cookie.
+	# Runs AFTER Authelia's block has already accepted the request (the
+	# injection order is: authelia first, then whatever else is inside
+	# the vhost). Aurora returns 204 + `X-Adguard-Cookie: agh_session=...`
+	# which we copy onto the upstream request as a `Cookie` header, so
+	# AdGuard treats us as an authenticated broker session.
+	#
+	# 503 from Aurora means the broker cannot log in \u2014 Caddy treats
+	# forward_auth 5xx as "deny" so the operator sees an honest error
+	# rather than falling through to AdGuard's native login (which was
+	# the whole point of building this).
+	forward_auth aurora:8090 {
+		uri /api/apps/adguard/session-cookie
+		copy_headers X-Adguard-Cookie>Cookie
+	}
+
 	reverse_proxy adguard:3000
+}
+
+# \u2500\u2500\u2500 DoH endpoint (public) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# @sso: skip
+http://dns.{$DOMAIN} {
+	# Some clients (Firefox, older Android) still probe http:// first.
+	# 301 to https:// so DoH always speaks TLS end-to-end.
+	redir https://{host}{uri} permanent
+}
+# @sso: skip
+https://dns.{$DOMAIN} {
+	tls internal
+	# Restrict to the DoH path so a curious LAN user can't reach the
+	# AdGuard admin through this vhost. Anything else returns 404.
+	@doh path /dns-query /dns-query/*
+	handle @doh {
+		reverse_proxy adguard:3000
+	}
+	handle {
+		respond "not found" 404
+	}
 }
