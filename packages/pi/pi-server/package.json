@@ -1,0 +1,23 @@
+{
+  "name": "pi-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenAI-compatible HTTP shim in front of Pi's SDK. LibreChat's door into Pi.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "node --experimental-strip-types src/index.ts",
+    "test": "node --experimental-strip-types --test src/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.3",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.0"
+  }
+}
