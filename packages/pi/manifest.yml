@@ -1,0 +1,79 @@
+name: pi
+title: Pi (household assistant)
+description: |
+  A household secretary that lives on this box. Pi remembers what
+  people asked for and prompts you before you forget. Ask it to add a
+  note, search your mail, or set a reminder — it uses the apps this box
+  already runs (SilverBullet for notes, Stalwart for mail, ntfy for
+  push) rather than a separate account somewhere in the cloud.
+
+  Single tenant on purpose: every household member gets the same
+  assistant, and Pi can join the dots ("your wife wanted you to do X"
+  yesterday in the notes, and it's Saturday morning now).
+
+  The reasoning core is Pi (the coding agent Bruce built on his laptop,
+  now containerised on this box). The web UI is LibreChat. The plumbing
+  between them is a small OpenAI-compatible shim that Aurora owns.
+
+category: productivity
+
+depends_on:
+  - core                          # Caddy + Authelia + Stalwart
+recommends:
+  - notes                         # SilverBullet is where Pi writes notes
+  - privacy                       # AdGuard resolves *.aurora.local on the LAN
+
+variant_group: assistant
+variant_default: true
+
+profiles: {}
+
+ports: []                         # nothing published; Caddy fronts it
+
+requires:
+  min_ram_mb: 1536                # LibreChat + Mongo + pi-server
+  min_disk_gb: 4                  # image + conversation history + Mongo
+  host_roles: []
+  start_budget_seconds: 90        # Mongo warmup + LibreChat first-run
+
+required_env:
+  # The provider Pi uses under the hood. Bruce runs on Copilot (his
+  # existing subscription). To use OpenAI or Anthropic directly, put
+  # the corresponding key in data/pi/auth/auth.json in Pi's own auth
+  # format (see packages/pi/README.md).
+  - PI_MODEL_PROVIDER
+  # LibreChat admin bootstrap. Filled in by rotate-secrets.sh.
+  - LIBRECHAT_CREDS_KEY
+  - LIBRECHAT_CREDS_IV
+  - LIBRECHAT_JWT_SECRET
+  - LIBRECHAT_JWT_REFRESH_SECRET
+  # Mongo bootstrap.
+  - MONGO_INITDB_ROOT_PASSWORD
+
+sso:
+  protect: true                   # LibreChat sits behind Authelia
+  min_role: user                  # every signed-in household member can use Pi
+  trusted_headers: true           # forward Remote-User so Pi knows who is talking
+
+# StatusProbeService looks up the compose service by the package name
+# by default; LibreChat runs as `librechat` so pin it explicitly.
+probe:
+  kind: docker
+  container: librechat
+
+vhosts:
+  - {label: pi, upstream: librechat:3080, description: The Pi chat UI}
+
+post_install_notes: |
+  Pi is on http://pi.$DOMAIN behind SSO. First sign-in walks you
+  through the LibreChat welcome; pick 'Pi' from the model dropdown
+  (that's Aurora's own Pi agent talking to whichever model provider
+  you configured — Copilot by default).
+
+  To wire Bruce's Copilot subscription, drop his ~/.pi/agent/auth.json
+  into data/pi/auth/auth.json. To use OpenAI or Anthropic directly,
+  set OPENAI_API_KEY or ANTHROPIC_API_KEY in packages/pi/.env and
+  re-run up.sh; Pi will pick them up on its next start.
+
+source_url: https://github.com/tomaytotomato/aurora.local
+homepage_url: https://github.com/earendil-works/pi-coding-agent

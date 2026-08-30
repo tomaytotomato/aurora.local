@@ -1,0 +1,22 @@
+# aurora.local / packages/pi / caddy.snippet
+#
+# Pi's chat UI at http(s)://pi.$DOMAIN.
+#
+# `import authelia` is INJECTED by Aurora's CaddySnippetService when
+# this package's manifest.yml declares `sso.protect: true` (it does).
+# The manifest is the source of truth; do NOT hand-add `import authelia`
+# here.
+#
+# Streaming: LibreChat holds the response open while pi-server streams
+# SSE from Pi's SDK back through it. Caddy's default reverse_proxy is
+# streaming-friendly out of the box (no response buffering), so nothing
+# to configure — but if you ever add `header_up` or a `handle` that
+# reads the response body, you'll break the stream. Don't.
+
+http://pi.{$DOMAIN} {
+	reverse_proxy librechat:3080
+}
+https://pi.{$DOMAIN} {
+	tls internal
+	reverse_proxy librechat:3080
+}
