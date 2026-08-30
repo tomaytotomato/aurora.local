@@ -4,12 +4,15 @@ import com.tomaytotomato.aurora.config.AuroraProperties;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -104,16 +108,73 @@ public class AutheliaMailProvisionService {
   private final AuroraProperties props;
   private final AuditEventRepo audit;
   private final SecureRandom rng;
+  /**
+   * Injectable TCP-reachability probe for the submission port. Real
+   * boots use {@link #defaultSubmissionProbe()}; tests hand in a lambda
+   * so they can flip the answer without touching a live socket.
+   */
+  private final SubmissionProbe submissionProbe;
+  /**
+   * True once we have logged the "waiting for stalwart submission
+   * listener to bind" INFO line at least once. The reconcile ticks
+   * every 30 minutes, so we only want the message once per cold boot,
+   * not on every retry — same "log-when-state-changes" shape as the
+   * registry seed's {@code seedListener} helper.
+   */
+  private final AtomicBoolean announcedWaitingForSubmission = new AtomicBoolean(false);
 
+  @Autowired
   public AutheliaMailProvisionService(StalwartProvisionService provision,
                                       StalwartMailClient mail,
                                       AuroraProperties props,
                                       AuditEventRepo audit) {
+    this(provision, mail, props, audit, defaultSubmissionProbe());
+  }
+
+  /** Test seam: hand in a fake probe. Package-private on purpose. */
+  AutheliaMailProvisionService(StalwartProvisionService provision,
+                               StalwartMailClient mail,
+                               AuroraProperties props,
+                               AuditEventRepo audit,
+                               SubmissionProbe submissionProbe) {
     this.provision = provision;
     this.mail = mail;
     this.props = props;
     this.audit = audit;
     this.rng = new SecureRandom();
+    this.submissionProbe = submissionProbe;
+  }
+
+  /**
+   * TCP-reachability probe for the submission port on aurora_net.
+   * Kept as an interface so tests can supply a stub without opening a
+   * real socket. Implementations must never throw — a probe that blew
+   * up would poison the reconcile.
+   */
+  @FunctionalInterface
+  interface SubmissionProbe {
+    boolean isOpen();
+  }
+
+  /**
+   * Real probe: 2 s TCP connect to {@code stalwart:587}. The registry
+   * object for the {@code submission} listener can be present in
+   * Stalwart's JMAP registry while the socket is not yet bound (the
+   * listener needs Stalwart to reload before it starts accepting), so
+   * gating on the JMAP object alone is not enough — Authelia's own
+   * startup check does exactly this dial and refuses to start when it
+   * fails.
+   */
+  static SubmissionProbe defaultSubmissionProbe() {
+    return () -> {
+      try (Socket s = new Socket()) {
+        s.connect(new InetSocketAddress(STALWART_HOST,
+            Integer.parseInt(STALWART_SUBMISSION_PORT)), 2_000);
+        return true;
+      } catch (Exception e) {
+        return false;
+      }
+    };
   }
 
   @EventListener(ApplicationReadyEvent.class)
@@ -160,6 +221,21 @@ public class AutheliaMailProvisionService {
       String domain = provision.mailDomain();
       if (!mail.domainExists(domain)) {
         log.debug("authelia mail provision: domain {} does not exist yet, will retry", domain);
+        return;
+      }
+      // The JMAP registry can list a submission listener (created by
+      // StalwartRegistrySeedService) while the socket is not yet bound:
+      // Stalwart reloads its listener table asynchronously, and until
+      // the port actually accepts, Authelia's startup check refuses to
+      // start. So gate the .env write on a real TCP probe, not on the
+      // JMAP object. Same fail-closed shape as the other gates above.
+      if (!submissionProbe.isOpen()) {
+        if (announcedWaitingForSubmission.compareAndSet(false, true)) {
+          log.info("authelia mail provision: waiting for stalwart submission listener "
+              + "to bind on {}:{}", STALWART_HOST, STALWART_SUBMISSION_PORT);
+        } else {
+          log.debug("authelia mail provision: submission port still not open, will retry");
+        }
         return;
       }
 

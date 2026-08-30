@@ -82,7 +82,9 @@ class AutheliaMailProvisionServiceTests {
     when(mail.domainExists("aurora.local")).thenReturn(true);
     when(mail.listMailboxes()).thenReturn(List.of());
     audit = Mockito.mock(AuditEventRepo.class);
-    svc = new AutheliaMailProvisionService(provision, mail, props, audit);
+    // Default probe: submission port is open. Individual tests flip it
+    // to false to pin the ordering gate.
+    svc = new AutheliaMailProvisionService(provision, mail, props, audit, () -> true);
   }
 
   @Test
@@ -204,5 +206,37 @@ class AutheliaMailProvisionServiceTests {
 
     assertThat(Files.exists(envPath)).isFalse();
     verify(mail, never()).createMailbox(anyString(), anyString(), anyString());
+  }
+
+  @Test
+  void does_nothing_when_stalwart_submission_port_is_not_open_yet() throws IOException {
+    // Ordering race (2026-08-30 review item 1): StalwartRegistrySeedService
+    // creates the submission network-listener object in the JMAP registry,
+    // but Stalwart binds the socket asynchronously. Between those two
+    // events, if Aurora writes the SMTP block and the operator runs
+    // up.sh, the recreated Authelia container's startup check dials
+    // stalwart:587, gets connection refused, and hard-fails into a
+    // restart loop that takes SSO down for the whole box. The gate:
+    // no .env write until a real TCP probe of :587 succeeds.
+    svc = new AutheliaMailProvisionService(provision, mail, props, audit, () -> false);
+
+    svc.provisionQuietly();
+
+    String written = Files.readString(envPath, StandardCharsets.UTF_8);
+    assertThat(written).doesNotContain("AUTHELIA_NOTIFIER_SMTP_ADDRESS=submission");
+    verify(mail, never()).createMailbox(anyString(), anyString(), anyString());
+    verify(mail, never()).resetMailboxPassword(anyString(), anyString());
+    verify(audit, never()).record(any(), anyString(), anyString(), anyString());
+  }
+
+  @Test
+  void the_default_submission_probe_returns_false_when_no_one_is_listening()
+      throws IOException {
+    // The real probe must fail-closed rather than throw when the box
+    // cannot dial stalwart:587 at all — an Aurora dev-box running the
+    // unit tests, for instance, has no stalwart container at all and
+    // the DNS name will not resolve. Under those conditions the probe
+    // has to return false, not blow up the reconcile thread.
+    assertThat(AutheliaMailProvisionService.defaultSubmissionProbe().isOpen()).isFalse();
   }
 }
