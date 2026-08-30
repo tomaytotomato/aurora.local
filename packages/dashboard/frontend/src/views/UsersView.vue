@@ -312,7 +312,10 @@ function formatCreatedAt(iso: string): string {
 
 <template>
   <section data-test="users-view">
-    <div class="mb-10 flex items-baseline justify-between gap-4">
+    <!-- on-photo: this header overlaps the aurora hero image, and without
+         the same cascade the other views use its title renders dark-on-dark
+         (near unreadable in the journey screenshots). -->
+    <div class="mb-10 on-photo flex items-baseline justify-between gap-4">
       <div>
         <div class="eyebrow mb-2">Access</div>
         <h1>Users</h1>

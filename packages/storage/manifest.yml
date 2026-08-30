@@ -1,10 +1,8 @@
 name: storage
 title: LAN file sharing (SMB + DLNA)
 description: |
-  Samba exports the media root over SMB for computers/phones.
-  MiniDLNA advertises the same content over UPnP/DLNA for smart TVs
-  and consoles that don't speak SMB.
-
+  Shares this box's files with the whole house: appears as a network drive on
+  computers and phones, and as a media source on smart TVs.
 category: storage
 
 depends_on:

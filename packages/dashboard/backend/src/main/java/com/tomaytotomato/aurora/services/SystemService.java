@@ -75,6 +75,7 @@ public class SystemService {
     out.put("diskTotalBytes", disk.get("total"));
     out.put("diskUsedBytes", disk.get("used"));
     out.put("dockerVersion", docker.version().orElse(null));
+    out.put("build", buildInfo());
     out.put("containerCount", dockerContainerCount());
     // Capability flags let the frontend gate feature fetches without
     // hard-coding a version check.
@@ -224,6 +225,31 @@ public class SystemService {
    * <p>Distro + kernel + resource facts stay best-effort (may return
    * {@code null}) so the endpoint always renders.
    */
+  /**
+   * Which build of Aurora this box is actually running.
+   *
+   * <p>It could not say. The published {@code :0.1.0} image on GHCR was two
+   * days behind main while still calling itself 0.1.0; a fresh install
+   * pulled it, and no screen or endpoint could name the commit, so "do you
+   * have the fix?" could only be answered by comparing image digests by
+   * hand. Stamped into the image at build time (see the Dockerfile's
+   * AURORA_BUILD_* args); {@code unknown} when someone built without them,
+   * which is honest rather than a fabricated version string.
+   */
+  Map<String, Object> buildInfo() {
+    Map<String, Object> b = new LinkedHashMap<>();
+    b.put("version", envOrNull("AURORA_BUILD_VERSION"));
+    b.put("revision", envOrNull("AURORA_BUILD_REVISION"));
+    b.put("builtAt", envOrNull("AURORA_BUILD_DATE"));
+    return b;
+  }
+
+  private String envOrNull(String key) {
+    String v = System.getenv(key);
+    if (v == null || v.isBlank() || "unknown".equals(v)) return null;
+    return v;
+  }
+
   public Map<String, Object> env() {
     Map<String, Object> out = new HashMap<>();
     var state = stateFiles.readState();
@@ -236,6 +262,7 @@ public class SystemService {
     out.put("distro", readDistro());
     out.put("kernel", readKernel());
     out.put("dockerVersion", docker.version().orElse(null));
+    out.put("build", buildInfo());
     // Host resource snapshot for the welcome screen + resource-warning logic.
     out.put("cpu", cpu());
     out.put("memory", readMemInfo());

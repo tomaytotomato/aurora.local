@@ -159,16 +159,40 @@ storage:
     password: '{{ env "AUTHELIA_STORAGE_POSTGRES_PASSWORD" }}'
 
 # ---- Notifier ------------------------------------------------
-# If AUTHELIA_NOTIFIER_SMTP_HOST is set in env, Authelia auto-picks
-# SMTP; otherwise it falls through to the filesystem notifier for
-# a self-contained local-only setup. In filesystem mode the 2FA-
-# enrolment / password-reset links land in
-#   data/authelia/notification.txt
-# on the host, so a single-user setup can bootstrap without email.
+# Aurora provisions an `authelia@$DOMAIN` mailbox on the box's own
+# Stalwart (see AutheliaMailProvisionService) and writes the SMTP env
+# vars into packages/core/.env. When those are set, Authelia sends
+# password-reset and 2FA-enrolment mail through the local mail server
+# to `system@$DOMAIN`, which is aliased to the owner's mailbox. When
+# they are absent (a box where Aurora has not yet provisioned mail
+# because Stalwart is not up yet), Authelia falls back to writing to
+# data/authelia/notification.txt so bootstrap still works and no
+# recovery link is ever silently dropped.
+#
+# Both cases share this file: Authelia's template filter (X_AUTHELIA_
+# CONFIG_FILTERS=template) resolves the conditional at container start.
+# Having both `notifier.smtp` and `notifier.filesystem` at the same
+# time is a fatal Authelia config error, so exactly one arm is emitted.
 notifier:
   disable_startup_check: false
+{{- if env "AUTHELIA_NOTIFIER_SMTP_HOST" }}
+  smtp:
+    address: 'submission://{{ env "AUTHELIA_NOTIFIER_SMTP_HOST" }}:{{ env "AUTHELIA_NOTIFIER_SMTP_PORT" }}'
+    username: '{{ env "AUTHELIA_NOTIFIER_SMTP_USERNAME" }}'
+    password: '{{ env "AUTHELIA_NOTIFIER_SMTP_PASSWORD" }}'
+    sender: '{{ env "AUTHELIA_NOTIFIER_SMTP_SENDER" }}'
+    # Aurora's own Stalwart uses the box's internal TLS root, which
+    # Authelia does not trust by default — turn TLS verification off so
+    # STARTTLS works against the aurora_net container without shipping
+    # the CA into Authelia's trust store. The traffic never leaves the
+    # docker bridge, so the threat model this loosens is small.
+    tls:
+      skip_verify: true
+      minimum_version: TLS1.2
+{{- else }}
   filesystem:
     filename: /data/notification.txt
+{{- end }}
 
 # ---- TOTP defaults -------------------------------------------
 # 6-digit code, 30-second period, one-code drift window. Matches

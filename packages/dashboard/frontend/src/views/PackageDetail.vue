@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
+import { useSystemStore } from '@/stores/system';
 import { useUpdatesStore } from '@/stores/updates';
 import { ContainersApi, type ContainerInfo } from '@/api/containers';
 import { PackagesApi, dockerStructureFor, isCorePackage, isRemovable, packageLinks } from '@/api/packages';
@@ -31,9 +32,11 @@ import PackageResourcesCard from '@/components/PackageResourcesCard.vue';
 import PackageImpactPanel from '@/components/PackageImpactPanel.vue';
 import PackagePreview from '@/components/PackagePreview.vue';
 import MarkdownBlock from '@/components/MarkdownBlock.vue';
+import { humanEnvLabel, cleanEnvHelp } from '@/lib/envCopy';
 import { Alert, AlertDescription, Button, Dialog, Input, Label, Skeleton } from '@/components/ui';
 
 const route = useRoute();
+const system = useSystemStore();
 const packages = usePackagesStore();
 const updates = useUpdatesStore();
 
@@ -95,15 +98,19 @@ const links = computed(() => (detail.value ? packageLinks(detail.value) : []));
 
 // The backend serves packages/<name>/README.md verbatim, heading and all,
 // so the leading `# Title` is stripped here rather than rendered above the
-// one the header already shows. Falls back to the description for a
-// package that ships no README.
+// one the header already shows.
+//
+// The README is *not* the About text. It is the owner's setup document —
+// "copy .env.example to .env", `./scripts/up.sh privacy`, uncomment the
+// devices: block for hardware transcoding — and rendering it as the first
+// thing on an app's page put the densest concentration of terminal
+// instructions in the product on the screen users visit most, three inches
+// under a button that already does the job. About is the manifest's own
+// one-paragraph description; the README sits in a closed disclosure for the
+// person who wants it.
 const readmeBody = computed(() => (detail.value?.readme ?? '').replace(/^#\s+.*\n+/, '').trim());
-const aboutBody = computed(() => readmeBody.value || (detail.value?.description ?? '').trim());
-// The About body is markdown when it came from README.md and plain text
-// when it fell back to the manifest description. MarkdownBlock renders
-// both fine (plain text is a valid degenerate markdown document), so we
-// key off which one we actually used rather than sniffing for #/*.
-const aboutIsMarkdown = computed(() => !!readmeBody.value);
+const aboutBody = computed(() => (detail.value?.description ?? '').trim());
+const ownerNotes = computed(() => readmeBody.value);
 
 // Primary CTA target for an installed + running app: the first vhost
 // Caddy is serving for it. vhostsFor() in PackagesService already
@@ -117,6 +124,32 @@ const openUrl = computed<string | null>(() => {
   if (!detail.value?.enabled || !detail.value?.running) return null;
   const host = (detail.value.vhosts ?? [])[0];
   return host ? `https://${host}/` : null;
+});
+
+/**
+ * The address that works when the name does not.
+ *
+ * `<app>.<domain>` is a multi-label .local name, and glibc's stock
+ * mdns4_minimal only resolves single-label ones — so on Linux and Android
+ * clients the Open button above is a dead link until this box is their DNS
+ * server. Rather than explain that in a paragraph nobody reads, offer the
+ * address that never depends on name resolution.
+ */
+const openFallbackUrl = computed<string | null>(() => {
+  if (!detail.value?.enabled || !detail.value?.running) return null;
+  const ip = system.info?.lanIp;
+  if (!ip) return null;
+  const ports = detail.value.ports ?? [];
+  for (const p of ports) {
+    const proto = (p.proto ?? 'tcp') as string;
+    if (proto.toLowerCase() !== 'tcp') continue;
+    if (p.profile) continue;              // behind a compose profile: not running
+    const port = (p.host ?? p.port) as number | undefined;
+    if (typeof port !== 'number') continue;
+    if (port === 80 || port === 443 || port === 53) continue;
+    return `http://${ip}:${port}/`;
+  }
+  return null;
 });
 
 function portLabel(p: Record<string, unknown>): string {
@@ -202,11 +235,7 @@ const errors = computed(() => validateEnvForm(envSpecs.value, form));
 const hasErrors = computed(() => Object.keys(errors.value).length > 0);
 
 function fieldLabel(key: string): string {
-  return key
-    .toLowerCase()
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+  return humanEnvLabel(key);
 }
 
 function resetEnvFormState(): void {
@@ -567,6 +596,17 @@ onMounted(async () => {
           data-test="package-open"
         >Open {{ heading }} <span aria-hidden="true">↗</span></a>
       </div>
+      <p v-if="openFallbackUrl" class="mt-2 text-sm text-white/80">
+        Name not resolving on this device?
+        <a
+          :href="openFallbackUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-white underline underline-offset-2"
+          data-test="package-open-fallback"
+        >{{ openFallbackUrl }}</a>
+        always works.
+      </p>
       <p v-if="detail" class="mt-2">{{ detail.description }}</p>
       <!-- VPN has a bespoke config surface at its own route; peer/QR
            management doesn't fit the generic env-var Config tab. -->
@@ -746,15 +786,17 @@ onMounted(async () => {
           <Card class="col-span-2" data-test="package-about-card">
             <div class="eyebrow mb-1">About</div>
             <h3 class="mb-3">What this is</h3>
-            <!-- Package READMEs are authored markdown; the fallback
-                 description from the manifest is plain text. Both go
-                 through MarkdownBlock so headings, code and links
-                 render properly — previously this was `{{ aboutBody }}`
-                 inside a whitespace-pre-line paragraph, which surfaced
-                 raw `##` and `[text](url)` to the user. -->
-            <MarkdownBlock v-if="aboutBody && aboutIsMarkdown" :source="aboutBody" />
-            <p v-else-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
+            <p v-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
             <p v-else class="text-sm text-muted-foreground">No description yet.</p>
+
+            <details v-if="ownerNotes" class="mt-5 border-t border-border pt-4" data-test="package-owner-notes">
+              <summary class="text-sm text-muted-foreground cursor-pointer select-none">
+                Setup notes for the owner · technical
+              </summary>
+              <div class="mt-3">
+                <MarkdownBlock :source="ownerNotes" />
+              </div>
+            </details>
           </Card>
           <!-- Versions. Absent entirely when the updates domain has
                nothing for this app: a card that says "no data" is worse
@@ -767,9 +809,13 @@ onMounted(async () => {
               <Badge v-else-if="updateUnknown" tone="warn">unchecked</Badge>
             </div>
 
-            <p v-if="updateUnknown" class="text-sm text-muted-foreground mb-3">
-              Aurora couldn't reach the image registry last time it looked, so this is the version
+            <p v-if="updateUnknown && update.lastCheckedAt" class="text-sm text-muted-foreground mb-3">
+              Aurora couldn't reach the image registry when it last looked, so this is the version
               on the box rather than the newest one available.
+            </p>
+            <p v-else-if="updateUnknown" class="text-sm text-muted-foreground mb-3">
+              Aurora hasn't checked for a newer version yet, so this is the version on the box.
+              It checks on its own schedule, or you can use Check and update above.
             </p>
 
             <div
@@ -796,7 +842,12 @@ onMounted(async () => {
             </ul>
 
             <p class="text-xs text-muted-foreground mt-3">
-              Checked {{ checkedLabel(update.lastCheckedAt) }}.
+              <!-- Three honest states, not two. "Aurora couldn't reach the
+                   registry last time it looked" printed directly above
+                   "Checked never." — two sentences contradicting each other
+                   inside one card, on a box that had simply never looked. -->
+              <template v-if="update.lastCheckedAt">Checked {{ checkedLabel(update.lastCheckedAt) }}.</template>
+              <template v-else>Not checked yet.</template>
               <template v-if="update.lastUpdatedAt"> Last updated {{ checkedLabel(update.lastUpdatedAt) }}.</template>
             </p>
           </Card>
@@ -942,7 +993,7 @@ onMounted(async () => {
                 >{{ revealed[spec.key] ? 'Hide' : 'Reveal' }}</Button>
               </div>
               <p v-if="errors[spec.key]" class="text-xs text-destructive mt-1">{{ errors[spec.key] }}</p>
-              <p v-else-if="spec.comment" class="text-xs text-muted-foreground mt-1">{{ spec.comment }}</p>
+              <p v-else-if="cleanEnvHelp(spec.comment)" class="text-xs text-muted-foreground mt-1">{{ cleanEnvHelp(spec.comment) }}</p>
             </div>
 
             <div class="flex items-center gap-3 pt-2">

@@ -86,9 +86,9 @@ async function accept(): Promise<void> {
         ship with it, and nothing reaches out to the network — the built-in apps still work.
       </p>
       <p class="text-xs">
-        Ask whoever set up this box to turn it on, or leave it off. When it is on, every
-        fetched catalogue is checked for a valid signature before it is shown, and accepting
-        an update never changes an app you are already running.
+        Turning it on is safe to leave for later. When it is on, every fetched catalogue is
+        checked for a valid signature before it is shown, and accepting an update never
+        changes an app you are already running.
       </p>
     </div>
 

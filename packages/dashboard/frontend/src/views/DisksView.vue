@@ -26,9 +26,11 @@ import {
   parityHeadline,
   parityTone,
   poolUsedPct,
+  protocolLabel,
   sortByHealth,
   type Disk,
   type DiskSmart,
+  type NetworkStorageDevice,
   type Parity,
   type Pool,
 } from '@/api/disks';
@@ -54,7 +56,7 @@ import {
   TableRow,
 } from '@/components/ui';
 
-type Tab = 'overview' | 'drives' | 'parity';
+type Tab = 'overview' | 'drives' | 'network' | 'parity';
 
 const disks = ref<Disk[]>([]);
 const pool = ref<Pool | null>(null);
@@ -65,6 +67,26 @@ const tab = ref<Tab>('overview');
 
 const jobId = ref<string | null>(null);
 const lastAction = ref<'sync' | 'scrub' | null>(null);
+
+// ── Storage on the network ────────────────────────────────────────────
+// Loaded separately from the disks above: it takes a few seconds to listen
+// for mDNS announcements, and a NAS being slow to answer must not hold up
+// the page that shows this box's own drives.
+const network = ref<NetworkStorageDevice[] | null>(null);
+const networkLoading = ref(false);
+const networkErr = ref<string | null>(null);
+
+async function loadNetwork(): Promise<void> {
+  networkLoading.value = true;
+  networkErr.value = null;
+  try {
+    network.value = await DisksApi.network();
+  } catch (e) {
+    networkErr.value = humanCopyForError(e, { subject: 'your network', action: 'search' });
+  } finally {
+    networkLoading.value = false;
+  }
+}
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -81,7 +103,10 @@ async function load(): Promise<void> {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  void loadNetwork();
+});
 
 // ── Derived ───────────────────────────────────────────────────────────
 const pageState = computed(() =>
@@ -254,6 +279,7 @@ function retryJob(): void {
         :tabs="[
           { value: 'overview', label: 'Overview' },
           { value: 'drives', label: 'Drives', hint: String(disks.length) },
+          { value: 'network', label: 'On your network', hint: network === null ? undefined : String(network.length) },
           { value: 'parity', label: 'Parity' },
         ]"
         @update:model-value="tab = $event as Tab"
@@ -404,14 +430,84 @@ function retryJob(): void {
         </p>
       </div>
 
+      <!-- ── On your network ─────────────────────────────────────── -->
+      <div v-else-if="tab === 'network'">
+        <div class="flex items-baseline justify-between gap-4 mb-4">
+          <p class="text-sm text-muted-foreground max-w-2xl">
+            Storage on your network that is not this box — a NAS, another computer, or
+            anything sharing a folder. Aurora finds these by listening for the
+            announcements they already make; it does not go looking through your network.
+          </p>
+          <Button variant="secondary" size="sm" :disabled="networkLoading"
+                  data-test="network-rescan" @click="loadNetwork">
+            {{ networkLoading ? 'Looking…' : 'Look again' }}
+          </Button>
+        </div>
+
+        <Alert v-if="networkErr" variant="destructive" class="mb-4">
+          <AlertDescription>{{ networkErr }}</AlertDescription>
+        </Alert>
+
+        <div v-else-if="networkLoading && network === null" class="space-y-2" data-state="loading">
+          <Skeleton class="h-20 w-full" />
+          <Skeleton class="h-20 w-full" />
+        </div>
+
+        <!-- Most homes have nothing here, so this is the state most people
+             see: it has to read as a normal answer, not a failure. -->
+        <Card v-else-if="network && network.length === 0" class="p-10 text-center" data-state="empty">
+          <h3 class="mb-2">Nothing is sharing storage on your network</h3>
+          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
+            That is perfectly normal — this box holds its own files quite happily.
+            If you do have a NAS and it is not here, it may have network discovery
+            turned off, or be on a different part of your network.
+          </p>
+        </Card>
+
+        <div v-else-if="network" class="space-y-3">
+          <Card v-for="device in network" :key="device.address" class="p-6" data-test="network-device">
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <h3 class="card-title">{{ device.name }}</h3>
+                  <Badge v-if="!device.reachable" tone="warn" data-test="device-asleep">not answering</Badge>
+                </div>
+                <p class="text-sm text-muted-foreground">
+                  {{ device.model ? device.model + ' · ' : '' }}{{ device.host ?? device.address }}
+                </p>
+                <p class="text-xs text-muted-foreground mt-2">
+                  Shares over {{ device.protocols.map((p) => protocolLabel(p.kind)).join(', ') }}
+                </p>
+              </div>
+              <div class="text-right shrink-0">
+                <code class="font-mono text-xs text-muted-foreground">{{ device.address }}</code>
+              </div>
+            </div>
+
+            <!-- Honest about what Aurora can and cannot do with it yet.
+                 A button that did nothing would be worse than this line. -->
+            <p class="text-xs text-muted-foreground mt-4 pt-4 border-t border-border">
+              <template v-if="device.reachable">
+                Aurora can see it. Using its space from this box — for films, photos or
+                backups — is coming next.
+              </template>
+              <template v-else>
+                It is advertising itself but not answering right now, which usually means
+                it is asleep or switched off.
+              </template>
+            </p>
+          </Card>
+        </div>
+      </div>
+
       <!-- ── Parity ──────────────────────────────────────────────── -->
       <div v-else>
         <Card v-if="!parity.configured" class="p-10 text-center" data-state="empty">
           <h3 class="mb-2">No parity protection</h3>
           <p class="text-sm text-muted-foreground max-w-lg mx-auto">
-            Right now, if a drive fails you lose whatever was on it. Aurora can protect
-            against a single drive failing once a spare drive — at least as large as your
-            biggest one — is added. Ask whoever set up this box to add parity protection.
+            Right now, if a drive fails you lose whatever was on it. Add a spare drive —
+            at least as large as your biggest one — and Aurora can survive one drive
+            failing. Nothing here needs doing until you have that spare.
           </p>
         </Card>
 

@@ -338,6 +338,7 @@ public class ComposeConvergeService implements Converger {
 
     ensureNetwork();
     seedEnvFiles(resolved, onLine);
+    ensureDataDirs(resolved, onLine);
     // A freshly-seeded .env ships every secret blank; several services treat
     // an empty required secret as fatal. Generate real ones before `up`.
     runSecretsRotation(onLine, cancelToken);
@@ -421,6 +422,51 @@ public class ComposeConvergeService implements Converger {
           onLine.accept("[aurora] seeded " + p + "/.env from .env.example");
         } catch (IOException e) {
           log.warn("could not seed {}/.env: {}", p, e.getMessage());
+        }
+      }
+    }
+  }
+
+  /**
+   * Create every {@code ../../data/<dir>} the selected packages bind-mount,
+   * owned by the user Aurora runs as, before compose starts anything.
+   *
+   * <p>Docker creates a missing bind-mount source itself, as <b>root</b>.
+   * After that, nothing running as the aurora user can write into it: the
+   * AdGuard provisioner hits AccessDenied, the service comes up in its own
+   * setup wizard, and the box has no DNS. {@code scripts/up.sh} learned this
+   * (render_data_dirs); this path is the one the first-run wizard actually
+   * uses, and it had not.
+   *
+   * <p>Only creates what is missing. A directory that already exists belongs
+   * to whoever made it — several services legitimately run as another uid
+   * and own their own data.
+   */
+  void ensureDataDirs(List<String> resolved, Consumer<String> onLine) {
+    Path repo = Path.of(props.repoPath());
+    var pattern = java.util.regex.Pattern.compile(
+        "\\.\\./\\.\\./data/([A-Za-z0-9._/-]+)");
+    for (String p : resolved) {
+      Path compose = repo.resolve("packages").resolve(p).resolve("compose.yml");
+      if (!Files.isRegularFile(compose)) continue;
+      String body;
+      try {
+        body = Files.readString(compose);
+      } catch (IOException e) {
+        log.debug("could not read {} for data-dir prep: {}", compose, e.getMessage());
+        continue;
+      }
+      var seen = new java.util.LinkedHashSet<String>();
+      var m = pattern.matcher(body);
+      while (m.find()) seen.add(m.group(1).replaceAll("[:\\s].*$", ""));
+      for (String dir : seen) {
+        Path target = repo.resolve("data").resolve(dir);
+        if (Files.exists(target)) continue;
+        try {
+          Files.createDirectories(target);
+          onLine.accept("[aurora] created data/" + dir);
+        } catch (IOException e) {
+          log.warn("could not create {}: {}", target, e.getMessage());
         }
       }
     }

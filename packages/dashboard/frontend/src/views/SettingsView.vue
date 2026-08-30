@@ -5,6 +5,7 @@ import { useSystemStore } from '@/stores/system';
 import { AuditApi, type AuditEvent } from '@/api/audit';
 import { MdnsApi, type MdnsAlias } from '@/api/mdns';
 import { humanCopyForError } from '@/lib/http-error-copy';
+import { auditActionText } from '@/lib/eventCopy';
 import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
@@ -12,6 +13,7 @@ import NotificationsCard from '@/components/NotificationsCard.vue';
 import MarketplaceCard from '@/components/MarketplaceCard.vue';
 import ProxyRoutesCard from '@/components/ProxyRoutesCard.vue';
 import SettingsPortabilityCard from '@/components/SettingsPortabilityCard.vue';
+import StartOverCard from '@/components/StartOverCard.vue';
 import TlsRootCard from '@/components/TlsRootCard.vue';
 import {
   Alert,
@@ -123,6 +125,26 @@ async function submitChangePassword(): Promise<void> {
 // will curl the endpoint directly, this card is for glanceability.
 const auditEvents = ref<AuditEvent[]>([]);
 const auditFilter = ref<string>('');
+/**
+ * "0.1.0 · a3c6227 · 28 Aug" when the image was stamped, "this build is
+ * unlabelled" when someone built it without the build args — which is the
+ * truth, and better than inventing a version.
+ */
+const buildLabel = computed(() => {
+  const b = system.info?.build;
+  if (!b) return 'unlabelled build';
+  const parts: string[] = [];
+  if (b.version) parts.push(b.version);
+  if (b.revision) parts.push(b.revision.slice(0, 7));
+  if (b.builtAt) {
+    const d = new Date(b.builtAt);
+    if (!Number.isNaN(d.getTime())) {
+      parts.push(d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }));
+    }
+  }
+  return parts.length ? parts.join(' · ') : 'unlabelled build';
+});
+
 const auditLoading = ref<boolean>(false);
 const auditErr = ref<string | null>(null);
 
@@ -264,6 +286,14 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
         <dl class="text-sm space-y-2">
           <div class="flex justify-between"><dt class="text-muted-foreground">Hostname</dt><dd class="font-mono">{{ info.hostname }}</dd></div>
           <div class="flex justify-between"><dt class="text-muted-foreground">Kernel</dt><dd class="font-mono">{{ info.kernel }}</dd></div>
+          <!-- Which Aurora this is. Without it, "have you got the fix?" was
+               unanswerable without comparing image digests by hand — the
+               published :0.1.0 tag was two days behind main while still
+               calling itself 0.1.0. -->
+          <div class="flex justify-between">
+            <dt class="text-muted-foreground">Aurora</dt>
+            <dd class="font-mono" data-test="system-build">{{ buildLabel }}</dd>
+          </div>
         </dl>
       </Card>
 
@@ -363,6 +393,17 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
            evening and costing ten minutes. -->
       <SettingsPortabilityCard />
 
+      <!-- Start over (A8, closing A6). The destructive twin of the
+           export card above: instead of preserving the state, wipe
+           it. Danger-zone framing on the card itself + a compulsory
+           typed confirmation in the modal + a "disconnecting" splash
+           after acceptance, because a single-button box-wipe would be
+           a footgun the doctrine explicitly bans (ESSENCE.md's
+           "honest state" clause covers what you are about to lose).
+           Sits above the audit log because it is destructive and
+           audit is diagnostic; findable, but past the boring cards. -->
+      <StartOverCard />
+
       <!-- iter-31: audit-log viewer. Consumes GET /api/audit/events
            (iter-30). Kept as an inline card rather than its own route
            so the Settings page is the one place operators check for
@@ -412,7 +453,7 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           launching a package appear here.
         </div>
 
-        <Table v-else data-test="audit-list" class="font-mono text-xs">
+        <Table v-else data-test="audit-list" class="text-xs">
           <TableHeader>
             <TableRow class="hover:bg-transparent">
               <TableHead class="w-40">Time</TableHead>
@@ -422,8 +463,12 @@ onMounted(() => { void loadAudit(); void loadMdns(); });
           </TableHeader>
           <TableBody>
             <TableRow v-for="e in auditEvents" :key="e.id">
-              <TableCell class="text-muted-foreground whitespace-nowrap align-baseline">{{ formatAuditTs(e.ts) }}</TableCell>
-              <TableCell class="text-foreground align-baseline">{{ e.action }}</TableCell>
+              <TableCell class="text-muted-foreground whitespace-nowrap align-baseline font-mono">{{ formatAuditTs(e.ts) }}</TableCell>
+              <!-- Was the raw key: mdns.alias.publish, job.finish,
+                   stalwart.secrets.bootstrap. True, and addressed to
+                   whoever wrote the code. The key stays in the title
+                   attribute for anyone debugging. -->
+              <TableCell class="text-foreground align-baseline" :title="e.action">{{ auditActionText(e.action) }}</TableCell>
               <TableCell class="text-muted-foreground truncate align-baseline">
                 <span v-if="e.user_id !== null" class="text-muted-foreground">user #{{ e.user_id }} · </span>
                 {{ e.target ?? '' }}

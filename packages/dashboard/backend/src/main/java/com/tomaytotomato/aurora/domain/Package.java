@@ -53,7 +53,22 @@ public record Package(
     String readme,
     List<String> vhosts,
     List<EnvVarSpec> envVars,
-    PackageBackupSpec backup
+    PackageBackupSpec backup,
+    /**
+     * The job this package does, when more than one package does it:
+     * {@code webmail}, {@code notes}, {@code media-player}. Null for the
+     * packages that are the only answer to their question.
+     *
+     * <p>ESSENCE calls for "one clear choice per job", and the manifests
+     * have recorded that choice all along — roundcube is the default
+     * webmail, silverbullet the default notes app — but nothing read the
+     * fields, so the catalogue showed three webmails as three equal
+     * options and left a non-technical owner to pick between them on
+     * nothing.
+     */
+    String variantGroup,
+    /** True for the package that is the recommended answer in its group. */
+    Boolean variantDefault
 ) {
 
   /**
@@ -82,7 +97,7 @@ public record Package(
   ) {
     this(name, title, description, category, dependsOn, recommends, profiles, ports,
         requires, requiredEnv, postInstallNotes, enabled, running, sso,
-        null, null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null, null);
   }
 
   /**
@@ -101,7 +116,8 @@ public record Package(
   ) {
     return new Package(name, title, description, category, dependsOn, recommends, profiles,
         ports, requires, requiredEnv, postInstallNotes, enabled, running, sso,
-        sourceUrl, homepageUrl, icon, readme, vhosts, envVars, backup);
+        sourceUrl, homepageUrl, icon, readme, vhosts, envVars, backup,
+        variantGroup, variantDefault);
   }
 
   /**

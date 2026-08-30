@@ -62,6 +62,8 @@ Usage:
   bootstrap.sh remove PKG [PKG...]  Stop and disable packages.
   bootstrap.sh list                 List all packages available in this repo.
   bootstrap.sh status               Show current state + container health.
+  bootstrap.sh reset [--yes]        Start over: stop everything, delete this
+                                    box's data and state, keep the repo.
   bootstrap.sh --help               This message.
 
 Environment:
@@ -80,7 +82,7 @@ EOF
 CMD="install"
 if [[ $# -gt 0 ]]; then
   case "$1" in
-    install|add|remove|list|status) CMD="$1"; shift ;;
+    install|add|remove|list|status|reset) CMD="$1"; shift ;;
     -h|--help|help) usage; exit 0 ;;
     -*) log_err "unknown flag: $1"; usage; exit 2 ;;
     *) ;;  # bare package names -> install
@@ -90,6 +92,8 @@ fi
 # Lazy-load libs that need manifest/state
 . "$REPO/scripts/lib/manifest.sh"
 . "$REPO/scripts/lib/state.sh"
+# shellcheck source=scripts/lib/net.sh
+. "$REPO/scripts/lib/net.sh"
 
 # --------------------------------------------------------------------
 # Prereqs
@@ -184,12 +188,14 @@ _resolve_selection() {
 # Config writing
 # --------------------------------------------------------------------
 
-_detect_lan_ip() {
-  ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}'
-}
+# Both live in scripts/lib/net.sh, which picks a LAN *interface* instead of
+# following the default route — a VPN on the host owns that route and used to
+# make aurora firewall off the real LAN. See the header of that file.
+_detect_lan_ip() { net_detect_lan_ip; }
 
 _write_configs() {
   local hostname="$1" domain="$2" tz="$3" user="$4" lan_cidr="$5" lan_ip="$6"
+  local lan_if; lan_if="$(net_detect_lan_iface)"
   local inv="$REPO/inventory.ini"
   local gv="$REPO/group_vars/all.yml"
 
@@ -236,6 +242,10 @@ fail2ban_max_retry: 5
 
 # ---- network ----
 lan_ip: $lan_ip
+# The interface the LAN is on. avahi publishes mDNS only here, so
+# aurora.local can never resolve to a docker bridge address on someone
+# else's laptop.
+lan_interface: $lan_if
 
 # Frees port 53 for the privacy package's AdGuard by turning off
 # systemd-resolved's loopback stub listener. Set false to keep the stub.
@@ -279,8 +289,15 @@ _install() {
   local user="${HOME_USER:-${SUDO_USER:-$USER}}"
   local lan_cidr="${LAN_CIDR:-$(_detect_lan_cidr)}"
   local lan_ip="${LAN_IP:-$(_detect_lan_ip)}"
-  lan_ip="${lan_ip:-192.168.0.110}"
-  lan_cidr="${lan_cidr:-192.168.0.0/24}"
+  # Detection returns empty rather than guessing. Say so out loud instead of
+  # silently baking a stranger's address into the firewall rules.
+  if [[ -z "$lan_ip" || -z "$lan_cidr" ]]; then
+    log_warn "couldn't work out which network this box is on."
+    log_warn "falling back to 192.168.0.110 on 192.168.0.0/24 — if that is wrong,"
+    log_warn "re-run with LAN_IP=<this box's address> LAN_CIDR=<your network>/24"
+    lan_ip="${lan_ip:-192.168.0.110}"
+    lan_cidr="${lan_cidr:-192.168.0.0/24}"
+  fi
 
   log_info "host=$hostname user=$user domain=$domain tz=$tz"
   log_info "lan_ip=$lan_ip lan_cidr=$lan_cidr"
@@ -310,11 +327,7 @@ _install() {
   _run_up "${requested[@]}"
 }
 
-# Derive the LAN CIDR from the default route's src address + prefix.
-# Falls back to empty (caller defaults to 192.168.0.0/24).
-_detect_lan_cidr() {
-  ip -4 route 2>/dev/null | awk '/proto kernel/ && /src/ {print $1; exit}'
-}
+_detect_lan_cidr() { net_detect_lan_cidr; }
 
 # --------------------------------------------------------------------
 # Runners
@@ -333,8 +346,45 @@ _run_host_bootstrap() {
   # intersected to nothing and ansible refused to run any role at all.
   # Same expression as _write_configs so the two cannot drift apart.
   local target="${HOSTNAME:-$(hostname -s)}"
-  ( cd "$REPO" && ansible-playbook -i "$inv" host/site.yml \
-      --connection=local --limit "$target" -K )
+
+  # Getting the sudo password right is the difference between an install
+  # that works and one that dies on its first task.
+  #
+  # The documented way in is `curl -fsSL ... | bash`, which means this
+  # script's stdin IS the download. Unconditionally passing -K therefore
+  # asked for a password on a stream that has no human on the other end:
+  #
+  #   getpass.py: GetPassWarning: Can not control echo on the terminal.
+  #   BECOME password:
+  #
+  # ...and ansible got an empty answer. It only appeared to work on boxes
+  # with passwordless sudo. Three honest cases instead:
+  #
+  #   1. sudo needs no password here    -> never prompt.
+  #   2. there is a terminal            -> prompt on /dev/tty, not stdin,
+  #                                        so the curl pipe is irrelevant.
+  #   3. no terminal and sudo wants one -> stop with a sentence that says
+  #                                        what to do, before anything is
+  #                                        half-applied to the host.
+  local -a become_args=()
+  if sudo -n true 2>/dev/null; then
+    become_args=()
+  elif [[ -r /dev/tty ]]; then
+    log_info "Aurora needs your login password once, to install Docker and set up the firewall."
+    become_args=(-K)
+  else
+    die "Aurora needs your login password to set this box up, and there is no terminal to ask on.
+   Run it from a terminal:  bash bootstrap.sh
+   ...or give this user passwordless sudo first."
+  fi
+
+  if [[ ${#become_args[@]} -gt 0 ]]; then
+    ( cd "$REPO" && ansible-playbook -i "$inv" host/site.yml \
+        --connection=local --limit "$target" "${become_args[@]}" </dev/tty )
+  else
+    ( cd "$REPO" && ansible-playbook -i "$inv" host/site.yml \
+        --connection=local --limit "$target" </dev/null )
+  fi
 }
 
 # The docker role has just added the user to the docker group, but this
@@ -377,9 +427,21 @@ _run_up() {
   _up_with_docker_group "${full[@]}"
 
   log_step "post-install notes"
+  # Interpolate the handful of placeholders a note can use. These are
+  # printed on the last screen of a terminal the owner is meant never to
+  # come back to, so a literal `https://$DOMAIN/` — which is what shipped
+  # — is worse than useless: it is an address that cannot be typed.
+  local _notes_domain _notes_host _notes_ip
+  _notes_domain="$(state_get domain 2>/dev/null || echo "${DOMAIN:-aurora.local}")"
+  _notes_host="$(state_get hostname 2>/dev/null || hostname -s)"
+  _notes_ip="${LAN_IP:-$(net_detect_lan_ip)}"
+  _notes_ip="${_notes_ip:-$_notes_host.local}"
   for p in "${full[@]}"; do
     local notes; notes=$(manifest_get post_install_notes "$p")
     [[ -z "$notes" ]] && continue
+    notes="${notes//\$DOMAIN/$_notes_domain}"
+    notes="${notes//\$HOSTNAME/$_notes_host}"
+    notes="${notes//\$LAN_IP/$_notes_ip}"
     printf '\n%s---- %s ----%s\n%s\n' "$_c_blue" "$p" "$_c_reset" "$notes" >&2
   done
 
@@ -488,5 +550,11 @@ case "$CMD" in
   install)
     _ensure_prereqs
     _install "$@"
+    ;;
+  reset)
+    # Deliberately no _ensure_prereqs: resetting must work on a box whose
+    # install failed halfway, which is exactly when yq/ansible may be the
+    # thing that is broken.
+    exec "$REPO/scripts/reset.sh" "$@"
     ;;
 esac

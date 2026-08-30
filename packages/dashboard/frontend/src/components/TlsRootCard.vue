@@ -39,9 +39,22 @@ import { toast } from '@/composables/useToast';
 import Card from '@/components/ui/Card.vue';
 import Button from '@/components/ui/Button.vue';
 import { Alert, AlertDescription, Skeleton } from '@/components/ui';
+import TrustRootInstructions from '@/components/TrustRootInstructions.vue';
 
 const loading = ref<boolean>(true);
 const err = ref<string | null>(null);
+/**
+ * True when the page is served over plain http, where the browser does not
+ * expose `crypto.subtle` at all.
+ *
+ * This is why the card that exists to *get you onto https* reported
+ * "Aurora couldn't read the TLS root certificate just now" on a box being
+ * reached at http://aurora.local — the certificate downloaded perfectly
+ * well (curl proves it), the fingerprint hash was what could not be
+ * computed. A missing nicety was being rendered as a red failure on the
+ * one card whose job is fixing browser warnings.
+ */
+const insecureContext = ref<boolean>(false);
 const fingerprint = ref<string | null>(null);
 const notBefore = ref<string | null>(null);
 const notAfter = ref<string | null>(null);
@@ -55,6 +68,7 @@ const notAfter = ref<string | null>(null);
 async function loadRootMeta(): Promise<void> {
   loading.value = true;
   err.value = null;
+  insecureContext.value = false;
   try {
     const resp = await fetch(OnboardingApi.caddyRootCaUrl(), {
       credentials: 'include',
@@ -70,6 +84,18 @@ async function loadRootMeta(): Promise<void> {
     // Keychain / Firefox / `openssl x509 -fingerprint`.
     const der = pemToDer(pemText);
     if (!der) throw new Error('cert body did not parse as PEM');
+    // Bare `crypto`, not `globalThis.crypto`: the digest call below
+    // resolves the identifier through the scope chain, and a test (or a
+    // polyfill) that swaps the global has to be seen by both or the two
+    // disagree about whether hashing is possible.
+    if (typeof crypto === 'undefined' || !crypto?.subtle) {
+      // Over http the download still works, which is the whole point of
+      // the card; only the fingerprint is unavailable. Say that, and say
+      // it as information rather than as an error.
+      insecureContext.value = true;
+      fingerprint.value = null;
+      return;
+    }
     fingerprint.value = await sha256Fingerprint(der);
 
     // Best-effort: parse the DER to pull notBefore/notAfter dates so
@@ -251,9 +277,8 @@ onMounted(() => {
       <div>
         <h3 class="card-title mb-1">TLS root CA</h3>
         <p class="text-xs text-muted-foreground mt-1">
-          Install this on every device that connects to
-          <span class="font-mono">{{ '*.$DOMAIN' /* keep literal so users see the shape */ }}</span>.
-          Skip it and browsers will warn on every subdomain.
+          Install this on every device you use with this box. Skip it and your
+          browser will warn you on every app, every time.
         </p>
       </div>
       <a :href="rootUrl" download="caddy-root.crt" data-test="tls-root-download">
@@ -265,13 +290,21 @@ onMounted(() => {
       <AlertDescription>{{ err }}</AlertDescription>
     </Alert>
 
+    <Alert v-else-if="insecureContext" class="mb-3" data-test="tls-root-insecure">
+      <AlertDescription>
+        The certificate above is ready to download. Its fingerprint can only be
+        shown when you are viewing Aurora over https — which is what installing
+        this certificate gets you.
+      </AlertDescription>
+    </Alert>
+
     <div v-else-if="loading" class="space-y-2 py-2" data-state="loading">
       <Skeleton class="h-4 w-24" />
       <Skeleton class="h-4 w-full" />
       <Skeleton class="h-4 w-2/3" />
     </div>
 
-    <dl v-else class="text-xs space-y-2 mb-6" data-test="tls-root-meta">
+    <dl v-else-if="!insecureContext" class="text-xs space-y-2 mb-6" data-test="tls-root-meta">
       <div class="flex flex-col gap-1">
         <dt class="eyebrow">SHA-256 fingerprint</dt>
         <dd class="flex items-start justify-between gap-3">
@@ -297,47 +330,10 @@ onMounted(() => {
       </div>
     </dl>
 
-    <!-- Same per-OS hints the onboarding wizard shows. Kept in sync
-         with OnboardingTls.vue on purpose: an operator installing the
-         root after the fact shouldn't need a different playbook. -->
-    <div class="space-y-3 text-xs text-muted-foreground">
-      <div>
-        <div class="eyebrow mb-1 text-foreground">macOS</div>
-        <p>
-          Double-click the file, add to <em>System</em> keychain, then set
-          to <em>Always Trust</em> in the certificate's info panel.
-        </p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">Windows</div>
-        <p>
-          Right-click → Install Certificate → Local Machine → place in
-          <em>Trusted Root Certification Authorities</em>.
-        </p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">Linux (Debian/Ubuntu)</div>
-        <p>
-          <code class="bg-muted px-1 py-0.5 rounded border border-border">sudo cp caddy-root.crt
-            /usr/local/share/ca-certificates/ &amp;&amp; sudo update-ca-certificates</code>
-        </p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">Firefox</div>
-        <p>
-          Firefox keeps its own trust store. Settings → Privacy &amp; Security → Certificates
-          → <em>View Certificates</em> → <em>Authorities</em> → <em>Import</em> the file and
-          tick "trust for websites."
-        </p>
-      </div>
-      <div>
-        <div class="eyebrow mb-1 text-foreground">iOS / Android</div>
-        <p>
-          AirDrop or copy the file to your device; both platforms then require you
-          to enable the profile in Settings → General → About → Certificate Trust.
-        </p>
-      </div>
-    </div>
+    <!-- One shared component with the wizard's TLS step: these were two
+         copies with "keep in sync" comments on both, and they had already
+         drifted. -->
+    <TrustRootInstructions variant="settings" />
 
     <Alert variant="info" class="mt-6">
       <AlertDescription>

@@ -16,6 +16,13 @@ volumes:
 services:
   aurora:
     build:
+      args:
+        # Stamped into the image so the box can say which build it runs.
+        # Defaults keep a bare `docker compose build` working; up.sh fills
+        # them in from git.
+        AURORA_BUILD_REVISION: ${AURORA_BUILD_REVISION:-unknown}
+        AURORA_BUILD_DATE: ${AURORA_BUILD_DATE:-unknown}
+        AURORA_BUILD_VERSION: ${AURORA_VERSION:-0.1.0}
       # Not "." — up.sh invokes compose with several -f files, and compose
       # resolves relative paths against the first one's directory, not each
       # file's own. A bare "." therefore pointed at whichever package sorted

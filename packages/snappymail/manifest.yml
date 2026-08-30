@@ -1,12 +1,8 @@
 name: snappymail
 title: SnappyMail (webmail)
 description: |
-  SnappyMail is a light, fast webmail client — the lower-footprint
-  alternative to Roundcube in the `webmail` group. A front end only; it
-  connects to the mail server (Stalwart) in the core stack over IMAP.
-  Note it has shipped no tagged release since October 2024 (see the
-  README) — chosen deliberately for its weight, not its release cadence.
-
+  A lighter webmail for the mailboxes on this box. Same job as Roundcube,
+  smaller and faster, fewer features.
 category: productivity
 icon: snappymail
 

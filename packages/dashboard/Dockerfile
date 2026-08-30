@@ -61,8 +61,17 @@ WORKDIR /app
 #   - bind-tools: dig, for mDNS resolution checks (@224.0.0.251 :5353)
 #   - ca-certificates: TLS verification for the yq download below (and future
 #     runtime https calls). Without it wget --https-only fails on Alpine.
+#   - rsync: mirrors this box's media to a NAS on a schedule (storage mode
+#     "keep a copy on the NAS"). Runs inside a one-shot container that has
+#     both the local folder and the NAS volume attached, so the copy never
+#     needs a privileged host process.
+#   - samba-client: `smbclient -L` lists the shares a NAS offers, so the
+#     owner picks a folder from a list instead of typing a share name they
+#     have to go and look up. ~2 MB, and it is the only way to answer "what
+#     is on that box" without implementing SMB2 by hand.
 # Also install /var/log/aurora as a writable log destination for LaunchService.
-RUN apk add --no-cache bash docker-cli docker-cli-compose avahi-tools bind-tools ca-certificates
+RUN apk add --no-cache bash docker-cli docker-cli-compose avahi-tools bind-tools ca-certificates \
+    samba-client rsync
 
 # ── mikefarah yq (v4) ──────────────────────────────────────────────────────
 # scripts/lib/manifest.sh + scripts/lib/state.sh (invoked by scripts/up.sh)
@@ -100,6 +109,24 @@ RUN addgroup -S aurora && adduser -S -G aurora -u 1000 aurora \
  && chown -R aurora:aurora /data /app /var/log/aurora
 
 COPY --from=backend /app/backend/target/aurora.jar /app/aurora.jar
+
+# Which build this actually is.
+#
+# A box could not tell you. The published :0.1.0 tag on GHCR was two days
+# behind main while calling itself 0.1.0, a fresh install pulled it, and
+# nothing in the UI or the API could say which commit was running — so
+# "have you got the fix?" was unanswerable without comparing image digests
+# by hand. These are plain build args so a local `docker compose build`
+# stamps the truth too; CI passes the real values.
+ARG AURORA_BUILD_REVISION=unknown
+ARG AURORA_BUILD_DATE=unknown
+ARG AURORA_BUILD_VERSION=dev
+ENV AURORA_BUILD_REVISION=${AURORA_BUILD_REVISION} \
+    AURORA_BUILD_DATE=${AURORA_BUILD_DATE} \
+    AURORA_BUILD_VERSION=${AURORA_BUILD_VERSION}
+LABEL org.opencontainers.image.revision=${AURORA_BUILD_REVISION} \
+      org.opencontainers.image.created=${AURORA_BUILD_DATE} \
+      org.opencontainers.image.version=${AURORA_BUILD_VERSION}
 
 EXPOSE 8090
 

@@ -251,6 +251,37 @@ export function disksPageState(disks: Disk[], pool: Pool, parity: Parity, nowMs 
   return 'healthy';
 }
 
+/**
+ * Something on the LAN that offers file storage — a NAS, another server, a
+ * spare machine sharing a folder. Not called a "NAS" for the same reason
+ * the backend does not: the same shape covers a Synology and a Raspberry Pi
+ * with Samba on it.
+ */
+export interface NetworkStorageDevice {
+  name: string;
+  host: string | null;
+  address: string;
+  protocols: Array<{ kind: 'smb' | 'nfs' | 'afp' | 'time-machine'; port: number }>;
+  /** What the device published about itself. Null when it published nothing. */
+  model: string | null;
+  /**
+   * Whether the advertised port answered just now. Separate from the
+   * advertisement on purpose: a device that is asleep keeps advertising.
+   */
+  reachable: boolean;
+}
+
+/** How the owner would say it, not how the protocol spells it. */
+export function protocolLabel(kind: string): string {
+  switch (kind) {
+    case 'smb': return 'Windows / Mac file sharing';
+    case 'nfs': return 'NFS';
+    case 'afp': return 'Apple file sharing (older)';
+    case 'time-machine': return 'Time Machine backups';
+    default: return kind;
+  }
+}
+
 export const DisksApi = {
   async list(): Promise<Disk[]> {
     const { data } = await http.get<Disk[]>('/disks');
@@ -258,6 +289,11 @@ export const DisksApi = {
   },
   async smart(id: string): Promise<DiskSmart> {
     const { data } = await http.get<DiskSmart>(`/disks/${encodeURIComponent(id)}/smart`);
+    return data;
+  },
+  /** Storage on the network. Empty is a normal answer, not an error. */
+  async network(): Promise<NetworkStorageDevice[]> {
+    const { data } = await http.get<NetworkStorageDevice[]>('/disks/network');
     return data;
   },
   async pool(): Promise<Pool> {

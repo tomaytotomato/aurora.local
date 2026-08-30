@@ -45,9 +45,9 @@ function back(): void { store.back(); router.push(`/onboarding/${store.currentSt
         <div class="border border-border rounded-lg p-4 bg-muted/40 text-sm">
           <div class="eyebrow mb-2">What Aurora will do</div>
           <ul class="text-muted-foreground space-y-1">
-            <li>Install the <code>privacy</code> package (AdGuard Home).</li>
-            <li>Seed a rewrite for <code>*.{{ store.domain }}</code> → this box's LAN IP.</li>
-            <li>Print instructions for pointing your router's DHCP DNS here.</li>
+            <li>Install AdGuard Home on this box (it also blocks ads and trackers).</li>
+            <li>Point <code>*.{{ store.domain }}</code> at this box, so every app has a name.</li>
+            <li>Show you how to point your router at it, on the last screen.</li>
           </ul>
         </div>
       </div>

@@ -1,11 +1,8 @@
 name: roundcube
 title: Roundcube (webmail)
 description: |
-  Roundcube webmail for the box's mailboxes. A front end only — the mail
-  server (Stalwart) lives in the core stack; this connects to it over
-  IMAP/SMTP. The default webmail; SnappyMail is the lighter alternative
-  in the same group.
-
+  Webmail for the mailboxes on this box: read and send from a browser. The
+  mail itself lives in Aurora's core; this is the front end.
 category: productivity
 icon: roundcube
 

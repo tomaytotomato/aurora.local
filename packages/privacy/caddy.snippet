@@ -1,0 +1,21 @@
+# aurora.local / packages/privacy / caddy vhost fragment
+#
+# Fronts AdGuard Home on adguard.${DOMAIN}. Without this the package
+# installed fine and then vanished: `vhosts: none` on its app page, no Open
+# button, no address anywhere in the dashboard, and the only way in was
+# knowing to type the box's LAN IP and :3000 — which is precisely the
+# knowledge Aurora exists to make unnecessary.
+#
+# NOTE: no `import authelia`. AdGuard has its own admin account (Aurora
+# provisions it with the owner's own credentials, see
+# AdguardProvisionService), and fronting it with forward-auth would break
+# the DNS-over-HTTPS and mobile-client endpoints AdGuard serves from the
+# same listener.
+
+http://adguard.{$DOMAIN} {
+	reverse_proxy adguard:3000
+}
+https://adguard.{$DOMAIN} {
+	tls internal
+	reverse_proxy adguard:3000
+}

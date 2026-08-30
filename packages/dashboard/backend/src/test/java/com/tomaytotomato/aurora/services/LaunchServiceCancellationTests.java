@@ -47,6 +47,18 @@ class LaunchServiceCancellationTests {
     return up;
   }
 
+  /** Wait until the launched process has actually produced output. */
+  private static void awaitOutput(LaunchService.Job job, String needle) throws Exception {
+    for (int i = 0; i < 200; i++) {
+      if (job.logFile != null && Files.exists(job.logFile)
+          && Files.readString(job.logFile).contains(needle)) {
+        return;
+      }
+      Thread.sleep(25);
+    }
+    throw new AssertionError("launched process never produced: " + needle);
+  }
+
   private static void awaitTerminal(LaunchService.Job job) throws InterruptedException {
     for (int i = 0; i < 200 && job.state == LaunchService.State.RUNNING; i++) {
       Thread.sleep(50);
@@ -63,11 +75,18 @@ class LaunchServiceCancellationTests {
       // Long enough to still be RUNNING when cancel() is called; short
       // enough that a bug leaving it un-killed would still fail the test
       // promptly rather than hanging the suite.
-      stageFakeUpSh(repo, "sleep 30\necho done\nexit 0\n");
+      // "started" first, so the test can wait for the child process to
+      // genuinely exist before cancelling it. Cancelling in the window
+      // between startLaunch() returning and the runner thread spawning bash
+      // made this flaky (~1 run in 200 in CI-like conditions), which is
+      // worse than a slow test: a gate that fails at random teaches people
+      // to re-run it rather than read it.
+      stageFakeUpSh(repo, "echo started\nsleep 30\necho done\nexit 0\n");
       var svc = new LaunchService(props(repo), Mockito.mock(AuditEventRepo.class));
 
       LaunchService.Job job = svc.startLaunch(List.of("core"));
       assertThat(job.state).isEqualTo(LaunchService.State.RUNNING);
+      awaitOutput(job, "started");
 
       boolean cancelled = svc.cancel(job.id);
       assertThat(cancelled).isTrue();

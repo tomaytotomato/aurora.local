@@ -73,9 +73,13 @@ render_authelia_seed() {
   if [[ -f "$src" && ! -f "$dst" ]]; then
     log_info "seeding data/authelia/users_database.yml from example"
     install -m 0640 "$src" "$dst"
-    log_warn "IMPORTANT: replace the example password hash in $dst"
-    log_warn "generate one with:  docker run --rm authelia/authelia:latest \\"
-    log_warn "                       authelia crypto hash generate argon2 --password 'yourpass'"
+    # No scary IMPORTANT block here any more. This placeholder exists only
+    # so Authelia can boot (it crash-loops on an empty users: map) and it is
+    # overwritten by AutheliaService the moment the wizard creates the real
+    # admin, minutes later in the same install. Telling the operator to go
+    # and run `docker run --rm authelia/authelia crypto hash generate argon2`
+    # was both terminal-first and untrue: nobody has to do it.
+    log_info "placeholder sign-in file written; the wizard replaces it with your admin account"
   fi
 }
 
@@ -135,7 +139,41 @@ render_stalwart_config() {
 #
 # One-call convenience wrapper for scripts/up.sh.
 # --------------------------------------------------------------------
+# --------------------------------------------------------------------
+# render_data_dirs <pkg> [<pkg>...]
+#
+# Create every ../../data/<dir> a package bind-mounts, owned by the user
+# running the install, BEFORE compose starts anything.
+#
+# Docker creates a missing bind-mount source itself — as root. Every later
+# attempt to write into that directory from Aurora (uid 1000) then fails
+# with AccessDenied, which is how AdGuard ended up unprovisionable on a box
+# where the container had been started once before Aurora had a config to
+# write: data/adguard/conf existed, owned by root, and nothing short of a
+# shell could fix it. The same trap already bit Stalwart and Authelia once
+# (see the ordering note in scripts/up.sh), so this generalises the fix
+# instead of adding a third per-service mkdir.
+#
+# Only creates what is missing; never chowns an existing directory, since a
+# service that legitimately runs as another uid owns its own data.
+# --------------------------------------------------------------------
+render_data_dirs() {
+  local p f dir
+  for p in "$@"; do
+    f="$REPO/packages/$p/compose.yml"
+    [[ -f "$f" ]] || continue
+    while IFS= read -r dir; do
+      [[ -n "$dir" ]] || continue
+      [[ -e "$REPO/data/$dir" ]] && continue
+      mkdir -p "$REPO/data/$dir"
+      log_info "created data/$dir"
+    done < <(grep -oE '\.\./\.\./data/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*' "$f" \
+               | sed 's|\.\./\.\./data/||' | sort -u)
+  done
+}
+
 render_all() {
+  render_data_dirs "$@"
   render_caddy_snippets "$@"
   render_authelia_seed "$@"
   render_stalwart_config "$@"

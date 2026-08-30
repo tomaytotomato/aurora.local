@@ -74,7 +74,10 @@ public class StalwartProvisionService {
         log.debug("stalwart provision: JMAP not reachable yet, will retry");
         return;
       }
-      boolean created = mail.ensureDomain(domain);
+      // ensureDomain now answers "does the domain exist", so work out
+      // whether this call is what created it before asking.
+      boolean existedBefore = mail.domainExists(domain);
+      boolean created = mail.ensureDomain(domain) && !existedBefore;
       if (created) {
         log.info("stalwart provision: mail domain {} is now configured", domain);
       }

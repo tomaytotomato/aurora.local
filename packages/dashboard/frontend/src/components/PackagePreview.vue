@@ -25,6 +25,7 @@ import Badge from '@/components/ui/Badge.vue';
 import MarkdownBlock from '@/components/MarkdownBlock.vue';
 import PackageImpactPanel from '@/components/PackageImpactPanel.vue';
 import PackageResourcesCard from '@/components/PackageResourcesCard.vue';
+import { humanEnvLabel, cleanEnvHelp } from '@/lib/envCopy';
 
 const props = defineProps<{
   detail: PackageDetail;
@@ -32,7 +33,20 @@ const props = defineProps<{
 }>();
 
 const readmeBody = computed(() => (props.detail.readme ?? '').replace(/^#\s+.*\n+/, '').trim());
-const aboutBody = computed(() => readmeBody.value || (props.detail.description ?? '').trim());
+// About is the manifest's own description — one paragraph, written for the
+// person deciding whether they want this app. The README is not that: it is
+// the owner's setup document, full of `./scripts/up.sh privacy`, compose
+// edits and "copy .env.example to .env", which is exactly the terminal
+// vocabulary this product exists to remove from the journey. It moves into a
+// disclosure below, closed by default, rather than being deleted — the
+// people who want it are real, they are just not the default reader.
+const aboutBody = computed(() => (props.detail.description ?? '').trim());
+const ownerNotes = computed(() => readmeBody.value);
+
+// Only the values the app genuinely cannot start without are worth showing
+// before install. Everything else has a working default and belongs on the
+// Config tab afterwards.
+const requiredEnvSpecs = computed(() => (props.detail.envVars ?? []).filter((s) => s.required));
 // When the About text came from the manifest README it is authored
 // markdown and needs MarkdownBlock — otherwise Notes-style READMEs
 // surface `## First-run` and `[SilverBullet](https://…)` as raw text,
@@ -40,9 +54,6 @@ const aboutBody = computed(() => readmeBody.value || (props.detail.description ?
 // plain prose, so a Notes-style README triggers markdown but a manifest
 // description does not. Matches PackageDetail.vue's `aboutIsMarkdown` —
 // the two paths must not disagree about the same field.
-const aboutIsMarkdown = computed(() => !!readmeBody.value);
-
-const envSpecs = computed(() => props.detail.envVars ?? []);
 
 // The images list carries the tag the compose file references — knowable
 // from the repository alone, whether or not the image has ever been
@@ -56,15 +67,17 @@ const hasImages = computed(() => (props.update?.images.length ?? 0) > 0);
     <Card class="col-span-2">
       <div class="eyebrow mb-1">About</div>
       <h3 class="mb-3">What this is</h3>
-      <!-- Same rendering rule as PackageDetail's installed About card:
-           README bodies are authored markdown (fenced code, headings,
-           links); manifest description fallbacks are plain prose.
-           MarkdownBlock is safe on both, but a paragraph is cheaper
-           and preserves author-intended line breaks for the plain-text
-           branch. -->
-      <MarkdownBlock v-if="aboutBody && aboutIsMarkdown" :source="aboutBody" />
-      <p v-else-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
+      <p v-if="aboutBody" class="text-sm text-foreground whitespace-pre-line">{{ aboutBody }}</p>
       <p v-else class="text-sm text-muted-foreground">No description yet.</p>
+
+      <details v-if="ownerNotes" class="mt-5 border-t border-border pt-4" data-test="package-owner-notes">
+        <summary class="text-sm text-muted-foreground cursor-pointer select-none">
+          Setup notes for the owner · technical
+        </summary>
+        <div class="mt-3">
+          <MarkdownBlock :source="ownerNotes" />
+        </div>
+      </details>
     </Card>
 
     <Card class="col-span-2" data-test="package-preview-impact">
@@ -98,19 +111,22 @@ const hasImages = computed(() => (props.update?.images.length ?? 0) > 0);
 
     <PackageResourcesCard :package="detail.name" class="col-span-2" />
 
-    <Card v-if="envSpecs.length" class="col-span-2" data-test="package-preview-config">
+    <Card v-if="requiredEnvSpecs.length" class="col-span-2" data-test="package-preview-config">
       <div class="eyebrow mb-1">Configuration</div>
-      <h3 class="mb-3">What you'll be asked to set</h3>
+      <h3 class="mb-3">What you'll need to hand</h3>
       <ul class="text-sm space-y-2">
-        <li v-for="spec in envSpecs" :key="spec.key" class="flex items-center justify-between gap-4">
-          <span class="font-mono text-xs">{{ spec.key }}</span>
+        <li v-for="spec in requiredEnvSpecs" :key="spec.key" class="flex items-start justify-between gap-4">
+          <span>{{ humanEnvLabel(spec.key) }}</span>
           <span class="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
-            <Badge v-if="spec.required" tone="warn">required</Badge>
-            <Badge v-if="spec.secret" tone="neutral">secret</Badge>
-            <span v-if="spec.comment" class="max-w-xs text-right">{{ spec.comment }}</span>
+            <Badge v-if="spec.secret" tone="neutral">kept secret</Badge>
+            <span v-if="cleanEnvHelp(spec.comment)" class="max-w-xs text-right">{{ cleanEnvHelp(spec.comment) }}</span>
           </span>
         </li>
       </ul>
+      <p class="text-xs text-muted-foreground mt-3">
+        Aurora fills in everything else. You can change any of it later on this app's
+        Config screen.
+      </p>
     </Card>
   </div>
 </template>

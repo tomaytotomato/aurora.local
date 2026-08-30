@@ -64,19 +64,27 @@ public class UnpinnedImageTagsRule implements SecurityRule {
         Verdict v = classify(image);
         if (v == Verdict.PINNED) continue;
 
-        String severity = v == Verdict.LATEST_TAG ? SecurityFinding.HIGH : SecurityFinding.MEDIUM;
+        // Severity is about what the owner should DO, not about how much
+        // an engineer dislikes a floating tag. These images are the ones
+        // Aurora itself ships: a box was in this state the moment it
+        // finished installing, nobody did anything wrong, and there is no
+        // action available to a person who has never opened a terminal.
+        // Reporting three of those as HIGH on a twenty-minute-old box
+        // (which is what shipped) teaches exactly one lesson — that the
+        // red things on the security page are to be dismissed.
+        String severity = v == Verdict.LATEST_TAG ? SecurityFinding.MEDIUM : SecurityFinding.LOW;
         String reason = v == Verdict.LATEST_TAG
-            ? " uses the moving `:latest` tag."
-            : " uses a floating tag with no digest pin.";
+            ? "follows the moving `latest` tag"
+            : "follows a tag that can move";
         out.add(new SecurityFinding(
             id() + ":" + name,
             severity,
-            "Container " + name + " is not digest-pinned",
-            "The container " + name + " runs image `" + image + "` which"
-                + reason + " That means Aurora can't guarantee the exact "
-                + "bytes running today will be the same tomorrow. Pin the "
-                + "compose file to a specific `@sha256:\u2026` digest to get "
-                + "reproducible restarts.",
+            prettyName(name) + " updates to whatever version is newest",
+            prettyName(name) + " " + reason + ", so a restart can quietly pick up "
+                + "a different version of `" + image + "` than the one running now. "
+                + "Nothing is broken and there is nothing for you to do: Aurora "
+                + "pins these versions in its own releases, and this entry "
+                + "disappears when it does.",
             null
         ));
       }
@@ -84,6 +92,13 @@ public class UnpinnedImageTagsRule implements SecurityRule {
       log.debug("unpinned-image-tags rule failed: {}", e.getMessage());
     }
     return out;
+  }
+
+  /** Container names are how docker refers to it; this is how a person would. */
+  private static String prettyName(String name) {
+    if (name == null || name.isBlank()) return "This app";
+    String base = name.replace('_', ' ').replace('-', ' ').trim();
+    return Character.toUpperCase(base.charAt(0)) + base.substring(1);
   }
 
   private static String firstName(Container c) {

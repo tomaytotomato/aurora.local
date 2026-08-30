@@ -4,7 +4,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePackagesStore } from '@/stores/packages';
 import { useUpdatesStore } from '@/stores/updates';
-import { dockerStructureFor, packageFallbackIcon, packageIconUrl, packageLinks, splitCatalogue, type PackageSummary } from '@/api/packages';
+import { dockerStructureFor, packageFallbackIcon, packageIconUrl, packageLinks, splitCatalogue, variantLabel, type PackageSummary } from '@/api/packages';
 import { categoryLabel, packageLabel } from '@/lib/packageName';
 import Card from '@/components/ui/Card.vue';
 import Badge from '@/components/ui/Badge.vue';
@@ -55,9 +55,49 @@ const catalogueTabs = computed(() => [
   { value: 'marketplace' as const, label: 'Available', hint: String(split.value.marketplace.length) },
 ]);
 
-const visible = computed(() =>
+const inTab = computed(() =>
   activeTab.value === 'installed' ? split.value.installed : split.value.marketplace,
 );
+
+/**
+ * Search, because nineteen cards in a fixed grid is a list you scan rather
+ * than a catalogue you use — and the words someone arrives with ("netflix",
+ * "block ads", "photos") are rarely the words on the card. Matches the
+ * title, the description and the category, so "watch" finds the media
+ * server through its own prose and "privacy" finds AdGuard through its
+ * category.
+ */
+const query = ref('');
+/**
+ * The recommended app in a group comes first, its alternatives after it.
+ * Without this, "one clear choice per job" depended on alphabetical luck:
+ * Bulwark and SnappyMail sorted above Roundcube, so the first webmail an
+ * owner met was the one the repo does not recommend.
+ */
+function byVariantPreference(a: PackageSummary, b: PackageSummary): number {
+  const rank = (p: PackageSummary) => (p.variantGroup && !p.variantDefault ? 1 : 0);
+  return rank(a) - rank(b);
+}
+
+function labelFor(pkg: PackageSummary): string | null {
+  return variantLabel(pkg, packages.list);
+}
+
+const visible = computed(() => {
+  const q = query.value.trim().toLowerCase();
+  if (!q) return [...inTab.value].sort(byVariantPreference);
+  const terms = q.split(/\s+/);
+  return [...inTab.value].sort(byVariantPreference).filter((pkg) => {
+    const haystack = [
+      packageLabel(pkg),
+      pkg.title ?? '',
+      pkg.description ?? '',
+      categoryLabel(pkg.category ?? ''),
+      pkg.name,
+    ].join(' ').toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  });
+});
 
 function badgeTone(pkg: PackageSummary): 'ok' | 'neutral' {
   return pkg.enabled && pkg.running ? 'ok' : 'neutral';
@@ -98,12 +138,27 @@ const appsNav = computed(() => {
       class="mb-6"
     />
 
-    <Tabs
-      :model-value="activeTab"
-      :tabs="catalogueTabs"
-      class="on-photo-tabs mb-6"
-      @update:model-value="activeTab = $event as CatalogueTab"
-    />
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <Tabs
+        :model-value="activeTab"
+        :tabs="catalogueTabs"
+        class="on-photo-tabs"
+        @update:model-value="activeTab = $event as CatalogueTab"
+      />
+      <div class="relative">
+        <label for="app-search" class="sr-only">Search apps</label>
+        <input
+          id="app-search"
+          v-model="query"
+          type="search"
+          placeholder="Search apps"
+          data-test="catalogue-search"
+          class="h-9 w-56 rounded-md border border-border bg-card px-3 text-sm text-foreground
+                 placeholder:text-muted-foreground focus-visible:outline-none
+                 focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+    </div>
 
     <div v-if="packages.loading && !packages.list.length" class="grid grid-cols-3 gap-6">
       <Card v-for="n in 6" :key="`skeleton-${n}`" class="h-full p-8">
@@ -122,6 +177,11 @@ const appsNav = computed(() => {
     <Card v-else-if="loadError && !packages.list.length" class="py-16 text-center">
       <p class="text-sm text-muted-foreground mb-4">Couldn't load the catalogue.</p>
       <Button size="sm" variant="secondary" @click="load">Try again</Button>
+    </Card>
+
+    <Card v-else-if="!visible.length && query" class="py-16 text-sm text-muted-foreground text-center" data-test="catalogue-no-matches">
+      Nothing here matches “{{ query }}”.
+      <button type="button" class="text-foreground underline underline-offset-2 ml-1" @click="query = ''">Clear</button>
     </Card>
 
     <Card v-else-if="!visible.length" class="py-16 text-sm text-muted-foreground text-center">
@@ -192,7 +252,18 @@ const appsNav = computed(() => {
           </div>
           <Badge tone="neutral">available</Badge>
         </div>
-        <p class="text-sm text-muted-foreground line-clamp-3 mb-4 flex-1">{{ pkg.description }}</p>
+        <p class="text-sm text-muted-foreground line-clamp-3 mb-3 flex-1">{{ pkg.description }}</p>
+        <!-- Own row, above the footer: as a badge beside DockerBadge it
+             collided with the Source/Docs links on a three-up grid, and
+             beside the title it wrapped to three lines. -->
+        <p
+          v-if="labelFor(pkg)"
+          class="text-xs mb-3"
+          :class="pkg.variantDefault ? 'text-foreground' : 'text-muted-foreground'"
+          data-test="variant-label"
+        >
+          <span v-if="pkg.variantDefault" aria-hidden="true">★ </span>{{ labelFor(pkg) }}
+        </p>
         <div class="flex items-center justify-between gap-3">
           <DockerBadge :structure="dockerStructureFor(pkg)" />
           <div v-if="packageLinks(pkg).length" class="flex items-center gap-3" @click.stop>

@@ -4,6 +4,16 @@ host-name={{ avahi_host_name }}
 domain-name={{ avahi_domain_name }}
 use-ipv4=yes
 use-ipv6=yes
+{% if avahi_allow_interfaces %}
+# Publish on the LAN interface only.
+#
+# Without this, avahi answers on docker0 and every br-* bridge as well, so
+# `aurora.local` resolved to 172.18.0.1 — a docker bridge address that means
+# nothing on anyone else's machine. A laptop asking for this box could be
+# handed an unroutable answer, which looks exactly like "the box is broken".
+allow-interfaces={{ avahi_allow_interfaces }}
+{% endif %}
+deny-interfaces=docker0,{{ avahi_deny_interfaces }}
 ratelimit-interval-usec=1000000
 ratelimit-burst=1000
 

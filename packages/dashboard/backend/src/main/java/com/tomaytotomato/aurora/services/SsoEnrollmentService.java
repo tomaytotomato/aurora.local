@@ -58,8 +58,14 @@ public class SsoEnrollmentService {
   /** Authelia's filesystem-notifier output, relative to the repo root. */
   private static final String NOTIFICATION_FILE = "data/authelia/notification.txt";
 
-  /** Authelia's own SQLite, relative to the repo root. */
+  /** Authelia's own SQLite, relative to the repo root. Pre-Postgres boxes only. */
   private static final String AUTHELIA_DB = "data/authelia/db.sqlite3";
+
+  /** The shared core Postgres instance Authelia's storage moved to. */
+  private static final String CORE_DB_CONTAINER = "core-db";
+
+  /** Authelia's database on that instance (packages/core/compose.yml). */
+  private static final String AUTHELIA_DB_NAME = "authelia";
 
   /** Container name to shell into when the notifier file is unreadable from the host. */
   private static final String AUTHELIA_CONTAINER = "authelia";
@@ -408,6 +414,45 @@ public class SsoEnrollmentService {
       throw new IllegalArgumentException("not a known factor table: " + table);
     }
 
+    int viaPostgres = countRowsInCoreDb(table);
+    if (viaPostgres >= 0) return viaPostgres;
+    return countRowsInSqlite(table);
+  }
+
+  /**
+   * Count in the shared core-db, where Authelia's storage lives since the
+   * Postgres migration.
+   *
+   * <p>This is the whole reason the SSO step said "Waiting for the SSO
+   * service to finish starting" forever on a freshly-installed box: the
+   * only lookup was {@code data/authelia/db.sqlite3}, a file that no
+   * longer exists, so {@code autheliaUp} was permanently false and the
+   * enrolment link never appeared — on the one screen whose job is to stop
+   * every gated app being unopenable.
+   *
+   * <p>Read through {@code docker exec core-db psql}, as the in-container
+   * superuser: no JDBC driver, no second copy of the password, and it
+   * cannot reach anything the docker socket did not already reach.
+   * Returns -1 when the answer is unknown (container down, psql missing,
+   * schema not created yet), which the caller reads as "cannot see
+   * Authelia" rather than "no factors".
+   */
+  private int countRowsInCoreDb(String table) {
+    var out = docker.execCapture(CORE_DB_CONTAINER,
+        "psql", "-U", "postgres", "-d", AUTHELIA_DB_NAME, "-tAc",
+        "select count(*) from " + table);
+    if (out.isEmpty()) return -1;
+    String text = new String(out.get().stdout(), StandardCharsets.UTF_8).trim();
+    try {
+      return Integer.parseInt(text);
+    } catch (NumberFormatException e) {
+      log.debug("unexpected psql output counting {}: {}", table, text);
+      return -1;
+    }
+  }
+
+  /** Pre-Postgres boxes, and the unit tests that stage a SQLite file. */
+  private int countRowsInSqlite(String table) {
     Path db = repo().resolve(AUTHELIA_DB);
     if (!Files.isReadable(db)) return -1;
 

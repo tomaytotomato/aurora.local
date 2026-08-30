@@ -42,14 +42,13 @@ probe:
   external_url: http://{domain}/
 
 post_install_notes: |
-  1. Open the first-run wizard: https://$DOMAIN/
-  2. Create the admin user (password for v0.1; passkey coming in v0.2).
-  3. Onboarding wizard walks you through domain, DNS and TLS, then
-     drops you on the dashboard where you install packages.
-  4. SSO (Authelia) ships in core and runs from Day 0. The Aurora admin
-     plane keeps its own login and is deliberately NOT behind Authelia
-     forward-auth (so you can never be locked out of the control plane);
-     Authelia gates the other `*.$DOMAIN` service subdomains.
+  The first-run wizard is waiting at http://$HOSTNAME.local/ (or
+  http://$LAN_IP/). It takes about two minutes: an admin account, a
+  domain, and a choice about DNS.
+
+  Aurora keeps its own sign-in, deliberately separate from the single
+  sign-on that guards the other apps, so a problem with SSO can never lock
+  you out of the box that fixes it.
 
 # Upstream project. Rendered as the Source and Docs buttons on the
 # app page; the package's headline service, not every image it runs.

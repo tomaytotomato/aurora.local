@@ -107,6 +107,8 @@ public class LaunchService {
    * which stage a fake {@code up.sh} and exercise the fallback below.
    */
   private final Converger converger;
+  /** Nullable: unit tests that stage a fake up.sh construct without it. */
+  private final AdguardProvisionService adguard;
 
   private final Map<String, Job> jobs = new ConcurrentHashMap<>();
   private final AtomicReference<String> activeJobId = new AtomicReference<>(null);
@@ -151,16 +153,33 @@ public class LaunchService {
     this(props, audit, packages, currentUser, commands, null);
   }
 
-  @Autowired
+  /**
+   * Test-only overload. NOT annotated: Spring must choose the constructor
+   * below, the one that receives the provisioner. When @Autowired sat here
+   * instead, production wiring passed null for it and the AdGuard
+   * provisioning added in B2 silently never ran on the wizard's own launch
+   * path — the box came up with an unconfigured AdGuard and no DNS, exactly
+   * the failure B2 was supposed to end. A compatibility shim that disables
+   * a feature in production is worse than no shim.
+   */
   public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
                        com.tomaytotomato.aurora.services.CurrentUserService currentUser,
                        CommandRunner commands, Converger converger) {
+    this(props, audit, packages, currentUser, commands, converger, null);
+  }
+
+  @Autowired
+  public LaunchService(AuroraProperties props, AuditEventRepo audit, PackagesService packages,
+                       com.tomaytotomato.aurora.services.CurrentUserService currentUser,
+                       CommandRunner commands, Converger converger,
+                       AdguardProvisionService adguard) {
     this.props = props;
     this.audit = audit;
     this.packages = packages;
     this.currentUser = currentUser;
     this.commands = commands;
     this.converger = converger;
+    this.adguard = adguard;
     // Fires every 15s. Cheap; iterates active job's emitters only.
     heartbeat.scheduleAtFixedRate(this::sendHeartbeats, 15, 15, TimeUnit.SECONDS);
   }
@@ -183,6 +202,15 @@ public class LaunchService {
       if (existing != null && existing.state == State.RUNNING) {
         throw new LaunchInProgressException(current);
       }
+    }
+
+    // Config that has to exist before a container's first start, or the
+    // service comes up in its own setup wizard instead of the state the
+    // wizard promised. Today that is AdGuard: an unprovisioned AdGuard does
+    // not answer DNS at all, so the "AdGuard on this box" story would be a
+    // dead letter on the finished box. Idempotent and non-fatal.
+    if (adguard != null && enabledPackages.contains("privacy")) {
+      adguard.provisionIfAbsent();
     }
 
     String id = UUID.randomUUID().toString();
@@ -428,7 +456,14 @@ public class LaunchService {
   }
 
   private void finishWith(Job job, State state, int exit, String reason, Classified classified) {
-    job.state = state;
+    // Why the outcome is written before the state: anything watching this
+    // job — the SSE stream, a poll of GET /launch/{id}, a test — treats
+    // "state is no longer RUNNING" as the signal to read why it stopped.
+    // Flipping state first left a window where a finished job had no
+    // failure reason yet, so a reader could honestly report a failure with
+    // no explanation. It showed up as a one-in-hundreds flaky test, which
+    // is the cheap version of a support ticket that says "it just says
+    // failed".
     job.exitCode = exit;
     job.finishedAt = Instant.now();
     if (classified != null) {
@@ -438,6 +473,7 @@ public class LaunchService {
       job.failureReason = reason;
       job.failureCode = null;
     }
+    job.state = state;
     if (job.failureReason != null) {
       onLine(job, "[aurora] " + job.failureReason);
     }

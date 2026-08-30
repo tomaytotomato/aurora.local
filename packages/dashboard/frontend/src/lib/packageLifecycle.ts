@@ -100,6 +100,7 @@ export type StatusLightState =
   | 'stopped'
   | 'starting'
   | 'unhealthy'
+  | 'needs-setup'
   | 'not-installed'
   | 'unknown';
 
@@ -134,8 +135,15 @@ export function deriveStatusLight(input: LightInputs): StatusLightState {
     case 'starting':
       return 'starting';
     case 'failed':
-    case 'needs-config':
       return 'unhealthy';
+    case 'needs-config':
+      // Not a fault. The app is up and answering; it is waiting for a
+      // human to finish something inside it. Rendering that as a red
+      // "Unhealthy" badge next to the words "Enabled and running" —
+      // which is what a freshly-installed AdGuard used to look like —
+      // reads as "your new app is broken" when the truth is "one more
+      // click inside that app".
+      return 'needs-setup';
     case 'not-started':
       // Enabled but the probe says nothing is up — trust the plain
       // boolean over the probe's own optimism/pessimism here, since

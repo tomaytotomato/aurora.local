@@ -57,83 +57,15 @@ https://{$DOMAIN}, https://aurora.local {
 	reverse_proxy aurora:8090
 }
 
-# ---- Privacy & security ---------------------------------------------
-http://adguard.{$DOMAIN} {
-	reverse_proxy adguard:3000
-}
-https://adguard.{$DOMAIN} {
-	tls internal
-	reverse_proxy adguard:3000
-}
-
-# ---- Media automation -----------------------------------------------
-http://sonarr.{$DOMAIN} {
-	reverse_proxy sonarr:8989
-}
-https://sonarr.{$DOMAIN} {
-	tls internal
-	reverse_proxy sonarr:8989
-}
-
-http://radarr.{$DOMAIN} {
-	reverse_proxy radarr:7878
-}
-https://radarr.{$DOMAIN} {
-	tls internal
-	reverse_proxy radarr:7878
-}
-
-http://prowlarr.{$DOMAIN} {
-	reverse_proxy prowlarr:9696
-}
-https://prowlarr.{$DOMAIN} {
-	tls internal
-	reverse_proxy prowlarr:9696
-}
-
-http://bazarr.{$DOMAIN} {
-	reverse_proxy bazarr:6767
-}
-https://bazarr.{$DOMAIN} {
-	tls internal
-	reverse_proxy bazarr:6767
-}
-
-http://seerr.{$DOMAIN} {
-	reverse_proxy seerr:5055
-}
-https://seerr.{$DOMAIN} {
-	tls internal
-	reverse_proxy seerr:5055
-}
-
-http://flaresolverr.{$DOMAIN} {
-	reverse_proxy flaresolverr:8191
-}
-https://flaresolverr.{$DOMAIN} {
-	tls internal
-	reverse_proxy flaresolverr:8191
-}
-
-# ---- Debrid + torrent -----------------------------------------------
-http://rdt.{$DOMAIN} {
-	reverse_proxy rdtclient:6500
-}
-https://rdt.{$DOMAIN} {
-	tls internal
-	reverse_proxy rdtclient:6500
-}
-
-# qBittorrent + Gluetun vhosts — only reachable when the 'torrent'
-# compose profile is enabled (scripts/up.sh --torrent).
-# Leaving them commented so re-enabling is a one-line uncomment.
-# http://qbit.{$DOMAIN} {
-# 	reverse_proxy gluetun:8080
-# }
-# https://qbit.{$DOMAIN} {
-# 	tls internal
-# 	reverse_proxy gluetun:8080
-# }
+# ---- Per-app vhosts --------------------------------------------------
+# There are none here on purpose. Every app's vhost lives in its own
+# packages/<pkg>/caddy.snippet and is materialised into
+# /etc/caddy/snippets/ for the packages that are actually enabled (see the
+# import at the bottom). Core used to hardcode adguard/sonarr/radarr/...
+# here as well, which meant Caddy advertised vhosts for apps that were not
+# installed, the dashboard's per-app "vhosts" list disagreed with Caddy,
+# and a package that later grew its own snippet collided with core
+# ("ambiguous site definition: https://adguard.aurora.local").
 
 # ---- Storage --------------------------------------------------------
 # minidlna runs with network_mode: host for UPnP multicast, so it's not

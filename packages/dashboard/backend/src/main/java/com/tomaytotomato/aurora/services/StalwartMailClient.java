@@ -83,6 +83,18 @@ public class StalwartMailClient {
    * false when it already existed. Throws {@link StalwartApiException} on
    * any other failure.
    */
+  /**
+   * Make sure the mail domain exists, and say whether it <em>does</em> —
+   * not whether this particular call is the one that made it.
+   *
+   * <p>It used to return true only on creation and false when the domain
+   * already existed, which reads as "not ready" to anyone who did not open
+   * this method. {@link MailAccountReconciler} did exactly that and
+   * silently provisioned nothing on every box past its first minute. The
+   * one caller that genuinely wants "did I create it" ({@link
+   * StalwartProvisionService}, for its log line) uses {@link #domainExists}
+   * to work it out instead.
+   */
   public boolean ensureDomain(String name) {
     String body = jmapCall("x:Domain/set",
         "{\"create\":{\"d1\":{\"@type\":\"Domain\",\"name\":" + quote(name) + "}}}");
@@ -95,19 +107,28 @@ public class StalwartMailClient {
     JsonNode notCreated = args.path("notCreated").path("d1");
     if ("primaryKeyViolation".equals(notCreated.path("type").asText())) {
       log.debug("stalwart: mail domain {} already exists", name);
-      return false;
+      return true;
     }
     throw new StalwartApiException("could not create domain " + name + ": " + notCreated);
   }
 
   /**
-   * Create a mailbox {@code localPart@domainName} with the given password.
+   * Create a mailbox {@code localPart@domainName} with the given secret.
    * The domain must already exist ({@link #ensureDomain}). Returns the
    * created account id. Throws {@link StalwartApiException} on failure
    * (including a weak password, which Stalwart rejects with
    * {@code invalidProperties}).
+   *
+   * <p><b>The secret may be a bcrypt hash rather than a plaintext
+   * password</b>, which is how a mailbox can be created for a user whose
+   * password Aurora only stores hashed. Verified against a live v0.16.19:
+   * an account created with {@code $2a$12$…} authenticates with the
+   * <em>plaintext</em> that hash was made from (200) and rejects the hash
+   * itself (401), so Stalwart is genuinely verifying, not storing the
+   * string as a literal password. That is what keeps "one password for
+   * your box and your mail" true for accounts Aurora heals after the fact.
    */
-  public String createMailbox(String localPart, String domainName, String password) {
+  public String createMailbox(String localPart, String domainName, String secret) {
     String domainId = domainIdFor(domainName);
     if (domainId == null) {
       throw new StalwartApiException("domain " + domainName + " does not exist; create it first");
@@ -115,7 +136,7 @@ public class StalwartMailClient {
     String create = "{\"create\":{\"a1\":{\"@type\":\"User\","
         + "\"name\":" + quote(localPart) + ","
         + "\"domainId\":" + quote(domainId) + ","
-        + "\"credentials\":{\"0\":{\"@type\":\"Password\",\"secret\":" + quote(password) + "}},"
+        + "\"credentials\":{\"0\":{\"@type\":\"Password\",\"secret\":" + quote(secret) + "}},"
         + "\"roles\":{\"@type\":\"User\"}}}}";
     JsonNode resp = post(jmapCall("x:Account/set", create));
     JsonNode args = methodArgs(resp);
@@ -179,6 +200,247 @@ public class StalwartMailClient {
     }
     JsonNode notUpdated = args.path("notUpdated").path(id);
     throw new StalwartApiException("could not reset mailbox " + id + ": " + notUpdated);
+  }
+
+  /**
+   * The extra addresses currently pointed at a mailbox, as local parts.
+   *
+   * <p>Exists so a reconcile can tell "already correct" from "needs
+   * setting" and stay quiet: {@link #setAliases} replaces the whole map, so
+   * without this it would rewrite the same value every five minutes
+   * forever and log it each time.
+   */
+  public java.util.List<String> aliasesOf(String accountId) {
+    JsonNode got = post(jmapCall("x:Account/get", "{\"ids\":[" + quote(accountId) + "]}"));
+    var out = new ArrayList<String>();
+    for (JsonNode a : methodArgs(got).path("list")) {
+      JsonNode aliases = a.path("aliases");
+      aliases.fields().forEachRemaining(e -> {
+        String name = text(e.getValue(), "name");
+        if (name != null) out.add(name);
+      });
+    }
+    return out;
+  }
+
+  /** Whether the mail domain is already known to Stalwart. */
+  public boolean domainExists(String name) {
+    return domainIdFor(name) != null;
+  }
+
+  // ─── registry seed (C27) ──────────────────────────────────────
+  //
+  // Aurora's config.json is pre-seeded so Stalwart never enters bootstrap
+  // mode. That skips the setup wizard, which means the JMAP objects the
+  // wizard would have written (SystemSettings hostname/domain, six
+  // NetworkListeners, a console Tracer) never get written either — and
+  // without them, only :25/:993/:4190 answer and delivered mail is
+  // discarded because there is no session/queue behind it. Aurora fills
+  // in the wizard's job programmatically; see StalwartRegistrySeedService
+  // for the driver.
+
+  /**
+   * Bring the SystemSettings singleton in line with the box: the default
+   * hostname the SMTP greeting uses and the default domain reports use.
+   * Returns true when the object was actually changed; false when both
+   * values were already correct (idempotent no-op).
+   *
+   * <p>Only these two fields are touched. Anything else the wizard would
+   * normally write to SystemSettings (thread-pool size, service
+   * advertisements) is left at Stalwart's defaults — they are correct on
+   * a single-box install.
+   *
+   * <p><b>Field name pinned from a live v0.16 registry:</b> the wire
+   * field is {@code defaultDomainId} (an {@code Id<Domain>}), not
+   * {@code defaultDomain}. Reading the wrong name silently means the
+   * idempotency check always fails and Aurora rewrites SystemSettings
+   * on every reconcile.
+   */
+  public boolean ensureSystemSettings(String defaultHostname, String defaultDomain) {
+    String domainId = domainIdFor(defaultDomain);
+    if (domainId == null) {
+      throw new StalwartApiException("domain " + defaultDomain
+          + " does not exist; create it before seeding SystemSettings");
+    }
+
+    JsonNode got = post(jmapCall("x:SystemSettings/get",
+        "{\"ids\":[\"singleton\"]}"));
+    JsonNode current = null;
+    for (JsonNode s : methodArgs(got).path("list")) {
+      current = s;
+      break;
+    }
+    if (current != null) {
+      String curHost = text(current, "defaultHostname");
+      String curDomain = text(current, "defaultDomainId");
+      if (defaultHostname.equals(curHost) && domainId.equals(curDomain)) {
+        return false;
+      }
+    }
+
+    String update = "{\"update\":{\"singleton\":{"
+        + "\"defaultHostname\":" + quote(defaultHostname) + ","
+        + "\"defaultDomainId\":" + quote(domainId)
+        + "}}}";
+    JsonNode args = methodArgs(post(jmapCall("x:SystemSettings/set", update)));
+    if (args.path("updated").has("singleton")) {
+      log.info("stalwart: SystemSettings updated (hostname={}, domainId={})",
+          defaultHostname, domainId);
+      return true;
+    }
+    JsonNode notUpdated = args.path("notUpdated").path("singleton");
+    throw new StalwartApiException("could not update SystemSettings: " + notUpdated);
+  }
+
+  /**
+   * Ensure a named NetworkListener exists on {@code bind} carrying
+   * {@code protocol}. Returns true when it was created (or updated to
+   * match) this call; false when it was already correct.
+   *
+   * <p>The identity is the listener's {@code name}; Aurora keys off it
+   * so a rebuild that changes a listener's bind updates the existing
+   * object rather than adding a second one.
+   *
+   * @param protocol one of {@code smtp}, {@code imap}, {@code manageSieve};
+   *                 the {@code NetworkListenerProtocol} enum in v0.16
+   * @param tlsImplicit true for ports that speak TLS from byte zero
+   *                    (submissions :465, imaps :993, managesieve :4190);
+   *                    false for STARTTLS or plaintext-then-upgrade ports
+   *                    (:25, :143, :587)
+   */
+  public boolean ensureNetworkListener(String name, String protocol, String bind,
+                                       boolean tlsImplicit) {
+    JsonNode existing = findListenerByName(name);
+    if (existing != null) {
+      String curBind = firstSetValue(existing.path("bind"));
+      String curProto = text(existing, "protocol");
+      Boolean curTls = existing.hasNonNull("tlsImplicit") ? existing.get("tlsImplicit").asBoolean() : null;
+      if (bind.equals(curBind) && protocol.equals(curProto)
+          && curTls != null && curTls == tlsImplicit) {
+        return false;
+      }
+      String id = text(existing, "id");
+      String update = "{\"update\":{" + quote(id) + ":{"
+          + "\"bind\":{" + quote(bind) + ":true},"
+          + "\"protocol\":" + quote(protocol) + ","
+          + "\"tlsImplicit\":" + tlsImplicit
+          + "}}}";
+      JsonNode args = methodArgs(post(jmapCall("x:NetworkListener/set", update)));
+      if (args.path("updated").has(id)) {
+        log.info("stalwart: updated listener {} ({} on {})", name, protocol, bind);
+        return true;
+      }
+      JsonNode notUpdated = args.path("notUpdated").path(id);
+      throw new StalwartApiException("could not update listener " + name + ": " + notUpdated);
+    }
+
+    String create = "{\"create\":{\"n1\":{"
+        + "\"name\":" + quote(name) + ","
+        + "\"bind\":{" + quote(bind) + ":true},"
+        + "\"protocol\":" + quote(protocol) + ","
+        + "\"tlsImplicit\":" + tlsImplicit
+        + "}}}";
+    JsonNode args = methodArgs(post(jmapCall("x:NetworkListener/set", create)));
+    if (args.path("created").has("n1")) {
+      log.info("stalwart: created listener {} ({} on {})", name, protocol, bind);
+      return true;
+    }
+    JsonNode notCreated = args.path("notCreated").path("n1");
+    throw new StalwartApiException("could not create listener " + name + ": " + notCreated);
+  }
+
+  /** The current NetworkListener object named {@code name}, or null. */
+  private JsonNode findListenerByName(String name) {
+    JsonNode resp = post(jmapCall("x:NetworkListener/get", "{\"ids\":null}"));
+    for (JsonNode l : methodArgs(resp).path("list")) {
+      if (name.equalsIgnoreCase(l.path("name").asText())) {
+        return l;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * A JMAP {@code Set<X>} of primitive values is encoded as an object of
+   * value → true entries — the KEY is the value, not a numeric index.
+   * For a NetworkListener the {@code bind} set carries one host:port
+   * entry, so "first key" is what compare-for-idempotency needs.
+   *
+   * <p>Verified against a live v0.16 registry: {@code "bind":{"[::]:25":true}}.
+   * Reading this as if it were a numeric-keyed map ("0" → "host:port")
+   * always returns null, so the idempotency check fails and Aurora
+   * rewrites every listener on every reconcile.
+   */
+  private static String firstSetValue(JsonNode set) {
+    if (set == null || !set.isObject()) return null;
+    var it = set.fieldNames();
+    if (it.hasNext()) return it.next();
+    return null;
+  }
+
+  /**
+   * Ensure a Console tracer at INFO level exists, so {@code docker logs
+   * stalwart} is not empty. Returns true when it was created; false when
+   * a console tracer was already there.
+   *
+   * <p>Content of the console tracer is intentionally minimal:
+   * {@code @type=Console}, {@code level=info}, everything else default.
+   * Aurora is not telling Stalwart what to log — only that logging should
+   * reach stdout so an operator can see it. Followups that tune log
+   * volume belong in the mail admin console, not the seed.
+   */
+  public boolean ensureConsoleTracer() {
+    JsonNode got = post(jmapCall("x:Tracer/get", "{\"ids\":null}"));
+    for (JsonNode t : methodArgs(got).path("list")) {
+      if ("Console".equals(text(t, "@type"))) {
+        return false;
+      }
+    }
+    String create = "{\"create\":{\"t1\":{"
+        + "\"@type\":\"Console\","
+        + "\"level\":\"info\""
+        + "}}}";
+    JsonNode args = methodArgs(post(jmapCall("x:Tracer/set", create)));
+    if (args.path("created").has("t1")) {
+      log.info("stalwart: created Console tracer (level=info)");
+      return true;
+    }
+    JsonNode notCreated = args.path("notCreated").path("t1");
+    throw new StalwartApiException("could not create Console tracer: " + notCreated);
+  }
+
+  /**
+   * Point extra addresses at an existing mailbox.
+   *
+   * <p>Shape discovered against a live v0.16.19, because it is not
+   * obvious: {@code aliases} is a map of index to an {@code Alias} object
+   * carrying {@code name} and {@code domainId} — not a list of strings, and
+   * not a map of address to boolean. Both of those are rejected with
+   * {@code invalidPatch}.
+   *
+   * <p>Replaces the whole alias map, so callers pass the full desired set;
+   * that keeps the operation idempotent, which is what a reconcile needs.
+   */
+  public void setAliases(String accountId, java.util.List<String> localParts, String domainName) {
+    String domainId = domainIdFor(domainName);
+    if (domainId == null) {
+      throw new StalwartApiException("domain " + domainName + " does not exist; create it first");
+    }
+    var sb = new StringBuilder("{\"update\":{" + quote(accountId) + ":{\"aliases\":{");
+    for (int i = 0; i < localParts.size(); i++) {
+      if (i > 0) sb.append(',');
+      sb.append(quote(String.valueOf(i))).append(":{\"@type\":\"Alias\",\"name\":")
+          .append(quote(localParts.get(i)))
+          .append(",\"domainId\":").append(quote(domainId)).append('}');
+    }
+    sb.append("}}}}");
+    JsonNode args = methodArgs(post(jmapCall("x:Account/set", sb.toString())));
+    if (args.path("updated").has(accountId)) {
+      log.info("stalwart: aliases for {} set to {}", accountId, localParts);
+      return;
+    }
+    JsonNode notUpdated = args.path("notUpdated").path(accountId);
+    throw new StalwartApiException("could not set aliases on " + accountId + ": " + notUpdated);
   }
 
   /** Delete a mailbox via {@code x:Account/set destroy}. Irreversible. */

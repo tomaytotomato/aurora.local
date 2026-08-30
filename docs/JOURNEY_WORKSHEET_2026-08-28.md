@@ -1,0 +1,1029 @@
+# Journey worksheet — full nuke → reinstall → be Sarah (2026-08-28)
+
+What this is: a **worksheet**, not a report. Every item is a checkbox with
+evidence, the doctrine it violates, and a concrete fix. It is written to be
+ground down one item per commit by the Ralph loop.
+
+Method: the live box was destroyed (all containers, all volumes, `data/`,
+`.state.yml`, every `packages/*/.env`, `group_vars/all.yml`, `inventory.ini`),
+the dashboard image was rebuilt from `main@a3c6227`, and `bash bootstrap.sh
+install` was run from scratch. The browser journey was then walked as **Sarah**
+(new admin user `sarah`), through onboarding, the catalogue, two installs
+(privacy/AdGuard, jellyfin), and every dashboard page. Screenshots: `/tmp/j*.png`.
+Install log: `/tmp/aurora-bootstrap.log`.
+
+Grading lens is `Essence.md`:
+1. **Zero terminal** — every CLI affordance in the user journey is a defect.
+2. **Honest state** — a number or status on screen is either real or not shown.
+3. **One clear choice per job** — opinionated catalogue.
+4. **The box just works** — "reachable at aurora.local with a green padlock and
+   no `/etc/hosts` editing".
+
+Severity: **blocker** (Sarah is stopped, misled, or locked out) >
+**friction** > **polish**.
+
+---
+
+## Scoreboard
+
+| ID | Sev | Title | Done |
+|----|-----|-------|------|
+| A1 | blocker | LAN detection follows the VPN route; UFW opens the wrong subnet | [x] |
+| A2 | blocker | `ansible -K` prompt breaks the documented `curl \| bash` install | [x] |
+| A3 | friction | Install log screams about secrets it is about to generate itself | [x] |
+| A4 | friction | Post-install notes are stale and terminal-first | [x] |
+| A5 | polish | Ansible deprecation noise dominates the install transcript | [x] |
+| A6 | friction | No reset/uninstall path anywhere | [x] |
+| A7 | blocker | Published image is stale vs main, and unidentifiable on the box | [x-half] |
+| A8 | friction | "Start over" exists only as a script, not in the dashboard | [x] |
+| B1 | blocker | "AdGuard on this box" does not install AdGuard | [x] |
+| B2 | blocker | AdGuard is never provisioned; the DNS story never completes | [x] |
+| B3 | blocker | Vue escape leak: `${'{'}DOMAIN{'}'}` rendered to the user | [x] |
+| B4 | friction | Wrong step reference ("trust the new TLS root (step 7)") | [x] |
+| B5 | friction | Step 7 (SSO) is silently skipped; 6 and 7 never tick | [x] |
+| B6 | blocker | "Password recovery" is promised in copy, unimplemented in fact | [x] |
+| B7 | friction | Done step hands out `http://` right after the TLS-trust step | [x] |
+| B8 | polish | "Hostname & domain" step never lets you set the hostname | [x] |
+| B9 | polish | Welcome CPU string truncated mid-token | [x] |
+| C1 | blocker | `<service>.aurora.local` does not resolve on Linux/Android clients | [x] |
+| C2 | blocker | 2FA-gated apps are unreachable: enrolment codes land in a server file | [x] |
+| C3 | blocker | Installed AdGuard has no Open link anywhere | [x] |
+| C4 | blocker | App detail dumps the operator README (CLI steps) into Sarah's UI | [x] |
+| C5 | blocker | Config card renders raw `.env` comment art and env var names | [x] |
+| C6 | friction | "UNHEALTHY" badge next to "Enabled and running" | [x] |
+| C7 | friction | "couldn't reach the registry last time it looked" + "Checked never." | [x] |
+| C8 | friction | Every install adds a HIGH finding Aurora itself caused, with no fix | [x] |
+| C9 | friction | Installing one app bounces every other running container | [x] |
+| C10 | friction | `.state.yml` drops `dashboard` after the first in-app install | [x] |
+| C11 | friction | Settings claims it can't read the TLS root; the API serves it fine | [x] |
+| C12 | friction | TLS card: unexpanded `$DOMAIN`, Linux steps miss the browser store | [x] |
+| C13 | polish | "last 24 hours" metrics and 4-day uptime on a 20-minute-old box | [x] |
+| C14 | polish | Activity feeds show raw event keys | [x] |
+| C15 | polish | `/users` heading is unreadable against the hero image | [x] |
+| C16 | polish | Catalogue: no search, three webmails, truncated copy, missing icons | [x] |
+| C17 | polish | "Ask whoever set up this box" — Sarah *is* that person | [x] |
+| C18 | friction | Manifest descriptions still written for operators (found while fixing C4) | [x] |
+| C19 | polish | Review lists a vhost for a profile-gated service that will not start | [x] |
+| C22 | blocker | Review listed the doubled `aurora.aurora.local` (regression from C10) | [x] |
+| C23 | blocker | The wizard's own launch path skipped AdGuard provisioning entirely | [x] |
+| C24 | blocker | The owner is the one user who gets no mailbox | [x] |
+| C25 | friction | `admin@` / `system@` do not exist | [x] |
+| C26 | friction | Aurora's alerts still go to a file, not to `system@` | [x] |
+| C27 | blocker | Mail is accepted on :25 and then silently discarded | [x-code] |
+| C20 | friction | The SSO step links to auth.$DOMAIN before the DNS that resolves it is running | [x-copy] |
+| C21 | fork | Ship image digests, or a "Pin these now" action (owner's call) | [x] |
+| D1 | polish | `Essence.md` is unreferenced and inconsistently named | [x] |
+| D2 | polish | README package table lists 12 of 18 packages | [x] |
+
+---
+
+## A · Phase 1 install (`bootstrap.sh` + Ansible)
+
+### A1 · [blocker] LAN detection follows the VPN route
+`_detect_lan_ip` uses `ip route get 1.1.1.1`, and `_detect_lan_cidr` takes the
+first `proto kernel` route. On this box (ProtonVPN up, which is a *normal*
+state for a privacy-minded homelab — Aurora itself ships Gluetun) that yielded:
+
+```
+lan_ip=10.2.0.2 lan_cidr=100.85.0.0/24     # bootstrap.sh
+firewall_lan_cidr: 100.85.0.0/24           # group_vars/all.yml
+```
+
+while the real LAN is `192.168.0.110/24` on `enp0s31f6` — which the dashboard's
+own detector got right (Welcome step showed `LAN IP 192.168.0.110`). UFW is then
+opened to the VPN subnet and (on a genuinely fresh box) **not** to the LAN, so
+the box becomes unreachable from Sarah's laptop. AdGuard would also bind :53 to
+the tunnel address.
+
+**Fix:** pick the interface that owns a default route *and* an RFC1918 address,
+skipping `tun*/wg*/proton*/tailscale*/ppp*` device names; prefer the interface
+with the lowest-metric non-VPN default route. Reuse (or share) whatever
+`SystemService` does, since it is already correct. Add a unit test with the
+`ip route` output captured above. Files: `bootstrap.sh`.
+
+**SHIPPED:** `scripts/lib/net.sh` picks a LAN *interface* instead of following a
+route — name filter (lo/docker/br-/veth/tun/wg/proton/pvpn/tailscale/zt/ppp),
+RFC1918-only address filter (so CGNAT 100.64/10 is out), `/31`+`/32` rejected as
+point-to-point, default-route owners preferred. Returns empty rather than
+guessing, and `bootstrap.sh` now says so in plain English before falling back.
+11 fixture tests in `scripts/tests/net.test.sh` (the ProtonVPN box above,
+Tailscale, `/22`, no-default-route, nothing-usable), wired into `ci.yml` and
+`scripts/verify.sh`. Live box re-derived to `192.168.0.110` / `192.168.0.0/24`
+and its ufw rules rebuilt — the VPN subnet is no longer trusted.
+
+### A2 · [blocker] `ansible -K` prompt breaks `curl | bash`
+`_run_host_bootstrap` runs `ansible-playbook … -K`. In the documented one-liner
+(`curl -fsSL … | bash`) stdin is the pipe, so the prompt reads garbage/EOF:
+
+```
+/usr/lib/python3.14/getpass.py:99: GetPassWarning: Can not control echo on the terminal.
+Warning: Password input may be echoed.
+BECOME password:
+```
+
+It only survived here because this box has NOPASSWD sudo. On a stock Debian box
+the run dies at the first `become` task.
+
+**Fix:** probe `sudo -n true` first; if passwordless, drop `-K`. Otherwise read
+the password from `/dev/tty` with plain-English copy ("Your Linux password, so
+Aurora can install Docker and set the firewall"), and fail with that sentence if
+there is no tty. Files: `bootstrap.sh`.
+
+**SHIPPED:** `_run_host_bootstrap` now has three honest cases — passwordless
+sudo never prompts; with a terminal it prompts on `/dev/tty` (so the curl pipe on
+stdin is irrelevant); with neither it stops *before* touching the host with
+"Aurora needs your login password to set this box up, and there is no terminal to
+ask on. Run it from a terminal: bash bootstrap.sh". The prompt is introduced by
+"Aurora needs your login password once, to install Docker and set up the
+firewall" instead of a bare `BECOME password:`.
+
+### A3 · [friction] The install log screams about secrets it then generates
+`up.sh` seeds `.env` files, prints 13 `WARN …=<empty>` lines plus
+
+```
+WARN IMPORTANT: replace the example password hash in .../users_database.yml
+WARN generate one with:  docker run --rm authelia/authelia:latest \
+WARN                        authelia crypto hash generate argon2 --password 'yourpass'
+```
+
+…and then immediately rotates all 13 automatically. The scary block is about
+work Aurora is doing for you, and the `docker run` line is a terminal
+instruction for something the dashboard now owns (the admin user is created in
+the wizard).
+
+**Fix:** run `rotate-secrets.sh --apply` first, then warn only about what is
+still weak. Delete the `authelia crypto hash` advice. Files: `scripts/up.sh`,
+`scripts/lib/render.sh`, `scripts/rotate-secrets.sh`.
+
+**SHIPPED:** `rotate-secrets.sh --apply` no longer prints a WARN per key — on a
+fresh install every secret is legitimately empty and the script fixes all of them
+seconds later, so it now says `core/.env — generating 13 missing secret(s)` and
+`OK generated 13 secret(s) for core`. Report mode (the operator audit) still
+lists every offending key. `render_authelia_seed` drops the `IMPORTANT: replace
+the example password hash` + `docker run ... crypto hash generate argon2` block
+for "placeholder sign-in file written; the wizard replaces it with your admin
+account", which is what actually happens.
+
+### A4 · [friction] Post-install notes are stale and terminal-first
+`core`'s `post_install_notes` still walks the operator through the **removed**
+Stalwart setup wizard ("Stalwart boots in bootstrap mode… complete it once…
+choose SQLite + filesystem blobs"), tells them to set `STALWART_ADMIN_SECRET` in
+`packages/core/.env`, prints `https://mail-admin.$DOMAIN/` with `$DOMAIN`
+uninterpolated, and points at `./scripts/get-caddy-root-cert.sh` although the
+dashboard now has a Download button (commit a3c6227).
+
+**Fix:** rewrite `packages/core/manifest.yml` notes to today's truth (mail is
+auto-provisioned; the recovery admin is revealed in the dashboard), interpolate
+`$DOMAIN`/`$LAN_IP` before printing, and replace every script reference with the
+screen that does the job.
+
+**SHIPPED:** both core and dashboard notes rewritten — the whole block is now
+four lines pointing at the browser ("Open it and finish setup in the browser:
+http://aurora.local/ or http://192.168.0.110/ ... Nothing left to do at a
+terminal"), the removed Stalwart wizard is replaced by what actually happens
+(mail is pre-configured, recovery admin is in the dashboard), and `bootstrap.sh`
+interpolates `$DOMAIN`/`$HOSTNAME`/`$LAN_IP` before printing, so the last thing
+the installer prints is an address that can actually be typed.
+
+### A5 · [polish] Ansible deprecation noise
+Five `INJECT_FACTS_AS_VARS` blocks with source excerpts dominate the transcript.
+**Fix:** `deprecation_warnings = False` in `ansible.cfg` and move host roles to
+`ansible_facts['os_family']`.
+
+**SHIPPED:** both. Every `ansible_os_family` / `ansible_distribution*` /
+`ansible_architecture` / `ansible_memtotal_mb` / `ansible_hostname` reference in
+`host/roles/` now reads `ansible_facts['...']`, and `ansible.cfg` silences the
+notice. A full `--check` run of `host/site.yml` prints zero deprecation lines
+(was five multi-line blocks with caret diagrams).
+
+### A6 · [friction] There is no reset path
+Nothing in `bootstrap.sh`, `scripts/`, or the dashboard takes a box back to
+clean. Nuking it required hand-rolled `docker rm -f`, `docker volume prune`,
+`sudo rm -rf data/`, and deleting `.state.yml`/`.env`s. A consumer box must be
+resettable by the consumer.
+
+**Fix:** `bootstrap.sh reset [--keep-data]` (stop everything, drop volumes,
+clear runtime state, keep the repo) plus Settings → "Start over" with a typed
+confirmation, streaming through the existing job/SSE plumbing.
+
+**SHIPPED (half):** `scripts/reset.sh` + `bootstrap.sh reset`, with `--yes`,
+`--keep-data` and `--all`. It says what it will do in the same words the UI
+would, requires typing RESET (or `--yes`), removes containers/volumes by compose
+**label** rather than by compose file so a half-broken or since-removed package
+is still cleaned up, deletes `data/` (with sudo only when root-owned files are
+actually there), clears `.state.yml` and every `packages/*/.env`, and leaves the
+repo, docker and the firewall alone. Deliberately skips the prereq check, because
+resetting has to work on a box whose install failed halfway.
+
+**Still open:** the in-dashboard "Start over" button. Tracked as A8 so the CLI
+half does not read as done.
+
+**Update:** A8 shipped. Settings → Start over now runs the same reset script
+through a detached helper container, with a typed-confirmation modal and a
+goodbye splash. See A8.
+
+### A7 · [blocker] Published image is stale, and the box can't say what it runs
+`ghcr.io/tomaytotomato/aurora:0.1.0` on GHCR carries
+`org.opencontainers.image.revision=3232c95` (2026-08-26) while `main` is
+`a3c6227` (2026-08-28) — the tag is mutable in name only, so a fresh
+`curl | bash` install silently gets a two-day-old dashboard, and nothing in the
+UI reveals which build is running. (This journey had to rebuild locally to test
+main at all.)
+
+**Fix:** publish on merge to main (rolling `:main` plus immutable
+`:sha-<short>`); surface `image.revision` + build date in Settings → System;
+make "Check and update" compare that revision, not just the tag.
+
+**SHIPPED (the identifiable half).** CI already publishes `edge` and
+`sha-<short>` on main, so the publishing was never the gap — the gap was that a
+box could not say what it was running. The image now carries
+`AURORA_BUILD_REVISION` / `_DATE` / `_VERSION` as build args (stamped by CI, and
+by `up.sh` from git for local builds), `/api/system/info` returns them under
+`build`, and Settings → System shows `0.1.0 · a3c6227 · 28 Aug` — or "unlabelled
+build" when someone built without stamps, which is the truth rather than an
+invented version.
+
+**Still open (owner's call):** whether a released tag like `0.1.0` should be
+re-published from main at all. It currently drifts under a fixed name, which is
+what made a fresh install silently two days old. Options: stop moving release
+tags and have boxes track `edge`; or bump `AURORA_VERSION` per release and have
+"Check and update" compare the stamped revision.
+
+### A8 · [friction] "Start over" exists only as a script, not in the dashboard
+**SHIPPED.** Settings → Start over. A red-framed card near the bottom of the
+page opens a modal that lists what will be deleted (every app + its data, every
+mailbox and account, the TLS root, DNS settings, backups on this box) and what
+will survive (the OS, docker, ufw, the repo, files on other machines), and
+makes the operator type the word `RESET` verbatim before the confirm button
+un-greys. On accept the whole viewport swaps to a "disconnecting…" splash
+spelling out how to bring Aurora back (`bash bootstrap.sh install`); the router
+would otherwise bounce to /login the moment the container starts dying, which
+reads as a mundane sign-out rather than the deliberate wipe.
+
+**Why it needs a helper container.** `POST /api/reset` records the audit row,
+then spawns a small detached container that reuses the aurora image (bash +
+docker-cli already baked in, so no pull), runs as UID 0 so it can delete
+root-owned `data/` subtrees without sudo, mounts the repo at its host path
+identity-style, and executes `bash scripts/reset.sh --yes` after a short sleep
+so the HTTP response can leave the process before the process is killed. The
+helper deliberately does NOT carry the `com.docker.compose.project=aurora`
+label that `reset.sh` filters on — otherwise it would delete itself mid-run.
+
+**Kept as a followup:** wire the reset flow into a fresh nuke-and-rebuild in
+`scripts/verify-*` so the door does not silently rot with future changes to
+`reset.sh`. The unit tests pin the docker argv shape; a live rebuild is what
+proves the operator ever gets back to the login screen.
+
+---
+
+## B · Onboarding wizard
+
+### B1 · [blocker] "AdGuard on this box" does not install AdGuard
+Step 4 (`DNS story`, default tab) promises: *"Install the privacy package
+(AdGuard Home). Seed a rewrite for `*.aurora.local` → this box's LAN IP."*
+Step 6 then lists `Packages: Core` only and warns:
+
+> DNS mode is 'adguard' but the privacy package (which provides AdGuard Home) is not selected.
+
+There is no package picker in the wizard and no "add it" affordance in the
+warning, so the only exit is Install-anyway. The wizard promised something, then
+told the user it isn't going to happen, then did it anyway.
+
+**Fix:** when `dns=adguard`, add `privacy` to the install plan (chip visible on
+the review step) and delete the warning; keep the warning only as a
+one-click "Add AdGuard" if the plan is ever edited by hand.
+
+**SHIPPED:** `OnboardingService` now derives packages from the DNS choice
+(`packagesForDnsMode()`): `/plan` includes it, so the chip shows on Review before
+anything is written, and `/install` persists it with the line "Added Privacy
+(LAN DNS + VPN) because you chose AdGuard for DNS." The contradictory warning is
+gone; the only remaining one fires when the build genuinely has no AdGuard
+package, and is phrased for the reader ("AdGuard isn't available in this build,
+so nothing on this box will answer DNS for *.aurora.local. Point your devices at
+your router's DNS instead."). The step's own promise lost its jargon too
+("Install AdGuard Home on this box", not "Install the `privacy` package").
+4 integration tests in `OnboardingDnsImpliesPackageIntegrationTest`.
+
+### B2 · [blocker] AdGuard is never provisioned; the DNS story never completes
+Even installing `privacy` by hand from the catalogue leaves:
+
+```
+$ ls data/adguard/conf/        → empty
+$ dig @192.168.0.110 test.aurora.local   → connection refused (:53 not serving)
+$ curl -I http://192.168.0.110:3000/     → 302 /install.html   (setup wizard)
+```
+
+`seed-adguard.sh` only works *after* a human completes AdGuard's own web wizard,
+which nothing in the journey tells Sarah to do. So the chosen DNS story silently
+does not exist, and if she does point her router at the box, the whole LAN loses
+DNS.
+
+**Fix:** provision AdGuard on install — write `AdGuardHome.yaml` (admin user =
+the Aurora admin, bcrypt hash, bind `0.0.0.0:53`, upstreams, and the
+`*.$DOMAIN → LAN_IP` rewrite) before first start, exactly as core now does for
+Stalwart/Authelia. Verify with `dig @<lan-ip> anything.aurora.local`. Then add a
+Done-step check "DNS answers for *.aurora.local" that is real, not assumed.
+
+**SHIPPED:** `AdguardProvisionService` writes `AdGuardHome.yaml` before AdGuard's
+first start — DNS on :53, DoH upstreams, rewrites for both `aurora.local` and
+`*.aurora.local` at the LAN address, admin = the Aurora admin with the same
+password (the bcrypt hash is copied, not a second credential invented). Wired
+into both paths that can start it (wizard launch, catalogue install) plus a
+startup heal for boxes installed before this existed; it never overwrites an
+existing config. `render_data_dirs` in `render.sh` now pre-creates every
+`../../data/<dir>` a package bind-mounts, user-owned, because Docker creates
+missing bind-mount sources as **root** — which is exactly why the first heal
+attempt on the live box failed with AccessDenied. Proved live:
+`dig @192.168.0.110 jellyfin.aurora.local` → `192.168.0.110`, upstream lookups
+resolve, and `POST /control/login` as `sarah` with her Aurora password → 200.
+Still open as its own item: a Done-step check that *shows* DNS answering.
+
+### B3 · [blocker] Vue escape leak in step 3
+Step 3 renders literally:
+
+> Every `.env` that references `${'{'}DOMAIN{'}'}` re-renders.
+
+Two defects in one line: a broken template escape shown to the user, and a
+sentence about `.env` files. **Fix:** rewrite in Sarah's language ("Every app
+that points at this domain is rebuilt with the new name") and delete the escape.
+File: `frontend/src/views/onboarding/OnboardingDomain.vue`.
+
+### B4 · [friction] Wrong step reference
+Same card: *"You'll need to trust the new TLS root (step 7)."* Trust the root CA
+is **step 5**; step 7 is SSO. **Fix:** derive the number from the step list, or
+link the step instead of numbering it.
+
+**SHIPPED:** the line now names the step from `STEP_LABELS` ("on the *Trust the
+root CA* step") instead of hardcoding an index that was already two out of date.
+
+### B5 · [friction] Step 7 is silently skipped and steps never tick
+Clicking Install jumps from 6 → 8 ("You're set", *Step 8 of 8*) while the
+sidebar leaves **6 Review & install** and **7 Set up SSO** unchecked. Either SSO
+setup is dead weight in the stepper or it was skipped by accident; both read as
+"something went wrong".
+
+**Fix:** if SSO needs no input, remove the step (7 steps, honest); otherwise run
+it. Mark every completed step complete when the wizard advances.
+
+**SHIPPED:** `OnboardingReview.install()` hardcoded `router.push('/onboarding/done')`.
+It now advances to whatever follows Review in `STEPS` (derived, not hardcoded)
+and marks Review complete, so the SSO step is reached and the sidebar ticks. This
+is also most of C2: that step is the only thing standing between a fresh box and
+"every gated app is impossible to open" — see below.
+
+### B6 · [blocker] Password recovery is promised, then denied
+Step 2 body copy: *"If you lose the password, use the password recovery option
+on this screen to reset it."* Clicking it opens:
+
+> Password recovery is coming to the dashboard shortly. In the meantime, if
+> you've lost the admin password, ask whoever set this box up to reset it for you.
+
+Sarah is the person who set the box up. The only real recovery is
+`scripts/reset-admin-password.sh` over SSH — the exact thing the doctrine bans.
+
+**Fix (pick one, in order of preference):** (a) implement recovery — a one-time
+recovery code shown at account creation, stored hashed, redeemable at
+`/login`; (b) until then, tell the truth on the card itself and print the
+recovery code with the password. Do not advertise a control that opens an
+apology.
+
+**SHIPPED (a).** `RecoveryCodeService` issues a six-word code (from the password
+generator's curated wordlist) when the admin account is created, stores only its
+bcrypt hash, and returns the plaintext exactly once. The wizard now stops on that
+screen and makes the operator acknowledge it, next to the password they are
+already saving. `/login` grew a "Forgot your password?" form — username, code,
+new password — which sets the password and immediately issues a replacement code,
+so the box is never left without a way back in; the spent code dies instantly. A
+wrong username and a wrong code return the same 401, so it cannot enumerate
+accounts. 9 service tests, OpenAPI updated. The apology dialog is deleted.
+
+**Also:** every other "ask whoever set up this box" was rewritten (C17) — the
+disks parity empty state and the marketplace card now tell the reader what they
+can do themselves.
+
+### B7 · [friction] Done hands out `http://` after the TLS step
+The Done step's "REACH THIS BOX AT" lists `http://aurora.local` and
+`http://192.168.0.110` — three screens after asking the user to install a root
+CA "so your browser stops warning". **Fix:** lead with
+`https://aurora.local`, keep the LAN-IP `http://` as the labelled fallback, and
+say which one to bookmark.
+
+**SHIPPED:** `ReachInfo` takes a `scheme` prop; Done passes `https` for the name
+and keeps `http` for the IP (the certificate covers the name, not the address, so
+an https IP link would produce the very warning the trust step exists to avoid).
+The help text now says which to bookmark and tells the per-platform truth.
+Done also gained the router-DNS card the DNS step promises — "set your router's
+DNS server to 192.168.0.110" with where to find it and what happens if you skip
+it — which was an unkept promise on the last screen of the wizard.
+
+### B8 · [polish] The "Hostname & domain" step has no hostname
+Sidebar says "Hostname & domain"; the page is titled "Pick your domain" and only
+has a domain field. **Fix:** rename the step to "Domain", or let the hostname be
+edited there.
+
+**SHIPPED:** renamed to "Your domain". The hostname is a host-level fact
+(`hostname -s`, set before Aurora exists) and the wizard has no business
+pretending otherwise.
+
+### B9 · [polish] Truncated CPU string on Welcome
+`Intel(R) Core(T…` — one line, hard-truncated. **Fix:** normalise the model
+string (strip `(R)`, `(TM)`, `CPU @ …`) and let it wrap to two lines.
+
+**SHIPPED:** exactly that — "Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz" becomes
+"Intel Core i5-6500T", and the line is allowed to wrap instead of truncating the
+part that identifies the chip.
+
+---
+
+## C · Dashboard and the app journey
+
+### C1 · [blocker] `<service>.aurora.local` does not resolve on Linux/Android
+The single biggest promise ("all reachable at `aurora.local` … no `/etc/hosts`
+editing") fails for multi-label names on the most common resolver stack:
+
+```
+$ getent hosts jellyfin.aurora.local    → (nothing, rc=2)
+$ ping jellyfin.aurora.local            → Name or service not known
+$ avahi-resolve -n jellyfin.aurora.local → 192.168.0.110   (works)
+$ hosts: files mdns4_minimal [NOTFOUND=return] dns   ← /etc/nsswitch.conf
+```
+
+`mdns4_minimal` resolves only single-label `*.local`, so every "Open <app>" link
+Aurora renders is a dead end on Linux clients (and Android has no equivalent
+resolver at all); Chromium on this very box returned `ERR_NAME_NOT_RESOLVED`.
+macOS/iOS Bonjour is the happy path. Aurora's Settings card states the opposite:
+*"so other devices on your network can reach `<label>.aurora.local` with no
+setup on those devices."* Additionally `aurora.local` itself resolves to the
+**docker bridge** address (`172.18.0.1`) because avahi publishes on every
+interface, which will hand LAN clients an unroutable A record.
+
+**Fix (three parts, can be separate commits):**
+1. Restrict avahi to the LAN interface (`allow-interfaces=<lan-if>`,
+   `deny-interfaces=docker0,br-*`) in the host role, so `aurora.local` cannot
+   resolve to a bridge IP.
+2. Make the AdGuard path real (B2) and, on the Done step + Settings, state
+   per-platform truth: works on Apple devices out of the box; Linux/Android
+   need the box as their DNS server.
+3. Every Open CTA gets a `http://<lan-ip>:<port>` fallback link, which never
+   depends on name resolution.
+
+**SHIPPED, all three:**
+1. The avahi role publishes on the LAN interface only (`allow-interfaces`,
+   detected by the same `net.sh` that fixed A1) and denies docker's bridges.
+   Verified live: `aurora.local` went from `172.18.0.1` — a docker bridge
+   address being handed to every laptop that asked — to `192.168.0.110`.
+2. B2 makes the AdGuard path real, and the Done step now carries the
+   router-DNS instruction (B7), which is what actually fixes Linux/Android.
+3. Each app page shows `http://<lan-ip>:<port>` under the Open button:
+   "Name not resolving on this device? http://192.168.0.110:8096/ always works."
+Remaining honestly-open: per-platform wording in Settings' LAN-aliases card
+still claims "no setup on those devices". Rolled into C18's copy pass.
+
+### C2 · [blocker] Anything behind SSO is unreachable without a terminal
+`packages/core/authelia/configuration.yml` sets `policy: two_factor` for
+`*.$DOMAIN` (and for `mail-admin`), while the notifier is
+
+```yaml
+notifier:
+  filesystem:
+    filename: /data/notification.txt
+```
+
+so the 2FA enrolment link/code lands in `data/authelia/notification.txt` on the
+server. Verified live: `POST /api/firstfactor` as `sarah` succeeds
+(`authentication_level: 1`), and `https://mail-admin.aurora.local/` still
+bounces back to the portal because it needs level 2. Sarah cannot enrol without
+SSH. Settings compounds it: *"Passkey sign-in isn't wired up on this box yet."*
+
+**Fix:** surface Authelia's pending notification in the dashboard (an
+"Aurora needs to verify it's you — here's your code" panel, admin-only, with the
+file as the source), **and/or** point the notifier at the core Stalwart SMTP now
+that every Aurora user gets a mailbox, **and** add a "Set up your second factor"
+card to the Done step / Overview attention strip so enrolment happens before the
+first gated app is installed.
+
+**SHIPPED — two fixes, both needed.** The machinery to surface the enrolment
+link already existed (`SsoEnrollmentService`, the wizard's SSO step). It was
+unreachable for two independent reasons, and either alone was fatal:
+1. **The step was skipped.** `OnboardingReview` pushed straight to
+   `/onboarding/done`, so the wizard went 6 → 8 and the operator never saw it
+   (B5).
+2. **The step could not work when reached.** It read Authelia's enrolment state
+   from `data/authelia/db.sqlite3`, a file that stopped existing when Authelia
+   moved to the shared Postgres — and an unreadable database is (correctly)
+   reported as "Authelia is not up yet", so the step sat on "Waiting for the SSO
+   service to finish starting" forever. Counts now come from
+   `docker exec core-db psql`; the SQLite path remains for pre-migration boxes.
+Verified live on a clean box: `/api/onboarding/sso` returns `autheliaUp: true`
+and the step renders its instructions and pending-link panel.
+
+**Bookkeeping note:** this row sat unticked for several iterations after the fix
+shipped — the scoreboard edit that should have ticked it was a no-op string
+replace and nobody checked. Fixed here, with the evidence above.
+
+**Still open (C20, product fork):** the step sends the operator to
+`https://auth.<domain>` on the second-to-last screen, before the DNS that
+resolves it exists. The copy now says so; reordering the wizard is the real fix.
+
+### C3 · [blocker] Installed AdGuard has nowhere to click
+After installing `privacy`, the detail page shows `vhosts: none`, no Open CTA,
+no address anywhere in the UI; AdGuard is on `<lan-ip>:3000`. LAN aliases lists
+only `auth`, `mail-admin`, `jellyfin`.
+
+**Fix:** ship `packages/privacy/caddy.snippet` for `adguard.$DOMAIN` (and an
+mDNS alias), or — better, generally — render an Open link from the manifest's
+published port whenever a package has no vhost.
+
+**SHIPPED:** `packages/privacy/caddy.snippet` (adguard.$DOMAIN, http + https,
+deliberately not behind Authelia). While doing it, the root cause turned up:
+`packages/core/caddy/Caddyfile` hardcoded vhosts for adguard **and** the whole
+media stack, so Caddy advertised addresses for apps that were not installed while
+the dashboard — which reads per-package snippets — showed `vhosts: none`, and
+adding the snippet collided outright ("ambiguous site definition:
+https://adguard.aurora.local"). Those blocks moved to
+`packages/media/caddy.snippet` and the privacy one, leaving core with only its
+own vhosts. Verified live: `https://adguard.aurora.local` → AdGuard's login,
+`/api/packages/privacy` reports `vhosts: [adguard.aurora.local]`, and the app
+page now renders the Open CTA. The generic "no vhost → offer host:port" fallback
+is still worth doing for backend-only apps; left for its own item.
+
+### C4 · [blocker] The operator README is rendered into Sarah's UI
+`/apps/privacy` shows, verbatim, under "What this is":
+
+> **First-run** 1. Copy `.env.example` to `.env`; pick a VPN provider and paste
+> creds. 2. `./scripts/up.sh privacy` 3. Visit `http://<lan-ip>:3000` for
+> AdGuard's setup wizard. 4. `./scripts/seed-adguard.sh` seeds the
+> `*.aurora.local` DNS rewrites.
+
+`/apps/jellyfin` adds hardware-transcoding compose edits (`uncomment the
+devices: and group_add: block`), a "Why not behind Authelia?" essay, and a raw
+env block. This is the single largest concentration of terminal jargon in the
+product, and it sits on the page users visit most.
+
+**Fix:** the package contract gains a user-facing block (`manifest.yml: about:`
++ optional `user_notes:`) that the detail page renders by default; the README
+moves behind a collapsed "For the owner (advanced)" disclosure. Update
+`docs/PACKAGE_CONTRACT.md` and every package.
+
+**SHIPPED (simpler than the plan):** no new manifest field was needed — the
+manifest already carries a `description`, written for the person deciding whether
+they want the app. About now renders that, and the README moves into a closed
+`Setup notes for the owner · technical` disclosure on both the pre-install
+preview and the installed page. Nothing is deleted; it just stops being the first
+thing a non-technical owner reads. The `privacy` and `jellyfin` descriptions were
+rewritten to carry that weight ("Your own Netflix, for the films, TV and music on
+this box"); the rest are follow-up C18.
+
+### C5 · [blocker] Config card renders `.env` comment art
+The "What you'll be asked to set" table shows `VPN_SERVICE_PROVIDER`,
+`WIREGUARD_PRIVATE_KEY`, `FIREWALL_OUTBOUND_SUBNETS`, each with the raw comment
+text from `.env.example`, including `---- gluetun: provider selection
+--------------------` rules. Two entries are badged **REQUIRED** but install
+never asks for them (and privacy installs fine without them, because Gluetun is
+profile-gated).
+
+**Fix:** render label/help from manifest-declared fields (human label, one-line
+help, whether it is genuinely required *for the selected profile*), never raw
+`.env` comments. Hide the whole card when nothing is required.
+
+**SHIPPED:** `lib/envCopy.ts` (`humanEnvLabel`, `cleanEnvHelp`, 8 tests) turns
+`WIREGUARD_PRIVATE_KEY` into "Wireguard private key" and strips the divider art
+(`---- gluetun: provider selection ----`) plus everything after the first
+sentence. The pre-install card now lists only genuinely required values under
+"What you'll need to hand", with "Aurora fills in everything else"; the installed
+Config tab uses the same two helpers, so the two surfaces cannot drift.
+
+### C6 · [friction] "UNHEALTHY" next to "Enabled and running"
+Right after a successful install, the privacy page header showed a red
+**UNHEALTHY** badge while the control row said "Enabled and running." AdGuard
+simply has no `HEALTHCHECK`. **Fix:** map "no healthcheck" → running (with a
+neutral "health not reported" tooltip); reserve unhealthy for real failures.
+
+**SHIPPED (root cause was different, and worse):** the red badge came from the
+probe's `needs-config` state — AdGuard's first-run detector firing because
+nothing had ever configured it (B2). B2 removes the cause; this removes the
+mislabel. `needs-config` now maps to its own amber `Needs setup` light instead of
+the red `Unhealthy` one, because "waiting for a human inside that app" and "this
+app is broken" are not the same sentence.
+
+### C7 · [friction] Version card contradicts itself
+> Version unknown · UNCHECKED — "Aurora couldn't reach the image registry last
+> time it looked, so this is the version on the box rather than the newest one
+> available." … "Checked never."
+
+**Fix:** three honest states — never checked / checked at <time> / check failed
+at <time> — and only show the failure sentence for the third.
+
+**SHIPPED:** exactly that. A never-checked app now reads "Aurora hasn't checked
+for a newer version yet ... It checks on its own schedule, or you can use Check
+and update above" over "Not checked yet.", and the registry-unreachable sentence
+only appears when there really was a check.
+
+### C8 · [friction] Aurora's own images generate HIGH findings, with no fix
+A 20-minute-old box shows 7 findings, 3 HIGH, all "Container X is not
+digest-pinned … Pin the compose file to a specific `@sha256:…` digest", for
+images Aurora ships (`adguard`, `authelia`, `jellyfin`). The count grows with
+every install, the page claims "Every finding has a fix — no silent nags", and
+the only affordances are a snooze dropdown and **Dismiss**. `scripts/pin.sh`
+exists and could fix all of them.
+
+**Fix:** ship digests (or run `pin.sh --apply` as part of enable) so the finding
+is absent by default; where it remains, give it a real "Pin these now" button
+that runs the existing script through the job runner. Failing that, it is not a
+HIGH.
+
+**SHIPPED (the "failing that" branch, deliberately):** severity is now about what
+the owner should do — `:latest` is medium, a floating tag is low, and neither is
+high, because the box was born in this state, nobody did anything wrong, and no
+action exists for a person who has never opened a terminal. The copy is rewritten
+for the reader: "Aurora media sonarr updates to whatever version is newest …
+Nothing is broken and there is nothing for you to do: Aurora pins these versions
+in its own releases, and this entry disappears when it does." A test asserts the
+description never tells a household user to pin an `@sha256` digest. The page
+header stops claiming "Every finding has a fix — no silent nags" and says which
+findings need a person and which Aurora handles. **Left open as a product fork
+(C21):** actually shipping digests in the repo, and/or a "Pin these now" button
+wired to `scripts/pin.sh --refresh` through the job runner.
+
+**C21 answer (2026-08-29):** digests are managed in `packages/<pkg>/pins.env`.
+`scripts/pin.sh` already does the walking + resolving + rewriting; Aurora's own
+release process is the single place where a refresh + apply lands, so a box's
+pinned digests match a release, not the operator's arbitrary Tuesday. Recorded
+as `docs/IMAGE_PINS.md`, which spells out where they live, when they change,
+why they are outside `manifest.yml`, and why the dashboard deliberately does
+NOT ship a "Pin these now" button. The already-shipped ImagePinRule
+severity/copy is consistent with that: un-pinned is medium, not high, and the
+copy says "Aurora pins these versions in its own releases and this entry
+disappears when it does".
+
+### C9 · [friction] Installing one app restarts the others
+Enabling `privacy` recreated `stalwart` (mail down mid-install); enabling
+`jellyfin` recreated `adguard` (DNS down). `up.sh` runs `up -d --remove-orphans`
+across the whole merged project. **Fix:** pass the newly-enabled package's
+service names explicitly, keeping `--remove-orphans` semantics for the
+compose-file set only.
+
+**SHIPPED (two causes, both worse than compose being noisy):**
+1. `rotate-secrets --apply` was "rotating" `WIREGUARD_PRIVATE_KEY` and
+   `OPENVPN_PASSWORD` on **every** run — values that belong to the owner's VPN
+   provider and that Aurora cannot mint. It wrote 24 random bytes into them,
+   which looks configured, destroys the "not set yet" signal, and changes every
+   run, so it then recreated the package's containers to "apply" the new junk.
+   Keys listed in a manifest's `required_env`, plus an explicit
+   external-credential pattern (`HOMEPAGE_VAR_*`, `*_API_KEY`,
+   `WIREGUARD_PRIVATE_KEY`, `OPENVPN_PASSWORD`), are now never generated. That
+   also stops seven pointless rotations in `core/.env`.
+2. `seed-adguard.sh` runs from up.sh's post-up hooks on every launch and
+   restarted AdGuard unconditionally — the LAN's DNS server, every time any app
+   was installed. It now restarts only when it actually added a rewrite.
+   Its fixture also hardcoded `192.168.0.110`/`aurora.local` (one specific box,
+   checked into the repo); both are substituted from this box's state, and the
+   substitution deliberately does not use `LAN_IP` from `privacy/.env`, where it
+   means "bind address" and defaults to `0.0.0.0` — which had just written
+   rewrites answering `0.0.0.0` for every name.
+Verified: repeated `up.sh` runs now recreate nothing and restart nothing.
+
+### C10 · [friction] `.state.yml` drops the dashboard
+After the first in-app install: `enabled: [core, privacy]` — `dashboard` is
+gone, which is why `up.sh` carries a 40-line "dashboard orphan guard". Fix the
+writer (`state_set_enabled` call site in the in-container path) to preserve
+packages it did not touch, then simplify the guard.
+
+### C11 · [friction] Settings claims it cannot read the TLS root
+The TLS root CA card renders a red **"Aurora couldn't read the TLS root
+certificate just now."** while, at the same moment,
+`curl http://aurora.local/api/system/caddy-root.crt` returns a valid
+`CN=Caddy Local Authority - 2026 ECC Root` certificate (631 bytes). The one card
+whose job is to stop browser warnings says it is broken when it is not.
+
+**Fix:** find the divergent probe (likely a host-path read vs the API/docker
+exec path used by the download endpoint), make the card use the same source as
+the Download button, and add a regression test for "cert present → no error".
+
+**SHIPPED (cause was more embarrassing than a divergent probe):** the card
+fetches the certificate fine and then hashes it with `crypto.subtle` — which
+browsers do not expose on an insecure origin. Reached at `http://aurora.local`,
+which is where every new box is reached, the hash threw and the catch rendered
+"Aurora couldn't read the TLS root certificate just now". The card that exists to
+end browser warnings was reporting itself broken *because* you had not installed
+the certificate yet. It now detects the insecure context, keeps the Download
+button, and explains that the fingerprint needs https. Regression test included.
+
+### C12 · [friction] TLS card copy
+*"Install this on every device that connects to `*.$DOMAIN`"* — unexpanded
+variable, second occurrence in the product (see B3). The Linux instructions are
+a `sudo cp … && sudo update-ca-certificates` one-liner, which does not cover
+Chrome/Chromium (NSS store) — Firefox gets its own paragraph, Chromium is left
+failing with `ERR_CERT_AUTHORITY_INVALID` (reproduced).
+
+**Fix:** interpolate the domain; add a Chromium/NSS paragraph
+(`certutil -d sql:$HOME/.pki/nssdb …`) or, better, ship a one-click
+"trust this cert" download for Linux desktops.
+
+**SHIPPED.** The literal `$DOMAIN` went with C11. The instructions are now one
+shared `TrustRootInstructions.vue` used by both the wizard step and the Settings
+card — they were two copies, each carrying a "keep these in sync" comment, and
+they had already drifted (the wizard told Linux users to wait for a step-by-step
+in Settings; Settings showed something else). Two corrections to content, both
+cases where following the text literally still left a warning:
+`update-ca-certificates` fills the system store that Chrome/Chromium/Edge do not
+read, so the NSS `certutil` line is now there too; and "iOS / Android" was one
+entry giving only the iOS path, which does not exist on Android — split, with
+each platform's real menu path and a note that Android's scary "someone could
+monitor you" warning is about this box. 4 tests, including one that mounts both
+surfaces and asserts they render the same component.
+
+### C13 · [polish] Time-travelling metrics
+Overview shows "CPU last 24h 30.4%" and a chart labelled "Host CPU % · last 24
+hours" on a box that has existed for 20 minutes, plus "uptime 4d 22h" (host
+uptime) on a fresh install. **Fix:** label the window by what exists
+("since install", "last 40 minutes"), and label host uptime as host uptime.
+
+### C14 · [polish] Raw event keys in activity feeds
+`mdns.alias.publish`, `job.finish`, `enable:jellyfin`,
+`stalwart.secrets.bootstrap`, `health:healthy stalwart`. **Fix:** a
+key → sentence map ("Published jellyfin.aurora.local on the network"), with the
+raw key behind a details toggle.
+
+**FOLLOW-UP (iteration 3):** the recovery-code feature added three audit keys
+after that map was written, so `auth.recovery_code.issue` fell through the
+generic path and rendered as **"Auth recovery code issue"** — a routine event
+reading as a fault, on exactly the rows a reader cannot shrug off. Spotted in a
+live screenshot, not by a test. Mapped, with a test that asserts the word
+"issue" never survives into that row.
+
+**SHIPPED:** `lib/eventCopy.ts` with two maps and 5 tests — container events read
+"stalwart is healthy", "adguard started", "jellyfin stopped responding"; audit
+rows read "Published an address on the network", "Set up the mail server",
+"Finished first-run setup". Unknown keys are made readable rather than hidden
+(dropping a real event would be the worse failure), and the raw key stays in the
+row's `title` for anyone debugging.
+
+### C15 · [polish] `/users` heading contrast
+The "Users" H1 and its "ACCESS" eyebrow sit on the dark aurora hero and are
+close to unreadable. **Fix:** the same scrim/offset treatment the other pages
+use.
+
+**SHIPPED:** the header block was missing the `.on-photo` class every other view
+applies over the hero image.
+
+### C16 · [polish] Catalogue
+No search or filter across 17 apps; **three** webmail clients (Bulwark,
+Roundcube, SnappyMail) and two note apps (Memos, SilverBullet) contradict "one
+clear choice per job"; card descriptions truncate mid-word ("Runs on CPU by
+default; opt-in NVIDI…"); SnappyMail and SilverBullet render blank/letter icons.
+**Fix:** add search + outcome chips ("Watch", "Block ads", "Photos"), pick a
+default webmail and mark the others "alternative", clamp descriptions on a word
+boundary, fix the two icons.
+
+**SHIPPED (search).** The catalogue has a search box that matches title,
+description, category and package name, with an honest "Nothing here matches
+'x'" state and a Clear affordance. Combined with C18's rewritten descriptions,
+the words someone actually arrives with — "photos", "block ads", "watch" — now
+find the right app through its own prose.
+
+**SHIPPED (variants).** The manifests had recorded the choice all along —
+roundcube the default webmail, silverbullet the default notes app, jellyfin the
+default media player — and nothing read the fields. `variant_group` /
+`variant_default` now flow through `Package` → `/api/packages` → the catalogue,
+which sorts the recommended app ahead of its alternatives (they had been sorting
+alphabetically, so the first webmail an owner met was Bulwark — the one the repo
+does not recommend) and labels them: "★ Recommended", "Alternative to Roundcube".
+The reference uses the short name, because "Alternative to Roundcube (webmail)"
+wrapped to three lines restating the group already visible. 4 unit tests; the
+label placement took two live passes to stop colliding with the Source/Docs links.
+
+**Still open (small):** the two missing icons (SnappyMail, SilverBullet) and
+word-boundary clamping on truncated descriptions.
+
+### C18 · [friction] Manifest descriptions are still written for operators
+Now that About renders the manifest `description` instead of the README (C4),
+that one paragraph is the only thing most owners will read about an app. Several
+are still operator prose: "Prometheus scrapes node_exporter (host) and cAdvisor
+(containers)", "Debrid-first (RDTClient) with qBittorrent-behind-gluetun as the
+local fallback", "A front end only — the mail server (Stalwart) lives in the core
+stack; this connects to it over JMAP". `privacy` and `jellyfin` were rewritten
+when C4 landed; the rest have not been.
+
+**Fix:** one pass over every `packages/*/manifest.yml` description: what it does
+for the household, in two or three sentences, no component names unless the
+owner would recognise them.
+
+**SHIPPED:** all 15 remaining descriptions rewritten. "Prometheus scrapes
+node_exporter (host) and cAdvisor (containers)" became "Charts for the curious:
+how hard this box is working, how much room is left, whether anything has been
+down. Nothing here is needed for the box to run well." Photos is "Your own photo
+library... the parts you would pay a subscription for elsewhere, on hardware you
+own." Component names survive only where the owner would recognise them.
+
+### C17 · [polish] Wrong-audience copy
+Settings → App marketplace: *"Ask whoever set up this box to turn it on."* Same
+pattern as B6. **Fix:** sweep the frontend for "ask whoever" / "whoever set this
+box up" and address the reader as the owner.
+
+---
+
+### C23 · [blocker] The wizard's launch path skipped the provisioning B2 added
+Found by the fourth nuke-and-reinstall, on a box where every test was green:
+`data/adguard/conf/` root-owned and empty, `dig @192.168.0.110` refused. B2's
+provisioning worked through `scripts/up.sh` and never ran through the path the
+first-run wizard actually uses.
+
+Two causes, both mine:
+1. `@Autowired` sat on `LaunchService`'s backwards-compatible constructor, the
+   one that passes `null` for `AdguardProvisionService`. Every test passed
+   because tests construct the full one; production wired the shim. **A
+   compatibility shim that disables a feature in production only is worse than
+   no shim.**
+2. `ComposeConvergeService` — the in-container bring-up the wizard calls — did
+   `ensureNetwork` + `seedEnvFiles` + secrets, but none of `up.sh`'s rendering.
+   So Docker created `data/adguard/*` as **root** before anything could write
+   config into it.
+
+**SHIPPED:** `@Autowired` moved to the constructor that carries the provisioner;
+`ensureDataDirs` added to the converger, mirroring `render_data_dirs`. Three
+tests: one asserts by reflection that the wired constructor takes
+`AdguardProvisionService` (that is the test that would have caught it), two cover
+data-dir creation and never touching an existing directory.
+
+**Proved on a clean box:** reset → `bootstrap.sh install` → wizard API through
+admin/domain/dns/install/launch → `adguard provision: wrote ... (admin=sarah,
+*.aurora.local -> 192.168.0.110)`, `dig @192.168.0.110 photos.aurora.local` →
+`192.168.0.110`, and AdGuard's own login accepts the Aurora password (200).
+
+### C24 · [blocker] The owner is the one user who gets no mailbox
+Reported by Bruce, 2026-08-28: "you created the sarah user during onboarding
+setup, so why isn't there a sarah@aurora.local".
+
+Reproduced exactly: creating `mailtest` through the **Users page** provisioned
+`mailtest@aurora.local` automatically (there is a comment in `UsersController`
+calling it "the story": one credential for signing in and for mail). `sarah`,
+created through the **onboarding wizard**, got nothing —
+`OnboardingService.createInitialAdmin` goes through `AdminUserRepo` directly and
+publishes no event. So the one account guaranteed to exist on every box, the
+owner's, was the only account without mail, and Stalwart looked empty on every
+fresh install.
+
+**SHIPPED:** `MailAccountReconciler` — idempotent, runs on boot, on a 5-minute
+drift guard, and on every user change; `createInitialAdmin` now publishes the
+event that triggers it. Three things made this more than a one-line call:
+
+1. **Timing.** The mail domain is provisioned asynchronously, and on a fresh box
+   does not exist when the wizard's admin step runs. A single call at creation
+   would be a race; a reconcile is not.
+2. **Healing existing boxes.** Aurora stores bcrypt hashes, never plaintext, so
+   an account created before this could not be given a mailbox with the right
+   password — unless Stalwart verifies against a hash. It does: proven on
+   v0.16.19 by creating an account with `$2a$12$…` and authenticating with the
+   plaintext (200) and with the hash itself (401). The hash is copied across, so
+   "one password for your box and your mail" holds for healed accounts too.
+   Verified live: `sarah@aurora.local` appeared on its own, and JMAP auth with
+   her Aurora password returns 200 while a wrong one returns 401.
+3. **A misleading boolean, which is why the first attempt silently did nothing.**
+   `ensureDomain` returned true only when it *created* the domain and false when
+   it already existed. Read as "is the domain ready" — which is what the name
+   suggests — that is inverted on every box past its first minute. It now
+   answers "does the domain exist"; the one caller that wanted "did I create it"
+   asks `domainExists` first. 8 tests.
+
+**SHIPPED (C25, aliases).** `admin@` and `system@` now point at the owner's
+mailbox — the first admin, i.e. the account the wizard created. Aliases rather
+than separate mailboxes, because a second mailbox means a second password to
+manage and an inbox nobody opens, and it would break "one password for your box
+and your mail". The alias schema had to be reverse-engineered against a live
+v0.16.19: it is a map of index → `{"@type":"Alias","name":…,"domainId":…}`; a
+list of strings and a map of address→bool are both rejected with `invalidPatch`.
+The reconcile reads the current aliases first and only writes when they differ,
+because setting them replaces the whole map and this runs every five minutes.
+An owner called `admin` is not aliased to themselves. 5 more tests.
+
+Verified as far as this layer goes: Stalwart records both aliases, and SMTP
+`RCPT TO:<system@aurora.local>` and `<admin@aurora.local>` both return 250 —
+i.e. the aliases resolve to the owner's account. End-to-end delivery could not
+be verified because of C27 below, which is not caused by this change.
+
+### C27 · [blocker] Mail is accepted and then silently discarded
+Found while verifying the aliases. **The box takes mail and throws it away.**
+
+Evidence, all on the live box:
+- SMTP on :25 answers `220 mail.aurora.local Stalwart ESMTP at your service`,
+  and a full transaction succeeds: `MAIL FROM` 250, `RCPT TO:<sarah@aurora.local>`
+  250, `RCPT TO:<system@aurora.local>` 250, `DATA` accepted.
+- Nothing ever arrives. Over IMAPS (993) as `sarah@aurora.local`, every folder
+  is empty, polled for 30 seconds after each send.
+- It is not an IMAP visibility problem: the row count in Stalwart's Postgres
+  store is **unchanged** after sending a 500-byte message (4838 before, 4838
+  after). The message is never stored.
+- `docker logs stalwart` is **completely empty**. No telemetry at all, so an
+  operator has no way of seeing any of this.
+- Plain IMAP :143 and submission :587 are **refused**, though compose publishes
+  them and the Stalwart panel's "connect a mail client" facts advertise
+  "IMAP 993 SSL/TLS, SMTP 587 STARTTLS". Only 25, 993 and 4190 answer.
+
+Likely root cause, and why this needs a decision rather than a guess: Aurora
+seeds **only the datastore pointer** into `config.json`
+(`packages/core/stalwart/config.template.json` is nine lines describing
+Postgres) and lets Stalwart's own defaults do everything else — listeners, local
+delivery, queue processing, logging. Those defaults evidently do not add up to a
+working local-delivery mail server. Aurora owns AdGuard's and Authelia's config
+for exactly this reason; mail is the outlier.
+
+**C27 implementation SHIPPED (2026-08-29, needs live-box verification):**
+See `docs/MAIL_LOCAL_DELIVERY_PLAN.md` for the design.
+`StalwartRegistrySeedService` runs on `ApplicationReadyEvent` and on a
+30-minute schedule (drift guard). It waits for JMAP to be reachable AND for
+the box's mail domain to exist (both belong to `StalwartProvisionService`),
+then performs three idempotent JMAP writes via `StalwartMailClient`: (1)
+`x:SystemSettings/set update singleton` with `defaultHostname=mail.<domain>`
+and `defaultDomain=<id>`; (2) six `x:NetworkListener/set create` matching the
+ports compose already publishes (smtp :25, submission :587, submissions :465,
+imap :143, imaps :993, managesieve :4190); (3) `x:Tracer/set create` for a
+Console tracer at info level so `docker logs stalwart` stops being empty.
+Each step first checks whether the object is already correct and skips the
+write when it is, so the reconcile is a drift-guard, not a load-bearing loop.
+Failures absorbed silently and retried on the next tick — same shape as
+`StalwartProvisionService`. Unit-tested with a scripted JMAP seam:
+`StalwartMailClientTests` covers the three ensure-shape methods, and
+`StalwartRegistrySeedServiceTests` pins the exact set of six listeners and
+the reachable+domain gate.
+
+**Live-box verification still owed:** rebuild the aurora image, force-recreate
+the container, wipe `data/stalwart` and Stalwart's registry, boot from scratch
+and confirm: (a) SMTP `MAIL FROM ... RCPT TO:<sarah@aurora.local> ... DATA .`
+followed by IMAPS `LOGIN sarah@aurora.local <pw>` + `SELECT INBOX` shows the
+message; (b) IMAP :143 and submission :587 answer instead of refusing; (c)
+`docker logs stalwart` carries INFO-level events. Backend tests pin the
+JMAP payload shape and the seed sequence; only a live run proves the
+Stalwart-side effect matches.
+
+**The fork:** how much of Stalwart's configuration should Aurora own? Minimum to
+close this is local delivery + the listeners we advertise + logging that reaches
+`docker logs`. Doing it properly probably means the same treatment core already
+gives Authelia: a rendered config Aurora controls, with the box's domain and
+hostname in it.
+
+**Owner's answer (2026-08-29):** ESSENCE. Aurora already owns AdGuard's and
+Authelia's config; mail is the outlier and should get the same treatment. The
+complication in v0.16 is that `config.json` really does only describe the
+datastore — every other setting the wizard writes (listeners, hostname,
+tracers, local-delivery routing) lives inside the datastore as JMAP objects.
+So "Aurora owns the config" means "Aurora replicates the wizard's writes",
+not "Aurora renders one big JSON file". Full plan in
+`docs/MAIL_LOCAL_DELIVERY_PLAN.md`: a new `StalwartRegistrySeedService` that
+posts the wizard-equivalent JMAP objects on boot (SystemSettings, Domain, six
+NetworkListeners, session/rcpt defaults, stdout tracer), idempotent and
+drift-reconciling so a rebuild that changes the seed re-applies cleanly. Not
+yet implemented — needs a live Stalwart to verify SMTP delivery, IMAP :143 +
+submission :587 stop refusing, and `docker logs stalwart` stops being empty.
+
+Until this is fixed, mailboxes and aliases are correct but useless, and
+**anything routed to `system@` would be silently lost** — so C26 (Aurora's alerts
+to `system@`) should not ship before it.
+
+### C26 · [friction] Aurora's alerts still go to a file, not to `system@`
+**SHIPPED alongside C27 (2026-08-29, needs live-box verification):**
+Authelia's password-reset and 2FA-enrolment links no longer land in
+`data/authelia/notification.txt`; they get mailed. `AutheliaMailProvisionService`
+runs on boot (and every 30 minutes), waits for JMAP to be reachable and the
+mail domain to exist, generates a strong SMTP password, ensures an
+`authelia@$DOMAIN` mailbox on the box's own Stalwart (creates it, or resets
+it when it exists but the password is unknown), and writes the five
+`AUTHELIA_NOTIFIER_SMTP_*` keys into `packages/core/.env` pointing at the
+internal Stalwart on `submission://stalwart:587`. `packages/core/authelia/
+configuration.yml` now emits `notifier.smtp` when those env vars are set and
+`notifier.filesystem` otherwise (Authelia templating gated by `X_AUTHELIA_
+CONFIG_FILTERS=template`, since having both blocks configured at once is a
+fatal Authelia error). Idempotent: a second run on a provisioned .env is a
+silent no-op with the password NOT rotated. Alerts intended for the owner
+use the existing `system@` alias `MailAccountReconciler` already points at
+the owner's mailbox, so the delivery path is authelia@ → SMTP → Stalwart →
+system@ alias → owner's inbox. **Deferred to the live-box verification of
+C27:** proving that a password-reset email actually arrives, and that
+Authelia recreates cleanly with the new SMTP env on the next `up.sh`.
+
+## D · Repo and docs
+
+### D1 · [polish] `Essence.md` is orphaned
+The file is `Essence.md` at the repo root (mixed case), referenced from no
+README, no docs index, and no CONTRIBUTING. **Fix:** rename to `ESSENCE.md`,
+link it from the top of `README.md` and `docs/ARCHITECTURE.md` as the document
+that outranks the rest.
+
+### D2 · [polish] README package table is stale
+It lists 12 packages; the repo ships 18 (missing `bulwark`, `filebrowser`,
+`jellyfin`, `memos`, `roundcube`, `snappymail`), and the catalogue shows 17.
+**Fix:** generate the table from the manifests in CI, or check it in CI.
+
+---
+
+## Working rules for the loop
+
+- One item per commit. Message: `fix(<area>): <title>` referencing the ID.
+- Tick the box in the scoreboard **in the same commit** as the fix.
+- Gates before every commit: backend `mvn -q test`, `vue-tsc --noEmit`,
+  `npm run test:unit`, plus `shellcheck` for shell changes.
+- Anything that changes the install path must be re-verified against the live
+  box (rebuild image → `docker compose up -d` → walk the affected screen).
+- Product-judgement forks (which webmail is the default; whether SSO stays a
+  wizard step) get written into the item and left for the owner rather than
+  guessed.

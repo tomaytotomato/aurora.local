@@ -1,10 +1,9 @@
 name: photos
 title: Photos (Immich)
 description: |
-  Self-hosted photo & video backup with mobile apps, timeline, faces,
-  and search. Immich server + microservices + Postgres (pgvecto.rs) +
-  Redis + a machine-learning worker for CLIP / face detection.
-
+  Your own photo library. The phone app backs up as you take pictures, then
+  sorts by date, place and face — the parts you would pay a subscription for
+  elsewhere, on hardware you own.
 category: productivity
 icon: immich
 

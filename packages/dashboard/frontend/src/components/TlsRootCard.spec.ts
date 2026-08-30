@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { webcrypto } from 'node:crypto';
 
@@ -34,6 +34,13 @@ beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto);
 });
 
+afterEach(() => {
+  // The insecure-context case stubs crypto to {}. Without this, that stub
+  // survives into whatever runs next in the same worker and the fingerprint
+  // test fails intermittently — which it did, exactly once, before this.
+  vi.unstubAllGlobals();
+});
+
 function stubFetchWithPem(pem: string): void {
   vi.stubGlobal(
     'fetch',
@@ -51,7 +58,7 @@ describe('TlsRootCard', () => {
   it('renders the download link at the same API path as onboarding', async () => {
     stubFetchWithPem(REAL_PEM);
     const w = mount(TlsRootCard);
-    await flushAll();
+    await flushAll(w);
 
     const dl = w.get('[data-test="tls-root-download"]');
     // Matches OnboardingApi.caddyRootCaUrl() so operators who
@@ -64,7 +71,7 @@ describe('TlsRootCard', () => {
   it('computes the DER-based SHA-256 fingerprint that matches openssl', async () => {
     stubFetchWithPem(REAL_PEM);
     const w = mount(TlsRootCard);
-    await flushAll();
+    await flushAll(w);
 
     const fp = w.get('[data-test="tls-root-fingerprint"]').text();
     // Colon-separated uppercase hex, matching Firefox's cert-info
@@ -74,13 +81,29 @@ describe('TlsRootCard', () => {
     expect(fp).toBe(REAL_FINGERPRINT);
   });
 
+  it('over plain http, offers the download and explains the missing fingerprint instead of erroring', async () => {
+    // Browsers do not expose crypto.subtle on an insecure origin, which is
+    // exactly where a new box is reached: http://aurora.local. The card
+    // used to render "Aurora couldn't read the TLS root certificate just
+    // now" — a red failure on the one card whose job is ending browser
+    // warnings, while the certificate itself downloaded fine.
+    vi.stubGlobal('crypto', {});
+    stubFetchWithPem(REAL_PEM);
+    const w = mount(TlsRootCard);
+    await flushAll(w);
+
+    expect(w.find('[data-test="tls-root-error"]').exists()).toBe(false);
+    expect(w.get('[data-test="tls-root-insecure"]').text()).toMatch(/ready to download/i);
+    expect(w.get('[data-test="tls-root-download"]').attributes('href')).toBe('/api/system/caddy-root.crt');
+  });
+
   it('shows an error state when the endpoint fails', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({ ok: false, status: 503 } as unknown as Response)),
     );
     const w = mount(TlsRootCard);
-    await flushAll();
+    await flushAll(w);
 
     expect(w.get('[data-test="tls-root-error"]').text()).toMatch(/read the tls root certificate/i);
     // No fingerprint in an error state — better to say nothing than
@@ -90,13 +113,16 @@ describe('TlsRootCard', () => {
 });
 
 // The card's mount flow has three sequential awaits (fetch →
-// arrayBuffer → crypto.subtle.digest), and Vue schedules a render
-// after each ref write. One flushPromises() unblocks the microtask
-// queue once; we need enough passes to drain all three plus the
-// final render, otherwise the assertions run while the card is
-// still in its loading skeleton.
-async function flushAll(): Promise<void> {
-  for (let i = 0; i < 6; i++) {
+// arrayBuffer → crypto.subtle.digest), and Vue schedules a render after
+// each ref write. A fixed number of flushPromises() passes was enough
+// most of the time and failed intermittently under load — the assertions
+// ran while the card was still showing its loading skeleton. Poll for the
+// loading state to clear instead: same intent, no race.
+async function flushAll(w?: { html: () => string }): Promise<void> {
+  for (let i = 0; i < 50; i++) {
     await flushPromises();
+    // Scoped to this wrapper: @vue/test-utils leaves earlier mounts in the
+    // document, so a document-wide probe can answer about the wrong card.
+    if (w && !w.html().includes('data-state="loading"')) return;
   }
 }

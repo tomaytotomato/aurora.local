@@ -20,8 +20,14 @@ jobs:
       - name: shellcheck
         run: |
           shopt -s nullglob
-          files=(bootstrap.sh scripts/*.sh scripts/lib/*.sh)
+          files=(bootstrap.sh scripts/*.sh scripts/lib/*.sh scripts/tests/*.sh)
           shellcheck -x -S style -e SC1091 "${files[@]}"
+      - name: shell unit tests
+        run: ./scripts/tests/net.test.sh
+      - name: README package table is current
+        run: |
+          pip install --quiet pyyaml
+          ./scripts/gen-package-table.py --check
 
   yaml:
     name: yamllint
@@ -291,6 +297,10 @@ jobs:
           file: packages/dashboard/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            AURORA_BUILD_REVISION=${{ github.sha }}
+            AURORA_BUILD_DATE=${{ github.event.repository.updated_at }}
+            AURORA_BUILD_VERSION=${{ github.ref_name }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

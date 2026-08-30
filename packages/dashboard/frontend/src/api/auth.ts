@@ -29,6 +29,22 @@ export const AuthApi = {
     const { data } = await http.post<Session>('/auth/login', { username, password });
     return data;
   },
+  /**
+   * Spend a recovery code: set a new password, receive the replacement code.
+   * Public endpoint — the caller is by definition someone who cannot sign in.
+   */
+  async recover(username: string, code: string, newPassword: string): Promise<string> {
+    const { data } = await http.post<{ ok: boolean; recoveryCode: string }>(
+      '/auth/recover', { username, code, newPassword });
+    return data.recoveryCode;
+  },
+
+  async recoveryStatus(): Promise<{ issued: boolean; issuedAt: string | null }> {
+    const { data } = await http.get<{ issued: boolean; issuedAt: string | null }>(
+      '/auth/recovery-status');
+    return data;
+  },
+
   async logout(): Promise<LogoutResponse> {
     const { data } = await http.post<LogoutResponse>('/auth/logout');
     return data;

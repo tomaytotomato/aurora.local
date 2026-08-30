@@ -1,10 +1,9 @@
 name: ai
 title: Local AI (Ollama + Open-WebUI)
 description: |
-  Local LLM inference via Ollama with Open-WebUI as the chat front-end.
-  Runs on CPU by default; opt-in NVIDIA GPU passthrough via the 'gpu'
-  compose profile (requires the gpu-nvidia host role, TBD).
-
+  Runs a chat assistant on this box instead of sending your questions to
+  someone else's servers. Works on the processor alone, which is slower than
+  a cloud service but private and free. A graphics card makes it quick.
 category: ai
 icon: ollama
 

@@ -10,6 +10,7 @@ import org.mockito.Mockito;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UnpinnedImageTagsRuleTests {
@@ -75,24 +76,38 @@ class UnpinnedImageTagsRuleTests {
   }
 
   @Test
-  void latest_tag_flagged_HIGH() {
+  void latest_tag_flagged_MEDIUM() {
     Container sonarr = container("aurora-media-sonarr", "linuxserver/sonarr:latest");
     var got = new UnpinnedImageTagsRule(dockerWith(List.of(sonarr))).evaluate();
     assertEquals(1, got.size());
-    assertEquals(SecurityFinding.HIGH, got.get(0).severity());
+    assertEquals(SecurityFinding.MEDIUM, got.get(0).severity());
     assertEquals("unpinned_image_tags:aurora-media-sonarr", got.get(0).id());
     assertTrue(got.get(0).description().contains(":latest"),
         "description should call out the :latest tag: " + got.get(0).description());
   }
 
   @Test
-  void floating_tag_flagged_MEDIUM() {
+  void floating_tag_flagged_LOW() {
     Container pg = container("aurora-docs-postgres", "postgres:16");
     var got = new UnpinnedImageTagsRule(dockerWith(List.of(pg))).evaluate();
     assertEquals(1, got.size());
-    assertEquals(SecurityFinding.MEDIUM, got.get(0).severity());
-    assertTrue(got.get(0).description().contains("floating tag"),
-        "description should mention floating tag: " + got.get(0).description());
+    // Aurora ships this compose file: the box was born in this state and
+    // there is nothing the owner can do about it. That is not HIGH, and it
+    // is not MEDIUM either.
+    assertEquals(SecurityFinding.LOW, got.get(0).severity());
+    assertTrue(got.get(0).description().contains("tag that can move"),
+        "description should say what it means in plain words: " + got.get(0).description());
+  }
+
+  @Test
+  void copy_is_addressed_to_the_owner_not_to_an_engineer() {
+    Container sonarr = container("aurora-media-sonarr", "linuxserver/sonarr:latest");
+    var f = new UnpinnedImageTagsRule(dockerWith(List.of(sonarr))).evaluate().get(0);
+    assertTrue(f.title().startsWith("Aurora media sonarr"), "title: " + f.title());
+    assertFalse(f.description().contains("@sha256"),
+        "must not tell a non-technical owner to pin a digest: " + f.description());
+    assertTrue(f.description().contains("nothing for you to do"),
+        "must say who owns the fix: " + f.description());
   }
 
   @Test
@@ -113,9 +128,9 @@ class UnpinnedImageTagsRuleTests {
     assertEquals(2, got.size());
     // Order is source order; no aggregation.
     assertEquals("unpinned_image_tags:aurora-homepage", got.get(0).id());
-    assertEquals(SecurityFinding.HIGH, got.get(0).severity());
+    assertEquals(SecurityFinding.MEDIUM, got.get(0).severity());
     assertEquals("unpinned_image_tags:aurora-photos-immich", got.get(1).id());
-    assertEquals(SecurityFinding.MEDIUM, got.get(1).severity());
+    assertEquals(SecurityFinding.LOW, got.get(1).severity());
   }
 
   @Test

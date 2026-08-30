@@ -129,6 +129,61 @@ paths:
         '204': { description: Password rotated. }
         '400': { description: New password is too short, matches the current one, or was rejected by the user-service validator. }
         '401': { description: Not signed in, or the current password did not verify. }
+  /auth/recover:
+    post:
+      tags: [auth]
+      summary: Set a new password using the box's recovery code
+      security: []
+      description: >-
+        The way back into a box whose password has been lost. The recovery
+        code is issued once, with the admin account, and shown on the
+        wizard's admin step. Redeeming it sets a new password and returns a
+        replacement code, so the box is never left without one; the redeemed
+        code stops working immediately. Public by necessity — the caller
+        cannot sign in — and a wrong username is answered identically to a
+        wrong code so this cannot be used to enumerate accounts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, code, newPassword]
+              properties:
+                username: { type: string }
+                code: { type: string, description: The six-word recovery code. Case and separators are normalised. }
+                newPassword: { type: string, minLength: 12 }
+      responses:
+        '200':
+          description: Password set; a replacement recovery code is returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  recoveryCode: { type: string }
+        '400': { description: The new password is shorter than 12 characters. }
+        '401': { description: That username and recovery code do not match. }
+  /auth/recovery-status:
+    get:
+      tags: [auth]
+      summary: Whether this box has a recovery code at all
+      security: []
+      description: >-
+        Lets the sign-in page decide whether to offer "Forgot your
+        password?". Offering a form that cannot succeed would be the same
+        broken promise the recovery code replaces.
+      responses:
+        '200':
+          description: Status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issued: { type: boolean }
+                  issuedAt: { type: string, nullable: true, format: date-time }
 
   # ──────────────────────────── onboarding ────────────────────────────
   /onboarding:
@@ -489,6 +544,56 @@ paths:
         '403': { description: Signed in but not an admin. }
         '404': { description: No such mailbox. }
         '502': { description: The mail server is not reachable. }
+
+  # ─────────────────────────── start over (A8) ─────────────────────────
+  /reset:
+    post:
+      tags: [reset]
+      summary: Wipe this box back to a clean clone
+      description: >-
+        The button-shaped equivalent of `bash scripts/reset.sh`. Aurora
+        spawns a detached helper container that, a few seconds after this
+        response returns, tears down every aurora container, deletes
+        `data/`, and clears every `packages/*/.env` and `.state.yml`.
+        The repo, docker itself, the OS and the firewall are left alone.
+
+
+        Admin-only. The request body must carry the literal string
+        "RESET" — a case-exact match — so that a misclick or a stray
+        curl cannot wipe the box. Returns 202 as soon as the helper is
+        launched; the dashboard itself is gone shortly after, so any
+        follow-up call will fail. Bringing Aurora back is a single
+        `bash bootstrap.sh install` from a terminal on the box.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  description: Must be the literal string "RESET".
+      responses:
+        '202':
+          description: Reset accepted; helper container launched.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [helperId]
+                properties:
+                  helperId:
+                    type: string
+                    description: >-
+                      Docker id of the helper container. Not shown to the
+                      operator; useful in bug reports for cross-referencing
+                      `docker logs` on the box.
+        '400': { description: Confirmation missing or not the exact word "RESET". }
+        '401': { description: Not signed in. }
+        '403': { description: Signed in but not an admin. }
+        '500': { description: Aurora could not start the helper; nothing has been destroyed. }
 
   # ───────────────────────────── packages ─────────────────────────────
   /packages:
@@ -967,6 +1072,160 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Disk' }
+  /disks/network:
+    get:
+      tags: [disks]
+      summary: Storage found on the LAN that is not this box
+      description: >-
+        A NAS, another server, or a spare machine sharing a folder.
+        Discovered by listening to the mDNS announcements this box already
+        receives — Synology, QNAP, TrueNAS, unRAID and a plain Samba
+        install all advertise `_smb._tcp` out of the box. It does **not**
+        sweep the subnet for open ports: a box that quietly probes every
+        address on someone's home network is not something to install on
+        trust, and it trips intrusion detection on exactly the appliances
+        being looked for.
+
+
+        Returns an empty array for a network with nothing on it, for a box
+        with no mDNS stack, and for any failure — all of which are honestly
+        "found nothing" rather than an error.
+      responses:
+        '200':
+          description: Devices found. Possibly none.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NetworkStorageDevice' }
+  /disks/network/shares:
+    post:
+      tags: [disks]
+      summary: What folders a network device is offering
+      description: >-
+        POST rather than GET because credentials travel in the body: a
+        share listing with a password in the query string ends up in access
+        logs and browser history.
+
+
+        Credentials are optional — most NAS boxes allow a guest listing, and
+        asking for a username before we know one is needed is a wall in
+        front of a door that is already open. A refused login is reported in
+        the body as `denied`, never as a 401: a wrong NAS password is not an
+        Aurora authentication failure, and a 401 here would log the operator
+        out of the dashboard.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address: { type: string }
+                username: { type: [string, 'null'] }
+                password: { type: [string, 'null'] }
+      responses:
+        '200':
+          description: The outcome of asking. Not all outcomes are successes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [outcome, shares]
+                properties:
+                  outcome:
+                    type: string
+                    description: >-
+                      `credentials-required` and `denied` are deliberately
+                      separate: "sign in" and "you got that wrong" need
+                      different things from a person.
+                    enum: [ok, credentials-required, denied, unreachable]
+                  shares:
+                    type: array
+                    items:
+                      type: object
+                      required: [name]
+                      properties:
+                        name: { type: string }
+                        comment: { type: [string, 'null'] }
+                  detail:
+                    type: [string, 'null']
+                    description: Plain-language explanation when the outcome is not ok.
+        '400': { description: No address given. }
+  /disks/network/mounts:
+    get:
+      tags: [disks]
+      summary: Folders on network devices this box has attached
+      responses:
+        '200':
+          description: Attached folders. Possibly none.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NetworkMount' }
+    post:
+      tags: [disks]
+      summary: Attach a folder from a network device
+      description: >-
+        Creates a CIFS docker volume, then proves it by mounting it once
+        with a throwaway container and reading it. Docker will create such a
+        volume happily whether or not the credentials are right — nothing is
+        mounted until something uses it — so reporting success at creation
+        time would tell the owner it worked and leave them to discover
+        otherwise when an app fails to start days later.
+
+
+        Returns 200 with `ok: false` for the things the owner can fix (wrong
+        password, wrong folder, device asleep). Those are answers to the
+        question they asked, not malformed requests, and a 401 in particular
+        would log them out of the dashboard.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address, share]
+              properties:
+                label: { type: [string, 'null'], description: What to call it on screen. }
+                address: { type: string }
+                share: { type: string }
+                username: { type: [string, 'null'] }
+                password: { type: [string, 'null'] }
+                readOnly:
+                  type: boolean
+                  description: >-
+                    Mount without write access, so a compromised app cannot
+                    delete the owner's files.
+      responses:
+        '200':
+          description: Whether it attached, and why not if it did not.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+                  mount: { $ref: '#/components/schemas/NetworkMount' }
+                  detail:
+                    type: [string, 'null']
+                    description: Plain-language reason, written for the owner.
+        '400': { description: No body. }
+  /disks/network/mounts/{id}:
+    delete:
+      tags: [disks]
+      summary: Detach a folder and forget it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Detached; the volume is removed. }
+        '404': { description: Nothing attached under that id. }
   /disks/pool:
     get:
       tags: [disks]
@@ -2412,6 +2671,14 @@ components:
         # a category tile, so the card never breaks on a missing logo.
         icon:
           type: [string, 'null']
+        # "One clear choice per job": which job this app does when several
+        # do the same one, and whether this is the recommended answer. The
+        # manifests carried these long before anything read them, which is
+        # why three webmails presented as three equal options.
+        variantGroup:
+          type: [string, 'null']
+        variantDefault:
+          type: [boolean, 'null']
         # The five fields below were served by the backend and documented
         # nowhere, so every packages response had to be stripped before it
         # could be validated. The frontend reads all of them, so the spec
@@ -3312,6 +3579,63 @@ components:
           description: >
             Gates /disks. False until the backend can read smartctl and
             the mergerfs/snapraid state.
+    NetworkMount:
+      type: object
+      description: >-
+        A folder on a network device, attached to this box as a docker
+        volume. The password is deliberately absent: it lives in the volume
+        definition, and copying it here would put the same secret in a
+        second place for no gain.
+      required: [id, label, address, share, volume, readOnly]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        address: { type: string }
+        share: { type: string }
+        username: { type: [string, 'null'] }
+        volume:
+          type: string
+          description: The docker volume name, prefixed so `docker volume ls` explains itself.
+        readOnly: { type: boolean }
+    NetworkStorageDevice:
+      type: object
+      description: >-
+        Something on the LAN that offers file storage. Deliberately not
+        called a "NAS": the same shape covers a Synology, a Raspberry Pi
+        running Samba, or a Mac with sharing switched on.
+      required: [name, address, protocols, reachable]
+      properties:
+        name:
+          type: string
+          description: The name the device advertises for itself. Never invented.
+        host:
+          type: [string, 'null']
+          description: mDNS hostname, when it advertised one.
+        address: { type: string }
+        protocols:
+          type: array
+          description: Sharing protocols it advertises, in the order Aurora would prefer them.
+          items:
+            type: object
+            required: [kind, port]
+            properties:
+              kind:
+                type: string
+                enum: [smb, nfs, afp, time-machine]
+              port: { type: integer }
+        model:
+          type: [string, 'null']
+          description: >-
+            What the device published about itself, when it published
+            anything. Null rather than guessed from the hostname — a wrong
+            badge is worse than no badge.
+        reachable:
+          type: boolean
+          description: >-
+            Whether the advertised port answered a connection just now.
+            Kept separate from the advertisement because a device that is
+            asleep keeps advertising, and merging the two into one
+            optimistic boolean would be a claim Aurora cannot support.
     SystemInfo:
       type: object
       required: [capabilities]
@@ -3329,6 +3653,19 @@ components:
         diskUsedBytes: { type: [integer, 'null'] }
         dockerVersion: { type: [string, 'null'] }
         containerCount: { type: [integer, 'null'] }
+        build:
+          type: object
+          description: >-
+            Which build of Aurora is running, stamped into the image at
+            build time. Every field is null when the image was built
+            without those stamps — honest, rather than a fabricated
+            version. Exists because a box could not previously say which
+            commit it was on, while the published :0.1.0 tag drifted days
+            behind main under the same name.
+          properties:
+            version: { type: [string, 'null'] }
+            revision: { type: [string, 'null'] }
+            builtAt: { type: [string, 'null'] }
         capabilities: { $ref: '#/components/schemas/SystemCapabilities' }
     MetricSample:
       type: object

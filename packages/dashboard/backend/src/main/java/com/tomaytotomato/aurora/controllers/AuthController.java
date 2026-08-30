@@ -3,6 +3,7 @@ package com.tomaytotomato.aurora.controllers;
 import com.tomaytotomato.aurora.domain.AdminUser;
 import com.tomaytotomato.aurora.domain.RepoState;
 import com.tomaytotomato.aurora.services.AuthService;
+import com.tomaytotomato.aurora.services.RecoveryCodeService;
 import com.tomaytotomato.aurora.services.CurrentUserService;
 import com.tomaytotomato.aurora.services.SessionService;
 import com.tomaytotomato.aurora.services.StateFileService;
@@ -38,16 +39,59 @@ public class AuthController {
   private final SessionService sessions;
   private final CurrentUserService currentUser;
   private final UsersService users;
+  private final RecoveryCodeService recovery;
 
   public AuthController(AuthService auth, StateFileService stateFiles,
                         SessionService sessions, CurrentUserService currentUser,
-                        UsersService users) {
+                        UsersService users, RecoveryCodeService recovery) {
     this.auth = auth;
     this.stateFiles = stateFiles;
     this.sessions = sessions;
     this.currentUser = currentUser;
     this.users = users;
+    this.recovery = recovery;
   }
+
+  /**
+   * Spend the recovery code shown when the account was created: set a new
+   * password, get a fresh code back.
+   *
+   * <p>Public by necessity — the caller is, by definition, someone who
+   * cannot sign in. What protects it is the code itself, which is six words
+   * from a 128-word list (~42 bits) and single-use.
+   *
+   * <p>A wrong username and a wrong code return exactly the same 401, so
+   * this cannot be used to find out which usernames exist.
+   */
+  @PostMapping("/recover")
+  public RecoveryResult recover(@Valid @RequestBody RecoverReq req) {
+    Optional<String> next;
+    try {
+      next = recovery.redeem(req.username(), req.code(), req.newPassword());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+    if (next.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+          "that username and recovery code do not match");
+    }
+    return new RecoveryResult(true, next.get());
+  }
+
+  /** Whether a recovery code exists at all, so the sign-in page knows what to offer. */
+  @GetMapping("/recovery-status")
+  public RecoveryStatus recoveryStatus() {
+    return new RecoveryStatus(recovery.isIssued(), recovery.issuedAt().orElse(null));
+  }
+
+  public record RecoverReq(
+      @NotBlank String username,
+      @NotBlank String code,
+      @NotBlank String newPassword) {}
+
+  public record RecoveryResult(boolean ok, String recoveryCode) {}
+
+  public record RecoveryStatus(boolean issued, String issuedAt) {}
 
   @PostMapping("/login")
   public Session login(@Valid @RequestBody LoginReq req, HttpServletRequest request) {

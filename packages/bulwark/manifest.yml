@@ -1,12 +1,8 @@
 name: bulwark
 title: Bulwark (webmail)
 description: |
-  Bulwark is a self-hosted webmail suite (mail + calendar + contacts +
-  files) built for the JMAP protocol and Stalwart. A front end only — the
-  mail server (Stalwart) lives in the core stack; this connects to it over
-  JMAP on aurora_net. Alternative to Roundcube in the `webmail` group;
-  Roundcube remains the default.
-
+  Mail, calendar and contacts in one place, for the mailboxes on this box.
+  It is the front end only — the mail itself lives in Aurora's core.
 category: productivity
 icon: bulwark
 

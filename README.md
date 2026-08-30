@@ -2,6 +2,10 @@
 
 Opinionated and simple home server setup to allow you to get the basics up and running.
 
+**Start here:** [`ESSENCE.md`](ESSENCE.md) — what this is, who it is for, and the
+two principles (zero terminal, honest state) that outrank everything else in
+this repo, including this README.
+
 This project is a formalisation of the last year of me tinkering around with a home server.
 
 It has a list of applications and configurations that have worked for me, and hopefully will work for you.
@@ -75,22 +79,32 @@ categories, and post-install notes. `bootstrap.sh` and `scripts/*.sh`
 use those manifests to resolve installs and render status output; the
 dashboard catalogue uses them to install packages after onboarding.
 
-Current packages:
+Current packages (generated from the manifests by
+`./scripts/gen-package-table.py`; CI checks it is current):
 
-| Package         | Category         | What                                                                       |
-|-----------------|------------------|----------------------------------------------------------------------------|
-| core            | core             | Caddy (HTTPS + reverse proxy) + Authelia SSO/2FA. Aurora (`packages/dashboard`) is the dashboard |
-| privacy         | privacy          | AdGuard Home (LAN DNS) + Gluetun (VPN sidecar)                             |
-| media           | media            | Sonarr, Radarr, Bazarr, Prowlarr, Seerr, RDTClient, SABnzbd, qBittorrent |
-| storage         | storage          | Samba + MiniDLNA                                                           |
-| monitoring      | monitoring       | Prometheus + Grafana + node_exporter + cAdvisor + Uptime-Kuma              |
-| backup          | storage          | Kopia (dedup backup with Web UI)                                           |
-| photos          | productivity     | Immich                                                                     |
-| documents       | productivity     | Paperless-ngx + Stirling-PDF                                               |
-| notes           | productivity     | SilverBullet                                                               |
-| dev             | dev              | code-server + Postgres 16 + Redis 7                                        |
-| ai              | ai               | Ollama + Open-WebUI (CPU default, `--gpu` opt-in NVIDIA)                   |
-| home-automation | home-automation  | Home Assistant + Mosquitto + Zigbee2MQTT (`--zigbee`)                      |
+<!-- package-table:start -->
+| Package | Category | What |
+|---------|----------|------|
+| `ai` | ai | Local AI (Ollama + Open-WebUI) |
+| `backup` | backup | Backup (Kopia) |
+| `bulwark` | productivity | Bulwark (webmail) |
+| `core` | core | Core (dashboard + reverse proxy) |
+| `dashboard` | core | Aurora — admin dashboard |
+| `dev` | dev | Dev sandbox (code-server + Postgres + Redis) |
+| `documents` | productivity | Documents (Paperless-ngx + Stirling-PDF) |
+| `filebrowser` | storage | Files (FileBrowser) |
+| `home-automation` | home-automation | Home automation (Home Assistant + MQTT + Zigbee2MQTT) |
+| `jellyfin` | media | Media server (Jellyfin) |
+| `media` | media | Media automation (*arr + requests + downloaders) |
+| `memos` | productivity | Notes (Memos) |
+| `monitoring` | monitoring | Monitoring (Prometheus + Grafana + Uptime-Kuma) |
+| `notes` | productivity | Notes (SilverBullet) |
+| `photos` | productivity | Photos (Immich) |
+| `privacy` | privacy | Privacy (LAN DNS + VPN) |
+| `roundcube` | productivity | Roundcube (webmail) |
+| `snappymail` | productivity | SnappyMail (webmail) |
+| `storage` | storage | LAN file sharing (SMB + DLNA) |
+<!-- package-table:end -->
 
 Adding a new one is a copy of `packages/_template/` and a
 `./bootstrap.sh add <name>` away.

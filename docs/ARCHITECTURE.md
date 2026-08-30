@@ -1,5 +1,8 @@
 # Architecture
 
+> Read [`../ESSENCE.md`](../ESSENCE.md) first. This document describes how
+> aurora is built; that one describes what it is for, and outranks it.
+
 Four diagrams: layered stack, bootstrap sequence, request flow, and the
 control plane — which is the one to read first if you are asking "what
 actually drives what".

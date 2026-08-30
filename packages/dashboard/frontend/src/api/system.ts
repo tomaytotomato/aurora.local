@@ -27,7 +27,17 @@ export interface SystemCapabilities {
   customStacks?: boolean;
 }
 
+export interface BuildInfo {
+  /** Release tag or 'dev'. Null when the image was built without stamps. */
+  version: string | null;
+  /** Git commit the image was built from. */
+  revision: string | null;
+  /** ISO timestamp of the build. */
+  builtAt: string | null;
+}
+
 export interface SystemInfo {
+  build?: BuildInfo | null;
   hostname: string | null;
   domain: string | null;
   lanIp: string | null;

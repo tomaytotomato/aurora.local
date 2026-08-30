@@ -22,6 +22,7 @@ const COPY: Record<StatusLightState, { label: string; tone: BadgeVariants['tone'
   stopped: { label: 'Stopped', tone: 'neutral' },
   starting: { label: 'Starting…', tone: 'warn' },
   unhealthy: { label: 'Unhealthy', tone: 'err' },
+  'needs-setup': { label: 'Needs setup', tone: 'warn' },
   'not-installed': { label: 'Not installed', tone: 'neutral' },
   unknown: { label: 'Unknown', tone: 'neutral' },
 };

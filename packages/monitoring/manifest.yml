@@ -1,12 +1,9 @@
 name: monitoring
 title: Monitoring (Prometheus + Grafana + Uptime-Kuma)
 description: |
-  Prometheus scrapes node_exporter (host) and cAdvisor (containers),
-  Grafana visualises with an auto-provisioned Prometheus datasource,
-  and Uptime-Kuma provides blackbox HTTP health checks. Comes with a
-  ready-to-go dashboards folder — drop JSON dashboards into
-  grafana/provisioning/dashboards/ and they load on start.
-
+  Charts for the curious: how hard this box is working, how much room is
+  left, whether anything has been down. Nothing here is needed for the box to
+  run well.
 category: monitoring
 icon: grafana
 

@@ -1,14 +1,9 @@
 name: aurora-automation
 title: Home automation (Home Assistant + MQTT + Zigbee2MQTT)
 description: |
-  Home Assistant for automations, Mosquitto as the MQTT broker, and
-  Zigbee2MQTT (opt-in via 'zigbee' profile) to bridge a Zigbee USB
-  coordinator (CC2531, Sonoff ZBDongle-P/E, etc.) onto MQTT.
-
-  Home Assistant runs with network_mode: host — this is standard
-  practice and required for many local-discovery integrations (mDNS,
-  SSDP, HomeKit, Chromecast). It is therefore NOT attached to aurora_net.
-
+  Runs the lights, heating, sensors and switches in your home, locally. Keeps
+  working when the internet is down, and does not report to a manufacturer.
+  Zigbee devices need a USB stick, which you can add later.
 category: home-automation
 icon: home-assistant
 

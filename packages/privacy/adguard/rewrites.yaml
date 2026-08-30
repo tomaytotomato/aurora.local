@@ -9,12 +9,16 @@
 # can splice it in verbatim.
 
 rewrites:
+  # ${DOMAIN} and ${LAN_IP} are substituted by scripts/seed-adguard.sh from
+  # this box's own state — they used to be one particular box's name and
+  # address, checked into the repo.
+
   # Base LAN domain resolves to the box itself.
-  - domain: aurora.local
-    answer: 192.168.0.110
+  - domain: ${DOMAIN}
+    answer: ${LAN_IP}
     enabled: true
 
-  # Wildcard: every service Caddy exposes on *.aurora.local.
-  - domain: '*.aurora.local'
-    answer: 192.168.0.110
+  # Wildcard: every service Caddy exposes on *.${DOMAIN}.
+  - domain: '*.${DOMAIN}'
+    answer: ${LAN_IP}
     enabled: true

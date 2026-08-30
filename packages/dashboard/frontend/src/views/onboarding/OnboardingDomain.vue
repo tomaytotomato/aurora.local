@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useOnboardingStore } from '@/stores/onboarding';
+import { STEP_LABELS } from '@/stores/onboarding';
 import { MANDATORY_FIRST_RUN_PACKAGES } from '@/api/packages';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
@@ -16,6 +17,12 @@ const router = useRouter();
 const domain = ref(store.domain);
 watch(() => store.domain, (v) => { if (v && v !== domain.value) domain.value = v; });
 const err = ref<string | null>(null);
+
+// Name the step, never its number. This line used to read "(step 7)" while
+// the TLS step was 5 and 7 was SSO — a hardcoded index that went stale the
+// moment the step list changed, on a card whose whole job is telling the
+// user what happens next.
+const tlsStepLabel = STEP_LABELS.tls;
 
 const domainOk = (d: string): boolean => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(d);
 
@@ -89,10 +96,10 @@ async function proceed(): Promise<void> {
     <div class="border border-border rounded-lg p-5 mb-8 bg-muted/50">
       <div class="eyebrow mb-2">What changes if you edit this</div>
       <ul class="text-sm text-muted-foreground space-y-1.5">
-        <li>Caddy vhosts are re-issued for the new apex.</li>
-        <li>Every <code>.env</code> that references <code>${'{'}DOMAIN{'}'}</code> re-renders.</li>
-        <li>AdGuard DNS rewrites are updated.</li>
-        <li>You'll need to trust the new TLS root (step 7).</li>
+        <li>Every app moves to a new address, like <code>photos.{{ domain }}</code>.</li>
+        <li>Aurora re-issues the certificates that keep those addresses private.</li>
+        <li>DNS on this box starts pointing the new name at it.</li>
+        <li>You'll need to trust the new certificate, on the <em>{{ tlsStepLabel }}</em> step.</li>
       </ul>
     </div>
 

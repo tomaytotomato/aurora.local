@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { AuthApi } from '@/api/auth';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { humanCopyForStatus, httpStatusFromError } from '@/lib/http-error-copy';
 import { safeRedirect } from '@/lib/safeRedirect';
@@ -22,12 +23,55 @@ const password = ref('');
 const err = ref<string | null>(null);
 const busy = ref(false);
 
+// ── Recovery ──────────────────────────────────────────────────────────
+// The way back in for someone who has lost the password. Before this, the
+// only route was scripts/reset-admin-password.sh over SSH, on a product
+// whose first principle is that reaching for a terminal is a defect.
+const showRecovery = ref(false);
+const recoveryAvailable = ref(false);
+const recoveryUsername = ref('');
+const recoveryCodeInput = ref('');
+const recoveryNewPassword = ref('');
+const recoveryErr = ref<string | null>(null);
+const recoveryBusy = ref(false);
+const recoveryNextCode = ref<string | null>(null);
+
+async function submitRecovery(): Promise<void> {
+  recoveryErr.value = null;
+  if (recoveryNewPassword.value.length < 12) {
+    recoveryErr.value = 'Choose a new password of at least 12 characters.';
+    return;
+  }
+  recoveryBusy.value = true;
+  try {
+    recoveryNextCode.value = await AuthApi.recover(
+      recoveryUsername.value.trim(), recoveryCodeInput.value, recoveryNewPassword.value);
+    // Prefill the sign-in form so the next step is one click.
+    username.value = recoveryUsername.value.trim();
+    password.value = '';
+  } catch (e) {
+    const status = httpStatusFromError(e);
+    recoveryErr.value = status === 401
+      ? "That username and recovery code don't match."
+      : "Aurora couldn't reset the password just now.";
+  } finally {
+    recoveryBusy.value = false;
+  }
+}
+
 // Onboarding CTA gate: only surface the "Start onboarding" link when the
 // wizard is not yet complete (or the box is in bootstrap_mode from a
 // half-run install). Post-install that path is closed and just confuses
 // the operator. /login is `public: true` so the router guard may fail-
 // open without populating the store — hydrate explicitly on mount.
 onMounted(async () => {
+  // Only offer recovery when a code actually exists on this box: a link to
+  // a form that cannot succeed is the same broken promise this replaces.
+  try {
+    recoveryAvailable.value = (await AuthApi.recoveryStatus()).issued;
+  } catch {
+    recoveryAvailable.value = false;
+  }
   if (!onboarding.hydrated) {
     try {
       await onboarding.hydrate();
@@ -130,6 +174,65 @@ async function submit(): Promise<void> {
           then, the login page shows only the door that actually works.
         -->
       </form>
+
+      <p
+        v-if="recoveryAvailable && !showRecovery"
+        class="mt-4 text-xs text-muted-foreground"
+      >
+        <button
+          type="button"
+          class="text-muted-foreground underline underline-offset-2"
+          data-test="forgot-password"
+          @click="showRecovery = true"
+        >Forgot your password?</button>
+      </p>
+
+      <!-- Recovery form. Deliberately on the sign-in page rather than
+           behind a link somewhere else: this is where a person is standing
+           when they discover the problem. -->
+      <div v-if="showRecovery" class="mt-6 border-t border-border pt-6" data-test="recovery-form">
+        <template v-if="recoveryNextCode">
+          <h2 class="text-base text-foreground mb-2">Password changed</h2>
+          <p class="text-xs text-muted-foreground mb-3">
+            Sign in with your new password. Here is your next recovery code —
+            the old one no longer works.
+          </p>
+          <code class="block font-mono text-sm text-foreground break-all mb-4" data-test="recovery-next-code">{{ recoveryNextCode }}</code>
+          <Button variant="secondary" size="sm" @click="showRecovery = false; recoveryNextCode = null">
+            Back to sign in
+          </Button>
+        </template>
+
+        <template v-else>
+          <h2 class="text-base text-foreground mb-2">Use your recovery code</h2>
+          <p class="text-xs text-muted-foreground mb-4">
+            The six words Aurora gave you when this box was set up.
+          </p>
+
+          <Alert v-if="recoveryErr" variant="destructive" class="mb-4">
+            <AlertDescription>{{ recoveryErr }}</AlertDescription>
+          </Alert>
+
+          <form class="space-y-3" @submit.prevent="submitRecovery">
+            <div>
+              <Label for="rec-user">Username</Label>
+              <Input id="rec-user" v-model="recoveryUsername" autocomplete="username" />
+            </div>
+            <div>
+              <Label for="rec-code">Recovery code</Label>
+              <Input id="rec-code" v-model="recoveryCodeInput" placeholder="six words" />
+            </div>
+            <div>
+              <Label for="rec-pw">New password</Label>
+              <Input id="rec-pw" v-model="recoveryNewPassword" type="password" autocomplete="new-password" />
+            </div>
+            <div class="flex items-center gap-2">
+              <Button type="submit" variant="primary" size="sm" :loading="recoveryBusy">Set new password</Button>
+              <Button type="button" variant="ghost" size="sm" @click="showRecovery = false">Cancel</Button>
+            </div>
+          </form>
+        </template>
+      </div>
 
       <p
         v-if="showOnboardingCta"

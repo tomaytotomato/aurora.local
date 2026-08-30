@@ -108,6 +108,16 @@ requires:
 required_env:
   - SONARR_API_KEY              # optional list; blank ok on first run
 
+# Values that exist somewhere else and can only be copied in — a VPN
+# provider's key, another app's API key. scripts/rotate-secrets.sh never
+# generates these: filling them with random bytes would look configured,
+# destroy the "not set yet" signal the dashboard reads, and change on every
+# run (which recreates the package's containers each time). NOT the same as
+# required_env: core *requires* AUTHELIA_JWT_SECRET and Aurora *generates*
+# it. Optional; a built-in pattern covers the obvious names.
+external_env:
+  - WIREGUARD_PRIVATE_KEY
+
 # Post-install one-liners printed to the user.
 post_install_notes: |
   Prowlarr indexers must be linked in Sonarr/Radarr Settings > Download Clients.

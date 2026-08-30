@@ -28,6 +28,9 @@ const launchJobId = ref<string | null>(null);
 const reachHostname = ref<string | null>(null);
 const reachLanIp = ref<string | null>(null);
 const reachDomain = computed<string | null>(() => store.domain ?? null);
+// Which DNS story the operator chose, so the router instruction below is
+// only shown to the people it applies to.
+const dnsMode = computed<string | null>(() => store.dnsMode ?? store.draft?.dns_mode ?? null);
 const launchState = ref<'idle' | 'running' | 'success' | 'failed'>('idle');
 const launchError = ref<string | null>(null);
 const starting = ref(false);
@@ -265,12 +268,37 @@ onMounted(async () => {
          /api/onboarding/env on mount below. -->
     <ReachInfo
       v-if="reachDomain || reachLanIp"
-      class="mb-8"
+      class="mb-6"
       :hostname="reachHostname"
       :domain="reachDomain"
       :lan-ip="reachLanIp"
+      scheme="https"
       variant="card"
     />
+
+    <!-- The DNS step promised "Show you how to point your router at it, on
+         the last screen". This is that screen, and until now it said
+         nothing — which left the one instruction that makes every app
+         reachable from phones, laptops and TVs unwritten. Only shown for
+         the AdGuard story: the other two put DNS somewhere else. -->
+    <section
+      v-if="dnsMode === 'adguard' && reachLanIp"
+      class="border border-border rounded-lg p-5 bg-muted/60 mb-8"
+      data-test="router-dns-card"
+    >
+      <div class="eyebrow mb-3">Cover every device in the house</div>
+      <p class="text-sm text-foreground mb-3">
+        Open your router's settings and set its DNS server to
+        <code class="font-mono bg-background px-1 py-0.5 rounded border border-border">{{ reachLanIp }}</code>.
+        Every phone, laptop and TV then finds your apps by name — and gets
+        ad-blocking for free.
+      </p>
+      <p class="text-xs text-muted-foreground">
+        It is usually under DHCP or LAN settings, labelled "DNS server".
+        Nothing breaks if you skip it: this box still works from the
+        addresses above, and you can do it any time.
+      </p>
+    </section>
 
     <div class="flex items-center justify-between border-t border-border pt-6">
       <div class="text-sm text-muted-foreground">

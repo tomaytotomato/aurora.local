@@ -2,11 +2,11 @@
 - name: Assert supported distro (Debian/Ubuntu only for now)
   ansible.builtin.assert:
     that:
-      - ansible_os_family == 'Debian'
+      - ansible_facts['os_family'] == 'Debian'
     fail_msg: >-
       aurora.local host roles currently support Debian/Ubuntu only
-      (detected {{ ansible_distribution }} {{ ansible_distribution_version }}
-      / family {{ ansible_os_family }}). TODO: add RHEL-family support
+      (detected {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+      / family {{ ansible_facts['os_family'] }}). TODO: add RHEL-family support
       (dnf, firewalld, etc.).
 
 - name: Set timezone

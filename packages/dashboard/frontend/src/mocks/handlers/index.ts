@@ -21,6 +21,7 @@ import { observabilityHandlers } from './observability';
 import { onboardingHandlers } from './onboarding';
 import { packagesHandlers } from './packages';
 import { proxyHandlers } from './proxy';
+import { resetHandlers } from './reset';
 import { servicesHandlers } from './services';
 import { systemHandlers } from './system';
 import { updatesHandlers } from './updates';
@@ -34,6 +35,7 @@ export const handlers = [
   ...packagesHandlers,
   ...networkHandlers,
   ...proxyHandlers,
+  ...resetHandlers,
   ...updatesHandlers,
   ...marketplaceHandlers,
   ...jobsHandlers,

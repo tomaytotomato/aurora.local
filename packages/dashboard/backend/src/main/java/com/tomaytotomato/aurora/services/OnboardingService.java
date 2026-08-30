@@ -59,13 +59,23 @@ public class OnboardingService {
   private final SystemService system;
   private final AuroraProperties props;
   private final PackageNameValidator packageNames;
+  /** Nullable in unit tests; see issueRecoveryCode(). */
+  private final RecoveryCodeService recoveryCodes;
+  /**
+   * Publishes the user-changed event the mail reconciler listens for.
+   * Nullable for the same reason as the field above: several suites build
+   * this service directly with nulls.
+   */
+  private final org.springframework.context.ApplicationEventPublisher events;
 
   @org.springframework.beans.factory.annotation.Autowired
   public OnboardingService(AdminUserRepo users, AuditEventRepo audit, SettingsRepo settings,
                            AuthService auth, StateFileService stateFiles,
                            PackagesService packages, SystemService system,
                            AuroraProperties props,
-                           PackageNameValidator packageNames) {
+                           PackageNameValidator packageNames,
+                           RecoveryCodeService recoveryCodes,
+                           org.springframework.context.ApplicationEventPublisher events) {
     this.users = users;
     this.audit = audit;
     this.settings = settings;
@@ -75,6 +85,20 @@ public class OnboardingService {
     this.system = system;
     this.props = props;
     this.packageNames = packageNames;
+    this.recoveryCodes = recoveryCodes;
+    this.events = events;
+  }
+
+  /**
+   * Retained for the suites that construct this service directly. Wiring in
+   * production always goes through the constructor above.
+   */
+  public OnboardingService(AdminUserRepo users, AuditEventRepo audit, SettingsRepo settings,
+                           AuthService auth, StateFileService stateFiles,
+                           PackagesService packages, SystemService system,
+                           AuroraProperties props,
+                           PackageNameValidator packageNames) {
+    this(users, audit, settings, auth, stateFiles, packages, system, props, packageNames, null, null);
   }
 
   /**
@@ -565,15 +589,49 @@ public class OnboardingService {
   // ------------------------------------------------------------------
 
   /**
-   * The package every first-run box gets regardless of anything a client
-   * PATCHed — just the reverse proxy + SSO plane ({@code core}). Authelia
-   * ships inside {@code core} and is always-on, so SSO needs no separate
-   * mandatory entry or wizard toggle. {@code storage} is deferred (D5):
-   * LAN file sharing is now something the user adds later from the
-   * dashboard catalogue rather than a forced first-run package, so the
-   * onboarding wizard stays minimal.
+   * The packages every first-run box gets regardless of anything a client
+   * PATCHed: the reverse proxy + SSO plane ({@code core}) and the dashboard
+   * the user is looking at ({@code dashboard}). Authelia ships inside
+   * {@code core} and is always-on, so SSO needs no separate mandatory entry
+   * or wizard toggle. {@code storage} is deferred (D5): LAN file sharing is
+   * a day-2 catalogue install, not a forced first-run package.
+   *
+   * <p>{@code dashboard} is here because leaving it out was actively
+   * corrupting state. bootstrap.sh writes {@code enabled: [core, dashboard]},
+   * then the wizard's domain step PATCHes the baseline {@code [core]} over
+   * the top of it, and {@code .state.yml} ends up denying that the very
+   * container serving the wizard is installed. {@code scripts/up.sh} carries
+   * a 40-line "dashboard orphan guard" purely so that lie does not get the
+   * dashboard deleted as an orphan on the next launch. State should describe
+   * the box.
    */
-  private static final List<String> MANDATORY_PACKAGES = List.of("core");
+  private static final List<String> MANDATORY_PACKAGES = List.of("core", "dashboard");
+
+  /**
+   * The package that provides AdGuard Home. The DNS step of the wizard sells
+   * "AdGuard runs on this box and rewrites *.domain to your LAN IP" and lists
+   * "Install the privacy package (AdGuard Home)" under "What Aurora will do" —
+   * but choosing it used to change nothing except a string in the draft. The
+   * Review step then said "DNS mode is 'adguard' but the privacy package ... is
+   * not selected", offered no way to fix that, and installed anyway. The wizard
+   * promised, then denied, then ignored itself.
+   *
+   * <p>Now the choice carries its package: {@code adguard} adds this to the
+   * plan (so the chip shows up on Review before anything is written) and to
+   * the enabled set at install. Only a missing package directory can produce a
+   * warning here now, and that warning is about the repo, not the user.
+   */
+  private static final String DNS_ADGUARD_PACKAGE = "privacy";
+
+  /**
+   * Packages implied by the chosen DNS story. Empty for {@code router} and
+   * {@code mdns} — those need no software on this box.
+   */
+  private List<String> packagesForDnsMode() {
+    return "adguard".equals(dnsMode().orElse(null))
+        ? List.of(DNS_ADGUARD_PACKAGE)
+        : List.of();
+  }
 
   /**
    * Apply the wizard draft. In v0.1 this means:
@@ -608,14 +666,27 @@ public class OnboardingService {
       }
     }
 
+    // 1a. Whatever the DNS step promised, add it — but only if this build
+    // actually ships it. See DNS_ADGUARD_PACKAGE. (The catalogue lookup
+    // below is what tells us; a name we cannot install would only be
+    // written into .state.yml for up.sh to drop again.)
+    var allPackages = packages.list();
+    var byName = new java.util.LinkedHashMap<String, Package>();
+    for (var p : allPackages) byName.put(p.name(), p);
+
+    var addedForDns = new java.util.LinkedHashSet<String>();
+    for (String implied : packagesForDnsMode()) {
+      if (byName.containsKey(implied) && !requested.contains(implied)) {
+        requested.add(implied);
+        addedForDns.add(implied);
+      }
+    }
+
     // 1b. Resolve the rest of the hard-dependency closure exactly the way
     // scripts/up.sh's manifest_resolve_deps would, and persist THAT set —
     // not the raw request — so .state.yml (and therefore what /launch
     // hands to up.sh) always matches what /plan already told the user
     // would happen.
-    var allPackages = packages.list();
-    var byName = new java.util.LinkedHashMap<String, Package>();
-    for (var p : allPackages) byName.put(p.name(), p);
     var resolution = resolveDependencies(requested, byName);
     var enabledOrder = new java.util.LinkedHashSet<String>(requested);
     enabledOrder.addAll(resolution.resolved());
@@ -626,6 +697,10 @@ public class OnboardingService {
           ? "Added " + prettyPackageName(mandatory) + " to enabled_packages (was missing; "
               + prettyPackageName(mandatory) + " is required)."
           : prettyPackageName(mandatory) + " is enabled.");
+    }
+    for (String added : addedForDns) {
+      applied.add("Added " + prettyPackageName(added)
+          + " because you chose AdGuard for DNS.");
     }
     for (String added : resolution.addedDependencies()) {
       if (MANDATORY_PACKAGES.contains(added)) continue;
@@ -689,11 +764,20 @@ public class OnboardingService {
     List<String> requested = enabledOverride != null
         ? enabledOverride
         : (state.enabled() == null ? List.of() : state.enabled());
+    // The DNS story's package is part of the plan, not an afterthought the
+    // Review step complains about. Same list install() will persist; the
+    // catalogue check happens below, once byName exists.
     String domain = state.domain();
 
     var allPackages = packages.list();
     var byName = new java.util.LinkedHashMap<String, Package>();
     for (var p : allPackages) byName.put(p.name(), p);
+
+    var withDns = new java.util.LinkedHashSet<>(requested);
+    for (String implied : packagesForDnsMode()) {
+      if (byName.containsKey(implied)) withDns.add(implied);
+    }
+    requested = new ArrayList<>(withDns);
 
     // Resolve depends_on into the same closure scripts/up.sh would arrive
     // at via manifest_resolve_deps, so this preview never promises fewer
@@ -731,6 +815,12 @@ public class OnboardingService {
       }
       for (var pkg : enabledManifests) {
         if ("core".equals(pkg.name())) continue;
+        // The dashboard IS the apex (and admin.<domain>), both already
+        // added above. Deriving a subdomain from its port description gave
+        // "aurora.aurora.local" — the doubled name the design language
+        // names as a thing that must never appear on screen. It showed up
+        // the moment `dashboard` correctly entered the enabled set.
+        if ("dashboard".equals(pkg.name())) continue;
         for (var entry : pkg.ports()) {
           Object desc = entry.get("description");
           Object portNum = entry.get("port");
@@ -738,6 +828,10 @@ public class OnboardingService {
           if (desc == null) continue;
           if (proto != null && !"tcp".equalsIgnoreCase(proto.toString())) continue;
           if (portNum instanceof Number n && NON_HTTP_PORTS.contains(n.intValue())) continue;
+          // A port declared behind a compose profile only exists if that
+          // profile is on. Listing qbittorrent.<domain> for a box that will
+          // not start qBittorrent promises an address that answers nothing.
+          if (entry.get("profile") != null) continue;
           String sub = firstWord(desc.toString()).toLowerCase();
           if (sub.isEmpty()) continue;
           if (sub.contains("http")) continue;               // "HTTP", "HTTPS" labels
@@ -751,8 +845,13 @@ public class OnboardingService {
     // Warnings: light static checks, plus the manifest-derived ones below.
     var warnings = new java.util.ArrayList<String>();
     String dns = dnsMode().orElse(null);
-    if ("adguard".equals(dns) && !enabled.contains("privacy")) {
-      warnings.add("DNS mode is 'adguard' but the privacy package (which provides AdGuard Home) is not selected.");
+    if ("adguard".equals(dns) && !enabled.contains(DNS_ADGUARD_PACKAGE)) {
+      // Only reachable when packages/privacy is missing from the repo — the
+      // user cannot cause this and cannot fix it, so say what it means for
+      // them rather than naming a package that isn't there.
+      warnings.add("AdGuard isn't available in this build, so nothing on this box "
+          + "will answer DNS for *." + (domain == null || domain.isBlank() ? "your domain" : domain)
+          + ". Point your devices at your router's DNS instead.");
     }
     if (domain == null || domain.isBlank()) {
       warnings.add("Domain not set — vhosts cannot be rendered until you complete step 3.");
@@ -884,7 +983,29 @@ public class OnboardingService {
     long id = users.create(username.trim(), hash, tz == null || tz.isBlank() ? "UTC" : tz);
     audit.record(id, "onboarding.admin.create", "admin_user:" + id, null);
     settings.put(KEY_STEP, "domain");
+    // The wizard's admin is a user like any other, and users get a mailbox.
+    // This path created the account through the repo directly and published
+    // nothing, so the one account guaranteed to exist on every box — the
+    // owner's — was the only one without mail. MailAccountReconciler listens
+    // for this; it is idempotent and never throws, and the mail domain not
+    // being provisioned yet is handled by its own retry rather than here.
+    if (events != null) {
+      events.publishEvent(new com.tomaytotomato.aurora.events.UserChangedEvent(
+          com.tomaytotomato.aurora.events.UserChangedEvent.CREATE));
+    }
     return id;
+  }
+
+  /**
+   * The recovery code that goes with the account just created, shown once,
+   * next to the password the operator is already being told to save.
+   *
+   * <p>Nullable service so the pure-helper unit tests can keep constructing
+   * OnboardingService with nulls; a null here simply means no code, which is
+   * the pre-existing behaviour rather than a crash.
+   */
+  public String issueRecoveryCode() {
+    return recoveryCodes == null ? null : recoveryCodes.issue();
   }
 
   /** Update .state.yml + packages/core/.env's DOMAIN. */

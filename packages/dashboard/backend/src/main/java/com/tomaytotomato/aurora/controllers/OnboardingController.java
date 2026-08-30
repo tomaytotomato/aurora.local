@@ -159,7 +159,17 @@ public class OnboardingController {
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     }
-    return ResponseEntity.ok(Map.of("id", id, "username", req.username()));
+    // The recovery code is issued here, with the account, and returned
+    // exactly once. The wizard shows it beside the password the operator is
+    // already saving, which is the only moment they are in the right frame
+    // of mind to write it down. Losing it is survivable (Settings can issue
+    // a new one while signed in); losing the password without it was not.
+    String recoveryCode = onboarding.issueRecoveryCode();
+    var body = new java.util.LinkedHashMap<String, Object>();
+    body.put("id", id);
+    body.put("username", req.username());
+    if (recoveryCode != null) body.put("recoveryCode", recoveryCode);
+    return ResponseEntity.ok(body);
   }
 
   /**
