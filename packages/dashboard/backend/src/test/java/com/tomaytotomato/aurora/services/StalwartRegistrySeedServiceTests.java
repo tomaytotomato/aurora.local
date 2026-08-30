@@ -3,6 +3,14 @@ package com.tomaytotomato.aurora.services;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -132,5 +140,119 @@ class StalwartRegistrySeedServiceTests {
     svc.seedQuietly();
 
     verify(mail, times(1)).ensureSystemSettings(Mockito.anyString(), Mockito.anyString());
+  }
+
+  // ------------------------------------------------------------------
+  // Cold-boot fast-retry (item 1b). What matters to pin:
+  //   1. When Stalwart becomes reachable partway through the retry
+  //      budget, the loop stops as soon as one pass succeeds. Otherwise
+  //      the loop would keep retrying a healthy seed for no reason.
+  //   2. When Stalwart never becomes reachable, the loop exits after
+  //      the budget with no exception. A stuck loop would never let the
+  //      steady-state reconcile take over.
+  //   3. The steady-state @Scheduled reconcile() calls the seed exactly
+  //      once per tick. Any accidental retry from that path would burn
+  //      JMAP calls every 30 minutes for no reason.
+  //   4. The sleep between attempts uses the injected Sleeper, not
+  //      Thread.sleep, so tests run in milliseconds not minutes.
+  // ------------------------------------------------------------------
+
+  private static final class RecordingSleeper implements StalwartRegistrySeedService.Sleeper {
+    final List<Duration> sleeps = new ArrayList<>();
+    @Override
+    public void sleep(Duration duration) {
+      sleeps.add(duration);
+    }
+  }
+
+  @Test
+  void cold_boot_retry_stops_as_soon_as_one_pass_succeeds() {
+    // Stalwart's cold-boot window: reachable() returns false for the
+    // first 3 attempts, then true. The loop should call seedQuietly()
+    // 4 times, sleep 3 times between them, then return once it sees
+    // SUCCESS. It must NOT keep retrying a healthy seed.
+    var mail = Mockito.mock(StalwartMailClient.class);
+    AtomicInteger reachableCalls = new AtomicInteger();
+    when(mail.reachable()).thenAnswer(inv -> reachableCalls.incrementAndGet() > 3);
+    when(mail.domainExists("aurora.local")).thenReturn(true);
+    var sleeper = new RecordingSleeper();
+    var svc = new StalwartRegistrySeedService(
+        provisionWithDomain("aurora.local"), mail, sleeper);
+
+    svc.seedUntilReady();
+
+    // 4 seedQuietly passes: 3 NOT_READY + 1 SUCCESS.
+    assertEquals(4, reachableCalls.get(),
+        "loop must stop as soon as SUCCESS is observed");
+    // 3 sleeps between the 4 attempts. Never after the successful one.
+    assertEquals(3, sleeper.sleeps.size());
+    assertTrue(sleeper.sleeps.stream().allMatch(d ->
+        d.equals(StalwartRegistrySeedService.COLD_BOOT_RETRY_INTERVAL)));
+    // The successful pass ran the full seed exactly once.
+    verify(mail, times(1))
+        .ensureSystemSettings("mail.aurora.local", "aurora.local");
+    verify(mail, times(1)).ensureConsoleTracer();
+  }
+
+  @Test
+  void cold_boot_retry_gives_up_after_the_budget_without_throwing() {
+    // Pathological case: Stalwart never comes up. The loop must exhaust
+    // its budget (20 attempts) without throwing so the shutdown hook
+    // can join the virtual thread and the steady-state reconcile can
+    // take over.
+    var mail = Mockito.mock(StalwartMailClient.class);
+    when(mail.reachable()).thenReturn(false);
+    var sleeper = new RecordingSleeper();
+    var svc = new StalwartRegistrySeedService(
+        provisionWithDomain("aurora.local"), mail, sleeper);
+
+    svc.seedUntilReady();
+
+    verify(mail, times(StalwartRegistrySeedService.COLD_BOOT_MAX_ATTEMPTS)).reachable();
+    // One sleep BETWEEN each pair of attempts — no sleep after the
+    // final (give-up) attempt, otherwise a shutdown-in-progress would
+    // block on a pointless wait.
+    assertEquals(
+        StalwartRegistrySeedService.COLD_BOOT_MAX_ATTEMPTS - 1,
+        sleeper.sleeps.size());
+    verify(mail, never()).ensureSystemSettings(Mockito.anyString(), Mockito.anyString());
+  }
+
+  @Test
+  void cold_boot_retry_exits_cleanly_when_interrupted() {
+    // Shutdown-in-flight: the sleep raises InterruptedException. The
+    // loop must restore the interrupt flag and exit so the container's
+    // graceful-shutdown hook can join the virtual thread.
+    var mail = Mockito.mock(StalwartMailClient.class);
+    when(mail.reachable()).thenReturn(false);
+    StalwartRegistrySeedService.Sleeper interrupting = d -> {
+      throw new InterruptedException("shutdown");
+    };
+    var svc = new StalwartRegistrySeedService(
+        provisionWithDomain("aurora.local"), mail, interrupting);
+
+    // Clear any lingering interrupt flag from earlier tests.
+    assertFalse(Thread.interrupted());
+    svc.seedUntilReady();
+    boolean interrupted = Thread.interrupted();
+
+    // Exactly one attempt, one sleep that threw, no further work.
+    verify(mail, times(1)).reachable();
+    assertTrue(interrupted, "interrupt flag must be re-raised so shutdown sees it");
+  }
+
+  @Test
+  void scheduled_reconcile_runs_the_seed_exactly_once_per_tick() {
+    // The @Scheduled path must not accidentally kick the cold-boot
+    // retry loop — every 30 min it would burn 20 pointless JMAP calls
+    // on a healthy box.
+    var mail = reachableClientWithDomain();
+    var svc = new StalwartRegistrySeedService(provisionWithDomain("aurora.local"), mail);
+
+    svc.reconcile();
+
+    verify(mail, times(1)).reachable();
+    verify(mail, times(1))
+        .ensureSystemSettings("mail.aurora.local", "aurora.local");
   }
 }
