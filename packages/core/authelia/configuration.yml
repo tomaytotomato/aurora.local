@@ -175,9 +175,9 @@ storage:
 # time is a fatal Authelia config error, so exactly one arm is emitted.
 notifier:
   disable_startup_check: false
-{{- if env "AUTHELIA_NOTIFIER_SMTP_HOST" }}
+{{- if env "AUTHELIA_NOTIFIER_SMTP_ADDRESS" }}
   smtp:
-    address: 'submission://{{ env "AUTHELIA_NOTIFIER_SMTP_HOST" }}:{{ env "AUTHELIA_NOTIFIER_SMTP_PORT" }}'
+    address: '{{ env "AUTHELIA_NOTIFIER_SMTP_ADDRESS" }}'
     username: '{{ env "AUTHELIA_NOTIFIER_SMTP_USERNAME" }}'
     password: '{{ env "AUTHELIA_NOTIFIER_SMTP_PASSWORD" }}'
     sender: '{{ env "AUTHELIA_NOTIFIER_SMTP_SENDER" }}'

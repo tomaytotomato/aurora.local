@@ -67,8 +67,7 @@ class AutheliaMailProvisionServiceTests {
     // in place, not append a second line.
     Files.writeString(envPath, String.join("\n",
         "STALWART_DB_PASSWORD=abc",
-        "# AUTHELIA_NOTIFIER_SMTP_HOST=",
-        "# AUTHELIA_NOTIFIER_SMTP_PORT=587",
+        "# AUTHELIA_NOTIFIER_SMTP_ADDRESS=",
         "# AUTHELIA_NOTIFIER_SMTP_USERNAME=",
         "# AUTHELIA_NOTIFIER_SMTP_PASSWORD=",
         "# AUTHELIA_NOTIFIER_SMTP_SENDER=authelia@aurora.local",
@@ -100,14 +99,13 @@ class AutheliaMailProvisionServiceTests {
     }
     // The host points at the aurora_net container, not localhost, and
     // the sender uses the box's own domain.
-    assertThat(written).contains("AUTHELIA_NOTIFIER_SMTP_HOST=stalwart");
-    assertThat(written).contains("AUTHELIA_NOTIFIER_SMTP_PORT=587");
+    assertThat(written).contains("AUTHELIA_NOTIFIER_SMTP_ADDRESS=submission://stalwart:587");
     assertThat(written).contains("AUTHELIA_NOTIFIER_SMTP_SENDER=authelia@aurora.local");
     assertThat(written).contains("AUTHELIA_NOTIFIER_SMTP_USERNAME=authelia@aurora.local");
 
     // Original comment-and-value structure preserved: STALWART_DB_PASSWORD
     // did not move and the .env file did not double any keys.
-    assertThat(written.split("(?m)^AUTHELIA_NOTIFIER_SMTP_HOST=", -1)).hasSize(2);
+    assertThat(written.split("(?m)^AUTHELIA_NOTIFIER_SMTP_ADDRESS=", -1)).hasSize(2);
     assertThat(written).contains("STALWART_DB_PASSWORD=abc");
 
     // Mailbox was created (not reset), and audit row records the
@@ -163,7 +161,7 @@ class AutheliaMailProvisionServiceTests {
     svc.provisionQuietly();
 
     String written = Files.readString(envPath, StandardCharsets.UTF_8);
-    assertThat(written).doesNotContain("AUTHELIA_NOTIFIER_SMTP_HOST=stalwart");
+    assertThat(written).doesNotContain("AUTHELIA_NOTIFIER_SMTP_ADDRESS=submission");
     verify(mail, never()).createMailbox(anyString(), anyString(), anyString());
     verify(audit, never()).record(any(), anyString(), anyString(), anyString());
   }
@@ -179,7 +177,7 @@ class AutheliaMailProvisionServiceTests {
     svc.provisionQuietly();
 
     String written = Files.readString(envPath, StandardCharsets.UTF_8);
-    assertThat(written).doesNotContain("AUTHELIA_NOTIFIER_SMTP_HOST=stalwart");
+    assertThat(written).doesNotContain("AUTHELIA_NOTIFIER_SMTP_ADDRESS=submission");
     verify(mail, never()).createMailbox(anyString(), anyString(), anyString());
   }
 

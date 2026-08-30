@@ -83,8 +83,7 @@ public class AutheliaMailProvisionService {
 
   /** Keys we own in {@code packages/core/.env}. Order stable for audit JSON. */
   static final List<String> MANAGED_KEYS = List.of(
-      "AUTHELIA_NOTIFIER_SMTP_HOST",
-      "AUTHELIA_NOTIFIER_SMTP_PORT",
+      "AUTHELIA_NOTIFIER_SMTP_ADDRESS",
       "AUTHELIA_NOTIFIER_SMTP_USERNAME",
       "AUTHELIA_NOTIFIER_SMTP_PASSWORD",
       "AUTHELIA_NOTIFIER_SMTP_SENDER"
@@ -180,8 +179,15 @@ public class AutheliaMailProvisionService {
       }
 
       String sender = AUTHELIA_LOCAL_PART + "@" + domain;
-      upsertLine(lines, "AUTHELIA_NOTIFIER_SMTP_HOST", STALWART_HOST);
-      upsertLine(lines, "AUTHELIA_NOTIFIER_SMTP_PORT", STALWART_SUBMISSION_PORT);
+      // Authelia auto-maps AUTHELIA_NOTIFIER_SMTP_HOST to notifier.smtp.host
+      // and AUTHELIA_NOTIFIER_SMTP_PORT to notifier.smtp.port. In 4.39+
+      // those keys are deprecated and CANNOT coexist with notifier.smtp.address
+      // in the rendered config — combining them is a fatal error. So we
+      // write a single AUTHELIA_NOTIFIER_SMTP_ADDRESS in the modern
+      // submission://host:port shape, and configuration.yml's conditional
+      // arm gates off that key instead of _HOST.
+      upsertLine(lines, "AUTHELIA_NOTIFIER_SMTP_ADDRESS",
+          "submission://" + STALWART_HOST + ":" + STALWART_SUBMISSION_PORT);
       upsertLine(lines, "AUTHELIA_NOTIFIER_SMTP_USERNAME", sender);
       upsertLine(lines, "AUTHELIA_NOTIFIER_SMTP_PASSWORD", password);
       upsertLine(lines, "AUTHELIA_NOTIFIER_SMTP_SENDER", sender);

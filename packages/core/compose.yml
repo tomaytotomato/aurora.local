@@ -182,8 +182,15 @@ services:
       # in .env is what makes it appear here; leaving them commented (the
       # default, filesystem notifier) means bash's `.` never defines the
       # shell variable in the first place, so it stays truly unset.
-      - AUTHELIA_NOTIFIER_SMTP_HOST
-      - AUTHELIA_NOTIFIER_SMTP_PORT
+      # Aurora provisions authelia@$DOMAIN on Stalwart and writes
+      # the SMTP env into packages/core/.env. Compose forwards these
+      # keys only when set in the calling shell (bare-name shape). In
+      # Authelia 4.39+ the SMTP config uses a single 'address' key
+      # (submission://host:port) instead of separate host/port —
+      # AutheliaMailProvisionService writes AUTHELIA_NOTIFIER_SMTP_ADDRESS
+      # in that shape. HOST/PORT are gone; keeping them here would
+      # silently overwrite ADDRESS at container start.
+      - AUTHELIA_NOTIFIER_SMTP_ADDRESS
       - AUTHELIA_NOTIFIER_SMTP_USERNAME
       - AUTHELIA_NOTIFIER_SMTP_PASSWORD
       - AUTHELIA_NOTIFIER_SMTP_SENDER
