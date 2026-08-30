@@ -351,9 +351,14 @@ function dismissStartJob(): void {
 // eye lands on the row that needs a Start click.
 const enabledSorted = computed(() =>
   [...packages.enabled].sort((a, b) => {
-    // iter-3 B4: rank on `.running` boolean; degraded state returns
-    // with the media sub-checklist (BL1).
-    const rank = (p: PackageSummary): number => (p.running ? 3 : 1);
+    // Rank on health signals: degraded (blocker) surfaces first,
+    // stopped next, healthy last so the eye lands on the row that
+    // needs a click.
+    const rank = (p: PackageSummary): number => {
+      if (p.degraded) return 0;
+      if (!p.running) return 1;
+      return 3;
+    };
     return rank(a) - rank(b);
   }),
 );
@@ -633,11 +638,12 @@ function pickMetric(key: string): void {
               :key="p.name"
               class="flex items-center justify-between text-sm gap-3"
               :data-package="p.name"
-              :data-status="p.running ? 'running' : 'stopped'"
+              :data-status="p.degraded ? 'restarting' : (p.running ? 'running' : 'stopped')"
             >
               <span class="text-foreground truncate">{{ p.title || p.name }}</span>
               <div class="flex items-center gap-2 shrink-0">
-                <span v-if="p.running" class="text-xs text-muted-foreground">Running</span>
+                <span v-if="p.degraded" class="text-xs text-amber-600 dark:text-amber-400">Restarting</span>
+                <span v-else-if="p.running" class="text-xs text-muted-foreground">Running</span>
                 <span v-else-if="startState[p.name] === 'starting'" class="text-xs text-muted-foreground">Starting…</span>
                 <span v-else-if="startState[p.name] === 'error'" class="text-xs text-muted-foreground">Couldn't start</span>
                 <Button

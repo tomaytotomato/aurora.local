@@ -50,6 +50,7 @@ public class PackagesService {
     RepoState state = stateFiles.readState();
     Set<String> enabled = new HashSet<>(state.enabled() == null ? List.of() : state.enabled());
     Set<String> running = runningPackageNames();
+    Set<String> degraded = degradedPackageNames();
 
     Path pkgs = Path.of(props.repoPath()).resolve("packages");
     List<Package> out = new ArrayList<>();
@@ -63,7 +64,8 @@ public class PackagesService {
         if (name.startsWith("_") || name.startsWith(".")) continue;
         Path manifest = dir.resolve("manifest.yml");
         if (!Files.isRegularFile(manifest)) continue;
-        parseManifest(manifest, enabled.contains(name), running.contains(name)).ifPresent(out::add);
+        parseManifest(manifest, enabled.contains(name), running.contains(name),
+            degraded.contains(name)).ifPresent(out::add);
       }
     } catch (IOException e) {
       throw new RuntimeException("failed to scan " + pkgs, e);
@@ -403,8 +405,69 @@ public class PackagesService {
     return out;
   }
 
+  /**
+   * Packages with ≥1 running container AND ≥1 sibling in a
+   * not-running-but-should-be state ({@code restarting}, {@code exited},
+   * {@code dead}, {@code paused}). Aggregation companion to
+   * {@link #runningPackageNames()}: without it, one healthy sibling in a
+   * multi-container package masks a broken one, and the top strip goes
+   * green while Authelia inside {@code core} is restart-looping and
+   * every gated vhost 502s (review 2026-08-30 item 2).
+   *
+   * <p>Uses the same {@code config_files} label the running check uses,
+   * so a container without an Aurora-owned compose file (an operator
+   * pet, a manual {@code docker run}) can't push a package into
+   * degraded on its own. Restarting a container Aurora doesn't own is
+   * not an Aurora concern; that’s a docker socket concern.
+   *
+   * <p>Deliberately does not call {@code inspect} on each container: an
+   * inspect roundtrip per container per {@code /packages} hit would
+   * pull the {@link ContainerStatsSampler} pattern into a hot path.
+   * {@link Container#getState()} for a restart-looping container reads
+   * {@code restarting} within the docker daemon’s own cadence, so the
+   * cheap read catches the loop.
+   */
+  private Set<String> degradedPackageNames() {
+    Set<String> anyRunning = new HashSet<>();
+    Set<String> anyBroken = new HashSet<>();
+    List<Container> containers;
+    try {
+      containers = docker.listProjectContainers();
+    } catch (Exception e) {
+      log.warn("docker unavailable: {}", e.getMessage());
+      return Set.of();
+    }
+    for (Container c : containers) {
+      if (c.getLabels() == null) continue;
+      String state = c.getState();
+      if (state == null) continue;
+      Set<String> owningPackages = new HashSet<>();
+      String cfg = c.getLabels().get("com.docker.compose.project.config_files");
+      if (cfg == null) continue;
+      for (String seg : cfg.split(",")) {
+        int i = seg.indexOf("/packages/");
+        if (i < 0) continue;
+        String rest = seg.substring(i + "/packages/".length());
+        int slash = rest.indexOf('/');
+        if (slash > 0) owningPackages.add(rest.substring(0, slash));
+      }
+      if (owningPackages.isEmpty()) continue;
+      String lower = state.toLowerCase();
+      if ("running".equals(lower)) {
+        anyRunning.addAll(owningPackages);
+      } else if ("restarting".equals(lower) || "exited".equals(lower)
+          || "dead".equals(lower) || "paused".equals(lower)) {
+        anyBroken.addAll(owningPackages);
+      }
+    }
+    Set<String> out = new HashSet<>(anyRunning);
+    out.retainAll(anyBroken);
+    return out;
+  }
+
   @SuppressWarnings("unchecked")
-  private Optional<Package> parseManifest(Path manifest, boolean enabled, boolean running) {
+  private Optional<Package> parseManifest(Path manifest, boolean enabled, boolean running,
+                                          boolean degraded) {
     try (var in = Files.newInputStream(manifest)) {
       Map<String, Object> m = new Yaml().load(in);
       if (m == null) return Optional.empty();
@@ -419,6 +482,13 @@ public class PackagesService {
         Object kind = probeMap.get("kind");
         if ("self".equals(kind)) effectiveRunning = true;
       }
+      // degraded is orthogonal to probe.kind: self. self-probe means
+      // "we are answering, so the dashboard is up" — which says
+      // nothing about the sibling containers inside the same package.
+      // core's manifest declares probe.kind: self AND ships Authelia,
+      // Caddy, Stalwart alongside; suppressing degraded here would
+      // re-hide the exact review outage this fix targets.
+      boolean effectiveDegraded = degraded;
       return Optional.of(new Package(
           str(m, "name"),
           str(m, "title"),
@@ -433,6 +503,7 @@ public class PackagesService {
           str(m, "post_install_notes"),
           enabled,
           effectiveRunning,
+          effectiveDegraded,
           SsoBlock.fromManifest(m.get("sso")),
           str(m, "source_url"),
           str(m, "homepage_url"),

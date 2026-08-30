@@ -60,4 +60,26 @@ describe('useHealthPill', () => {
     const { pill } = useHealthPill();
     expect(pill.value.state).toBe('not-started');
   });
+
+  it('reports partial when a package is degraded even if every enabled package is running', () => {
+    // Review 2026-08-30 item 2 regression guard. `core` shows running
+    // because caddy/db/stalwart hold it up while Authelia inside it
+    // restart-loops. Before this branch the pill went green there and
+    // every gated vhost 502'd underneath it.
+    const store = usePackagesStore();
+    store.list = [pkg({ name: 'core', running: true, degraded: true })];
+    const { pill } = useHealthPill();
+    expect(pill.value.state).toBe('partial');
+    expect(pill.value.tone).toBe('warn');
+    expect(pill.value.text).toBe('Apps: partly running');
+  });
+
+  it('treats absent degraded as false so pre-fix wire payloads still read running', () => {
+    // Older backend releases don't emit `degraded` at all. Absent must
+    // be neutral, not a truthy "undefined".
+    const store = usePackagesStore();
+    store.list = [pkg({ name: 'a', running: true })];
+    const { pill } = useHealthPill();
+    expect(pill.value.state).toBe('running');
+  });
 });

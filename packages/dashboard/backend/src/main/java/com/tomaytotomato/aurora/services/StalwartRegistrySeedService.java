@@ -82,6 +82,7 @@ public class StalwartRegistrySeedService {
    */
   private final Sleeper sleeper;
 
+  @org.springframework.beans.factory.annotation.Autowired
   public StalwartRegistrySeedService(StalwartProvisionService provision, StalwartMailClient mail) {
     this(provision, mail, defaultSleeper());
   }

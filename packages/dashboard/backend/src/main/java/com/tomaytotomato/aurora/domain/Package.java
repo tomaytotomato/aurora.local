@@ -46,6 +46,25 @@ public record Package(
     String postInstallNotes,
     boolean enabled,
     boolean running,
+    /**
+     * True when at least one container that belongs to this package is
+     * healthy AND at least one other is not (state {@code restarting},
+     * {@code exited}, {@code dead}, or {@code paused}). Populated by
+     * {@link com.tomaytotomato.aurora.services.PackagesService}.
+     *
+     * <p>Introduced 2026-08-30 (review item 2). Before this, the health
+     * pill went green as soon as any single container in a package was
+     * up, which lied about the state of the box when Authelia
+     * restart-looped inside {@code core}: caddy/db/stalwart stayed
+     * {@code running}, so {@code core.running == true}, and the top
+     * strip read “Apps: all running” while every gated vhost 502’d.
+     *
+     * <p>Distinct from {@code !running}: a package with every container
+     * stopped is {@code running=false, degraded=false}. Both dimensions
+     * are needed so “we never got here” and “we were here and
+     * something broke” can render differently.
+     */
+    boolean degraded,
     SsoBlock sso,
     String sourceUrl,
     String homepageUrl,
@@ -96,7 +115,7 @@ public record Package(
       SsoBlock sso
   ) {
     this(name, title, description, category, dependsOn, recommends, profiles, ports,
-        requires, requiredEnv, postInstallNotes, enabled, running, sso,
+        requires, requiredEnv, postInstallNotes, enabled, running, false, sso,
         null, null, null, null, null, null, null, null, null);
   }
 
@@ -115,7 +134,7 @@ public record Package(
       PackageBackupSpec backup
   ) {
     return new Package(name, title, description, category, dependsOn, recommends, profiles,
-        ports, requires, requiredEnv, postInstallNotes, enabled, running, sso,
+        ports, requires, requiredEnv, postInstallNotes, enabled, running, degraded, sso,
         sourceUrl, homepageUrl, icon, readme, vhosts, envVars, backup,
         variantGroup, variantDefault);
   }

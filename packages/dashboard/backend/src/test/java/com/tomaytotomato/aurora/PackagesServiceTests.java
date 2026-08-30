@@ -204,4 +204,81 @@ class PackagesServiceTests {
             + "would render with nothing behind it")
         .isEmpty();
   }
+
+  /**
+   * Review 2026-08-30 item 2: a package with one running container AND
+   * one restarting sibling must report {@code degraded=true} while
+   * {@code running=true}. Before this fix, one healthy sibling in the
+   * same package masked a broken one — the header pill went
+   * "Apps: all running" while Authelia was restart-looping inside {@code core}
+   * and every gated vhost 502'd.
+   *
+   * <p>Uses the same fixture-standalone shape as
+   * {@code dashboardProbeSelfMarksRunningEvenWithoutComposeLabels} so
+   * neither test pollutes the class-wide fake-repo state other suites pin.
+   */
+  @Test
+  void degraded_is_true_when_package_has_running_and_restarting_siblings() {
+    var stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of("core"), List.of()));
+    var docker = Mockito.mock(DockerService.class);
+
+    // Two containers, both owned by packages/core: one running, one restarting.
+    // This mirrors the live outage the review found: caddy stayed up,
+    // authelia bounced, PackagesService reported core as running.
+    var caddy = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(caddy.getState()).thenReturn("running");
+    Mockito.when(caddy.getLabels()).thenReturn(Map.of(
+        "com.docker.compose.project.config_files",
+        "/home/bruce/aurora.local/packages/core/compose.yml"));
+    var authelia = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(authelia.getState()).thenReturn("restarting");
+    Mockito.when(authelia.getLabels()).thenReturn(Map.of(
+        "com.docker.compose.project.config_files",
+        "/home/bruce/aurora.local/packages/core/compose.yml"));
+    Mockito.when(docker.listProjectContainers()).thenReturn(List.of(caddy, authelia));
+
+    var props = new AuroraProperties("src/test/resources/fake-repo", null, List.of(), null);
+    var svc = new PackagesService(props, stateFiles, docker, null);
+    Package core = svc.find("core").orElseThrow();
+
+    assertThat(core.running())
+        .as("one running container is enough for a package to be running")
+        .isTrue();
+    assertThat(core.degraded())
+        .as("one restarting sibling makes the package degraded")
+        .isTrue();
+  }
+
+  /**
+   * A package with every container running is not degraded. Guards
+   * against a broken predicate that would mark every multi-container
+   * package amber the moment the fix ships.
+   */
+  @Test
+  void degraded_is_false_when_every_container_runs() {
+    var stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of("core"), List.of()));
+    var docker = Mockito.mock(DockerService.class);
+    var c1 = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(c1.getState()).thenReturn("running");
+    Mockito.when(c1.getLabels()).thenReturn(Map.of(
+        "com.docker.compose.project.config_files",
+        "/repo/packages/core/compose.yml"));
+    var c2 = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(c2.getState()).thenReturn("running");
+    Mockito.when(c2.getLabels()).thenReturn(Map.of(
+        "com.docker.compose.project.config_files",
+        "/repo/packages/core/compose.yml"));
+    Mockito.when(docker.listProjectContainers()).thenReturn(List.of(c1, c2));
+
+    var props = new AuroraProperties("src/test/resources/fake-repo", null, List.of(), null);
+    var svc = new PackagesService(props, stateFiles, docker, null);
+    Package core = svc.find("core").orElseThrow();
+
+    assertThat(core.degraded()).isFalse();
+    assertThat(core.running()).isTrue();
+  }
 }

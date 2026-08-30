@@ -41,6 +41,17 @@ export interface PackageSummary {
   description: string;
   enabled: boolean;
   running: boolean;
+  /**
+   * True when at least one container that belongs to this package is
+   * healthy AND at least one other is not (restarting / exited / dead /
+   * paused). Reused by the top-strip pill and the Apps card so a
+   * multi-container package shows "Restarting" instead of "Running"
+   * the moment one sibling flips.
+   *
+   * Optional on the wire so pre-2026-08-30 clients ignore it; treat
+   * absent as false.
+   */
+  degraded?: boolean | null;
   requires?: Record<string, unknown> | null;
   ports?: Array<Record<string, unknown>> | null;
   dependsOn?: string[] | null;
@@ -94,6 +105,7 @@ export function variantLabel(
 /** Derive a status label from the on-wire booleans. */
 export function packageStatus(p: PackageSummary): PackageStatus {
   if (!p.enabled) return 'not-installed';
+  if (p.degraded) return 'degraded';
   if (p.running) return 'running';
   return 'stopped';
 }

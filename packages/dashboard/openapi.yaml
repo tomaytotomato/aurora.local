@@ -2684,6 +2684,13 @@ components:
         description: { type: string }
         enabled: { type: boolean }
         running: { type: boolean }
+        # True when at least one of a package's containers is up AND at
+        # least one other is not (restarting / exited / dead / paused).
+        # Enables the top-strip pill and the row status label to say
+        # "Restarting" instead of "Running" the moment a single container
+        # inside a multi-container package flips. Optional on the wire so
+        # older clients ignore it (defaults to false server-side).
+        degraded: { type: [boolean, 'null'] }
         requires:
           type: [object, 'null']
           additionalProperties: true

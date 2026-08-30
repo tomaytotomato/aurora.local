@@ -33,6 +33,14 @@ export function useHealthPill(): { pill: ComputedRef<HealthPill> } {
     const xs = packages.enabled;
     if (xs.length === 0) return 'not-started';
     const running = xs.filter((p) => p.running).length;
+    const anyDegraded = xs.some((p) => p.degraded === true);
+    // A package is degraded when ≥1 of its containers is running AND
+    // ≥1 sibling is restarting / exited / dead / paused. The pill has to
+    // reflect that even when the coarse `.running` count is complete,
+    // because Authelia inside `core` bouncing does not flip `core.running`
+    // (caddy/db/stalwart hold it up) but does flip `core.degraded`.
+    // Without this branch the pill goes green while every gated vhost 502s.
+    if (anyDegraded) return 'partial';
     if (running === xs.length) return 'running';
     // Honesty fix: some-but-not-all running used to report 'not-started',
     // so 4-of-5-up read "Not started" in the TopBar on every page. Report
