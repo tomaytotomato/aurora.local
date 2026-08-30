@@ -380,7 +380,7 @@ class StalwartMailClientTests {
 
     String setBody = bodies.stream()
         .filter(b -> b.contains("x:Tracer/set")).findFirst().orElseThrow();
-    assertThat(setBody).contains("\"@type\":\"Console\"");
+    assertThat(setBody).contains("\"@type\":\"Stdout\"");
     assertThat(setBody).contains("\"level\":\"info\"");
   }
 
@@ -393,7 +393,7 @@ class StalwartMailClientTests {
     var c = scripted(java.util.Map.of(
         "x:Tracer/get",
         "{\"methodResponses\":[[\"x:Tracer/get\",{\"list\":["
-            + "{\"id\":\"T1\",\"@type\":\"Console\",\"level\":\"info\"}]},\"c1\"]]}"
+            + "{\"id\":\"T1\",\"@type\":\"Stdout\",\"level\":\"info\"}]},\"c1\"]]}"
     ), bodies);
 
     assertThat(c.ensureConsoleTracer()).isFalse();

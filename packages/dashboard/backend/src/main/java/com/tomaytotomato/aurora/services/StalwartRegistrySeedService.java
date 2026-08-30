@@ -143,7 +143,7 @@ public class StalwartRegistrySeedService {
 
       boolean tracerCreated = mail.ensureConsoleTracer();
       if (tracerCreated) {
-        log.info("stalwart registry seed: console tracer created; "
+        log.info("stalwart registry seed: stdout tracer created; "
             + "`docker logs stalwart` will now carry INFO-level events");
       }
     } catch (Exception e) {

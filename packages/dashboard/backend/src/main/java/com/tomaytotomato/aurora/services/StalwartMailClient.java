@@ -379,34 +379,42 @@ public class StalwartMailClient {
   }
 
   /**
-   * Ensure a Console tracer at INFO level exists, so {@code docker logs
+   * Ensure a stdout tracer at INFO level exists, so {@code docker logs
    * stalwart} is not empty. Returns true when it was created; false when
-   * a console tracer was already there.
+   * a stdout tracer was already there.
    *
-   * <p>Content of the console tracer is intentionally minimal:
-   * {@code @type=Console}, {@code level=info}, everything else default.
+   * <p>Content of the stdout tracer is intentionally minimal:
+   * {@code @type=Stdout}, {@code level=info}, everything else default.
    * Aurora is not telling Stalwart what to log — only that logging should
    * reach stdout so an operator can see it. Followups that tune log
    * volume belong in the mail admin console, not the seed.
+   *
+   * <p><b>The variant string is {@code Stdout}, not {@code Console}.</b>
+   * The docs page describes the variant as "Console", but a live v0.16
+   * registry rejects {@code @type=Console} with {@code invalidPatch}
+   * ("Missing or invalid '@type' property in object") and accepts
+   * {@code @type=Stdout} for the same shape. Verified by enumerating
+   * variants against a real Stalwart on 2026-08-30.
    */
   public boolean ensureConsoleTracer() {
     JsonNode got = post(jmapCall("x:Tracer/get", "{\"ids\":null}"));
     for (JsonNode t : methodArgs(got).path("list")) {
-      if ("Console".equals(text(t, "@type"))) {
+      if ("Stdout".equals(text(t, "@type"))) {
         return false;
       }
     }
     String create = "{\"create\":{\"t1\":{"
-        + "\"@type\":\"Console\","
-        + "\"level\":\"info\""
+        + "\"@type\":\"Stdout\","
+        + "\"level\":\"info\","
+        + "\"events\":{}"
         + "}}}";
     JsonNode args = methodArgs(post(jmapCall("x:Tracer/set", create)));
     if (args.path("created").has("t1")) {
-      log.info("stalwart: created Console tracer (level=info)");
+      log.info("stalwart: created Stdout tracer (level=info)");
       return true;
     }
     JsonNode notCreated = args.path("notCreated").path("t1");
-    throw new StalwartApiException("could not create Console tracer: " + notCreated);
+    throw new StalwartApiException("could not create Stdout tracer: " + notCreated);
   }
 
   /**
