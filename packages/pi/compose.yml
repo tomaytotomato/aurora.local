@@ -92,7 +92,12 @@ services:
       # Additional skills the operator wants Pi to load. Pi's
       # DefaultResourceLoader walks $HOME/.pi/agent/skills; the
       # container's HOME is /pi-data (baked into the Dockerfile).
-      - ./skills:/pi-data/.pi/agent/skills:ro
+      #
+      # NB: this must be `../pi/skills`, not `./skills`. When up.sh
+      # invokes compose with multiple -f files, relative bind mounts
+      # resolve against the FIRST compose file's directory, not each
+      # file's own. Same footgun packages/core hit before.
+      - ../pi/skills:/pi-data/.pi/agent/skills:ro
       # Model provider auth. Bruce drops his laptop's
       # ~/.pi/agent/auth.json in as data/pi/auth/auth.json; pi-server
       # points ModelRuntime at it via PI_AUTH_PATH. Read-write because
