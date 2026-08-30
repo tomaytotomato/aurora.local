@@ -75,7 +75,7 @@ Severity: **blocker** (Sarah is stopped, misled, or locked out) >
 | D1 | polish | `Essence.md` is unreferenced and inconsistently named | [x] |
 | D2 | polish | README package table lists 12 of 18 packages | [x] |
 | E1 | plan   | ASSISTANT_PACKAGE_PLAN.md landed; execution approved | [x] |
-| E2 | feat   | pi-server shim (Node/TS, OpenAI-compatible over Pi SDK) | [ ] |
+| E2 | feat   | pi-server shim (Node/TS, OpenAI-compatible over Pi SDK) | [x] |
 | E3 | feat   | packages/pi compose stack (LibreChat + Mongo + pi-server) | [ ] |
 | E4 | feat   | ASSISTANT role in Aurora + assistant@$DOMAIN mailbox | [ ] |
 | E5 | feat   | MCP servers: aurora-status, notes, mail, reminders | [ ] |

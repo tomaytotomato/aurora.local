@@ -1,0 +1,67 @@
+# ────────────────────────────────────────────────────────────────────
+# LibreChat configuration — Aurora's Pi assistant
+#
+# This file is baked in by Aurora, NOT edited through the LibreChat UI.
+# packages/pi/compose.yml bind-mounts it at /app/librechat.yaml.
+#
+# What we declare here:
+#
+#   * exactly ONE endpoint: "Pi", pointing at http://pi-server:8080/v1
+#     over aurora_net. The user picks "Pi" in the dropdown and every
+#     turn goes through Pi's SDK — never straight to a model provider.
+#   * registration off (Authelia is the identity, not LibreChat).
+#   * social/OAuth logins off (same reason).
+#
+# What we deliberately DON'T declare:
+#
+#   * OpenAI/Anthropic/etc as direct endpoints. Users would then bypass
+#     Pi's memory + skills entirely, which is the whole point.
+#   * MCP servers here. LibreChat's Agent Builder can register MCPs
+#     as tools alongside Pi, but Pi already has MCP support of its
+#     own; adding a second wiring against the same tools doubles the
+#     surface. When we ship MCPs in E5 we register them in Pi's own
+#     config, not here.
+#
+# See docs/ASSISTANT_PACKAGE_PLAN.md for the shape of the stack.
+# ────────────────────────────────────────────────────────────────────
+version: 1.2.4
+cache: true
+
+interface:
+  # Suppress the "Try our other models" nudges — for this box, Pi is
+  # THE model.
+  privacyPolicy:
+    externalUrl: ''
+    openNewTab: false
+  termsOfService:
+    externalUrl: ''
+    openNewTab: false
+
+registration:
+  # Authelia handles identity. LibreChat's own signup is off.
+  socialLogins: []
+
+endpoints:
+  custom:
+    - name: 'Pi'
+      # pi-server accepts any bearer string; the shim does not check it
+      # (Authelia has already gated the request at Caddy). We still
+      # send one so LibreChat's OpenAI client is happy — 'unused'
+      # is deliberately obvious rather than looking like a secret.
+      apiKey: 'unused'
+      baseURL: 'http://pi-server:8080/v1'
+      models:
+        default: ['pi']
+        # Don't try to fetch models — the /v1/models list from pi-server
+        # is fine, but keeping this off means one less network hop at
+        # LibreChat's startup and one less thing to fail.
+        fetch: false
+      titleConvo: true
+      titleMethod: 'completion'
+      titleModel: 'pi'
+      modelDisplayLabel: 'Pi'
+      # LibreChat pings this with an OpenAI /v1/chat/completions POST
+      # by default; pi-server speaks that shape natively.
+      forcePrompt: false
+      # No feature flags at v0.1 — RAG, plugins and vision are opt-in
+      # later. Keeps the first-run UX to "just type".

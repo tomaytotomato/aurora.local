@@ -1,0 +1,161 @@
+# aurora.local / packages/pi
+#
+# Pi (the household assistant). Three long-lived containers on
+# aurora_net:
+#
+#   * librechat  - the web UI. Talks to pi-server over aurora_net as
+#                  an OpenAI-compatible endpoint. Sits behind Caddy on
+#                  http(s)://pi.$DOMAIN, gated by Authelia
+#                  (import authelia in caddy.snippet).
+#   * mongo      - LibreChat's conversation + auth store. Bind-mounted
+#                  to data/pi/mongo/ so a reset can drop it cleanly.
+#   * pi-server  - Aurora's own shim: turns Pi's SDK into a POST
+#                  /v1/chat/completions endpoint. Loads skills from
+#                  data/pi/skills/, model provider auth from
+#                  data/pi/auth/. Not published on the host; only
+#                  reachable inside aurora_net.
+#
+# What is deliberately NOT here (yet):
+#
+#   * Meilisearch — LibreChat's optional search index. It works fine
+#     without it; adding it doubles the RAM ceiling for a v0.1 the
+#     household won't notice.
+#   * RAG file ingestion — same, deferred.
+#   * MCP server containers — those ship in E5 alongside the
+#     aurora-status / notes-read-write / mail-send tools; when they
+#     land, they go in `mcp-*` services on this same compose file.
+#
+# The manifest keeps min_ram_mb at 1536; Bruce's Dell OptiPlex has
+# 15 GB, so headroom is fine even with core, dashboard and privacy
+# already resident.
+
+name: aurora-pi
+
+networks:
+  aurora_net:
+    external: true
+
+services:
+  # ── Mongo — LibreChat's conversation + user store ─────────────────
+  librechat-mongo:
+    # 7.0.x is what LibreChat's own docker-compose recommends. Pinned
+    # to a specific minor so a compose-up isn't chasing a moving tag.
+    image: mongo:7.0
+    container_name: librechat-mongo
+    restart: unless-stopped
+    networks: [aurora_net]
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=librechat
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD:?librechat mongo needs MONGO_INITDB_ROOT_PASSWORD in packages/pi/.env}
+      - MONGO_INITDB_DATABASE=LibreChat
+    volumes:
+      # LibreChat's Mongo store lives under data/pi/ so reset.sh's
+      # blanket data/ wipe removes it in one shot.
+      - ../../data/pi/mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── pi-server — Aurora's shim, LibreChat → Pi SDK ─────────────────
+  pi-server:
+    build:
+      context: pi-server
+    image: ghcr.io/tomaytotomato/aurora-pi-server:${PI_SERVER_VERSION:-0.1.0}
+    pull_policy: missing
+    container_name: pi-server
+    restart: unless-stopped
+    networks: [aurora_net]
+    environment:
+      - PI_MODEL_NAME=pi
+      # Explicit path Pi's ModelRuntime consults for provider auth.
+      # We keep it OUTSIDE $HOME/.pi/agent so the skills mount and
+      # the auth mount cannot collide.
+      - PI_AUTH_PATH=/pi-data/auth/auth.json
+      # Bruce's default: run against Copilot. To use OpenAI or
+      # Anthropic directly, put the key + provider hint in the
+      # auth store (data/pi/auth) which is HOME for pi-server.
+      - PI_MODEL_PROVIDER=${PI_MODEL_PROVIDER:-copilot}
+      # Optional per-provider environment keys pi's ModelRuntime
+      # will pick up if the auth store is empty. Compose forwards
+      # bare entries only when set in the calling shell (same trick
+      # packages/core/compose.yml uses for AUTHELIA_NOTIFIER_SMTP_*).
+      - OPENAI_API_KEY
+      - ANTHROPIC_API_KEY
+      # GitHub Copilot's OAuth-token path is populated by mounting
+      # ~/.pi/agent/auth.json into /pi-data/auth/auth.json below;
+      # nothing to set here.
+      - TZ=${TZ:-Europe/London}
+    volumes:
+      # Additional skills the operator wants Pi to load. Pi's
+      # DefaultResourceLoader walks $HOME/.pi/agent/skills; the
+      # container's HOME is /pi-data (baked into the Dockerfile).
+      - ./skills:/pi-data/.pi/agent/skills:ro
+      # Model provider auth. Bruce drops his laptop's
+      # ~/.pi/agent/auth.json in as data/pi/auth/auth.json; pi-server
+      # points ModelRuntime at it via PI_AUTH_PATH. Read-write because
+      # Pi's ModelRuntime uses a `.lock` sibling to serialise access;
+      # only pi-server touches this directory.
+      - ../../data/pi/auth:/pi-data/auth:rw
+    depends_on:
+      # No hard dependency, but LibreChat's first-run health probe
+      # against pi-server /v1/models likes it to be up already.
+      librechat-mongo:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── LibreChat — the door ─────────────────────────────────────────
+  librechat:
+    # Pin to a specific version rather than :latest so a compose-up
+    # isn't chasing upstream.
+    image: ghcr.io/danny-avila/librechat:v0.7.9
+    pull_policy: missing
+    container_name: librechat
+    restart: unless-stopped
+    networks: [aurora_net]
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3080
+      - MONGO_URI=mongodb://librechat:${MONGO_INITDB_ROOT_PASSWORD}@librechat-mongo:27017/LibreChat?authSource=admin
+      - DOMAIN_CLIENT=https://pi.${DOMAIN:-aurora.local}
+      - DOMAIN_SERVER=https://pi.${DOMAIN:-aurora.local}
+      # Symmetric secrets — LibreChat won't boot without them.
+      - CREDS_KEY=${LIBRECHAT_CREDS_KEY:?LibreChat needs LIBRECHAT_CREDS_KEY in packages/pi/.env}
+      - CREDS_IV=${LIBRECHAT_CREDS_IV:?LibreChat needs LIBRECHAT_CREDS_IV in packages/pi/.env}
+      - JWT_SECRET=${LIBRECHAT_JWT_SECRET:?LibreChat needs LIBRECHAT_JWT_SECRET in packages/pi/.env}
+      - JWT_REFRESH_SECRET=${LIBRECHAT_JWT_REFRESH_SECRET:?LibreChat needs LIBRECHAT_JWT_REFRESH_SECRET in packages/pi/.env}
+      # Turn OFF every model provider LibreChat ships with by default.
+      # Pi is the ONE model, exposed as a custom endpoint pointing at
+      # pi-server (see librechat.yaml).
+      - ENDPOINTS=custom
+      - ALLOW_REGISTRATION=false
+      - ALLOW_SOCIAL_LOGIN=false
+      - CONFIG_PATH=/app/librechat.yaml
+      # Search index off (see the note at the top of this file).
+      - SEARCH=false
+      - TZ=${TZ:-Europe/London}
+    volumes:
+      - ./librechat/librechat.yaml:/app/librechat.yaml:ro
+      # Uploads / images LibreChat writes at runtime.
+      - ../../data/pi/librechat/images:/app/client/public/images
+      - ../../data/pi/librechat/uploads:/app/uploads
+      - ../../data/pi/librechat/logs:/app/api/logs
+    depends_on:
+      librechat-mongo:
+        condition: service_healthy
+      pi-server:
+        condition: service_healthy
+    healthcheck:
+      # LibreChat's own /health once it exists, else the app root.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3080/health >/dev/null 2>&1 || wget -qO- http://127.0.0.1:3080/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s

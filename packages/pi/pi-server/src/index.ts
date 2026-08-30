@@ -70,6 +70,15 @@ const PREFERRED_PROVIDER = process.env.PI_MODEL_PROVIDER ?? "";
 const PREFERRED_MODEL_ID = process.env.PI_MODEL_ID ?? "";
 
 /**
+ * Explicit auth store path. Pi's ModelRuntime looks up provider
+ * credentials here (see `authPath` in
+ * CreateModelRuntimeOptions). We expose it as an env var so the
+ * compose file can mount the operator's auth store to any path
+ * without colliding with the skills mount.
+ */
+const AUTH_PATH = process.env.PI_AUTH_PATH ?? "";
+
+/**
  * Idle timeout for a Pi session. LibreChat conversations that go
  * quiet for this long are disposed; the next request creates a fresh
  * one. Keeps memory bounded without dropping mid-conversation.
@@ -138,7 +147,9 @@ async function slotFor(req: ChatCompletionRequest): Promise<SessionSlot> {
 
 async function newSession(): Promise<AgentSession> {
   if (!modelRuntime) {
-    modelRuntime = await ModelRuntime.create();
+    modelRuntime = await ModelRuntime.create(
+      AUTH_PATH ? { authPath: AUTH_PATH } : {},
+    );
   }
   const model = await pickModel(modelRuntime);
   const { session } = await createAgentSession({
