@@ -249,6 +249,12 @@ public class StalwartMailClient {
    * normally write to SystemSettings (thread-pool size, service
    * advertisements) is left at Stalwart's defaults — they are correct on
    * a single-box install.
+   *
+   * <p><b>Field name pinned from a live v0.16 registry:</b> the wire
+   * field is {@code defaultDomainId} (an {@code Id<Domain>}), not
+   * {@code defaultDomain}. Reading the wrong name silently means the
+   * idempotency check always fails and Aurora rewrites SystemSettings
+   * on every reconcile.
    */
   public boolean ensureSystemSettings(String defaultHostname, String defaultDomain) {
     String domainId = domainIdFor(defaultDomain);
@@ -266,10 +272,7 @@ public class StalwartMailClient {
     }
     if (current != null) {
       String curHost = text(current, "defaultHostname");
-      String curDomain = text(current, "defaultDomain");
-      // SystemSettings.defaultDomain is an Id<Domain>; the server may
-      // echo either the id or the object depending on Get expansion, so
-      // compare against the resolved id.
+      String curDomain = text(current, "defaultDomainId");
       if (defaultHostname.equals(curHost) && domainId.equals(curDomain)) {
         return false;
       }
@@ -277,7 +280,7 @@ public class StalwartMailClient {
 
     String update = "{\"update\":{\"singleton\":{"
         + "\"defaultHostname\":" + quote(defaultHostname) + ","
-        + "\"defaultDomain\":" + quote(domainId)
+        + "\"defaultDomainId\":" + quote(domainId)
         + "}}}";
     JsonNode args = methodArgs(post(jmapCall("x:SystemSettings/set", update)));
     if (args.path("updated").has("singleton")) {
@@ -318,7 +321,7 @@ public class StalwartMailClient {
       }
       String id = text(existing, "id");
       String update = "{\"update\":{" + quote(id) + ":{"
-          + "\"bind\":{\"0\":" + quote(bind) + "},"
+          + "\"bind\":{" + quote(bind) + ":true},"
           + "\"protocol\":" + quote(protocol) + ","
           + "\"tlsImplicit\":" + tlsImplicit
           + "}}}";
@@ -333,7 +336,7 @@ public class StalwartMailClient {
 
     String create = "{\"create\":{\"n1\":{"
         + "\"name\":" + quote(name) + ","
-        + "\"bind\":{\"0\":" + quote(bind) + "},"
+        + "\"bind\":{" + quote(bind) + ":true},"
         + "\"protocol\":" + quote(protocol) + ","
         + "\"tlsImplicit\":" + tlsImplicit
         + "}}}";
@@ -358,20 +361,20 @@ public class StalwartMailClient {
   }
 
   /**
-   * A JMAP {@code Set<X>} is encoded as an object of numeric-string keys.
-   * The listener's {@code bind} is such a set of {@code host:port}
-   * strings; Aurora writes one entry per listener (one host:port each,
-   * matching how compose exposes them), so "first value" is enough to
-   * compare against for idempotency.
+   * A JMAP {@code Set<X>} of primitive values is encoded as an object of
+   * value → true entries — the KEY is the value, not a numeric index.
+   * For a NetworkListener the {@code bind} set carries one host:port
+   * entry, so "first key" is what compare-for-idempotency needs.
+   *
+   * <p>Verified against a live v0.16 registry: {@code "bind":{"[::]:25":true}}.
+   * Reading this as if it were a numeric-keyed map ("0" → "host:port")
+   * always returns null, so the idempotency check fails and Aurora
+   * rewrites every listener on every reconcile.
    */
   private static String firstSetValue(JsonNode set) {
     if (set == null || !set.isObject()) return null;
-    var it = set.fields();
-    while (it.hasNext()) {
-      var e = it.next();
-      JsonNode v = e.getValue();
-      if (v.isTextual()) return v.asText();
-    }
+    var it = set.fieldNames();
+    if (it.hasNext()) return it.next();
     return null;
   }
 

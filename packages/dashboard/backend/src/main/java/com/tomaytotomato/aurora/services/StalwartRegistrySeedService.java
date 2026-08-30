@@ -125,12 +125,21 @@ public class StalwartRegistrySeedService {
       // packages/core/compose.yml; changing them there without changing
       // them here would silently open a port with no listener behind it,
       // which is what C27 was.
-      seedListener("smtp", "smtp", "0.0.0.0:25", false);
-      seedListener("submission", "smtp", "0.0.0.0:587", false);
-      seedListener("submissions", "smtp", "0.0.0.0:465", true);
-      seedListener("imap", "imap", "0.0.0.0:143", false);
-      seedListener("imaps", "imap", "0.0.0.0:993", true);
-      seedListener("managesieve", "manageSieve", "0.0.0.0:4190", true);
+      //
+      // Names match Stalwart v0.16's own default names verified live:
+      // smtp, submission, submissions, imap, imaps, sieve. Aurora keys
+      // idempotency off the name, so using different names here would
+      // duplicate the wizard's defaults and cause port fights.
+      //
+      // Bind uses [::]:port because Stalwart's own defaults do (and the
+      // idempotency check compares against what the wizard writes).
+      // [::] on a dual-stack container binds both v4 and v6.
+      seedListener("smtp",        "smtp",        "[::]:25",   false);
+      seedListener("submission",  "smtp",        "[::]:587",  false);
+      seedListener("submissions", "smtp",        "[::]:465",  true);
+      seedListener("imap",        "imap",        "[::]:143",  false);
+      seedListener("imaps",       "imap",        "[::]:993",  true);
+      seedListener("sieve",       "manageSieve", "[::]:4190", false);
 
       boolean tracerCreated = mail.ensureConsoleTracer();
       if (tracerCreated) {
@@ -155,7 +164,7 @@ public class StalwartRegistrySeedService {
 
   /** The six listener names Aurora manages. Used by tests. */
   static final List<String> MANAGED_LISTENER_NAMES = List.of(
-      "smtp", "submission", "submissions", "imap", "imaps", "managesieve");
+      "smtp", "submission", "submissions", "imap", "imaps", "sieve");
 
   /** Only for tests: the set for {@link #MANAGED_LISTENER_NAMES}. */
   static final Set<String> MANAGED_LISTENER_NAMES_SET = Set.copyOf(MANAGED_LISTENER_NAMES);

@@ -252,7 +252,7 @@ class StalwartMailClientTests {
             + "{\"list\":[{\"id\":\"b\",\"name\":\"aurora.local\"}]},\"c1\"]]}",
         "x:SystemSettings/get", "{\"methodResponses\":[[\"x:SystemSettings/get\","
             + "{\"list\":[{\"id\":\"singleton\","
-            + "\"defaultHostname\":\"mail.old.example\",\"defaultDomain\":\"other\"}]},\"c1\"]]}",
+            + "\"defaultHostname\":\"mail.old.example\",\"defaultDomainId\":\"other\"}]},\"c1\"]]}",
         "x:SystemSettings/set", "{\"methodResponses\":[[\"x:SystemSettings/set\","
             + "{\"updated\":{\"singleton\":null}},\"c1\"]]}"
     ), bodies);
@@ -260,11 +260,11 @@ class StalwartMailClientTests {
     assertThat(c.ensureSystemSettings("mail.aurora.local", "aurora.local")).isTrue();
 
     // The Set call carries the hostname literal AND references the
-    // domain by its id, not by its name (defaultDomain is Id<Domain>).
+    // domain by its id, not by its name (defaultDomainId is Id<Domain>).
     String setBody = bodies.stream()
         .filter(b -> b.contains("x:SystemSettings/set")).findFirst().orElseThrow();
     assertThat(setBody).contains("\"defaultHostname\":\"mail.aurora.local\"");
-    assertThat(setBody).contains("\"defaultDomain\":\"b\"");
+    assertThat(setBody).contains("\"defaultDomainId\":\"b\"");
     assertThat(setBody).contains("\"update\":{\"singleton\":");
   }
 
@@ -280,7 +280,7 @@ class StalwartMailClientTests {
             + "{\"list\":[{\"id\":\"b\",\"name\":\"aurora.local\"}]},\"c1\"]]}",
         "x:SystemSettings/get", "{\"methodResponses\":[[\"x:SystemSettings/get\","
             + "{\"list\":[{\"id\":\"singleton\","
-            + "\"defaultHostname\":\"mail.aurora.local\",\"defaultDomain\":\"b\"}]},\"c1\"]]}"
+            + "\"defaultHostname\":\"mail.aurora.local\",\"defaultDomainId\":\"b\"}]},\"c1\"]]}"
     ), bodies);
 
     assertThat(c.ensureSystemSettings("mail.aurora.local", "aurora.local")).isFalse();
@@ -290,7 +290,7 @@ class StalwartMailClientTests {
 
   @Test
   void ensureSystemSettings_refuses_when_the_domain_does_not_exist_yet() {
-    // The caller is telling us to point defaultDomain at a domain that
+    // The caller is telling us to point defaultDomainId at a domain that
     // does not exist. Fail explicitly instead of writing an invalid id
     // that the server would reject later with a less useful message.
     var c = scripted(java.util.Map.of(
@@ -313,13 +313,13 @@ class StalwartMailClientTests {
         "{\"methodResponses\":[[\"x:NetworkListener/set\",{\"created\":{\"n1\":{\"id\":\"L1\"}}},\"c1\"]]}"
     ), bodies);
 
-    assertThat(c.ensureNetworkListener("smtp", "smtp", "0.0.0.0:25", false)).isTrue();
+    assertThat(c.ensureNetworkListener("smtp", "smtp", "[::]:25", false)).isTrue();
 
     String setBody = bodies.stream()
         .filter(b -> b.contains("x:NetworkListener/set")).findFirst().orElseThrow();
     // bind is a JMAP Set encoded as a numeric-keyed map, not a JSON array.
     // Getting this wrong is exactly what breaks a listener on the server.
-    assertThat(setBody).contains("\"bind\":{\"0\":\"0.0.0.0:25\"}");
+    assertThat(setBody).contains("\"bind\":{\"[::]:25\":true}");
     assertThat(setBody).contains("\"name\":\"smtp\"");
     assertThat(setBody).contains("\"protocol\":\"smtp\"");
     assertThat(setBody).contains("\"tlsImplicit\":false");
@@ -332,11 +332,11 @@ class StalwartMailClientTests {
         "x:NetworkListener/get",
         "{\"methodResponses\":[[\"x:NetworkListener/get\",{\"list\":["
             + "{\"id\":\"L9\",\"name\":\"imaps\","
-            + "\"bind\":{\"0\":\"0.0.0.0:993\"},"
+            + "\"bind\":{\"[::]:993\":true},"
             + "\"protocol\":\"imap\",\"tlsImplicit\":true}]},\"c1\"]]}"
     ), bodies);
 
-    assertThat(c.ensureNetworkListener("imaps", "imap", "0.0.0.0:993", true)).isFalse();
+    assertThat(c.ensureNetworkListener("imaps", "imap", "[::]:993", true)).isFalse();
     assertThat(bodies).noneMatch(b -> b.contains("x:NetworkListener/set"));
   }
 
@@ -351,19 +351,19 @@ class StalwartMailClientTests {
         "x:NetworkListener/get",
         "{\"methodResponses\":[[\"x:NetworkListener/get\",{\"list\":["
             + "{\"id\":\"L9\",\"name\":\"submission\","
-            + "\"bind\":{\"0\":\"0.0.0.0:588\"},"
+            + "\"bind\":{\"[::]:588\":true},"
             + "\"protocol\":\"smtp\",\"tlsImplicit\":false}]},\"c1\"]]}",
         "x:NetworkListener/set",
         "{\"methodResponses\":[[\"x:NetworkListener/set\",{\"updated\":{\"L9\":null}},\"c1\"]]}"
     ), bodies);
 
-    assertThat(c.ensureNetworkListener("submission", "smtp", "0.0.0.0:587", false)).isTrue();
+    assertThat(c.ensureNetworkListener("submission", "smtp", "[::]:587", false)).isTrue();
 
     String setBody = bodies.stream()
         .filter(b -> b.contains("x:NetworkListener/set")).findFirst().orElseThrow();
     // Update by ID, not by name.
     assertThat(setBody).contains("\"update\":{\"L9\":");
-    assertThat(setBody).contains("\"bind\":{\"0\":\"0.0.0.0:587\"}");
+    assertThat(setBody).contains("\"bind\":{\"[::]:587\":true}");
   }
 
   @Test

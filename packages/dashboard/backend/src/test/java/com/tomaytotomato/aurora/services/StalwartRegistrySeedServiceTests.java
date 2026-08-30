@@ -62,12 +62,12 @@ class StalwartRegistrySeedServiceTests {
 
     svc.seedQuietly();
 
-    verify(mail).ensureNetworkListener("smtp",        "smtp",        "0.0.0.0:25",   false);
-    verify(mail).ensureNetworkListener("submission",  "smtp",        "0.0.0.0:587",  false);
-    verify(mail).ensureNetworkListener("submissions", "smtp",        "0.0.0.0:465",  true);
-    verify(mail).ensureNetworkListener("imap",        "imap",        "0.0.0.0:143",  false);
-    verify(mail).ensureNetworkListener("imaps",       "imap",        "0.0.0.0:993",  true);
-    verify(mail).ensureNetworkListener("managesieve", "manageSieve", "0.0.0.0:4190", true);
+    verify(mail).ensureNetworkListener("smtp",        "smtp",        "[::]:25",   false);
+    verify(mail).ensureNetworkListener("submission",  "smtp",        "[::]:587",  false);
+    verify(mail).ensureNetworkListener("submissions", "smtp",        "[::]:465",  true);
+    verify(mail).ensureNetworkListener("imap",        "imap",        "[::]:143",  false);
+    verify(mail).ensureNetworkListener("imaps",       "imap",        "[::]:993",  true);
+    verify(mail).ensureNetworkListener("sieve",       "manageSieve", "[::]:4190", false);
   }
 
   @Test
