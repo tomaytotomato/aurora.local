@@ -3,6 +3,19 @@ import { packageLabel } from '@/lib/packageName';
 import type { BackupAction } from './backup';
 
 export type PackageStatus = 'running' | 'degraded' | 'stopped' | 'not-installed';
+
+/**
+ * One sibling container inside an otherwise-up package that is
+ * currently restart-looping / exited / dead / paused, together with the
+ * operator-visible impact of it being down. Wire shape mirrors the
+ * backend `DegradedService` record; the reason string is server-owned
+ * copy (see `CoreServiceImpact`) so Overview and CoreServiceDetail
+ * cannot disagree.
+ */
+export interface DegradedService {
+  container: string;
+  reason: string;
+}
 export type PackageCategory =
   | 'core'
   | 'privacy'
@@ -52,6 +65,21 @@ export interface PackageSummary {
    * absent as false.
    */
   degraded?: boolean | null;
+  /**
+   * When {@link #degraded} is true, the sibling containers that pushed
+   * it there, each paired with a one-line impact string ("SSO down —
+   * every gated app returns 502"). Sorted by impact priority server-
+   * side so `[0]` is the headline reason for the Overview row and the
+   * AttentionStrip; the frontend does not know about the priority
+   * table.
+   *
+   * Absent (not empty array) when the package is healthy: the backend
+   * uses `@JsonInclude NON_NULL` to keep the wire quiet in the common
+   * case. Optional on the type so pre-2026-08-30 clients ignore it.
+   *
+   * Added 2026-08-30 (review item 3).
+   */
+  degradedServices?: DegradedService[] | null;
   requires?: Record<string, unknown> | null;
   ports?: Array<Record<string, unknown>> | null;
   dependsOn?: string[] | null;

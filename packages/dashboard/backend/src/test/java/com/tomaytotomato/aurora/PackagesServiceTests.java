@@ -229,11 +229,13 @@ class PackagesServiceTests {
     // authelia bounced, PackagesService reported core as running.
     var caddy = Mockito.mock(com.github.dockerjava.api.model.Container.class);
     Mockito.when(caddy.getState()).thenReturn("running");
+    Mockito.when(caddy.getNames()).thenReturn(new String[]{"/caddy"});
     Mockito.when(caddy.getLabels()).thenReturn(Map.of(
         "com.docker.compose.project.config_files",
         "/home/bruce/aurora.local/packages/core/compose.yml"));
     var authelia = Mockito.mock(com.github.dockerjava.api.model.Container.class);
     Mockito.when(authelia.getState()).thenReturn("restarting");
+    Mockito.when(authelia.getNames()).thenReturn(new String[]{"/authelia"});
     Mockito.when(authelia.getLabels()).thenReturn(Map.of(
         "com.docker.compose.project.config_files",
         "/home/bruce/aurora.local/packages/core/compose.yml"));
@@ -252,6 +254,94 @@ class PackagesServiceTests {
   }
 
   /**
+   * Review 2026-08-30 item 3: when a package is degraded, the DTO must
+   * name the broken container(s) AND carry a human impact string. This
+   * is the frontend's answer to "which container inside core is down
+   * and what does that take out?" — Overview and CoreServiceDetail then
+   * read the same wire so they can never disagree.
+   */
+  @Test
+  void degraded_services_carries_container_name_and_impact_reason() {
+    var stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of("core"), List.of()));
+    var docker = Mockito.mock(DockerService.class);
+
+    var caddy = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(caddy.getState()).thenReturn("running");
+    Mockito.when(caddy.getNames()).thenReturn(new String[]{"/caddy"});
+    Mockito.when(caddy.getLabels()).thenReturn(Map.of(
+        "com.docker.compose.project.config_files",
+        "/repo/packages/core/compose.yml"));
+    var authelia = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(authelia.getState()).thenReturn("restarting");
+    Mockito.when(authelia.getNames()).thenReturn(new String[]{"/authelia"});
+    Mockito.when(authelia.getLabels()).thenReturn(Map.of(
+        "com.docker.compose.project.config_files",
+        "/repo/packages/core/compose.yml"));
+    Mockito.when(docker.listProjectContainers()).thenReturn(List.of(caddy, authelia));
+
+    var props = new AuroraProperties("src/test/resources/fake-repo", null, List.of(), null);
+    var svc = new PackagesService(props, stateFiles, docker, null);
+    Package core = svc.find("core").orElseThrow();
+
+    assertThat(core.degradedServices())
+        .as("degraded package must name the broken container and the operator-visible impact")
+        .hasSize(1);
+    assertThat(core.degradedServices().get(0).container()).isEqualTo("authelia");
+    assertThat(core.degradedServices().get(0).reason())
+        .contains("SSO down");
+  }
+
+  /**
+   * Multiple broken containers must arrive sorted by
+   * {@link com.tomaytotomato.aurora.domain.CoreServiceImpact}'s priority
+   * table so the frontend can render the highest-impact reason first
+   * without having to know about the priority order itself.
+   */
+  @Test
+  void degraded_services_are_sorted_by_priority() {
+    var stateFiles = Mockito.mock(StateFileService.class);
+    Mockito.when(stateFiles.readState()).thenReturn(
+        new RepoState(1, "aurora", "aurora.local", null, List.of("core"), List.of()));
+    var docker = Mockito.mock(DockerService.class);
+
+    // caddy holds core in the "has a running container" state; core-db
+    // and authelia are both flapping. authelia (priority 0) must sort
+    // ahead of core-db (priority 3), even though core-db appears first
+    // in the docker listing.
+    var caddy = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(caddy.getState()).thenReturn("running");
+    Mockito.when(caddy.getNames()).thenReturn(new String[]{"/caddy"});
+    Mockito.when(caddy.getLabels()).thenReturn(Map.of(
+        "com.docker.compose.project.config_files",
+        "/repo/packages/core/compose.yml"));
+    var coreDb = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(coreDb.getState()).thenReturn("restarting");
+    Mockito.when(coreDb.getNames()).thenReturn(new String[]{"/core-db"});
+    Mockito.when(coreDb.getLabels()).thenReturn(Map.of(
+        "com.docker.compose.project.config_files",
+        "/repo/packages/core/compose.yml"));
+    var authelia = Mockito.mock(com.github.dockerjava.api.model.Container.class);
+    Mockito.when(authelia.getState()).thenReturn("restarting");
+    Mockito.when(authelia.getNames()).thenReturn(new String[]{"/authelia"});
+    Mockito.when(authelia.getLabels()).thenReturn(Map.of(
+        "com.docker.compose.project.config_files",
+        "/repo/packages/core/compose.yml"));
+    Mockito.when(docker.listProjectContainers())
+        .thenReturn(List.of(caddy, coreDb, authelia));
+
+    var props = new AuroraProperties("src/test/resources/fake-repo", null, List.of(), null);
+    var svc = new PackagesService(props, stateFiles, docker, null);
+    Package core = svc.find("core").orElseThrow();
+
+    assertThat(core.degradedServices())
+        .extracting(com.tomaytotomato.aurora.domain.DegradedService::container)
+        .as("authelia's impact string is the more useful headline than core-db's")
+        .containsExactly("authelia", "core-db");
+  }
+
+  /**
    * A package with every container running is not degraded. Guards
    * against a broken predicate that would mark every multi-container
    * package amber the moment the fix ships.
@@ -264,11 +354,13 @@ class PackagesServiceTests {
     var docker = Mockito.mock(DockerService.class);
     var c1 = Mockito.mock(com.github.dockerjava.api.model.Container.class);
     Mockito.when(c1.getState()).thenReturn("running");
+    Mockito.when(c1.getNames()).thenReturn(new String[]{"/caddy"});
     Mockito.when(c1.getLabels()).thenReturn(Map.of(
         "com.docker.compose.project.config_files",
         "/repo/packages/core/compose.yml"));
     var c2 = Mockito.mock(com.github.dockerjava.api.model.Container.class);
     Mockito.when(c2.getState()).thenReturn("running");
+    Mockito.when(c2.getNames()).thenReturn(new String[]{"/authelia"});
     Mockito.when(c2.getLabels()).thenReturn(Map.of(
         "com.docker.compose.project.config_files",
         "/repo/packages/core/compose.yml"));
@@ -279,6 +371,9 @@ class PackagesServiceTests {
     Package core = svc.find("core").orElseThrow();
 
     assertThat(core.degraded()).isFalse();
+    assertThat(core.degradedServices())
+        .as("a healthy package must not carry impact copy on the wire")
+        .isNull();
     assertThat(core.running()).isTrue();
   }
 }

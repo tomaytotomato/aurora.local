@@ -12,6 +12,7 @@
 // is the one place that decides.
 
 import type { PackageUpdate } from '@/api/updates';
+import type { PackageSummary } from '@/api/packages';
 import type { SecurityFinding } from '@/api/security';
 import type { BackupPolicy, BackupStatus } from '@/api/backup';
 import type { Disk, Parity, Pool } from '@/api/disks';
@@ -54,6 +55,15 @@ export interface AttentionInput {
    * imported into this pure module.
    */
   marketplace?: { updateAvailable: boolean; newAppCount?: number | null } | null;
+  /**
+   * The enabled packages, as returned by /packages. Only used to lift
+   * per-package degraded state (one sibling restart-looping in a
+   * multi-container package) onto the top-of-Overview strip so a real
+   * outage is not silent while the pill goes green from the other
+   * healthy sibling (review 2026-08-30 item 3). Optional so tests
+   * that don't care about degraded packages need not construct one.
+   */
+  packages?: readonly PackageSummary[] | null;
   /** Root filesystem percentage above which Aurora starts saying so. */
   diskWarnPct?: number;
   nowMs?: number;
@@ -108,6 +118,43 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
         cta: 'Disks',
       });
     }
+  }
+
+  // ── Degraded packages ───────────────────────────────────────────────
+  // A package with one running container AND one restart-looping
+  // sibling is the exact outage shape the 2026-08-30 review caught:
+  // core stayed "running" because caddy was up, while authelia inside
+  // it flapped and every gated vhost 502'd. Item 2 taught the pill to
+  // go amber; item 3 puts the actual reason on the strip so the
+  // operator sees "SSO down — every gated app returns 502" instead of
+  // just "partly running".
+  //
+  // The reason string is server-owned copy (see backend CoreServiceImpact),
+  // pre-sorted so `degradedServices[0]` is the highest-impact reason.
+  // If a package flipped degraded but the wire carried no impact list
+  // (older backend, or a broken container not on the priority table),
+  // fall back to naming the package — still more useful than silence.
+  for (const p of input.packages ?? []) {
+    if (!p.degraded) continue;
+    const headline = p.degradedServices?.[0];
+    const name = p.title || p.name;
+    const text = headline
+      ? `${name}: ${headline.reason}`
+      : `${name} has a container that keeps restarting`;
+    // For a broken core service we know its detail page; anything else
+    // routes to the package detail. Falling through to /apps/<name> is
+    // still useful — the row lists all sibling containers there.
+    const to =
+      p.name === 'core' && headline
+        ? `/apps/core/services/${headline.container}`
+        : `/apps/${p.name}`;
+    items.push({
+      id: `package-degraded:${p.name}`,
+      tone: 'warn',
+      text,
+      to,
+      cta: headline?.container ?? name,
+    });
   }
 
   // ── Backup ──────────────────────────────────────────────────────────

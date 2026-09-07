@@ -2,6 +2,8 @@ package com.tomaytotomato.aurora.services;
 
 import com.github.dockerjava.api.model.Container;
 import com.tomaytotomato.aurora.config.AuroraProperties;
+import com.tomaytotomato.aurora.domain.CoreServiceImpact;
+import com.tomaytotomato.aurora.domain.DegradedService;
 import com.tomaytotomato.aurora.domain.EnvVarSpec;
 import com.tomaytotomato.aurora.domain.Package;
 import com.tomaytotomato.aurora.domain.PackageBackupSpec;
@@ -17,6 +19,8 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +54,7 @@ public class PackagesService {
     RepoState state = stateFiles.readState();
     Set<String> enabled = new HashSet<>(state.enabled() == null ? List.of() : state.enabled());
     Set<String> running = runningPackageNames();
-    Set<String> degraded = degradedPackageNames();
+    Map<String, List<String>> degraded = degradedContainersByPackage();
 
     Path pkgs = Path.of(props.repoPath()).resolve("packages");
     List<Package> out = new ArrayList<>();
@@ -64,8 +68,9 @@ public class PackagesService {
         if (name.startsWith("_") || name.startsWith(".")) continue;
         Path manifest = dir.resolve("manifest.yml");
         if (!Files.isRegularFile(manifest)) continue;
+        List<String> brokenContainers = degraded.getOrDefault(name, List.of());
         parseManifest(manifest, enabled.contains(name), running.contains(name),
-            degraded.contains(name)).ifPresent(out::add);
+            !brokenContainers.isEmpty(), brokenContainers).ifPresent(out::add);
       }
     } catch (IOException e) {
       throw new RuntimeException("failed to scan " + pkgs, e);
@@ -408,17 +413,26 @@ public class PackagesService {
   /**
    * Packages with ≥1 running container AND ≥1 sibling in a
    * not-running-but-should-be state ({@code restarting}, {@code exited},
-   * {@code dead}, {@code paused}). Aggregation companion to
-   * {@link #runningPackageNames()}: without it, one healthy sibling in a
-   * multi-container package masks a broken one, and the top strip goes
-   * green while Authelia inside {@code core} is restart-looping and
-   * every gated vhost 502s (review 2026-08-30 item 2).
+   * {@code dead}, {@code paused}), mapped to the sorted list of broken
+   * container names in each such package.
    *
-   * <p>Uses the same {@code config_files} label the running check uses,
-   * so a container without an Aurora-owned compose file (an operator
-   * pet, a manual {@code docker run}) can't push a package into
-   * degraded on its own. Restarting a container Aurora doesn't own is
-   * not an Aurora concern; that’s a docker socket concern.
+   * <p>Companion to {@link #runningPackageNames()}: without it, one
+   * healthy sibling in a multi-container package masks a broken one,
+   * and the top strip goes green while Authelia inside {@code core}
+   * is restart-looping and every gated vhost 502s (review 2026-08-30
+   * items 2 + 3).
+   *
+   * <p>Item 2 returned only a {@code Set<String>} of package names. Item
+   * 3 needs the broken container names too so the Overview row can
+   * name the failing service and the AttentionStrip can render its
+   * impact reason. Same {@code config_files} label plumbing as before
+   * so an operator's pet container cannot push a package into
+   * degraded on its own.
+   *
+   * <p>Container names in the returned list are sorted by
+   * {@link CoreServiceImpact#priorityFor(String)} so the highest-impact
+   * reason is the first element and the frontend row can render it
+   * without knowing about the priority table.
    *
    * <p>Deliberately does not call {@code inspect} on each container: an
    * inspect roundtrip per container per {@code /packages} hit would
@@ -427,15 +441,15 @@ public class PackagesService {
    * {@code restarting} within the docker daemon’s own cadence, so the
    * cheap read catches the loop.
    */
-  private Set<String> degradedPackageNames() {
+  private Map<String, List<String>> degradedContainersByPackage() {
     Set<String> anyRunning = new HashSet<>();
-    Set<String> anyBroken = new HashSet<>();
+    Map<String, List<String>> anyBroken = new HashMap<>();
     List<Container> containers;
     try {
       containers = docker.listProjectContainers();
     } catch (Exception e) {
       log.warn("docker unavailable: {}", e.getMessage());
-      return Set.of();
+      return Map.of();
     }
     for (Container c : containers) {
       if (c.getLabels() == null) continue;
@@ -457,17 +471,42 @@ public class PackagesService {
         anyRunning.addAll(owningPackages);
       } else if ("restarting".equals(lower) || "exited".equals(lower)
           || "dead".equals(lower) || "paused".equals(lower)) {
-        anyBroken.addAll(owningPackages);
+        String containerName = cleanContainerName(c);
+        if (containerName == null) continue;
+        for (String pkg : owningPackages) {
+          anyBroken.computeIfAbsent(pkg, k -> new ArrayList<>()).add(containerName);
+        }
       }
     }
-    Set<String> out = new HashSet<>(anyRunning);
-    out.retainAll(anyBroken);
+    Map<String, List<String>> out = new HashMap<>();
+    for (var entry : anyBroken.entrySet()) {
+      if (!anyRunning.contains(entry.getKey())) continue;
+      List<String> sorted = new ArrayList<>(new HashSet<>(entry.getValue()));
+      sorted.sort(Comparator.comparingInt(CoreServiceImpact::priorityFor)
+          .thenComparing(Comparator.naturalOrder()));
+      out.put(entry.getKey(), List.copyOf(sorted));
+    }
     return out;
+  }
+
+  /**
+   * Docker's client library returns container names with a leading
+   * slash ({@code /authelia}); the DTO and every human-facing surface
+   * uses the bare form. Falls back to null when a container has no
+   * usable name, which the caller drops (a nameless container cannot
+   * be pointed at from Overview anyway).
+   */
+  private static String cleanContainerName(Container c) {
+    String[] names = c.getNames();
+    if (names == null || names.length == 0) return null;
+    String raw = names[0];
+    if (raw == null || raw.isBlank()) return null;
+    return raw.startsWith("/") ? raw.substring(1) : raw;
   }
 
   @SuppressWarnings("unchecked")
   private Optional<Package> parseManifest(Path manifest, boolean enabled, boolean running,
-                                          boolean degraded) {
+                                          boolean degraded, List<String> brokenContainers) {
     try (var in = Files.newInputStream(manifest)) {
       Map<String, Object> m = new Yaml().load(in);
       if (m == null) return Optional.empty();
@@ -489,6 +528,15 @@ public class PackagesService {
       // Caddy, Stalwart alongside; suppressing degraded here would
       // re-hide the exact review outage this fix targets.
       boolean effectiveDegraded = degraded;
+      // Impact reasons only carried on the wire when the package is
+      // actually degraded; otherwise null so @JsonInclude NON_NULL
+      // keeps healthy responses quiet.
+      List<DegradedService> impactServices = null;
+      if (effectiveDegraded && !brokenContainers.isEmpty()) {
+        impactServices = brokenContainers.stream()
+            .map(container -> new DegradedService(container, CoreServiceImpact.reasonFor(container)))
+            .collect(Collectors.toList());
+      }
       return Optional.of(new Package(
           str(m, "name"),
           str(m, "title"),
@@ -504,6 +552,7 @@ public class PackagesService {
           enabled,
           effectiveRunning,
           effectiveDegraded,
+          impactServices,
           SsoBlock.fromManifest(m.get("sso")),
           str(m, "source_url"),
           str(m, "homepage_url"),

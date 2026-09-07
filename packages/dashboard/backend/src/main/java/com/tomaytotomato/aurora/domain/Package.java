@@ -65,6 +65,25 @@ public record Package(
      * something broke” can render differently.
      */
     boolean degraded,
+    /**
+     * When {@link #degraded} is true, the broken container(s) that
+     * pushed it there, each paired with a one-line impact string from
+     * {@link CoreServiceImpact}. Null when {@code degraded == false}
+     * so the wire is quiet on healthy packages ({@code @JsonInclude
+     * NON_NULL}).
+     *
+     * <p>Introduced 2026-08-30 (review item 3). Item 2 landed the
+     * package-level boolean; the reviewer's next question was "which
+     * container inside {@code core} is down, and what does that take
+     * out?" — the answer belongs on the same DTO the pill reads so
+     * Overview and CoreServiceDetail cannot disagree.
+     *
+     * <p>Sorted by {@link CoreServiceImpact#priorityFor(String)} so
+     * the first element is the highest-impact reason to render on the
+     * Overview row and in the AttentionStrip's "one thing to look at"
+     * slot.
+     */
+    List<DegradedService> degradedServices,
     SsoBlock sso,
     String sourceUrl,
     String homepageUrl,
@@ -115,7 +134,7 @@ public record Package(
       SsoBlock sso
   ) {
     this(name, title, description, category, dependsOn, recommends, profiles, ports,
-        requires, requiredEnv, postInstallNotes, enabled, running, false, sso,
+        requires, requiredEnv, postInstallNotes, enabled, running, false, null, sso,
         null, null, null, null, null, null, null, null, null);
   }
 
@@ -134,7 +153,8 @@ public record Package(
       PackageBackupSpec backup
   ) {
     return new Package(name, title, description, category, dependsOn, recommends, profiles,
-        ports, requires, requiredEnv, postInstallNotes, enabled, running, degraded, sso,
+        ports, requires, requiredEnv, postInstallNotes, enabled, running, degraded,
+        degradedServices, sso,
         sourceUrl, homepageUrl, icon, readme, vhosts, envVars, backup,
         variantGroup, variantDefault);
   }

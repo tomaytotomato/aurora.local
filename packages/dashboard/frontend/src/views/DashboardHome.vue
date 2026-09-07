@@ -187,6 +187,11 @@ const attentionItems = computed(() =>
           newAppCount: marketplace.status.availableNewAppCount,
         }
       : null,
+    // Item 3 (2026-08-30): feeds the strip a per-package degraded item
+    // carrying the actual impact reason ("SSO down — every gated app
+    // returns 502") instead of the pill's generic "partly running".
+    // Empty on a healthy box; the strip renders nothing then.
+    packages: packages.enabled,
   }),
 );
 
@@ -636,11 +641,24 @@ function pickMetric(key: string): void {
             <li
               v-for="p in enabledSorted"
               :key="p.name"
-              class="flex items-center justify-between text-sm gap-3"
+              class="flex items-start justify-between text-sm gap-3"
               :data-package="p.name"
               :data-status="p.degraded ? 'restarting' : (p.running ? 'running' : 'stopped')"
             >
-              <span class="text-foreground truncate">{{ p.title || p.name }}</span>
+              <div class="min-w-0">
+                <span class="text-foreground truncate block">{{ p.title || p.name }}</span>
+                <!-- Impact reason lives on the row so the operator sees *why*
+                   this line is amber ("SSO down — every gated app returns
+                   502") without leaving Overview. Empty on healthy rows so
+                   the layout stays quiet. Server-owned copy from the
+                   `degradedServices` list — sorted so [0] is the headline
+                   reason — keeps this view aligned with CoreServiceDetail. -->
+                <span
+                  v-if="p.degraded && p.degradedServices && p.degradedServices.length"
+                  class="text-xs text-muted-foreground truncate block"
+                  :data-degraded-reason="p.degradedServices[0].container"
+                >{{ p.degradedServices[0].reason }}</span>
+              </div>
               <div class="flex items-center gap-2 shrink-0">
                 <span v-if="p.degraded" class="text-xs text-amber-600 dark:text-amber-400">Restarting</span>
                 <span v-else-if="p.running" class="text-xs text-muted-foreground">Running</span>

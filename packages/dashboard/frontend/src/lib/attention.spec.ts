@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { BackupStatus } from '@/api/backup';
 import type { Disk, Parity, Pool } from '@/api/disks';
+import type { PackageSummary } from '@/api/packages';
 import type { SecurityFinding } from '@/api/security';
 import type { SystemInfo } from '@/api/system';
 import type { PackageUpdate } from '@/api/updates';
@@ -121,6 +122,21 @@ function clean(): AttentionInput {
     updates: [],
     system: system(),
   };
+}
+
+/** A degraded package as it arrives from the /packages wire in item 3. */
+function pkg(over: Partial<PackageSummary> & { name: string }): PackageSummary {
+  const { name, ...rest } = over;
+  return {
+    name,
+    title: undefined,
+    category: 'core',
+    description: '',
+    enabled: true,
+    running: true,
+    degraded: false,
+    ...rest,
+  } as PackageSummary;
 }
 
 describe('buildAttention', () => {
@@ -290,6 +306,75 @@ describe('buildAttention', () => {
 
   it('stays quiet when the marketplace has no pending update', () => {
     expect(buildAttention({ ...clean(), marketplace: { updateAvailable: false, newAppCount: 0 } })).toEqual([]);
+  });
+
+  // ── Degraded packages (review 2026-08-30 item 3) ───────────────────────────────
+  // The exact outage shape: `core` reports running=true (caddy is up)
+  // AND degraded=true (authelia inside it is restart-looping). The
+  // strip must not be silent, and must not just say "partly running";
+  // it must render the impact string.
+
+  it('names the failing container and the impact, not just the package', () => {
+    const items = buildAttention({
+      ...clean(),
+      packages: [
+        pkg({
+          name: 'core',
+          title: 'Core',
+          degraded: true,
+          degradedServices: [
+            { container: 'authelia', reason: 'SSO down — every gated app returns 502 until this recovers' },
+          ],
+        }),
+      ],
+    });
+    const row = items.find((i) => i.id === 'package-degraded:core');
+    expect(row?.text).toContain('SSO down');
+    expect(row?.tone).toBe('warn');
+    // The CTA is the failing container name, so the row reads
+    // "Core: SSO down …    authelia →" — useful, not a repetition of
+    // the package title.
+    expect(row?.cta).toBe('authelia');
+  });
+
+  it('routes a broken core service to its CoreServiceDetail page', () => {
+    const items = buildAttention({
+      ...clean(),
+      packages: [
+        pkg({
+          name: 'core',
+          degraded: true,
+          degradedServices: [{ container: 'stalwart', reason: 'Mail down' }],
+        }),
+      ],
+    });
+    const row = items.find((i) => i.id === 'package-degraded:core');
+    expect(row?.to).toBe('/apps/core/services/stalwart');
+  });
+
+  it('falls back to a generic message when the wire carries no impact list', () => {
+    // Older backend, or a broken container outside the CoreServiceImpact
+    // priority table — the strip must still say *something* rather than
+    // silently drop the row.
+    const items = buildAttention({
+      ...clean(),
+      packages: [pkg({ name: 'media', title: 'Media', degraded: true })],
+    });
+    const row = items.find((i) => i.id === 'package-degraded:media');
+    expect(row?.text).toContain('keeps restarting');
+    expect(row?.to).toBe('/apps/media');
+  });
+
+  it('stays quiet about healthy packages', () => {
+    // Guards against a rule that would flip the strip amber the moment
+    // this array gains a value — the whole point of item 3 is that a
+    // clean box stays clean.
+    expect(
+      buildAttention({
+        ...clean(),
+        packages: [pkg({ name: 'core', running: true, degraded: false })],
+      }),
+    ).toEqual([]);
   });
 
   it('gives every item somewhere to go', () => {
