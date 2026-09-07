@@ -70,7 +70,31 @@ public class LaunchService {
    * gets its own file, no cross-run growth.
    */
   static final long LOG_FILE_MAX_BYTES = 5L * 1024 * 1024;
-  private static final String LOG_DIR = "/data/launch-logs";
+  /**
+   * Default on-disk home for launch logs. In production this is the
+   * {@code aurora_aurora_data} docker volume mounted at {@code /data},
+   * so the logs outlive a container recreate.
+   */
+  private static final String LOG_DIR_DEFAULT = "/data/launch-logs";
+  /**
+   * Escape hatch for tests and for anyone running the backend outside a
+   * container, where {@code /data} does not exist and never will.
+   *
+   * <p>Resolved per instance rather than once per class so a test can
+   * point one service at a {@code @TempDir} without leaking that choice
+   * into the next test. Production never sets it and gets
+   * {@link #LOG_DIR_DEFAULT}.
+   *
+   * <p>Why this exists: {@code LaunchServiceCancellationTests} waits for
+   * the launched process to write "started" to {@code job.logFile}
+   * before cancelling it. With a hardcoded {@code /data}, the directory
+   * creation failed on a bare dev box, {@code logFile} fell back to
+   * null, and the wait could never succeed — the test failed with
+   * "launched process never produced: started" on any machine without a
+   * writable {@code /data}, while passing in the container. A gate whose
+   * result depends on undeclared host state is not a gate.
+   */
+  static final String LOG_DIR_PROPERTY = "aurora.launch.log-dir";
 
   private final AuroraProperties props;
   private final AuditEventRepo audit;
@@ -92,6 +116,12 @@ public class LaunchService {
    * acting admin's id.
    */
   private final com.tomaytotomato.aurora.services.CurrentUserService currentUser;
+
+  /**
+   * Where this instance writes launch logs. See {@link #LOG_DIR_PROPERTY}.
+   */
+  private final String logDir =
+      System.getProperty(LOG_DIR_PROPERTY, LOG_DIR_DEFAULT);
 
   /**
    * The single seam for running anything outside the JVM. Defaulted in the
@@ -220,15 +250,15 @@ public class LaunchService {
 
     // Best-effort log file.
     try {
-      Files.createDirectories(Path.of(LOG_DIR));
-      job.logFile = Path.of(LOG_DIR, "launch-" + id + ".log");
+      Files.createDirectories(Path.of(logDir));
+      job.logFile = Path.of(logDir, "launch-" + id + ".log");
       String header = "# aurora launch " + id + " started " + job.startedAt + "\n"
               + "# packages: " + String.join(",", job.packages) + "\n"
               + "# start_budget: " + renderBudgetHeader(job.packages) + "\n";
       Files.writeString(job.logFile, header, StandardCharsets.UTF_8);
       job.logBytesWritten = header.getBytes(StandardCharsets.UTF_8).length;
     } catch (IOException e) {
-      log.warn("could not create launch log file at {}: {}", LOG_DIR, e.getMessage());
+      log.warn("could not create launch log file at {}: {}", logDir, e.getMessage());
       job.logFile = null;
     }
 

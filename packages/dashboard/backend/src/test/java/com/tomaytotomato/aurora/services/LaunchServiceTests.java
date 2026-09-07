@@ -3,6 +3,8 @@ package com.tomaytotomato.aurora.services;
 import com.tomaytotomato.aurora.config.AuroraProperties;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
 import com.tomaytotomato.aurora.support.FakeCommandRunner;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
@@ -24,6 +26,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * inside a temp repo whose exit code and output we control.
  */
 class LaunchServiceTests {
+
+  /**
+   * Point launch logs at a per-test temp dir, so assertions about the
+   * on-disk log run everywhere rather than only inside the container.
+   *
+   * <p>The production default is {@code /data/launch-logs}. On a box
+   * without a writable {@code /data}, {@code job.logFile} silently falls
+   * back to null — which turned
+   * {@link #log_file_is_bounded_when_up_sh_spews_more_than_cap} into a
+   * test that passed without asserting anything, while the disk-cap
+   * behaviour it guards went unexercised.
+   */
+  @BeforeEach
+  void redirectLaunchLogs(@TempDir Path logDir) {
+    System.setProperty(LaunchService.LOG_DIR_PROPERTY, logDir.toString());
+  }
+
+  @AfterEach
+  void restoreLaunchLogDir() {
+    System.clearProperty(LaunchService.LOG_DIR_PROPERTY);
+  }
 
   private static AuroraProperties props(Path repo) {
     return new AuroraProperties(
@@ -223,12 +246,16 @@ class LaunchServiceTests {
     }
     assertEquals(LaunchService.State.SUCCESS, job.state, "launch should finish");
 
-    if (job.logFile != null && Files.exists(job.logFile)) {
-      long size = Files.size(job.logFile);
-      assertTrue(size <= LaunchService.LOG_FILE_MAX_BYTES + 512,
-          "on-disk log must be bounded (~" + LaunchService.LOG_FILE_MAX_BYTES + " bytes); was " + size);
-      assertTrue(job.logTruncated, "truncated flag must be set once cap is hit");
-    }
+    // Unconditional: with the log dir redirected to a temp dir in
+    // @BeforeEach, a null logFile now means the write path is broken,
+    // not that the environment lacks /data. Guarding this behind an
+    // `if` is what let the cap go unverified on every dev box.
+    assertNotNull(job.logFile, "launch must write an on-disk log");
+    assertTrue(Files.exists(job.logFile), "log file must exist on disk");
+    long size = Files.size(job.logFile);
+    assertTrue(size <= LaunchService.LOG_FILE_MAX_BYTES + 512,
+        "on-disk log must be bounded (~" + LaunchService.LOG_FILE_MAX_BYTES + " bytes); was " + size);
+    assertTrue(job.logTruncated, "truncated flag must be set once cap is hit");
     @SuppressWarnings("unchecked")
     List<String> tail = (List<String>) job.toStatusMap().get("tail");
     assertTrue(tail.size() <= 200, "status-map tail is capped at 200 lines");

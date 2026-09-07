@@ -36,11 +36,51 @@ class AutheliaConfigurationInvariantsTests {
       "../../../packages/core/authelia/configuration.yml"
   );
 
+  /**
+   * Go-template control-flow lines, which are structural rather than
+   * part of any YAML value: {@code {{- if ... }}}, {@code {{- else }}},
+   * {@code {{- end }}}.
+   *
+   * <p>Deliberately narrow. Value-level references like
+   * {@code domain: '{{ env "DOMAIN" }}'} sit inside quoted scalars,
+   * parse as ordinary strings, and several invariants below assert on
+   * their exact text — so this must never match them.
+   */
+  private static final java.util.regex.Pattern TEMPLATE_CONTROL_LINE =
+      java.util.regex.Pattern.compile("^\\s*\\{\\{-?\\s*(if|else|end|range|with)\\b.*\\}\\}\\s*$");
+
+  /**
+   * The config as YAML, with Go-template control-flow lines removed.
+   *
+   * <p>Authelia runs this file through its own template filter
+   * ({@code X_AUTHELIA_CONFIG_FILTERS=template}) at container start, so
+   * on disk it is a template, not valid YAML: since the SMTP notifier
+   * landed (dec76cc) it carries an {@code if/else/end} that picks the
+   * {@code smtp} arm when Aurora has provisioned mail and the
+   * {@code filesystem} arm when it has not.
+   *
+   * <p>SnakeYAML cannot parse those bare control lines, so they are
+   * stripped here. Both arms of the conditional survive the strip and
+   * become sibling keys under {@code notifier} — harmless for these
+   * invariants, none of which assert on {@code notifier}, and cheaper
+   * than teaching the test a Go template engine. The two raw-text tests
+   * ({@link #jwt_secret_never_reads_the_authelia_managed_env_var_name},
+   * {@link #secrets_never_appear_literal_in_the_config}) read the
+   * unmodified bytes and are unaffected.
+   *
+   * <p>Emphatically not a reason to relax
+   * {@link #snapshot_matches_source}: the snapshot stays byte-identical
+   * to the source file, and the normalising happens at parse time.
+   */
   @SuppressWarnings("unchecked")
   private static Map<String, Object> load() throws IOException {
     try (var in = AutheliaConfigurationInvariantsTests.class.getResourceAsStream(CLASSPATH_YML)) {
       if (in == null) throw new IOException("missing test resource " + CLASSPATH_YML);
-      return (Map<String, Object>) new Yaml().load(in);
+      String body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+      String yamlOnly = body.lines()
+          .filter(line -> !TEMPLATE_CONTROL_LINE.matcher(line).matches())
+          .collect(java.util.stream.Collectors.joining("\n"));
+      return (Map<String, Object>) new Yaml().load(yamlOnly);
     }
   }
 

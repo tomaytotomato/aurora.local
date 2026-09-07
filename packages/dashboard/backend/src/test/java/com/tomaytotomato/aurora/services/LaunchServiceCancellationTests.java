@@ -2,6 +2,8 @@ package com.tomaytotomato.aurora.services;
 
 import com.tomaytotomato.aurora.config.AuroraProperties;
 import com.tomaytotomato.aurora.persistence.AuditEventRepo;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -29,6 +31,31 @@ import static org.assertj.core.api.Assertions.assertThat;
  * a stubbed command runner would reproduce.
  */
 class LaunchServiceCancellationTests {
+
+  /**
+   * Point launch logs at a per-test temp dir.
+   *
+   * <p>These tests wait for the launched process to write to
+   * {@code job.logFile} before acting on it. The production default is
+   * {@code /data/launch-logs}, which exists inside the container and
+   * nowhere else — on a bare dev box the directory creation failed,
+   * {@code logFile} fell back to null, and the wait could never be
+   * satisfied. The suite then failed with "launched process never
+   * produced: started" for reasons that had nothing to do with launch
+   * cancellation.
+   *
+   * <p>Set and cleared per test so the choice cannot leak into another
+   * suite running in the same JVM fork.
+   */
+  @BeforeEach
+  void redirectLaunchLogs(@TempDir Path logDir) {
+    System.setProperty(LaunchService.LOG_DIR_PROPERTY, logDir.toString());
+  }
+
+  @AfterEach
+  void restoreLaunchLogDir() {
+    System.clearProperty(LaunchService.LOG_DIR_PROPERTY);
+  }
 
   private static AuroraProperties props(Path repo) {
     return new AuroraProperties(
