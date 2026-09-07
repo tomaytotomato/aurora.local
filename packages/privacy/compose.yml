@@ -19,7 +19,20 @@ networks:
 
 services:
   adguard:
-    image: adguard/adguardhome:latest
+    # Pinned by digest, not `:latest`. Aurora's own Security page raises a
+    # MEDIUM finding for any container running a moving tag
+    # (UnpinnedImageTagsRule), and shipping `:latest` here meant Aurora was
+    # both the source of the finding and the cause of it — flagged in the
+    # 2026-08-30 homelabber review.
+    #
+    # The default is the curated, human-reviewed pin from
+    # pins.env.example (v0.107.78, checked 2026-08-15 — a security release:
+    # path traversal, JIGGLE mitigation, stricter DoH/DNSCrypt upstream
+    # validation). Because pins.env is gitignored, a fresh clone has no
+    # pins.env at all; the `:-` default is what makes a fresh install
+    # pinned rather than silently falling back to an empty image ref.
+    # `scripts/pin.sh --refresh` still overrides via pins.env.
+    image: ${IMAGE_ADGUARD:-adguard/adguardhome:v0.107.78@sha256:1ea34eafe5dc691007946e8eaab7bf46b0de9412f39213d8c06e48b53bf9a6c5}
     container_name: adguard
     restart: unless-stopped
     networks: [aurora_net]
@@ -38,7 +51,12 @@ services:
       - ../../data/adguard/conf:/opt/adguardhome/conf
 
   gluetun:
-    image: qmcgaw/gluetun:latest
+    # Pinned by digest — same reasoning as adguard above. v3.41.1 is the
+    # latest confirmed stable (published 2026-02-11); `:latest` resolves to
+    # a newer, different digest that looks like an edge build, so this
+    # deliberately does not chase it. A VPN client is exactly the thing you
+    # want on a reviewed version rather than whatever moved last night.
+    image: ${IMAGE_GLUETUN:-qmcgaw/gluetun:v3.41.1@sha256:1a5bf4b4820a879cdf8d93d7ef0d2d963af56670c9ebff8981860b6804ebc8ab}
     container_name: gluetun
     restart: unless-stopped
     # The reusable WireGuard egress gateway. Any app that sets

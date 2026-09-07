@@ -26,7 +26,15 @@ services:
   # the init script under core-db/init/ provisions per-app databases the
   # first time the data dir is created.
   core-db:
-    image: postgres:17-alpine
+    # Pinned by digest. `17-alpine` is a moving tag: it advances with every
+    # patch release, so the database engine under Authelia, Stalwart and
+    # Aurora could change on any `docker compose pull`. Postgres patch
+    # upgrades are usually safe, but "usually" is doing a lot of work when
+    # the data directory is version-locked and a surprise major would
+    # refuse to start on a data dir it did not create.
+    #
+    # 17.11, the build this box has run and been verified against.
+    image: ${IMAGE_CORE_DB:-postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73}
     container_name: core-db
     restart: unless-stopped
     networks: [aurora_net]
@@ -57,7 +65,13 @@ services:
       start_period: 20s
 
   caddy:
-    image: caddy:2-alpine
+    # Pinned by digest — `2-alpine` moves with every 2.x release. Caddy is
+    # the reverse proxy: if it changes, every vhost and the box's whole TLS
+    # posture changes with it, and a Caddyfile syntax change between
+    # minors would take the entire box off the network by name.
+    #
+    # v2.11.4, the build this box has run and been verified against.
+    image: ${IMAGE_CADDY:-caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648}
     container_name: caddy
     restart: unless-stopped
     networks: [aurora_net]
@@ -118,7 +132,28 @@ services:
   # NOT behind Authelia (configuration.yml access_control bypasses it), so
   # the admin is never locked out of the control plane.
   authelia:
-    image: authelia/authelia:latest
+    # Pinned by digest. This is the SSO provider for the whole box: if it
+    # changes underneath you, every gated vhost changes with it. The
+    # 2026-08-30 review's headline outage was Authelia restart-looping and
+    # taking all of SSO down, so "whatever :latest moved to overnight" is
+    # the wrong thing to boot on a fresh install.
+    #
+    # 4.39.20 is the build that has actually been verified end-to-end on
+    # the testbed — the AdGuard SSO broker work (ff47dfa) and the mail
+    # gating fixes (dec76cc) were all confirmed against this exact digest.
+    # It is not merely "current"; it is the one known to work with this
+    # repo's configuration.yml and users_database.yml projection.
+    #
+    # Note the tag has no `v` prefix — authelia/authelia:v4.39.20 does not
+    # exist in the registry and will fail to pull.
+    #
+    # Checked 2026-09-07: `:latest` had already moved to a *different*
+    # digest (sha256:936134…) than the one this box has been running for
+    # five days, so a plain `docker compose pull` would have silently
+    # swapped the identity provider for an unreviewed image. That is
+    # exactly the failure mode digest pinning exists to prevent.
+    # Multi-arch: linux/amd64, linux/arm64, linux/arm/v7.
+    image: ${IMAGE_AUTHELIA:-authelia/authelia:4.39.20@sha256:1b363e9279e742397966333f364e0876ae02bf5c876de73e83af6d48c57ff51b}
     container_name: authelia
     restart: unless-stopped
     networks: [aurora_net]
@@ -222,7 +257,16 @@ services:
   # IMAP on aurora_net. Stalwart's own HTTP (admin UI + JMAP) is proxied
   # by Caddy at mail-admin.${DOMAIN}, gated to admins (see caddy.snippet).
   stalwart:
-    image: stalwartlabs/stalwart:v0.16
+    # Pinned by digest. `v0.16` is a minor-series tag that advances with
+    # each 0.16.x patch. Stalwart is pre-1.0 and its config schema has
+    # moved between patches before — the v0.16 listener/registry shape is
+    # exactly what StalwartRegistrySeedService and the seeded config.json
+    # are written against, and what the submission-port fixes (dec76cc,
+    # d96722d) were verified on. An unattended patch bump here would be
+    # felt as mail silently not delivering.
+    #
+    # 0.16.20, the build this box has run and been verified against.
+    image: ${IMAGE_STALWART:-stalwartlabs/stalwart:v0.16@sha256:74ca4f7f6885fe302f38a99381f36a208547afce1033d8734d9e6d8d3eba7446}
     container_name: stalwart
     restart: unless-stopped
     hostname: ${MAIL_HOSTNAME:-mail.aurora.local}
